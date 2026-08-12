@@ -5,6 +5,7 @@ GOOGLE_PLACES_API_KEY varsa gerçek rating/userRatingCount; yoksa deterministik
 SIMULATED değerler. Günlük snapshot → trend. GuestRevu paritesi (5 rakip).
 """
 from datetime import datetime, timezone
+import asyncio
 import hashlib
 import logging
 import os
@@ -285,17 +286,7 @@ def create_reputation_router(db, require_roles):
         "luks": "Lüks, sofistike, zengin dokular, dramatik ışık, premium beş yıldızlı his.",
     }
 
-    @router.post("/reputation/social-drafts/{draft_id}/image")
-    async def social_draft_image(draft_id: str, body: dict = None,
-                                 _: dict = Depends(require_roles("admin", "manager"))):
-        """Taslak için Gemini Nano Banana ile sosyal medya görseli üret."""
-        style = ((body or {}).get("style") or "sicak").lower()
-        style_prompt = IMG_STYLES.get(style, IMG_STYLES["sicak"])
-        doc = await db.social_drafts.find_one({"id": draft_id}, {"_id": 0})
-        if not doc:
-            raise HTTPException(404, "Taslak bulunamadı")
-        prop = await db.properties.find_one(
-            {"id": doc["property_id"]}, {"_id": 0, "name": 1}) or {}
+    async def _gen_one_image(doc: dict, prop_name: str, style_prompt: str, out_path: str):
         import base64
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         chat = LlmChat(api_key=os.environ.get("EMERGENT_LLM_KEY"),
@@ -305,25 +296,69 @@ def create_reputation_router(db, require_roles):
             modalities=["image", "text"])
         prompt = (f"Instagram için fotogerçekçi bir otel pazarlama görseli üret. "
                   f"Stil: {style_prompt} "
-                  f"Konu: {doc.get('topic', '')}. Otel: {prop.get('name', '')}. "
+                  f"Konu: {doc.get('topic', '')}. Otel: {prop_name}. "
                   f"Gönderi metni bağlamı: {(doc.get('draft') or '')[:300]}. "
                   f"Görselde hiçbir yazı/metin/logo OLMASIN; sadece atmosferik, profesyonel fotoğraf.")
-        try:
-            _text, images = await chat.send_message_multimodal_response(UserMessage(text=prompt))
-        except Exception as e:
-            logger.warning(f"social image generation failed: {e}")
-            raise HTTPException(502, "Görsel üretilemedi, tekrar deneyin")
+        _text, images = await chat.send_message_multimodal_response(UserMessage(text=prompt))
         if not images:
-            raise HTTPException(502, "Görsel üretilemedi, tekrar deneyin")
-        os.makedirs("/app/backend/uploads/social_images", exist_ok=True)
-        with open(f"/app/backend/uploads/social_images/{draft_id}.png", "wb") as f:
+            raise RuntimeError("no image returned")
+        with open(out_path, "wb") as f:
             f.write(base64.b64decode(images[0]["data"]))
-        image_url = f"/api/uploads/social_images/{draft_id}.png"
+
+    @router.post("/reputation/social-drafts/{draft_id}/image")
+    async def social_draft_image(draft_id: str, body: dict = None,
+                                 _: dict = Depends(require_roles("admin", "manager"))):
+        """Taslak için Gemini Nano Banana ile sosyal medya görseli üret (1 veya çok varyasyon)."""
+        style = ((body or {}).get("style") or "sicak").lower()
+        variants = min(max(int((body or {}).get("variants") or 1), 1), 3)
+        style_prompt = IMG_STYLES.get(style, IMG_STYLES["sicak"])
+        doc = await db.social_drafts.find_one({"id": draft_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Taslak bulunamadı")
+        prop = await db.properties.find_one(
+            {"id": doc["property_id"]}, {"_id": 0, "name": 1}) or {}
+        os.makedirs("/app/backend/uploads/social_images", exist_ok=True)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if variants == 1:
+            path = f"/app/backend/uploads/social_images/{draft_id}.png"
+            try:
+                await _gen_one_image(doc, prop.get("name", ""), style_prompt, path)
+            except Exception as e:
+                logger.warning(f"social image generation failed: {e}")
+                raise HTTPException(502, "Görsel üretilemedi, tekrar deneyin")
+            image_url = f"/api/uploads/social_images/{draft_id}.png"
+            await db.social_drafts.update_one(
+                {"id": draft_id},
+                {"$set": {"image_url": image_url, "image_style": style,
+                          "image_generated_at": now_iso}})
+            return {"image_url": image_url, "style": style}
+        tasks = []
+        for i in range(variants):
+            path = f"/app/backend/uploads/social_images/{draft_id}_v{i}.png"
+            tasks.append(_gen_one_image(doc, prop.get("name", ""), style_prompt, path))
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        urls = [f"/api/uploads/social_images/{draft_id}_v{i}.png"
+                for i, r in enumerate(results) if not isinstance(r, Exception)]
+        if not urls:
+            raise HTTPException(502, "Görsel üretilemedi, tekrar deneyin")
         await db.social_drafts.update_one(
             {"id": draft_id},
-            {"$set": {"image_url": image_url, "image_style": style,
-                      "image_generated_at": datetime.now(timezone.utc).isoformat()}})
-        return {"image_url": image_url, "style": style}
+            {"$set": {"image_variants": urls, "image_style": style,
+                      "image_generated_at": now_iso}})
+        return {"variants": urls, "style": style}
+
+    @router.post("/reputation/social-drafts/{draft_id}/select-image")
+    async def social_draft_select_image(draft_id: str, body: dict,
+                                        _: dict = Depends(require_roles("admin", "manager"))):
+        url = (body.get("image_url") or "").split("?")[0]
+        doc = await db.social_drafts.find_one({"id": draft_id}, {"_id": 0, "image_variants": 1})
+        if not doc:
+            raise HTTPException(404, "Taslak bulunamadı")
+        if url not in (doc.get("image_variants") or []):
+            raise HTTPException(400, "Geçersiz görsel seçimi")
+        await db.social_drafts.update_one(
+            {"id": draft_id}, {"$set": {"image_url": url}})
+        return {"ok": True, "image_url": url}
 
     @router.post("/reputation/social-drafts/{draft_id}/send-package")
     async def social_draft_send_package(draft_id: str, body: dict = None,

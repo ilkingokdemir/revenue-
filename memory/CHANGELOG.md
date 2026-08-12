@@ -3318,3 +3318,15 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
 - 3) ⚡ GÖRSEL+PAKET: görselsiz taslaklarda tek buton — görsel üret + send-package art arda,
   takvim yenilenir. TEST: UI'da tıklandı, ~25 sn'de görsel + paket + takvim 3 öğe.
 - BEKLEYEN: Expo token (8. kez) + Google Places anahtarı.
+
+## Iter 528 (2026-08-12) — Şube Bazlı Arşiv + Çoklu Görsel Seçimi TAMAMLANDI
+- 1) ŞUBE BAZLI ARŞİV: Arşiv başlığında "Şube" seçici (propList /api/properties'ten).
+  archivePid = seçim || propertyId; taslaklar + takvim + anket-taslak + paket yenilemeleri
+  archivePid ile. Arşiv kartı artık boşken de görünür (empty state metni).
+- 2) ÇOKLU GÖRSEL: image endpoint {variants:1-3} — asyncio.gather ile paralel üretim
+  ({id}_v{i}.png), image_variants dokümana yazılır (30 sn/3 görsel).
+  POST /select-image {image_url} — varyasyon listesi doğrulamalı. UI: "🎨 3 Varyasyon"
+  butonu + küçük resim ızgarası, seçilende yeşil çerçeve + ✓.
+- TEST: curl (3 varyasyon, seçim, geçersiz seçim 400, aldgate şube taslağı) + 2 screenshot
+  (varyasyon seçimi UI, şube geçişi). Hepsi geçti.
+- BEKLEYEN: Expo token (9. kez) + Google Places anahtarı.

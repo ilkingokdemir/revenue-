@@ -70,6 +70,9 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [socialCalendar, setSocialCalendar] = useState([]);
   const [previewDraft, setPreviewDraft] = useState(null);
   const [surveyDrafting, setSurveyDrafting] = useState(false);
+  const [archiveProperty, setArchiveProperty] = useState("");
+  const [propList, setPropList] = useState([]);
+  const archivePid = archiveProperty || propertyId;
 
   const runInsight = async () => {
     setInsightLoading(true);
@@ -214,10 +217,13 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
     }
     if (tab === "benchmark" && propertyId) {
       axios.get(`${API}/reputation/competitor-spy/${propertyId}/latest`).then(({ data }) => data?.id && setSpy(data)).catch(() => {});
-      axios.get(`${API}/reputation/social-drafts/${propertyId}`).then(({ data }) => setSocialDrafts(data.items || [])).catch(() => {});
-      axios.get(`${API}/reputation/social-calendar/${propertyId}`).then(({ data }) => setSocialCalendar(data.items || [])).catch(() => {});
+      axios.get(`${API}/properties`).then(({ data }) => setPropList(Array.isArray(data) ? data : data.items || data.properties || [])).catch(() => {});
     }
-  }, [tab, propertyId, loadConfig, loadBench]);
+    if (tab === "benchmark" && archivePid) {
+      axios.get(`${API}/reputation/social-drafts/${archivePid}`).then(({ data }) => setSocialDrafts(data.items || [])).catch(() => {});
+      axios.get(`${API}/reputation/social-calendar/${archivePid}`).then(({ data }) => setSocialCalendar(data.items || [])).catch(() => {});
+    }
+  }, [tab, propertyId, archivePid, loadConfig, loadBench]);
 
   const bulkDraft = async () => {
     setBulkDrafting(true);
@@ -1135,18 +1141,29 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
               </div>
             )}
           </div>
-          {socialDrafts.length > 0 && (
-            <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="social-draft-archive">
-              <div className="flex items-center justify-between">
+          <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="social-draft-archive">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <p className="text-sm font-medium text-stone-200">🗂️ Sosyal Taslak Arşivi ({socialDrafts.length})</p>
                 <div className="flex items-center gap-3">
+                  {propList.length > 1 && (
+                    <label className="flex items-center gap-1.5 text-[10px] text-stone-500">
+                      Şube:
+                      <select data-testid="archive-property-select" value={archivePid}
+                        onChange={(e) => setArchiveProperty(e.target.value)}
+                        className="px-2 py-1 rounded bg-stone-950 border border-stone-700 text-[11px] text-stone-200 outline-none max-w-[160px]">
+                        {propList.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name || p.id}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   <button data-testid="survey-to-draft-btn" disabled={surveyDrafting}
                     onClick={async () => {
                       setSurveyDrafting(true);
                       try {
-                        const { data } = await axios.post(`${API}/reputation/survey-to-draft/${propertyId}`);
+                        const { data } = await axios.post(`${API}/reputation/survey-to-draft/${archivePid}`);
                         toast.success(`${data.guest} adlı misafirin övgüsü taslağa çevrildi 🎉`);
-                        const { data: d } = await axios.get(`${API}/reputation/social-drafts/${propertyId}`);
+                        const { data: d } = await axios.get(`${API}/reputation/social-drafts/${archivePid}`);
                         setSocialDrafts(d.items || []);
                       } catch (e) { toast.error(e?.response?.data?.detail || "Taslak üretilemedi"); }
                       setSurveyDrafting(false);
@@ -1202,7 +1219,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                               const { data } = await axios.post(`${API}/reputation/social-drafts/${d.id}/image`, { style: imageStyle });
                               await axios.post(`${API}/reputation/social-drafts/${d.id}/send-package`, { publish_date: publishDates[d.id] || "" });
                               setSocialDrafts((prev) => prev.map((x) => x.id === d.id ? { ...x, image_url: `${data.image_url}?t=${Date.now()}` } : x));
-                              axios.get(`${API}/reputation/social-calendar/${propertyId}`).then(({ data: c }) => setSocialCalendar(c.items || [])).catch(() => {});
+                              axios.get(`${API}/reputation/social-calendar/${archivePid}`).then(({ data: c }) => setSocialCalendar(c.items || [])).catch(() => {});
                               toast.success("⚡ Görsel üretildi ve paket pazarlamaya gönderildi");
                             } catch (e) { toast.error(e?.response?.data?.detail || "İşlem başarısız"); }
                             setImagingDraft(null);
@@ -1211,6 +1228,20 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                           {imagingDraft === d.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null} ⚡ Görsel + Paket
                         </button>
                       )}
+                      <button data-testid={`social-draft-variants-${d.id}`} disabled={imagingDraft === d.id}
+                        onClick={async () => {
+                          setImagingDraft(d.id);
+                          toast.info("3 görsel varyasyonu üretiliyor… (~20 sn)");
+                          try {
+                            const { data } = await axios.post(`${API}/reputation/social-drafts/${d.id}/image`, { style: imageStyle, variants: 3 });
+                            setSocialDrafts((prev) => prev.map((x) => x.id === d.id ? { ...x, image_variants: data.variants } : x));
+                            toast.success(`${data.variants.length} varyasyon hazır — favorinizi seçin 🎨`);
+                          } catch (e) { toast.error(e?.response?.data?.detail || "Varyasyonlar üretilemedi"); }
+                          setImagingDraft(null);
+                        }}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-fuchsia-600/80 hover:bg-fuchsia-500 disabled:opacity-50 text-white">
+                        🎨 3 Varyasyon
+                      </button>
                       <button data-testid={`social-draft-image-${d.id}`} disabled={imagingDraft === d.id}
                         onClick={async () => {
                           setImagingDraft(d.id);
@@ -1267,6 +1298,33 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   ) : (
                     <p className="text-xs text-stone-300 whitespace-pre-wrap">{d.draft}</p>
                   )}
+                  {d.image_variants?.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-[10px] text-stone-500 mb-1.5">Favorinizi seçin:</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {d.image_variants.map((v, vi) => {
+                          const selected = (d.image_url || "").split("?")[0] === v;
+                          return (
+                            <button key={vi} data-testid={`variant-select-${d.id}-${vi}`}
+                              onClick={async () => {
+                                try {
+                                  await axios.post(`${API}/reputation/social-drafts/${d.id}/select-image`, { image_url: v });
+                                  setSocialDrafts((prev) => prev.map((x) => x.id === d.id ? { ...x, image_url: `${v}?t=${Date.now()}` } : x));
+                                  toast.success("Görsel seçildi ✓");
+                                } catch { toast.error("Seçilemedi"); }
+                              }}
+                              className={`relative rounded-lg overflow-hidden border-2 ${selected ? "border-emerald-400" : "border-stone-700 hover:border-stone-500"}`}>
+                              <img src={`${process.env.REACT_APP_BACKEND_URL}${v}`} alt={`varyasyon ${vi + 1}`}
+                                className="w-24 h-24 object-cover" />
+                              {selected && (
+                                <span className="absolute top-1 right-1 bg-emerald-500 text-white text-[9px] px-1 rounded">✓</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   {d.image_url && (
                     <div className="mt-2">
                       <a href={`${process.env.REACT_APP_BACKEND_URL}${d.image_url.split("?")[0]}`} target="_blank" rel="noreferrer">
@@ -1311,7 +1369,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                               toast.success(data.task_created
                                 ? "📦 Hazır paket pazarlama görevine iliştirildi"
                                 : data.date_updated ? "Yayın tarihi güncellendi 📅" : "Bu taslak için paket görevi zaten açık");
-                              axios.get(`${API}/reputation/social-calendar/${propertyId}`).then(({ data: c }) => setSocialCalendar(c.items || [])).catch(() => {});
+                              axios.get(`${API}/reputation/social-calendar/${archivePid}`).then(({ data: c }) => setSocialCalendar(c.items || [])).catch(() => {});
                             } catch { toast.error("Paket gönderilemedi"); }
                             setPackagingDraft(null);
                           }}
@@ -1323,8 +1381,10 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   )}
                 </div>
               ))}
+              {socialDrafts.length === 0 && (
+                <p className="text-xs text-stone-500 py-3 text-center">Bu şube için henüz taslak yok — "🎉 Anket Övgüsünden Taslak" ile başlayın.</p>
+              )}
             </div>
-          )}
           {socialCalendar.length > 0 && (
             <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="social-calendar">
               <p className="text-sm font-medium text-stone-200">📅 Yayın Planı ({socialCalendar.length})</p>

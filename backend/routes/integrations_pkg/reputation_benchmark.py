@@ -537,6 +537,133 @@ def create_reputation_router(db, require_roles):
                       "approved_at": datetime.now(timezone.utc).isoformat()}})
         return {"approved": res.modified_count}
 
+    @router.get("/reputation/social-connection/{property_id}")
+    async def social_connection_get(property_id: str,
+                                    _: dict = Depends(require_roles("admin", "manager"))):
+        doc = await db.social_connections.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        tok = doc.get("meta_access_token", "")
+        return {"connected": bool(tok),
+                "meta_access_token_masked": (tok[:6] + "…" + tok[-4:]) if len(tok) > 12 else ("***" if tok else ""),
+                "ig_business_id": doc.get("ig_business_id", ""),
+                "fb_page_id": doc.get("fb_page_id", "")}
+
+    @router.post("/reputation/social-connection/{property_id}")
+    async def social_connection_save(property_id: str, body: dict,
+                                     current_user: dict = Depends(require_roles("admin", "manager"))):
+        upd = {"property_id": property_id,
+               "updated_by": current_user.get("email", ""),
+               "updated_at": datetime.now(timezone.utc).isoformat()}
+        for k in ("meta_access_token", "ig_business_id", "fb_page_id"):
+            v = (body.get(k) or "").strip()
+            if v:
+                upd[k] = v
+        await db.social_connections.update_one(
+            {"property_id": property_id}, {"$set": upd}, upsert=True)
+        return {"ok": True}
+
+    @router.post("/reputation/social-drafts/{draft_id}/publish")
+    async def social_draft_publish(draft_id: str,
+                                   _: dict = Depends(require_roles("admin", "manager"))):
+        """Onaylı paketi Instagram/Facebook'a gönder (anahtar yoksa SİMÜLASYON)."""
+        doc = await db.social_drafts.find_one({"id": draft_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Taslak bulunamadı")
+        if not doc.get("image_url"):
+            raise HTTPException(400, "Önce bir görsel üretin")
+        conn = await db.social_connections.find_one(
+            {"property_id": doc["property_id"]}, {"_id": 0}) or {}
+        now_iso = datetime.now(timezone.utc).isoformat()
+        token = conn.get("meta_access_token")
+        ig_id = conn.get("ig_business_id")
+        if not (token and ig_id):
+            await db.social_drafts.update_one(
+                {"id": draft_id},
+                {"$set": {"published": True, "published_at": now_iso,
+                          "publish_mode": "simulated"}})
+            return {"published": True, "mode": "simulated",
+                    "message": "SİMÜLASYON: Meta anahtarları eklenince gerçek gönderime geçer"}
+        # PNG → JPEG (Meta JPEG ister) ve public URL hazırla
+        from PIL import Image
+        fname = doc["image_url"].split("?")[0].split("/")[-1]
+        png_path = f"/app/backend/uploads/social_images/{fname}"
+        jpg_name = fname.rsplit(".", 1)[0] + ".jpg"
+        Image.open(png_path).convert("RGB").save(
+            f"/app/backend/uploads/social_images/{jpg_name}", "JPEG", quality=90)
+        base_url = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+        image_public = f"{base_url}/api/uploads/social_images/{jpg_name}"
+        graph = "https://graph.facebook.com/v25.0"
+        caption = (doc.get("draft") or "")[:2200]
+        async with httpx.AsyncClient(timeout=30) as client:
+            r1 = await client.post(f"{graph}/{ig_id}/media", params={
+                "image_url": image_public, "caption": caption, "access_token": token})
+            b1 = r1.json()
+            if r1.is_error or "error" in b1:
+                raise HTTPException(502, f"Instagram container hatası: {b1.get('error', {}).get('message', r1.text[:150])}")
+            r2 = await client.post(f"{graph}/{ig_id}/media_publish", params={
+                "creation_id": b1["id"], "access_token": token})
+            b2 = r2.json()
+            if r2.is_error or "error" in b2:
+                raise HTTPException(502, f"Instagram yayın hatası: {b2.get('error', {}).get('message', r2.text[:150])}")
+            fb_result = None
+            if conn.get("fb_page_id"):
+                r3 = await client.post(f"{graph}/{conn['fb_page_id']}/photos", params={
+                    "url": image_public, "caption": caption, "access_token": token})
+                fb_result = r3.json()
+        await db.social_drafts.update_one(
+            {"id": draft_id},
+            {"$set": {"published": True, "published_at": now_iso, "publish_mode": "live",
+                      "instagram_media_id": b2.get("id"), "facebook_result": fb_result}})
+        return {"published": True, "mode": "live", "instagram_media_id": b2.get("id")}
+
+    @router.post("/reputation/social-drafts/{draft_id}/performance")
+    async def social_draft_performance(draft_id: str, body: dict,
+                                       _: dict = Depends(require_roles("admin", "manager"))):
+        perf = {}
+        for k in ("likes", "reach", "comments"):
+            try:
+                perf[k] = max(0, int(body.get(k) or 0))
+            except (TypeError, ValueError):
+                perf[k] = 0
+        res = await db.social_drafts.update_one(
+            {"id": draft_id},
+            {"$set": {"performance": perf,
+                      "performance_at": datetime.now(timezone.utc).isoformat()}})
+        if not res.matched_count:
+            raise HTTPException(404, "Taslak bulunamadı")
+        return {"ok": True, "performance": perf}
+
+    @router.get("/reputation/social-performance/{property_id}")
+    async def social_performance(property_id: str,
+                                 _: dict = Depends(require_roles("admin", "manager"))):
+        """Konu bazlı gönderi performansı — robot hangi konuların tuttuğunu öğrenir."""
+        drafts = await db.social_drafts.find(
+            {"property_id": property_id, "performance": {"$exists": True}},
+            {"_id": 0, "topic": 1, "performance": 1}).to_list(200)
+        topics = {}
+        for d in drafts:
+            t = d.get("topic") or "diğer"
+            p = d.get("performance") or {}
+            agg = topics.setdefault(t, {"posts": 0, "likes": 0, "reach": 0, "comments": 0})
+            agg["posts"] += 1
+            for k in ("likes", "reach", "comments"):
+                agg[k] += p.get(k, 0)
+        rows = []
+        for t, a in topics.items():
+            rows.append({"topic": t, "posts": a["posts"],
+                         "avg_likes": round(a["likes"] / a["posts"], 1),
+                         "avg_reach": round(a["reach"] / a["posts"], 1),
+                         "avg_comments": round(a["comments"] / a["posts"], 1)})
+        rows.sort(key=lambda x: -x["avg_likes"])
+        insight = ""
+        if len(rows) >= 2 and rows[0]["avg_likes"] > 0:
+            diff = round((rows[0]["avg_likes"] - rows[-1]["avg_likes"])
+                         / max(rows[-1]["avg_likes"], 1) * 100)
+            insight = (f"'{rows[0]['topic']}' konulu gönderiler ortalama {rows[0]['avg_likes']} beğeni ile "
+                       f"en iyi performansı gösteriyor (%{diff} fark). Bu konuya ağırlık verin.")
+        elif len(rows) == 1:
+            insight = f"Şu ana kadar tek konu ölçüldü: '{rows[0]['topic']}' ({rows[0]['avg_likes']} ort. beğeni)."
+        return {"rows": rows, "insight": insight}
+
     @router.put("/reputation/social-drafts/{draft_id}/approve")
     async def social_draft_approve(draft_id: str,
                                    current_user: dict = Depends(require_roles("admin", "manager"))):

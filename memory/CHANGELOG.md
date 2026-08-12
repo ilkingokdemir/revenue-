@@ -3341,3 +3341,18 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   dosyanın üzerine yazar (cache-bust ?t=). UI: görselli taslaklarda not input + "🪄 İyileştir".
   TEST: "aydınlık + deniz manzarası" notu görsele birebir yansıdı (9 sn); boş not 400.
 - BEKLEYEN: Expo token (10. kez) + Google Places anahtarı.
+
+## Iter 530 (2026-08-12) — Instagram Bağlantısı + Gönderi Performansı TAMAMLANDI
+- 1) INSTAGRAM BAĞLANTISI (integration_expert playbook: Meta Graph API v25.0):
+  GET/POST /reputation/social-connection/{pid} (token maskeli döner, social_connections
+  koleksiyonu). POST /reputation/social-drafts/{id}/publish — anahtar varsa gerçek 2 adımlı
+  IG yayını (media container → media_publish, PNG→JPEG PIL dönüşümü, PUBLIC_BASE_URL ile
+  public URL; FB Page opsiyonel), yoksa SİMÜLASYON (publish_mode=simulated).
+  UI: "🔗 Instagram Bağlantısı" toggle + 3 inputlu ayar paneli; "📤 Instagram'a Gönder"
+  butonu; "📤 Yayınlandı (simülasyon)" rozeti. TEST: simulated publish + conn save/masked OK
+  (test bağlantısı temizlendi, simülasyon modunda).
+- 2) GÖNDERİ PERFORMANSI: POST /reputation/social-drafts/{id}/performance {likes,reach,
+  comments}; GET /reputation/social-performance/{pid} — konu bazlı ort. beğeni/erişim
+  sıralaması + insight cümlesi. UI: yayınlanmış taslakta beğeni/erişim inputları + 📊 Kaydet;
+  "📊 Gönderi Performansı" kartı (sıralama + 💡 içgörü). TEST: 120/2400 kaydedildi, özet OK.
+- BEKLEYEN: Expo token (11. kez) + Google Places anahtarı + Meta anahtarları (yeni).

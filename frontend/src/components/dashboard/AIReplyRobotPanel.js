@@ -77,6 +77,12 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [refineNotes, setRefineNotes] = useState({});
   const [refiningDraft, setRefiningDraft] = useState(null);
   const [bulkApproving, setBulkApproving] = useState(false);
+  const [connOpen, setConnOpen] = useState(false);
+  const [connStatus, setConnStatus] = useState(null);
+  const [connForm, setConnForm] = useState({ meta_access_token: "", ig_business_id: "", fb_page_id: "" });
+  const [publishingDraft, setPublishingDraft] = useState(null);
+  const [perfInputs, setPerfInputs] = useState({});
+  const [perfSummary, setPerfSummary] = useState(null);
 
   const runInsight = async () => {
     setInsightLoading(true);
@@ -227,6 +233,8 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
     if (tab === "benchmark" && archivePid) {
       axios.get(`${API}/reputation/social-drafts/${archivePid}`).then(({ data }) => setSocialDrafts(data.items || [])).catch(() => {});
       axios.get(`${API}/reputation/social-calendar/${archivePid}`).then(({ data }) => setSocialCalendar(data.items || [])).catch(() => {});
+      axios.get(`${API}/reputation/social-connection/${archivePid}`).then(({ data }) => setConnStatus(data)).catch(() => {});
+      axios.get(`${API}/reputation/social-performance/${archivePid}`).then(({ data }) => setPerfSummary(data)).catch(() => {});
     }
   }, [tab, propertyId, archivePid, loadConfig, loadBench]);
 
@@ -1191,6 +1199,10 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <p className="text-sm font-medium text-stone-200">🗂️ Sosyal Taslak Arşivi ({socialDrafts.length})</p>
                 <div className="flex items-center gap-3">
+                  <button data-testid="social-conn-toggle" onClick={() => setConnOpen((v) => !v)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] border ${connStatus?.connected ? "bg-emerald-950/50 border-emerald-700 text-emerald-300" : "bg-stone-950 border-stone-700 text-stone-300 hover:border-stone-500"}`}>
+                    🔗 {connStatus?.connected ? "Instagram bağlı" : "Instagram Bağlantısı"}
+                  </button>
                   {propList.length > 1 && (
                     <label className="flex items-center gap-1.5 text-[10px] text-stone-500">
                       Şube:
@@ -1229,6 +1241,41 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   </label>
                 </div>
               </div>
+              {connOpen && (
+                <div data-testid="social-conn-panel" className="p-3 rounded-lg bg-stone-950 border border-stone-700 space-y-2">
+                  <p className="text-[11px] text-stone-400">
+                    Meta (Instagram/Facebook) anahtarlarınızı girin — anahtar yoksa gönderimler <span className="text-amber-300">SİMÜLASYON</span> modunda çalışır.
+                    Gerekli: Instagram Business hesabı + <a href="https://developers.facebook.com/apps/" target="_blank" rel="noreferrer" className="text-violet-300 underline">Meta uygulaması</a> erişim token'ı.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <input data-testid="conn-token-input" type="password" placeholder={connStatus?.meta_access_token_masked || "Meta Access Token"}
+                      value={connForm.meta_access_token}
+                      onChange={(e) => setConnForm((f) => ({ ...f, meta_access_token: e.target.value }))}
+                      className="px-2 py-1.5 rounded-lg text-[11px] bg-stone-900 border border-stone-700 text-stone-200 outline-none focus:border-violet-500" />
+                    <input data-testid="conn-ig-input" type="text" placeholder={connStatus?.ig_business_id || "Instagram Business ID"}
+                      value={connForm.ig_business_id}
+                      onChange={(e) => setConnForm((f) => ({ ...f, ig_business_id: e.target.value }))}
+                      className="px-2 py-1.5 rounded-lg text-[11px] bg-stone-900 border border-stone-700 text-stone-200 outline-none focus:border-violet-500" />
+                    <input data-testid="conn-fb-input" type="text" placeholder={connStatus?.fb_page_id || "Facebook Page ID (opsiyonel)"}
+                      value={connForm.fb_page_id}
+                      onChange={(e) => setConnForm((f) => ({ ...f, fb_page_id: e.target.value }))}
+                      className="px-2 py-1.5 rounded-lg text-[11px] bg-stone-900 border border-stone-700 text-stone-200 outline-none focus:border-violet-500" />
+                  </div>
+                  <button data-testid="conn-save-btn"
+                    onClick={async () => {
+                      try {
+                        await axios.post(`${API}/reputation/social-connection/${archivePid}`, connForm);
+                        const { data } = await axios.get(`${API}/reputation/social-connection/${archivePid}`);
+                        setConnStatus(data);
+                        setConnForm({ meta_access_token: "", ig_business_id: "", fb_page_id: "" });
+                        toast.success("Bağlantı ayarları kaydedildi");
+                      } catch { toast.error("Kaydedilemedi"); }
+                    }}
+                    className="px-3 py-1 rounded-lg text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white">
+                    Kaydet
+                  </button>
+                </div>
+              )}
               {socialDrafts.map((d) => (
                 <div key={d.id} data-testid={`social-draft-${d.id}`} className="p-3 rounded-lg bg-stone-950 border border-stone-800">
                   <div className="flex items-center justify-between mb-1">
@@ -1444,6 +1491,54 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                             {refiningDraft === d.id ? "…" : "🪄 İyileştir"}
                           </button>
                         </div>
+                        {!d.published ? (
+                          <button data-testid={`social-publish-${d.id}`} disabled={publishingDraft === d.id}
+                            onClick={async () => {
+                              setPublishingDraft(d.id);
+                              try {
+                                const { data } = await axios.post(`${API}/reputation/social-drafts/${d.id}/publish`);
+                                setSocialDrafts((prev) => prev.map((x) => x.id === d.id ? { ...x, published: true, publish_mode: data.mode } : x));
+                                toast.success(data.mode === "live"
+                                  ? "Instagram'da yayınlandı 🎉"
+                                  : "SİMÜLASYON modunda yayınlandı — Meta anahtarları eklenince gerçek gönderime geçer");
+                              } catch (e) { toast.error(e?.response?.data?.detail || "Yayınlanamadı"); }
+                              setPublishingDraft(null);
+                            }}
+                            className="px-2.5 py-1 rounded-lg text-[10px] bg-gradient-to-r from-fuchsia-600 to-amber-500 hover:opacity-90 disabled:opacity-50 text-white font-medium">
+                            {publishingDraft === d.id ? "Gönderiliyor…" : "📤 Instagram'a Gönder"}
+                          </button>
+                        ) : (
+                          <span data-testid={`social-published-${d.id}`} className="px-2 py-0.5 rounded bg-fuchsia-500/15 text-fuchsia-300 text-[10px]">
+                            📤 Yayınlandı{d.publish_mode === "simulated" ? " (simülasyon)" : ""}
+                          </span>
+                        )}
+                        {d.published && (
+                          <div className="flex items-center gap-1">
+                            <input data-testid={`perf-likes-${d.id}`} type="number" min="0" placeholder="beğeni"
+                              value={perfInputs[d.id]?.likes ?? d.performance?.likes ?? ""}
+                              onChange={(e) => setPerfInputs((p) => ({ ...p, [d.id]: { ...p[d.id], likes: e.target.value } }))}
+                              className="w-16 px-1.5 py-1 rounded-lg text-[10px] bg-stone-950 border border-stone-700 text-stone-200 outline-none" />
+                            <input data-testid={`perf-reach-${d.id}`} type="number" min="0" placeholder="erişim"
+                              value={perfInputs[d.id]?.reach ?? d.performance?.reach ?? ""}
+                              onChange={(e) => setPerfInputs((p) => ({ ...p, [d.id]: { ...p[d.id], reach: e.target.value } }))}
+                              className="w-16 px-1.5 py-1 rounded-lg text-[10px] bg-stone-950 border border-stone-700 text-stone-200 outline-none" />
+                            <button data-testid={`perf-save-${d.id}`}
+                              onClick={async () => {
+                                try {
+                                  const v = perfInputs[d.id] || {};
+                                  const { data } = await axios.post(`${API}/reputation/social-drafts/${d.id}/performance`, {
+                                    likes: v.likes ?? d.performance?.likes, reach: v.reach ?? d.performance?.reach,
+                                  });
+                                  setSocialDrafts((prev) => prev.map((x) => x.id === d.id ? { ...x, performance: data.performance } : x));
+                                  axios.get(`${API}/reputation/social-performance/${archivePid}`).then(({ data: s }) => setPerfSummary(s)).catch(() => {});
+                                  toast.success("Performans kaydedildi 📊");
+                                } catch { toast.error("Kaydedilemedi"); }
+                              }}
+                              className="px-2 py-1 rounded-lg text-[10px] bg-sky-600/80 hover:bg-sky-500 text-white">
+                              📊 Kaydet
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1470,6 +1565,23 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] ${["done", "completed", "closed"].includes(c.task_status) ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
                     {["done", "completed", "closed"].includes(c.task_status) ? "✓ Yayınlandı" : "⏳ Bekliyor"}
                   </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {perfSummary?.rows?.length > 0 && (
+            <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="perf-summary">
+              <p className="text-sm font-medium text-stone-200">📊 Gönderi Performansı — hangi konular tutuyor?</p>
+              {perfSummary.insight && (
+                <p data-testid="perf-insight" className="text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-800/40 rounded-lg p-2">💡 {perfSummary.insight}</p>
+              )}
+              {perfSummary.rows.map((r, i) => (
+                <div key={r.topic} className="flex items-center gap-3 text-xs p-2 rounded-lg bg-stone-950 border border-stone-800">
+                  <span className="shrink-0 w-6 text-stone-500">{i + 1}.</span>
+                  <span className="text-violet-300 uppercase text-[10px] w-28 truncate shrink-0">{r.topic}</span>
+                  <span className="text-stone-400">❤️ {r.avg_likes} ort. beğeni</span>
+                  <span className="text-stone-400">👁 {r.avg_reach} ort. erişim</span>
+                  <span className="text-stone-600 ml-auto">{r.posts} gönderi</span>
                 </div>
               ))}
             </div>

@@ -105,6 +105,92 @@ async def winback_reminder_loop(db, interval_seconds: int = 21600):
         await asyncio.sleep(interval_seconds)
 
 
+async def run_publish_day_check(db) -> dict:
+    """Yayın günü gelen sosyal medya paketleri için 'bugün yayınla' bildirimi."""
+    today = datetime.now(timezone.utc).date().isoformat()
+    drafts = await db.social_drafts.find(
+        {"publish_date": today, "publish_alert_sent": {"$ne": True},
+         "packaged_task_id": {"$exists": True}}, {"_id": 0}).to_list(50)
+    created = 0
+    for d in drafts:
+        task = await db.staff_tasks.find_one(
+            {"id": d["packaged_task_id"]}, {"_id": 0, "status": 1})
+        if task and task.get("status") in ("done", "completed", "closed"):
+            continue
+        prop = await db.properties.find_one(
+            {"id": d["property_id"]}, {"_id": 0, "name": 1}) or {}
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "type": "info",
+            "title": f"📣 Bugün yayınla — {d.get('topic', '')}",
+            "message": (f"{prop.get('name', d['property_id'])} için '{d.get('topic')}' sosyal medya "
+                        f"paketinin yayın günü bugün ({today}). Paket pazarlama görevinde hazır."),
+            "category": "publish_day", "property_id": d["property_id"],
+            "target_user": "", "target_role": "", "link_to": "ai-reply-robot",
+            "priority": "high", "read": False,
+            "created_by": "System", "created_at": datetime.now(timezone.utc).isoformat()})
+        await db.social_drafts.update_one(
+            {"id": d["id"]}, {"$set": {"publish_alert_sent": True}})
+        created += 1
+    return {"alerts_created": created}
+
+
+async def publish_day_alert_loop(db, interval_seconds: int = 3600):
+    while True:
+        try:
+            res = await run_publish_day_check(db)
+            if res["alerts_created"]:
+                logger.info(f"publish day alerts: {res}")
+        except Exception as e:
+            logger.warning(f"publish day alert tick error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
+async def run_praise_hunter(db) -> dict:
+    """Haftada bir: en iyi anket övgüsünü otomatik sosyal taslağa çevir (onay bekler)."""
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    created = []
+    async for p in db.properties.find({}, {"_id": 0, "id": 1, "name": 1}):
+        pid = p["id"]
+        recent = await db.social_drafts.find_one(
+            {"property_id": pid, "source": "survey_praise_auto",
+             "created_at": {"$gte": week_ago}}, {"_id": 0, "id": 1})
+        if recent:
+            continue
+        resp = await db.survey_responses.find(
+            {"property_id": pid, "nps_score": {"$gte": 9},
+             "comment": {"$nin": ["", None]},
+             "social_draft_created": {"$ne": True}},
+            {"_id": 0}).sort([("nps_score", -1), ("submitted_at", -1)]).to_list(1)
+        if not resp:
+            continue
+        r = resp[0]
+        first_name = (r.get("guest_name") or "Misafirimiz").split()[0]
+        draft = (f"🌟 {first_name} adlı misafirimizden {r.get('nps_score')}/10: "
+                 f"\"{(r.get('comment') or '')[:180]}\" Bu güzel sözler için teşekkürler! "
+                 f"#misafirmemnuniyeti #otel #tesekkurler")
+        await db.social_drafts.insert_one({
+            "id": str(uuid.uuid4()), "property_id": pid, "topic": "anket övgüsü",
+            "draft": draft, "source": "survey_praise_auto",
+            "auto": True, "approved": False,
+            "survey_response_id": r.get("id"),
+            "created_at": datetime.now(timezone.utc).isoformat()})
+        await db.survey_responses.update_one(
+            {"id": r.get("id")}, {"$set": {"social_draft_created": True}})
+        created.append(pid)
+    return {"drafts_created": len(created), "properties": created}
+
+
+async def praise_hunter_loop(db, interval_seconds: int = 21600):
+    while True:
+        try:
+            res = await run_praise_hunter(db)
+            if res["drafts_created"]:
+                logger.info(f"praise hunter: {res}")
+        except Exception as e:
+            logger.warning(f"praise hunter tick error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def complaint_sla_loop(db, interval_seconds: int = 300):
     """Yanıt süresi hedefi (SLA) aşılan şikayetlerde yöneticiyi uyar."""
     while True:

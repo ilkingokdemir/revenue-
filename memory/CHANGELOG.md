@@ -3304,3 +3304,17 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   kullanıcı adı + kare görsel + ikon satırı + caption). data-testid=instagram-preview-modal.
 - E2E DOĞRULANDI: curl (3 akış + tarih güncelleme + takvim sıralaması) + 2 screenshot.
 - BEKLEYEN: Expo token (7. kez buton metni, token yok) + Google Places anahtarı.
+
+## Iter 527 (2026-08-12) — Yayın Günü Bildirimi + Övgü Avcısı + ⚡ Görsel+Paket TAMAMLANDI
+- 1) YAYIN GÜNÜ BİLDİRİMİ: workers.run_publish_day_check + publish_day_alert_loop (saatlik).
+  publish_date=bugün & görev açık → high-priority notification (kategori publish_day,
+  publish_alert_sent flag ile dedupe; tarih güncellenince flag sıfırlanır).
+  Manuel: POST /reputation/publish-alerts/run. TEST: 1 bildirim + dedupe 0.
+- 2) OTOMATİK ÖVGÜ AVCISI: workers.run_praise_hunter + praise_hunter_loop (6 saatte bir,
+  şube başına haftada 1). En iyi nps>=9 yorum → auto taslak (source survey_praise_auto,
+  auto=true, approved=false). UI: "🤖 onay bekliyor" rozeti + "✅ Onayla" butonu
+  (PUT /reputation/social-drafts/{id}/approve). TEST: startup'ta otomatik taslak üretildi,
+  onay akışı UI'da doğrulandı.
+- 3) ⚡ GÖRSEL+PAKET: görselsiz taslaklarda tek buton — görsel üret + send-package art arda,
+  takvim yenilenir. TEST: UI'da tıklandı, ~25 sn'de görsel + paket + takvim 3 öğe.
+- BEKLEYEN: Expo token (8. kez) + Google Places anahtarı.

@@ -342,7 +342,8 @@ def create_reputation_router(db, require_roles):
                 await db.staff_tasks.update_one(
                     {"id": existing["id"]}, {"$set": {"publish_date": publish_date}})
                 await db.social_drafts.update_one(
-                    {"id": draft_id}, {"$set": {"publish_date": publish_date}})
+                    {"id": draft_id},
+                    {"$set": {"publish_date": publish_date, "publish_alert_sent": False}})
             return {"task_created": False, "task_id": existing["id"],
                     "date_updated": bool(publish_date)}
         desc = f"Yayına hazır sosyal medya paketi.\n\nGönderi metni:\n{doc.get('draft', '')}"
@@ -431,5 +432,28 @@ def create_reputation_router(db, require_roles):
         """Puan düşüş trendi kontrolünü manuel tetikle."""
         from workers import run_rating_trend_check
         return await run_rating_trend_check(db)
+
+    @router.post("/reputation/publish-alerts/run")
+    async def publish_alerts_run(_: dict = Depends(require_roles("admin", "manager"))):
+        """Yayın günü bildirimlerini manuel tetikle."""
+        from workers import run_publish_day_check
+        return await run_publish_day_check(db)
+
+    @router.post("/reputation/praise-hunter/run")
+    async def praise_hunter_run(_: dict = Depends(require_roles("admin", "manager"))):
+        """Övgü avcısını manuel tetikle."""
+        from workers import run_praise_hunter
+        return await run_praise_hunter(db)
+
+    @router.put("/reputation/social-drafts/{draft_id}/approve")
+    async def social_draft_approve(draft_id: str,
+                                   current_user: dict = Depends(require_roles("admin", "manager"))):
+        res = await db.social_drafts.update_one(
+            {"id": draft_id},
+            {"$set": {"approved": True, "approved_by": current_user.get("email", ""),
+                      "approved_at": datetime.now(timezone.utc).isoformat()}})
+        if not res.matched_count:
+            raise HTTPException(404, "Taslak bulunamadı")
+        return {"ok": True}
 
     return router

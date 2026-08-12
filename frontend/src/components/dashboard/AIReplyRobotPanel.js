@@ -1169,9 +1169,48 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
               {socialDrafts.map((d) => (
                 <div key={d.id} data-testid={`social-draft-${d.id}`} className="p-3 rounded-lg bg-stone-950 border border-stone-800">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-violet-300 uppercase tracking-wider">{d.topic}{d.edited ? " · düzenlendi" : ""}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-violet-300 uppercase tracking-wider">{d.topic}{d.edited ? " · düzenlendi" : ""}</span>
+                      {d.auto && !d.approved && (
+                        <span data-testid={`social-draft-pending-${d.id}`} className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[9px]">🤖 onay bekliyor</span>
+                      )}
+                      {d.auto && d.approved && (
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[9px]">🤖 onaylandı</span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-stone-600">{(d.created_at || "").slice(0, 16).replace("T", " ")}</span>
+                      {d.auto && !d.approved && (
+                        <button data-testid={`social-draft-approve-${d.id}`}
+                          onClick={async () => {
+                            try {
+                              await axios.put(`${API}/reputation/social-drafts/${d.id}/approve`);
+                              setSocialDrafts((prev) => prev.map((x) => x.id === d.id ? { ...x, approved: true } : x));
+                              toast.success("Taslak onaylandı ✅");
+                            } catch { toast.error("Onaylanamadı"); }
+                          }}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-emerald-600/80 hover:bg-emerald-500 text-white">
+                          ✅ Onayla
+                        </button>
+                      )}
+                      {!d.image_url && (
+                        <button data-testid={`social-draft-quick-${d.id}`} disabled={imagingDraft === d.id}
+                          onClick={async () => {
+                            setImagingDraft(d.id);
+                            toast.info("Görsel üretiliyor + paketleniyor… (~20 sn)");
+                            try {
+                              const { data } = await axios.post(`${API}/reputation/social-drafts/${d.id}/image`, { style: imageStyle });
+                              await axios.post(`${API}/reputation/social-drafts/${d.id}/send-package`, { publish_date: publishDates[d.id] || "" });
+                              setSocialDrafts((prev) => prev.map((x) => x.id === d.id ? { ...x, image_url: `${data.image_url}?t=${Date.now()}` } : x));
+                              axios.get(`${API}/reputation/social-calendar/${propertyId}`).then(({ data: c }) => setSocialCalendar(c.items || [])).catch(() => {});
+                              toast.success("⚡ Görsel üretildi ve paket pazarlamaya gönderildi");
+                            } catch (e) { toast.error(e?.response?.data?.detail || "İşlem başarısız"); }
+                            setImagingDraft(null);
+                          }}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-amber-600/80 hover:bg-amber-500 disabled:opacity-50 text-white">
+                          {imagingDraft === d.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null} ⚡ Görsel + Paket
+                        </button>
+                      )}
                       <button data-testid={`social-draft-image-${d.id}`} disabled={imagingDraft === d.id}
                         onClick={async () => {
                           setImagingDraft(d.id);

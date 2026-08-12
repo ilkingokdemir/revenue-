@@ -286,7 +286,8 @@ def create_reputation_router(db, require_roles):
         "luks": "Lüks, sofistike, zengin dokular, dramatik ışık, premium beş yıldızlı his.",
     }
 
-    async def _gen_one_image(doc: dict, prop_name: str, style_prompt: str, out_path: str):
+    async def _gen_one_image(doc: dict, prop_name: str, style_prompt: str, out_path: str,
+                             extra_note: str = ""):
         import base64
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         chat = LlmChat(api_key=os.environ.get("EMERGENT_LLM_KEY"),
@@ -299,6 +300,8 @@ def create_reputation_router(db, require_roles):
                   f"Konu: {doc.get('topic', '')}. Otel: {prop_name}. "
                   f"Gönderi metni bağlamı: {(doc.get('draft') or '')[:300]}. "
                   f"Görselde hiçbir yazı/metin/logo OLMASIN; sadece atmosferik, profesyonel fotoğraf.")
+        if extra_note:
+            prompt += f" ÖNEMLİ kullanıcı düzeltme notu (mutlaka uygula): {extra_note[:200]}."
         _text, images = await chat.send_message_multimodal_response(UserMessage(text=prompt))
         if not images:
             raise RuntimeError("no image returned")
@@ -479,6 +482,60 @@ def create_reputation_router(db, require_roles):
         """Övgü avcısını manuel tetikle."""
         from workers import run_praise_hunter
         return await run_praise_hunter(db)
+
+    @router.post("/reputation/social-drafts/{draft_id}/refine-image")
+    async def social_draft_refine_image(draft_id: str, body: dict,
+                                        _: dict = Depends(require_roles("admin", "manager"))):
+        """Kullanıcı notuna göre mevcut görseli yenile."""
+        note = (body.get("note") or "").strip()
+        if not note:
+            raise HTTPException(400, "İyileştirme notu gerekli")
+        doc = await db.social_drafts.find_one({"id": draft_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Taslak bulunamadı")
+        if not doc.get("image_url"):
+            raise HTTPException(400, "Önce bir görsel üretin")
+        prop = await db.properties.find_one(
+            {"id": doc["property_id"]}, {"_id": 0, "name": 1}) or {}
+        style_prompt = IMG_STYLES.get(doc.get("image_style") or "sicak", IMG_STYLES["sicak"])
+        fname = doc["image_url"].split("?")[0].split("/")[-1]
+        try:
+            await _gen_one_image(doc, prop.get("name", ""), style_prompt,
+                                 f"/app/backend/uploads/social_images/{fname}",
+                                 extra_note=note)
+        except Exception as e:
+            logger.warning(f"image refine failed: {e}")
+            raise HTTPException(502, "Görsel yenilenemedi, tekrar deneyin")
+        await db.social_drafts.update_one(
+            {"id": draft_id},
+            {"$set": {"image_refine_note": note,
+                      "image_generated_at": datetime.now(timezone.utc).isoformat()}})
+        return {"image_url": doc["image_url"].split("?")[0], "note": note}
+
+    @router.get("/reputation/social-drafts-pending")
+    async def social_drafts_pending(_: dict = Depends(require_roles("admin", "manager"))):
+        """Tüm şubelerin onay bekleyen otomatik taslakları."""
+        items = await db.social_drafts.find(
+            {"auto": True, "approved": {"$ne": True}},
+            {"_id": 0}).sort("created_at", -1).to_list(100)
+        props = {}
+        async for p in db.properties.find({}, {"_id": 0, "id": 1, "name": 1}):
+            props[p["id"]] = p.get("name", p["id"])
+        for i in items:
+            i["property_name"] = props.get(i["property_id"], i["property_id"])
+        return {"items": items}
+
+    @router.post("/reputation/social-drafts/approve-bulk")
+    async def social_drafts_approve_bulk(body: dict,
+                                         current_user: dict = Depends(require_roles("admin", "manager"))):
+        ids = body.get("draft_ids") or []
+        if not ids:
+            raise HTTPException(400, "draft_ids gerekli")
+        res = await db.social_drafts.update_many(
+            {"id": {"$in": ids}, "auto": True},
+            {"$set": {"approved": True, "approved_by": current_user.get("email", ""),
+                      "approved_at": datetime.now(timezone.utc).isoformat()}})
+        return {"approved": res.modified_count}
 
     @router.put("/reputation/social-drafts/{draft_id}/approve")
     async def social_draft_approve(draft_id: str,

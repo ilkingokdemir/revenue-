@@ -3330,3 +3330,14 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
 - TEST: curl (3 varyasyon, seçim, geçersiz seçim 400, aldgate şube taslağı) + 2 screenshot
   (varyasyon seçimi UI, şube geçişi). Hepsi geçti.
 - BEKLEYEN: Expo token (9. kez) + Google Places anahtarı.
+
+## Iter 529 (2026-08-12) — Toplu Onay + Görsel Yorum İyileştirme TAMAMLANDI
+- 1) TOPLU ONAY: GET /reputation/social-drafts-pending (tüm şubeler, property_name ile),
+  POST /reputation/social-drafts/approve-bulk {draft_ids}. UI: benchmark sekmesinde amber
+  "⏳ Onay Bekleyen Otomatik Taslaklar" paneli — şube etiketi + tekil Onayla + "✅ Tümünü
+  Onayla (N)". TEST: 1 taslak toplu onaylandı, panel kayboldu.
+- 2) GÖRSEL YORUM İYİLEŞTİRME: POST /reputation/social-drafts/{id}/refine-image {note} —
+  _gen_one_image extra_note ile prompt'a "ÖNEMLİ kullanıcı düzeltme notu" ekler, mevcut
+  dosyanın üzerine yazar (cache-bust ?t=). UI: görselli taslaklarda not input + "🪄 İyileştir".
+  TEST: "aydınlık + deniz manzarası" notu görsele birebir yansıdı (9 sn); boş not 400.
+- BEKLEYEN: Expo token (10. kez) + Google Places anahtarı.

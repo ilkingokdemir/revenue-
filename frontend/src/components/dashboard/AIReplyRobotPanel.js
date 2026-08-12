@@ -73,6 +73,10 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [archiveProperty, setArchiveProperty] = useState("");
   const [propList, setPropList] = useState([]);
   const archivePid = archiveProperty || propertyId;
+  const [pendingDrafts, setPendingDrafts] = useState([]);
+  const [refineNotes, setRefineNotes] = useState({});
+  const [refiningDraft, setRefiningDraft] = useState(null);
+  const [bulkApproving, setBulkApproving] = useState(false);
 
   const runInsight = async () => {
     setInsightLoading(true);
@@ -218,6 +222,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
     if (tab === "benchmark" && propertyId) {
       axios.get(`${API}/reputation/competitor-spy/${propertyId}/latest`).then(({ data }) => data?.id && setSpy(data)).catch(() => {});
       axios.get(`${API}/properties`).then(({ data }) => setPropList(Array.isArray(data) ? data : data.items || data.properties || [])).catch(() => {});
+      axios.get(`${API}/reputation/social-drafts-pending`).then(({ data }) => setPendingDrafts(data.items || [])).catch(() => {});
     }
     if (tab === "benchmark" && archivePid) {
       axios.get(`${API}/reputation/social-drafts/${archivePid}`).then(({ data }) => setSocialDrafts(data.items || [])).catch(() => {});
@@ -1141,6 +1146,47 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
               </div>
             )}
           </div>
+          {pendingDrafts.length > 0 && (
+            <div className="bg-amber-950/40 border border-amber-800/40 rounded-xl p-4 space-y-2" data-testid="pending-approvals">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-amber-200">⏳ Onay Bekleyen Otomatik Taslaklar ({pendingDrafts.length}) — tüm şubeler</p>
+                <button data-testid="bulk-approve-btn" disabled={bulkApproving}
+                  onClick={async () => {
+                    setBulkApproving(true);
+                    try {
+                      const { data } = await axios.post(`${API}/reputation/social-drafts/approve-bulk`, {
+                        draft_ids: pendingDrafts.map((p) => p.id),
+                      });
+                      toast.success(`${data.approved} taslak toplu onaylandı ✅`);
+                      setPendingDrafts([]);
+                      axios.get(`${API}/reputation/social-drafts/${archivePid}`).then(({ data: d }) => setSocialDrafts(d.items || [])).catch(() => {});
+                    } catch { toast.error("Toplu onay başarısız"); }
+                    setBulkApproving(false);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white">
+                  {bulkApproving ? "Onaylanıyor…" : `✅ Tümünü Onayla (${pendingDrafts.length})`}
+                </button>
+              </div>
+              {pendingDrafts.map((p) => (
+                <div key={p.id} data-testid={`pending-draft-${p.id}`} className="flex items-center gap-2 p-2 rounded-lg bg-stone-950 border border-stone-800 text-xs">
+                  <span className="shrink-0 px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 text-[10px] w-28 truncate">{p.property_name}</span>
+                  <span className="text-stone-400 flex-1 truncate">{p.draft}</span>
+                  <button data-testid={`pending-approve-${p.id}`}
+                    onClick={async () => {
+                      try {
+                        await axios.put(`${API}/reputation/social-drafts/${p.id}/approve`);
+                        setPendingDrafts((prev) => prev.filter((x) => x.id !== p.id));
+                        setSocialDrafts((prev) => prev.map((x) => x.id === p.id ? { ...x, approved: true } : x));
+                        toast.success("Onaylandı ✅");
+                      } catch { toast.error("Onaylanamadı"); }
+                    }}
+                    className="shrink-0 px-2 py-0.5 rounded text-[10px] bg-emerald-600/80 hover:bg-emerald-500 text-white">
+                    Onayla
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="social-draft-archive">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <p className="text-sm font-medium text-stone-200">🗂️ Sosyal Taslak Arşivi ({socialDrafts.length})</p>
@@ -1376,6 +1422,28 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                           className="px-2.5 py-1 rounded-lg text-[10px] bg-emerald-600/80 hover:bg-emerald-500 disabled:opacity-50 text-white">
                           {packagingDraft === d.id ? "Gönderiliyor…" : "📦 Pakete Gönder (metin + görsel)"}
                         </button>
+                        <div className="flex items-center gap-1">
+                          <input data-testid={`refine-note-${d.id}`} type="text"
+                            placeholder="Görsel notu: daha aydınlık olsun…"
+                            value={refineNotes[d.id] || ""}
+                            onChange={(e) => setRefineNotes((p) => ({ ...p, [d.id]: e.target.value }))}
+                            className="px-2 py-1 rounded-lg text-[10px] bg-stone-950 border border-stone-700 text-stone-200 outline-none focus:border-violet-500 w-48" />
+                          <button data-testid={`refine-btn-${d.id}`} disabled={refiningDraft === d.id || !(refineNotes[d.id] || "").trim()}
+                            onClick={async () => {
+                              setRefiningDraft(d.id);
+                              toast.info("Görsel notunuza göre yenileniyor… (~15 sn)");
+                              try {
+                                const { data } = await axios.post(`${API}/reputation/social-drafts/${d.id}/refine-image`, { note: refineNotes[d.id] });
+                                setSocialDrafts((prev) => prev.map((x) => x.id === d.id ? { ...x, image_url: `${data.image_url}?t=${Date.now()}` } : x));
+                                setRefineNotes((p) => ({ ...p, [d.id]: "" }));
+                                toast.success("Görsel notunuza göre yenilendi 🪄");
+                              } catch (e) { toast.error(e?.response?.data?.detail || "Yenilenemedi"); }
+                              setRefiningDraft(null);
+                            }}
+                            className="px-2 py-1 rounded-lg text-[10px] bg-violet-600/80 hover:bg-violet-500 disabled:opacity-40 text-white">
+                            {refiningDraft === d.id ? "…" : "🪄 İyileştir"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}

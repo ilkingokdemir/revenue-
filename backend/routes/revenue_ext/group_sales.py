@@ -220,6 +220,30 @@ def create_group_sales_router(db, require_roles):
                 expected_rooms, rate, real_net)
         return {"ok": True, "version": version, "alternatives": alternatives}
 
+    @router.post("/rfp/{rfp_id}/reschedule")
+    async def reschedule(rfp_id: str, body: Dict,
+                         user: dict = Depends(require_roles("admin", "manager"))):
+        """Alternatif tarih önerisini tek tıkla uygular: tarihleri taşır + otomatik yeniden fiyatlar."""
+        rfp = await db.group_rfps.find_one({"id": rfp_id}, {"_id": 0})
+        if not rfp:
+            raise HTTPException(404, "RFP bulunamadı")
+        try:
+            s, e = _d(body["check_in"]), _d(body["check_out"])
+        except (KeyError, ValueError, TypeError):
+            raise HTTPException(400, "check_in ve check_out gerekli")
+        if e <= s:
+            raise HTTPException(400, "Geçersiz tarih aralığı")
+        old = f"{rfp['check_in']} → {rfp['check_out']}"
+        await db.group_rfps.update_one(
+            {"id": rfp_id},
+            {"$set": {"check_in": s.isoformat(), "check_out": e.isoformat(),
+                      "updated_at": datetime.now(timezone.utc).isoformat()},
+             "$push": {"reschedule_log": {"from": old, "to": f"{s.isoformat()} → {e.isoformat()}",
+                                          "at": datetime.now(timezone.utc).isoformat(),
+                                          "by": user.get("email", "")}}})
+        result = await quote(rfp_id, {"note": f"Tarih kaydırma: {old} yerine"}, user)
+        return {**result, "rescheduled": {"from": old, "to": f"{s.isoformat()} → {e.isoformat()}"}}
+
     @router.post("/rfp/{rfp_id}/alternatives")
     async def alternatives(rfp_id: str,
                            _: dict = Depends(require_roles("admin", "manager"))):

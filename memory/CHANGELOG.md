@@ -3582,3 +3582,11 @@ d) GROUP SALES OS LITE: routes/revenue_ext/group_sales.py — group_rfps CRUD, w
 - UYARI: data_quality.py'de iç fonksiyonu search_replace ile modül seviyesine taşırken dosya bozuldu,
   create_file overwrite=true ile temiz yeniden yazma gerekti. Büyük refactor'da tam dosya yazmayı tercih et.
 - Anahtarlar HÂLÂ gelmedi (4. kez) — Expo/Resend/Meta/Google Places mock modda.
+
+## Iter 513 (2026-06) — Tarih Kaydırma Teklifi
+- POST /api/group-sales/rfp/{id}/reschedule {check_in, check_out}: RFP tarihlerini taşır,
+  reschedule_log'a kaydeder ve quote()'u otomatik çağırır (yeni versiyon + not: 'Tarih kaydırma: ... yerine').
+- Panel: alternatif tarih satırında 'Bu tarihle fiyatla' butonu (gs-reschedule-{rfpId}-{i}) →
+  taşıma + otomatik fiyatlama + alt listesi temizlenir.
+- TEST: Beta Kongre 10-05→10-02 taşındı, v3 otomatik teklif ACCEPT, net 896 → 5104. UI'da v3 Kabul satırı görünür.
+  Not: RFP en iyi tarihe taşındıktan sonra 'Alternatif tarih' haklı olarak boş döner (gain>0 filtresi).

@@ -61,6 +61,16 @@ export default function GroupSalesPanel({ propertyId }) {
     } catch (e) { toast.error(e?.response?.data?.detail || "Aranamadı"); }
     finally { setAltLoading(null); }
   };
+  const reschedule = async (rfp, a) => {
+    setAltLoading(rfp.id);
+    try {
+      const { data: r } = await axios.post(`${API}/group-sales/rfp/${rfp.id}/reschedule`, { check_in: a.check_in, check_out: a.check_out });
+      toast.success(`RFP ${a.check_in} tarihine taşındı — yeni teklif: ${REC_TR[r.version.recommendation] || r.version.recommendation}`);
+      setAlts((p) => ({ ...p, [rfp.id]: [] }));
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Taşınamadı"); }
+    finally { setAltLoading(null); }
+  };
   const sendEmail = async (rfp) => {
     setEmailing(rfp.id);
     try {
@@ -194,6 +204,10 @@ export default function GroupSalesPanel({ propertyId }) {
                       <span className="text-stone-500">{a.total_displaced_rooms} displacement</span>
                       <span className={`font-bold ${a.recommendation === "accept" ? "text-emerald-600" : "text-amber-600"}`}>{REC_TR[a.recommendation]}</span>
                       <span className="font-black text-indigo-700 ml-auto">net +{a.gain_vs_current} kazanç</span>
+                      <button onClick={() => reschedule(r, a)} disabled={altLoading === r.id} data-testid={`gs-reschedule-${r.id}-${i}`}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold disabled:opacity-50">
+                        Bu tarihle fiyatla
+                      </button>
                     </div>
                   ))}
                 </div>

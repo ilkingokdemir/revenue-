@@ -39,6 +39,20 @@ def create_abs_router(db, require_roles):
             {"property_id": property_id, "active": {"$ne": False}},
             {"_id": 0, "id": 1, "name": 1, "price": 1, "icon": 1, "description": 1, "image_url": 1}
         ).sort("sort", 1).to_list(20)
+        # Akıllı sıralama: son 90 günde en çok satan özellik üstte (dönüşüm bazlı)
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
+        counts: Dict[str, int] = {}
+        async for b in db.bookings.find(
+                {"property_id": property_id, "abs_total": {"$gt": 0},
+                 "created_at": {"$gte": cutoff}, "status": {"$ne": "cancelled"}},
+                {"_id": 0, "abs_attributes.id": 1}):
+            for a in (b.get("abs_attributes") or []):
+                if a.get("id"):
+                    counts[a["id"]] = counts.get(a["id"], 0) + 1
+        rows.sort(key=lambda r: (-counts.get(r["id"], 0), r.get("name", "")))
+        for r in rows:
+            if counts.get(r["id"], 0) >= 3:
+                r["popular"] = True
         return {"attributes": rows}
 
     @router.get("/{property_id}")

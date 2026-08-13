@@ -3545,3 +3545,9 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
 - NOT: GroupDisplacementPanel'de FileDown import'u bir kez kaybolmuştu (edit sonrası dosya eski hâle döndü) —
   yeniden eklendi; UI hatası 'X is not defined' görülürse önce import satırını doğrula.
 - Anahtarlar hâlâ bekleniyor: Expo token, Resend, Meta/Instagram, Google Places.
+
+## Iter 510 (2026-06) — ABS Akıllı Sıralama
+- GET /api/abs/public/{pid} artık son 90 gün satış adedine göre sıralıyor (çok satan üstte, eşitlikte isim).
+- ≥3 satışı olan özelliğe "popular": true → widget'ta amber "Popüler" rozeti (abs-popular-{id} testid).
+- TEST: Sessiz oda'ya 4 test satışı eklendi → 4.→2. sıraya yükseldi + popüler rozeti; temizlik sonrası eski sıra. ✓
+- Anahtarlar HÂLÂ paylaşılmadı (Expo/Resend/Meta/Google Places) — kullanıcıya tekrar hatırlatıldı.

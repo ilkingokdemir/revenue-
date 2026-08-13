@@ -825,7 +825,10 @@ export default function BookingWidgetPage({ propertyId }) {
                         className={`flex items-center gap-3 p-2.5 rounded-xl border-2 text-left transition-all ${on ? "border-sky-500 bg-sky-50" : "border-stone-200 hover:border-stone-300"}`}>
                         {a.image_url && <img src={a.image_url} alt={a.name} className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />}
                         <span className="flex-1 min-w-0">
-                          <span className="text-xs font-bold text-stone-800 block">{a.name}</span>
+                          <span className="text-xs font-bold text-stone-800 block">
+                            {a.name}
+                            {a.popular && <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-bold align-middle" data-testid={`abs-popular-${a.id}`}>Popüler</span>}
+                          </span>
                           {a.description && <span className="text-[10px] text-stone-400">{a.description}</span>}
                         </span>
                         <span className="text-xs font-semibold flex-shrink-0 ml-1" style={{ color: ac }}>+{cur(a.price, cc)}/night</span>

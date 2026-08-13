@@ -850,3 +850,30 @@ async def reports_loop(db, interval_seconds: int = 300):
         except Exception as e:
             logger.warning(f"Reports tick error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+async def profit_autopilot_loop(db, interval_seconds: int = 3600):
+    """Kâr Otopilotu — gece yarısı (UTC 00) negatif net kanalları stop-sell'e alır."""
+    import logging
+    logger = logging.getLogger(__name__)
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            if now.hour == 0:
+                from routes.revenue_ext.profit_pricing import run_profit_autopilot
+                today = now.date().isoformat()
+                props = await db.properties.find(
+                    {"is_active": {"$ne": False}}, {"_id": 0, "id": 1}).to_list(50)
+                for p in props:
+                    state = await db.profit_autopilot_state.find_one(
+                        {"property_id": p["id"]}, {"_id": 0, "last_run_date": 1})
+                    if state and state.get("last_run_date") == today:
+                        continue
+                    res = await run_profit_autopilot(db, p["id"], trigger="cron")
+                    await db.profit_autopilot_state.update_one(
+                        {"property_id": p["id"]},
+                        {"$set": {"last_run_date": today}}, upsert=True)
+                    logger.info(f"profit_autopilot_loop: {p['id']} → {res.get('actions', res.get('skipped'))}")
+        except Exception as e:
+            logger.warning(f"profit_autopilot_loop error: {e}")
+        await asyncio.sleep(interval_seconds)

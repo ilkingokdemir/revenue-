@@ -17,11 +17,16 @@ from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException
 
 STARTER = [
-    {"name": "Deniz manzarası", "price": 15.0, "icon": "waves", "description": "Deniz cepheli oda garantisi"},
-    {"name": "Yüksek kat", "price": 8.0, "icon": "building", "description": "5. kat ve üzeri"},
-    {"name": "Balkonlu oda", "price": 12.0, "icon": "sun", "description": "Özel balkon"},
-    {"name": "Sessiz oda", "price": 6.0, "icon": "moon", "description": "Asansör ve sokaktan uzak"},
-    {"name": "Erken check-in garantisi", "price": 10.0, "icon": "clock", "description": "12:00'de odanız hazır"},
+    {"name": "Deniz manzarası", "price": 15.0, "icon": "waves", "description": "Deniz cepheli oda garantisi",
+     "image_url": "https://static.prod-images.emergentagent.com/jobs/f284f94c-059d-4721-a5db-def78e330cac/images/d218cf083e5a28710c6a523f82bfd32e4f5cf2dc578ba1ce926ee009d841cf54.jpeg"},
+    {"name": "Yüksek kat", "price": 8.0, "icon": "building", "description": "5. kat ve üzeri",
+     "image_url": "https://static.prod-images.emergentagent.com/jobs/f284f94c-059d-4721-a5db-def78e330cac/images/5d6ffb3194a7aa43856ff4dfb26c308b97019f0e8f4d8361247c0fa06ce54bec.jpeg"},
+    {"name": "Balkonlu oda", "price": 12.0, "icon": "sun", "description": "Özel balkon",
+     "image_url": "https://static.prod-images.emergentagent.com/jobs/f284f94c-059d-4721-a5db-def78e330cac/images/67975259827081d4b366a05ac5f5701654d708dc6e2e9c98d0fe4685d4d74177.jpeg"},
+    {"name": "Sessiz oda", "price": 6.0, "icon": "moon", "description": "Asansör ve sokaktan uzak",
+     "image_url": "https://static.prod-images.emergentagent.com/jobs/f284f94c-059d-4721-a5db-def78e330cac/images/bd39a8fb258af81f5951e530f211750980c644fec74676f464116a18cba16cf6.jpeg"},
+    {"name": "Erken check-in garantisi", "price": 10.0, "icon": "clock", "description": "12:00'de odanız hazır",
+     "image_url": "https://static.prod-images.emergentagent.com/jobs/f284f94c-059d-4721-a5db-def78e330cac/images/dfb0dd03dc13301730d1d8688cd7c184129e16d66daa0259896b0eee46d39667.jpeg"},
 ]
 
 
@@ -32,7 +37,7 @@ def create_abs_router(db, require_roles):
     async def public_attrs(property_id: str):
         rows = await db.abs_attributes.find(
             {"property_id": property_id, "active": {"$ne": False}},
-            {"_id": 0, "id": 1, "name": 1, "price": 1, "icon": 1, "description": 1}
+            {"_id": 0, "id": 1, "name": 1, "price": 1, "icon": 1, "description": 1, "image_url": 1}
         ).sort("sort", 1).to_list(20)
         return {"attributes": rows}
 
@@ -69,6 +74,7 @@ def create_abs_router(db, require_roles):
         aid = body.get("id") or str(uuid.uuid4())
         doc = {"id": aid, "property_id": property_id, "name": name, "price": price,
                "icon": body.get("icon", "star"), "description": body.get("description", ""),
+               "image_url": (body.get("image_url") or "").strip(),
                "active": bool(body.get("active", True)), "sort": int(body.get("sort", 99) or 99),
                "updated_at": datetime.now(timezone.utc).isoformat()}
         await db.abs_attributes.update_one({"id": aid}, {"$set": doc}, upsert=True)

@@ -11,7 +11,7 @@ export default function AbsPanel({ propertyId }) {
   const [attrs, setAttrs] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: "", price: "", description: "" });
+  const [form, setForm] = useState({ name: "", price: "", description: "", image_url: "" });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -28,7 +28,7 @@ export default function AbsPanel({ propertyId }) {
     if (!form.name.trim()) return toast.error("Özellik adı gerekli");
     try {
       await axios.post(`${API}/abs/${pid}`, { ...form, price: parseFloat(form.price) || 0 });
-      setForm({ name: "", price: "", description: "" });
+      setForm({ name: "", price: "", description: "", image_url: "" });
       toast.success("Özellik eklendi");
       load();
     } catch (e) { toast.error(e?.response?.data?.detail || "Eklenemedi"); }
@@ -88,7 +88,7 @@ export default function AbsPanel({ propertyId }) {
       )}
 
       {/* Add form */}
-      <div className="bg-white border border-stone-200 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+      <div className="bg-white border border-stone-200 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
         <div className="col-span-2">
           <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Özellik adı</label>
           <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -105,6 +105,11 @@ export default function AbsPanel({ propertyId }) {
           <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
             data-testid="abs-desc-input" className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
         </div>
+        <div>
+          <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Görsel URL</label>
+          <input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+            placeholder="https://..." data-testid="abs-image-input" className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
+        </div>
         <button onClick={add} data-testid="abs-add-btn"
           className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-stone-900 hover:bg-stone-700 text-white text-xs font-bold">
           <Plus size={14} /> Ekle
@@ -119,6 +124,11 @@ export default function AbsPanel({ propertyId }) {
           {attrs.length === 0 && <p className="p-6 text-sm text-stone-400 text-center">Henüz özellik yok — başlangıç setini yükleyin.</p>}
           {attrs.map((a) => (
             <div key={a.id} className="flex items-center gap-3 px-4 py-3" data-testid={`abs-row-${a.id}`}>
+              {a.image_url ? (
+                <img src={a.image_url} alt={a.name} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" data-testid={`abs-img-${a.id}`} />
+              ) : (
+                <div className="w-12 h-12 rounded-lg bg-stone-100 flex items-center justify-center text-stone-300 flex-shrink-0"><Bed size={18} /></div>
+              )}
               <div className="flex-1">
                 <p className={`text-sm font-bold ${a.active ? "text-stone-900" : "text-stone-400 line-through"}`}>{a.name}</p>
                 {a.description && <p className="text-[11px] text-stone-400">{a.description}</p>}

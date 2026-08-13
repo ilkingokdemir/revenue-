@@ -3526,3 +3526,22 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   Main agent ek düzeltmeler: abs-line testid'leri geri eklendi, gd-rooms-input/gd-rate-input testid eklendi,
   DB'deki TEST_ önekli duplicate abs attribute'ları temizlendi.
 - NOT: phosphor-icons'ta Loader2 YOK — lucide-react'ten import edilmeli (bir kez compile hatası verdi, düzeltildi).
+
+## Iter 509 (2026-06) — Kâr Otopilotu + ABS Görselleri + Grup Teklif PDF'i
+1. KÂR OTOPİLOTU: profit_pricing.py'ye run_profit_autopilot + compute_channel_nets (modül seviyesi) eklendi.
+   - Negatif Ø net kanallar → channel_stop_sells kaydı + manager bildirimi; pozitife dönenler released.
+   - Endpoints: GET/POST /{pid}/autopilot, POST /{pid}/autopilot/run. workers.profit_autopilot_loop (saatlik,
+     sadece UTC 00'da çalışır, profit_autopilot_state.last_run_date ile günde 1 kez). server.py create_task eklendi.
+   - Panel: pp-autopilot-card (toggle + şimdi çalıştır + aktif stop-sell rozetleri + log).
+   - TEST: CPOR=500 ile 5 kanal stop_sell alındı + bildirim düştü; ayarlar geri alınınca 5 kanal released. ✓
+2. ABS GÖRSELLERİ: 5 başlangıç özelliği için Gemini görselleri üretildi (static.prod-images URL'leri
+   abs_selling.py STARTER içinde + mevcut default kayıtlara DB update). upsert/public'e image_url alanı.
+   Widget'ta thumbnail'li seçim kartları, admin panelde görsel + Görsel URL girişi. TEST: widget'ta 5 görsel ✓
+3. GRUP TEKLİF PDF'İ: POST /api/group-displacement/proposal-pdf/{analysis_id} → tek sayfa şık PDF
+   (lacivert başlık, KPI bloğu, altın 'önerilen min fiyat' bandı, 14 gün geçerlilik).
+   DİKKAT: DejaVu fontları bu ortamda YOK — FreeSans/FreeSansBold (/usr/share/fonts/truetype/freefont/)
+   fallback listesiyle çözüldü. Türkçe karakterler doğrulandı (pdftotext).
+   Panel: gd-pdf-btn → blob indirme. TEST: UI'dan grup-teklif-grup.pdf indirildi ✓
+- NOT: GroupDisplacementPanel'de FileDown import'u bir kez kaybolmuştu (edit sonrası dosya eski hâle döndü) —
+  yeniden eklendi; UI hatası 'X is not defined' görülürse önce import satırını doğrula.
+- Anahtarlar hâlâ bekleniyor: Expo token, Resend, Meta/Instagram, Google Places.

@@ -20,9 +20,116 @@ from datetime import datetime, timedelta, timezone, date as ddate
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from auth import require_perm
+
+
+def _build_proposal_pdf(a: dict, hotel_name: str, prepared_by: str) -> bytes:
+    """Tek sayfalık şık grup teklif PDF'i (Türkçe karakter destekli)."""
+    import io
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.colors import HexColor
+    from reportlab.pdfgen import canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    import os
+    candidates = {
+        "DVS": ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/freefont/FreeSans.ttf"],
+        "DVSB": ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                 "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"],
+    }
+    for fname, paths in candidates.items():
+        if fname not in pdfmetrics.getRegisteredFontNames():
+            for path in paths:
+                if os.path.exists(path):
+                    pdfmetrics.registerFont(TTFont(fname, path))
+                    break
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    navy, gold, grey = HexColor("#1a3c5e"), HexColor("#b8860b"), HexColor("#6b7280")
+
+    c.setFillColor(navy)
+    c.rect(0, H - 110, W, 110, stroke=0, fill=1)
+    c.setFillColor(HexColor("#ffffff"))
+    c.setFont("DVSB", 20)
+    c.drawString(40, H - 55, hotel_name)
+    c.setFont("DVS", 12)
+    c.drawString(40, H - 80, "GRUP KONAKLAMA TEKLİFİ")
+    c.setFont("DVS", 9)
+    c.drawRightString(W - 40, H - 80, datetime.now(timezone.utc).strftime("%d.%m.%Y"))
+
+    y = H - 150
+    c.setFillColor(navy)
+    c.setFont("DVSB", 14)
+    c.drawString(40, y, a.get("group_name") or "Grup Rezervasyonu")
+    y -= 30
+    c.setFont("DVS", 11)
+    c.setFillColor(HexColor("#111827"))
+    nights = a.get("nights", 0)
+    rows = [
+        ("Konaklama tarihleri", f"{a['check_in']}  →  {a['check_out']}  ({nights} gece)"),
+        ("Oda sayısı", f"{a['rooms_requested']} oda / gece"),
+        ("Gecelik oda fiyatı", f"{a['offered_rate']:.2f}"),
+        ("Toplam konaklama bedeli", f"{a.get('total_group_revenue', 0):,.2f}"),
+    ]
+    for label, val in rows:
+        c.setFillColor(grey)
+        c.drawString(40, y, label)
+        c.setFillColor(HexColor("#111827"))
+        c.setFont("DVSB", 11)
+        c.drawString(240, y, str(val))
+        c.setFont("DVS", 11)
+        y -= 22
+
+    y -= 12
+    c.setFillColor(HexColor("#f3f4f6"))
+    c.roundRect(40, y - 96, W - 80, 96, 8, stroke=0, fill=1)
+    c.setFillColor(navy)
+    c.setFont("DVSB", 11)
+    c.drawString(52, y - 22, "Gelir Yönetimi Değerlendirmesi")
+    c.setFont("DVS", 9.5)
+    c.setFillColor(HexColor("#374151"))
+    verdict_tr = {"accept": "UYGUN — teklif kabul edilebilir",
+                  "negotiate": "PAZARLIK — fiyat iyileştirmesi önerilir",
+                  "reject": "UYGUN DEĞİL — mevcut fiyatla önerilmez"}.get(a.get("recommendation"), "-")
+    lines = [
+        f"Karar: {verdict_tr}",
+        f"Yerinden edilen bireysel talep: {a.get('total_displaced_rooms', 0)} oda-gece "
+        f"(maliyet {a.get('total_displacement_cost', 0):,.2f}, shoulder kaybı {a.get('shoulder_loss', 0):,.2f})",
+        f"Komisyon sonrası net katkı: {a.get('net_value_after_commission', a.get('net_value', 0)):,.2f}",
+        f"Başabaş gecelik fiyat (net): {a.get('breakeven_rate_net', a.get('breakeven_rate', 0)):,.2f}",
+    ]
+    ly = y - 40
+    for ln in lines:
+        c.drawString(52, ly, ln)
+        ly -= 15
+
+    y -= 130
+    c.setFillColor(gold)
+    c.roundRect(40, y - 60, W - 80, 60, 8, stroke=0, fill=1)
+    c.setFillColor(HexColor("#ffffff"))
+    c.setFont("DVSB", 12)
+    c.drawString(52, y - 25, "Önerilen minimum gecelik fiyat")
+    c.setFont("DVSB", 20)
+    c.drawRightString(W - 52, y - 32, f"{a.get('suggested_min_rate_net', a.get('suggested_min_rate', 0)):,.2f}")
+    c.setFont("DVS", 8)
+    c.drawString(52, y - 45, "Fiyata vergiler dahildir. Kahvaltı ve toplantı salonu ihtiyaçları ayrıca fiyatlandırılır.")
+
+    c.setFillColor(grey)
+    c.setFont("DVS", 8)
+    c.drawString(40, 60, f"Bu teklif {(datetime.now(timezone.utc) + timedelta(days=14)).strftime('%d.%m.%Y')} tarihine kadar geçerlidir ve müsaitlik teyidine tabidir.")
+    c.drawString(40, 46, f"Hazırlayan: {prepared_by or 'Revenue Ekibi'} · {hotel_name} Grup Satış")
+    c.setFillColor(navy)
+    c.rect(0, 0, W, 24, stroke=0, fill=1)
+    c.showPage()
+    c.save()
+    return buf.getvalue()
 
 
 class AnalyzeIn(BaseModel):
@@ -229,6 +336,20 @@ def create_group_displacement_router(db):
         await db.group_displacement_analyses.insert_one(dict(result))
         result.pop("_id", None)
         return result
+
+    @router.post("/proposal-pdf/{analysis_id}")
+    async def proposal_pdf(analysis_id: str,
+                           current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
+        """Displacement analizinden tek sayfalık grup teklif PDF'i üretir."""
+        a = await db.group_displacement_analyses.find_one({"id": analysis_id}, {"_id": 0})
+        if not a:
+            raise HTTPException(404, "Analiz bulunamadı")
+        prop = await db.properties.find_one({"id": a["property_id"]}, {"_id": 0, "name": 1}) or {}
+        hotel_name = prop.get("name") or "Otel"
+        pdf = _build_proposal_pdf(a, hotel_name, current_user.get("email", ""))
+        fname = f"grup-teklif-{(a.get('group_name') or 'grup').replace(' ', '-')[:30]}.pdf"
+        return Response(content=pdf, media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
     @router.get("/verdicts/{property_id}")
     async def verdicts(property_id: str,

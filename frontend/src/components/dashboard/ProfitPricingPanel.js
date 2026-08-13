@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Coins, TrendUp, TrendDown, Warning, FloppyDisk } from "@phosphor-icons/react";
+import { Coins, TrendUp, TrendDown, Warning, FloppyDisk, Robot, Play } from "@phosphor-icons/react";
 import { Loader2 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -12,6 +12,15 @@ export default function ProfitPricingPanel({ propertyId }) {
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [auto, setAuto] = useState(null);
+  const [running, setRunning] = useState(false);
+
+  const loadAuto = useCallback(async () => {
+    try {
+      const { data: d } = await axios.get(`${API}/profit-pricing/${pid}/autopilot`);
+      setAuto(d);
+    } catch { /* silent */ }
+  }, [pid]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -23,6 +32,24 @@ export default function ProfitPricingPanel({ propertyId }) {
     finally { setLoading(false); }
   }, [pid]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadAuto(); }, [loadAuto]);
+
+  const toggleAuto = async () => {
+    const next = !auto?.enabled;
+    await axios.post(`${API}/profit-pricing/${pid}/autopilot`, { enabled: next });
+    toast.success(next ? "Kâr Otopilotu AÇIK — her gece yarısı çalışacak" : "Kâr Otopilotu kapatıldı");
+    loadAuto();
+  };
+  const runNow = async () => {
+    setRunning(true);
+    try {
+      const { data: r } = await axios.post(`${API}/profit-pricing/${pid}/autopilot/run`);
+      const n = (r.actions || []).length;
+      toast.success(n ? `${n} kanal aksiyonu alındı` : "Aksiyon gerekmedi — tüm kanallar net pozitif");
+      loadAuto();
+    } catch { toast.error("Çalıştırılamadı"); }
+    finally { setRunning(false); }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -69,6 +96,48 @@ export default function ProfitPricingPanel({ propertyId }) {
           <div className="text-lg font-black text-stone-900">{data.settings.cpor}</div>
           <div className="text-xs text-stone-500">temizlik + amenity + enerji / gece</div>
         </div>
+      </div>
+
+      {/* Kâr Otopilotu */}
+      <div className={`rounded-2xl border p-5 ${auto?.enabled ? "bg-emerald-50 border-emerald-200" : "bg-white border-stone-200"}`} data-testid="pp-autopilot-card">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <Robot size={26} weight="fill" className={auto?.enabled ? "text-emerald-600" : "text-stone-400"} />
+            <div>
+              <h2 className="text-sm font-black text-stone-900">Kâr Otopilotu</h2>
+              <p className="text-[11px] text-stone-500">
+                Her gece yarısı net katkısı negatif OTA kanallarını otomatik stop-sell'e alır, pozitife dönenleri açar.
+                {auto?.last_run && <> Son çalışma: {new Date(auto.last_run).toLocaleString("tr-TR")}</>}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={runNow} disabled={running} data-testid="pp-autopilot-run"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-stone-300 hover:bg-stone-50 text-xs font-bold text-stone-700 disabled:opacity-50">
+              {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play size={13} weight="fill" />} Şimdi çalıştır
+            </button>
+            <button onClick={toggleAuto} data-testid="pp-autopilot-toggle"
+              className={`px-4 py-2 rounded-xl text-xs font-bold ${auto?.enabled ? "bg-emerald-600 text-white" : "bg-stone-900 text-white hover:bg-stone-700"}`}>
+              {auto?.enabled ? "AÇIK — Kapat" : "Otopilotu Aç"}
+            </button>
+          </div>
+        </div>
+        {(auto?.active_stop_sells || []).length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2" data-testid="pp-active-stopsells">
+            {auto.active_stop_sells.map((s) => (
+              <span key={s.id} className="px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold">
+                🚫 {auto.channel_labels?.[s.channel] || s.channel} · {s.from_date} → {s.to_date} (net {s.net_avg})
+              </span>
+            ))}
+          </div>
+        )}
+        {(auto?.log || []).length > 0 && (
+          <div className="mt-3 text-[11px] text-stone-500 space-y-1" data-testid="pp-autopilot-log">
+            {auto.log.slice(0, 3).map((l) => (
+              <p key={l.id}>· {new Date(l.run_at).toLocaleString("tr-TR")} ({l.trigger}) — {(l.actions || []).length ? l.actions.map((x) => `${x.channel}:${x.action}`).join(", ") : "aksiyon yok"}</p>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Findings */}

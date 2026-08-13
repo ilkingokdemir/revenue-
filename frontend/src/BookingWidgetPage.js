@@ -822,12 +822,13 @@ export default function BookingWidgetPage({ propertyId }) {
                     {absAttrs.map(a => { const on = absSelected.includes(a.id); return (
                       <button key={a.id} type="button" data-testid={`abs-attr-${a.id}`}
                         onClick={() => setAbsSelected(p => on ? p.filter(x => x !== a.id) : [...p, a.id])}
-                        className={`flex items-center justify-between p-3 rounded-xl border-2 text-left transition-all ${on ? "border-sky-500 bg-sky-50" : "border-stone-200 hover:border-stone-300"}`}>
-                        <span>
+                        className={`flex items-center gap-3 p-2.5 rounded-xl border-2 text-left transition-all ${on ? "border-sky-500 bg-sky-50" : "border-stone-200 hover:border-stone-300"}`}>
+                        {a.image_url && <img src={a.image_url} alt={a.name} className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />}
+                        <span className="flex-1 min-w-0">
                           <span className="text-xs font-bold text-stone-800 block">{a.name}</span>
                           {a.description && <span className="text-[10px] text-stone-400">{a.description}</span>}
                         </span>
-                        <span className="text-xs font-semibold flex-shrink-0 ml-2" style={{ color: ac }}>+{cur(a.price, cc)}/night</span>
+                        <span className="text-xs font-semibold flex-shrink-0 ml-1" style={{ color: ac }}>+{cur(a.price, cc)}/night</span>
                       </button>
                     ); })}
                   </div>

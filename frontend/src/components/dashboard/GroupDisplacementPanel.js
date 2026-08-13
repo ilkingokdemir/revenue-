@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Scale, Loader2, CheckCircle2, AlertTriangle, XCircle, Users } from "lucide-react";
+import { Scale, Loader2, CheckCircle2, AlertTriangle, XCircle, Users, FileDown } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -22,6 +22,23 @@ export function GroupDisplacementPanel({ activePropertyId }) {
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const downloadPdf = async () => {
+    if (!result?.id) return;
+    setPdfLoading(true);
+    try {
+      const { data } = await axios.post(`${API}/group-displacement/proposal-pdf/${result.id}`, {}, { responseType: "blob" });
+      const url = URL.createObjectURL(data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `grup-teklif-${(result.group_name || "grup").replace(/\s+/g, "-")}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Teklif PDF'i indirildi");
+    } catch { toast.error("PDF üretilemedi"); }
+    finally { setPdfLoading(false); }
+  };
 
   const loadHistory = useCallback(async () => {
     try {
@@ -100,10 +117,15 @@ export function GroupDisplacementPanel({ activePropertyId }) {
         <div className="space-y-4" data-testid="gd-result">
           <div className={`border-2 rounded-2xl p-5 flex items-start gap-4 ${rec.bg}`} data-testid="gd-recommendation">
             <rec.icon className={`w-8 h-8 flex-shrink-0 ${rec.text}`} />
-            <div>
+            <div className="flex-1">
               <div className={`text-lg font-black ${rec.text}`}>{rec.label}</div>
               <p className={`text-sm mt-0.5 ${rec.text}`}>{result.reason}</p>
             </div>
+            <button onClick={downloadPdf} disabled={pdfLoading} data-testid="gd-pdf-btn"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-700 text-white text-xs font-bold flex-shrink-0 disabled:opacity-50">
+              {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+              Teklif PDF'i
+            </button>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <Kpi label="Grup geliri" value={result.total_group_revenue} testId="gd-kpi-revenue" />

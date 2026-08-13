@@ -32,25 +32,50 @@ export default function PhotoContestPage() {
           </p>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-          {(data?.items || []).map((it, i) => (
+          {(data?.items || []).slice(0, 1).map((it, i) => (
             <div key={i} data-testid={`gallery-item-${i}`}
-              className="rounded-2xl overflow-hidden bg-stone-900 border border-stone-800">
+              className="rounded-2xl overflow-hidden bg-stone-900 border border-stone-800 sm:col-span-2 sm:grid sm:grid-cols-2">
               <img src={`${process.env.REACT_APP_BACKEND_URL}${it.image_url}`}
                 alt={`${it.month} kazananı`} className="w-full aspect-square object-cover" />
-              <div className="p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold">🏆 {it.winner}</p>
-                  <p className="text-[11px] text-stone-500">{it.month} kazananı</p>
-                </div>
-                {i === 0 && (
-                  <span className="px-2 py-1 rounded-full bg-amber-500/15 text-amber-300 text-[10px]">
-                    Güncel Kazanan
-                  </span>
-                )}
+              <div className="p-6 flex flex-col justify-center">
+                <span className="inline-block w-fit px-2 py-1 rounded-full bg-amber-500/15 text-amber-300 text-[10px] mb-3">
+                  Güncel Kazanan
+                </span>
+                <p className="text-2xl font-bold">🏆 {it.winner}</p>
+                <p className="text-sm text-stone-500 mt-1">{it.month} kazananı</p>
               </div>
             </div>
           ))}
         </div>
+        {(data?.items || []).length > 1 && (
+          <div className="mt-14" data-testid="hall-of-fame">
+            <h2 className="text-lg font-semibold text-stone-200 mb-1">⭐ Şeref Duvarı</h2>
+            <p className="text-xs text-stone-500 mb-6">Geçmiş ayların kazananları</p>
+            {Object.entries(
+              data.items.slice(1).reduce((acc, it) => {
+                const y = (it.month || "").slice(0, 4) || "Diğer";
+                (acc[y] = acc[y] || []).push(it);
+                return acc;
+              }, {})
+            ).sort((a, b) => b[0].localeCompare(a[0])).map(([year, items]) => (
+              <div key={year} className="mb-8" data-testid={`hof-year-${year}`}>
+                <p className="text-sm font-mono text-amber-400/80 mb-3">{year}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {items.map((it, i) => (
+                    <div key={i} className="rounded-xl overflow-hidden bg-stone-900 border border-stone-800">
+                      <img src={`${process.env.REACT_APP_BACKEND_URL}${it.image_url}`}
+                        alt={it.month} className="w-full aspect-square object-cover" />
+                      <div className="p-2">
+                        <p className="text-xs font-semibold truncate">🏆 {it.winner}</p>
+                        <p className="text-[10px] text-stone-500">{it.month}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <p className="text-[11px] text-stone-600 mt-12">
           Fotoğraflar, misafirlerimizin açık izniyle paylaşılmaktadır.
         </p>

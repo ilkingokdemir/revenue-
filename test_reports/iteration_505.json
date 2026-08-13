@@ -1,0 +1,28 @@
+{
+  "summary": "Iteration 505 — Regression of the LAST 6 additions to the Social Media module. Backend: 10/10 pytest tests PASSED (~76s incl. 70s dispatcher wait). Covered: (1) public /api/reputation/public/photo-contest/default returns 200 without auth with hotel name + items[] (month/winner/image_url). (2) /api/reputation/photo-contest-poster/default (admin) returns poster_url and the PDF downloads (%PDF header, >1KB). (3) /api/reputation/room-qr-cards/default (admin) returns pdf_url + rooms count; PDF opens with pypdf and page count matches ceil(rooms/4) — current default property has 4 rooms → 1 page (spec expected 6 rooms/2 pages; not a bug, just data). Unknown property returns 404 (Turkish 'Otel bulunamadı'). (4) Photo thanks coupon flow: uploaded a small JPEG via POST /api/surveys/public/qr-default/photo → submitted survey with photo_consent=true and guest_email → verified winback_offers doc (source_type='photo_thanks', discount_pct=10) and outbound_email_queue doc (type='photo_thanks', status='queued'); submit response includes property_id:'default'. (5) Negative variants (no consent OR no email) do NOT create photo_thanks coupon/email. (6) /api/ai-agent/monthly-report-pdf/default?month=2026-08 returns a valid PDF containing both 'Foto tesekkur kuponu' and 'Kupondan rezervasyon' lines. (7) Email dispatcher mocked behavior: after ~70s wait, the queued photo_thanks email row is STILL status='queued' (RESEND_API_KEY=re_123456789 placeholder). Frontend: /kareler/default renders photo-contest-page + gallery-item-0 (Zeynep, 2026-08); hall-of-fame hidden with a single item (expected). After inserting a synthetic 2026-01 winner draft, hof + hof-year-2026 appear correctly; synthetic doc deleted. /survey/qr-default with NPS 8 → Submit Feedback shows thank-you screen with data-testid='survey-gallery-link' pointing to /kareler/default. Admin login → AI Yanıt Robotu → Benchmark tab → guest-photos card renders room-cards-btn/poster-btn/gallery-link-btn; clicking room-cards-btn shows Sonner toast '6 oda için QR masa kartı hazır 🃏'. No blocking issues.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "/api/reputation/room-qr-cards/{unknown_property}", "issue": "Spec says 400 Turkish error but implementation returns 404 'Otel bulunamadı'. Message is Turkish so UX is fine; only status code differs from spec."}
+  ]},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration505_social_recent_features.py",
+    "/app/test_reports/pytest/iteration505.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "reputation_benchmark.py room_qr_cards raises 404 when property is missing but spec asked for 400. Consider normalizing to 400 with a Turkish message OR update spec — current 404 is Turkish and works for the UI.",
+    "surveys.py submit_public_survey uses invite.get('guest_email') check — when photo_url is provided by an anonymous QR guest without email/consent, we correctly skip. Good. But note that response 'property_id' now exists (matches spec).",
+    "public/photo-contest handler builds items even when winner_name missing by regex-parsing draft text ('Kazanan XYZ!'); fallback name is 'Misafirimiz'. Fine, but could return created_at to help the UI sort by contest_month or fall back to created_at when contest_month missing (older docs).",
+    "room_qr_cards adds a trailing empty c.showPage() at end which produces one extra blank page in the PDF for rooms multiples of 4 (would need to guard with `if len(rooms)%4==0 do NOT call the last showPage()`). Non-critical."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration505_social_recent_features.py (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% of tested flows"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Created and cleaned: TEST_ prefixed survey_responses via /surveys/public/qr-default (3 flows), winback_offers + outbound_email_queue docs (deleted in test_zzz_cleanup fixture and post-run mongo delete). Inserted then deleted a synthetic social_drafts doc id=TEST_HOF_2026 (source=photo_contest, contest_month=2026-01) to prove the hall-of-fame renders when items>1.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run backend tests with: REACT_APP_BACKEND_URL=<preview> MONGO_URL=mongodb://localhost:27017 DB_NAME=test_database pytest /app/backend/tests/test_iteration505_social_recent_features.py -v. The dispatcher test sleeps ~70s to prove RESEND_API_KEY=re_123456789 keeps rows queued. The 'default' property currently has 4 rooms so room-qr-cards PDF renders 1 page — this matches ceil(rooms/4) and is not a bug. Photo poster is not gated by auth for the download URL /api/uploads/reports/kareler-poster-default.pdf (public static). Hall-of-fame requires items.length>1 from public photo-contest endpoint.",
+  "rca of the issue": "N/A — all 6 recent features working as designed."
+}

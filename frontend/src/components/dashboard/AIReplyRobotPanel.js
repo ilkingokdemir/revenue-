@@ -1206,6 +1206,18 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-stone-200">📸 İzinli Misafir Fotoğrafları ({guestPhotos.length}) — sosyal pakete hazır</p>
                 <div className="flex items-center gap-2">
+                  <button data-testid="room-cards-btn"
+                    onClick={async () => {
+                      try {
+                        toast.info("Oda kartları hazırlanıyor…");
+                        const { data } = await axios.get(`${API}/reputation/room-qr-cards/${archivePid}`);
+                        window.open(`${process.env.REACT_APP_BACKEND_URL}${data.pdf_url}`, "_blank");
+                        toast.success(`${data.rooms} oda için QR masa kartı hazır 🃏`);
+                      } catch (e) { toast.error(e?.response?.data?.detail || "Kartlar üretilemedi"); }
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[10px] bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200">
+                    🃏 Oda QR Kartları
+                  </button>
                   <button data-testid="poster-btn"
                     onClick={async () => {
                       try {

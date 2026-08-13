@@ -3434,3 +3434,16 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
 - 3) KUPON ETKİ RAPORU: aylık karne PDF'ine "Foto tesekkur kuponu" (üretilen) ve
   "Kupondan rezervasyon" (%dönüşüm) satırları. TEST: extract ile 1 kupon / %0 doğrulandı.
 - BEKLEYEN: Expo token (17. kez) + gerçek RESEND_API_KEY + Google Places + Meta anahtarları.
+
+## Iter 537 (2026-08-13) — Oda QR Kartları + Şeref Duvarı + REGRESYON (iteration_505) TAMAMLANDI
+- 1) ODA QR KARTLARI: GET /reputation/room-qr-cards/{pid} — A4'te 4 masa kartı/sayfa,
+  her kartta otel adı + oda adı + 2 QR (anket /survey/qr-{pid} ve galeri /kareler/{pid}).
+  UI: guest-photos kartında "🃏 Oda QR Kartları" butonu (toast oda sayısıyla).
+- 2) ŞEREF DUVARI: PhotoContestPage — güncel kazanan geniş hero kartı + geçmiş aylar
+  yıl bazlı gruplu "⭐ Şeref Duvarı" (items>1 iken görünür, hof-year-{yıl}).
+- 3) REGRESYON: testing_agent iteration_505 — backend 10/10 PASS, frontend %100 PASS.
+  Teşekkür kuponu pozitif+negatif akışlar, dispatcher'ın placeholder anahtarla queued
+  kalması, karne kupon satırları, poster/kart PDF'leri, galeri daveti hepsi doğrulandı.
+  Test suite: /app/backend/tests/test_iteration505_social_recent_features.py.
+- Not (kod inceleme): room-qr-cards bilinmeyen otelde 404 döner (Türkçe mesajlı, kabul).
+- BEKLEYEN: Expo token (18. kez) + gerçek RESEND_API_KEY + Google Places + Meta anahtarları.

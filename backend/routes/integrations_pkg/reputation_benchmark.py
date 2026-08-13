@@ -781,6 +781,81 @@ def create_reputation_router(db, require_roles):
                           "image_url": d.get("image_url")})
         return {"hotel": prop.get("name", property_id), "items": items}
 
+    @router.get("/reputation/room-qr-cards/{property_id}")
+    async def room_qr_cards(property_id: str,
+                            _: dict = Depends(require_roles("admin", "manager"))):
+        """Oda başına anket + galeri QR'lı masa kartları (toplu A4 PDF, 4 kart/sayfa)."""
+        import qrcode
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas as pdfcanvas
+        from reportlab.lib.units import mm
+        from reportlab.lib.utils import ImageReader
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "name": 1})
+        if not prop:
+            raise HTTPException(404, "Otel bulunamadı")
+        rooms = await db.rooms.find(
+            {"property_id": property_id},
+            {"_id": 0, "name": 1, "room_number": 1, "number": 1}).to_list(200)
+        if not rooms:
+            raise HTTPException(400, "Bu şubede oda tanımlı değil")
+        base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+        os.makedirs("/app/backend/uploads/reports", exist_ok=True)
+        survey_qr = f"/app/backend/uploads/reports/_sq_{property_id}.png"
+        gallery_qr = f"/app/backend/uploads/reports/_gq_{property_id}.png"
+        qrcode.make(f"{base}/survey/qr-{property_id}").save(survey_qr)
+        qrcode.make(f"{base}/kareler/{property_id}").save(gallery_qr)
+        _tr = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+        hotel = prop.get("name", "").translate(_tr)[:30]
+        fname = f"oda-qr-kartlari-{property_id}.pdf"
+        pdf_path = f"/app/backend/uploads/reports/{fname}"
+        c = pdfcanvas.Canvas(pdf_path, pagesize=A4)
+        w, h = A4
+        cw, ch = w / 2, h / 2
+        sq = ImageReader(survey_qr)
+        gq = ImageReader(gallery_qr)
+        for i, room in enumerate(rooms):
+            pos = i % 4
+            if pos == 0 and i > 0:
+                c.showPage()
+            x0 = (pos % 2) * cw
+            y0 = h - ((pos // 2) + 1) * ch
+            room_label = (room.get("room_number") or room.get("number")
+                          or room.get("name") or f"Oda {i + 1}")
+            room_label = str(room_label).translate(_tr)[:20]
+            c.setFillColorRGB(0.07, 0.06, 0.05)
+            c.roundRect(x0 + 6 * mm, y0 + 6 * mm, cw - 12 * mm, ch - 12 * mm,
+                        4 * mm, fill=1, stroke=0)
+            c.setFillColorRGB(0.96, 0.62, 0.04)
+            c.setFont("Helvetica-Bold", 10)
+            c.drawCentredString(x0 + cw / 2, y0 + ch - 16 * mm, hotel)
+            c.setFillColorRGB(1, 1, 1)
+            c.setFont("Helvetica-Bold", 14)
+            c.drawCentredString(x0 + cw / 2, y0 + ch - 24 * mm, room_label)
+            qs = 34 * mm
+            gap = (cw - 12 * mm - 2 * qs) / 3
+            for j, (img, cap1, cap2) in enumerate(
+                    [(sq, "Deneyiminizi", "paylasin"),
+                     (gq, "Ayin Karesi", "kazananlari")]):
+                qx = x0 + 6 * mm + gap + j * (qs + gap)
+                qy = y0 + 24 * mm
+                c.setFillColorRGB(1, 1, 1)
+                c.roundRect(qx - 2 * mm, qy - 2 * mm, qs + 4 * mm, qs + 4 * mm,
+                            2 * mm, fill=1, stroke=0)
+                c.drawImage(img, qx, qy, width=qs, height=qs)
+                c.setFillColorRGB(0.8, 0.78, 0.75)
+                c.setFont("Helvetica", 8)
+                c.drawCentredString(qx + qs / 2, qy - 6 * mm, cap1)
+                c.drawCentredString(qx + qs / 2, qy - 9.5 * mm, cap2)
+            c.setFillColorRGB(0.5, 0.48, 0.46)
+            c.setFont("Helvetica", 7)
+            c.drawCentredString(x0 + cw / 2, y0 + 10 * mm,
+                                "QR kodu telefonunuzla okutmaniz yeterli")
+        c.showPage()
+        c.save()
+        os.remove(survey_qr)
+        os.remove(gallery_qr)
+        return {"pdf_url": f"/api/uploads/reports/{fname}", "rooms": len(rooms)}
+
     @router.get("/reputation/photo-contest-poster/{property_id}")
     async def photo_contest_poster(property_id: str,
                                    _: dict = Depends(require_roles("admin", "manager"))):

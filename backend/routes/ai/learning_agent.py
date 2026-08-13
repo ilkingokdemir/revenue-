@@ -894,6 +894,10 @@ def create_learning_agent_router(db, require_roles):
             {"_id": 0, "rule": 1}).to_list(10)
         cats = await category_summary(property_id, _={})
         prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "name": 1}) or {}
+        pt_q = {"property_id": property_id, "source_type": "photo_thanks",
+                "created_at": {"$gte": start, "$lte": end}}
+        pt_total = await db.winback_offers.count_documents(pt_q)
+        pt_redeemed = await db.winback_offers.count_documents({**pt_q, "redeemed": True})
 
         buf = io.BytesIO()
         c = pdfcanvas.Canvas(buf, pagesize=A4)
@@ -913,7 +917,10 @@ def create_learning_agent_router(db, require_roles):
                  ("Duzenlenen", str(edited)),
                  ("Onay orani", f"%{approval}"),
                  ("Ortalama kalite", f"{avg_q}/100" if avg_q is not None else "—"),
-                 ("Yeni ogrenilen kural", str(len(lessons)))]
+                 ("Yeni ogrenilen kural", str(len(lessons))),
+                 ("Foto tesekkur kuponu", str(pt_total)),
+                 ("Kupondan rezervasyon",
+                  f"{pt_redeemed} (%{round(pt_redeemed / pt_total * 100, 1) if pt_total else 0} donusum)")]
         for label, val in stats:
             c.setFont("Helvetica", 11)
             c.drawString(18 * mm, y, label)

@@ -1205,7 +1205,20 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
             <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="guest-photos">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-stone-200">📸 İzinli Misafir Fotoğrafları ({guestPhotos.length}) — sosyal pakete hazır</p>
-                <button data-testid="gallery-link-btn"
+                <div className="flex items-center gap-2">
+                  <button data-testid="poster-btn"
+                    onClick={async () => {
+                      try {
+                        toast.info("Poster hazırlanıyor…");
+                        const { data } = await axios.get(`${API}/reputation/photo-contest-poster/${archivePid}`);
+                        window.open(`${process.env.REACT_APP_BACKEND_URL}${data.poster_url}`, "_blank");
+                        toast.success("QR poster hazır — yazdırıp resepsiyona asın 🖨️");
+                      } catch { toast.error("Poster üretilemedi"); }
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[10px] bg-amber-600/80 hover:bg-amber-500 text-white">
+                    🖨️ QR Poster
+                  </button>
+                  <button data-testid="gallery-link-btn"
                   onClick={async () => {
                     const url = `${window.location.origin}/kareler/${archivePid}`;
                     try { await navigator.clipboard.writeText(url); toast.success("Galeri linki kopyalandı 🌐 " + url); }
@@ -1214,6 +1227,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   className="px-2.5 py-1 rounded-lg text-[10px] bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200">
                   🌐 Galeri Linkini Kopyala
                 </button>
+                </div>
               </div>
               <div className="flex gap-3 flex-wrap">
                 {guestPhotos.map((g) => (

@@ -3422,3 +3422,15 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   gönderir (asyncio.to_thread), status sent/failed. Şu an anahtar placeholder → MOCKED devam.
   requirements.txt'de resend==2.27.0 mevcut.
 - BEKLEYEN: Expo token (16. kez) + GERÇEK RESEND_API_KEY + Google Places + Meta anahtarları.
+
+## Iter 536 (2026-08-13) — QR Poster + Galeri Daveti + Kupon Etki Raporu TAMAMLANDI
+- 1) QR POSTER: GET /reputation/photo-contest-poster/{pid} — A4 koyu şık poster (qrcode +
+  reportlab, ASCII-TR): AYIN KARESI başlık, otel adı, beyaz kutuda QR (→ /kareler/{pid}),
+  davet + izin metni. UI: guest-photos kartında "🖨️ QR Poster" butonu.
+  TEST: PDF üretildi, extract ile QR okunabilir + tüm metinler doğrulandı.
+- 2) GALERİ DAVETİ: submit_public_survey response'a property_id eklendi; GuestSurveyPage
+  teşekkür ekranına "🏆 Ayın Karesi kazananlarını gör" linki (TR/EN/DE i18n).
+  TEST: screenshot — link /kareler/default'a gidiyor.
+- 3) KUPON ETKİ RAPORU: aylık karne PDF'ine "Foto tesekkur kuponu" (üretilen) ve
+  "Kupondan rezervasyon" (%dönüşüm) satırları. TEST: extract ile 1 kupon / %0 doğrulandı.
+- BEKLEYEN: Expo token (17. kez) + gerçek RESEND_API_KEY + Google Places + Meta anahtarları.

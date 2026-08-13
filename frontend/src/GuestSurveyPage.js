@@ -17,6 +17,7 @@ const SURVEY_I18N = {
     photoTitle: "Bir anınızı paylaşın (isteğe bağlı)",
     photoBtn: "📸 Fotoğraf Ekle", photoUploading: "Yükleniyor...",
     photoConsent: "Fotoğrafımın otelin sosyal medya hesaplarında paylaşılmasına izin veriyorum.",
+    galleryBtn: "Ayın Karesi kazananlarını gör",
     thanks: "Geri bildiriminiz alındı. Deneyiminizi paylaşmaya zaman ayırdığınız için içtenlikle teşekkür ederiz.",
     promptMsg: "Deneyiminizi çok beğendiğinize sevindik! Bir dakikanızı ayırıp yorumunuzu paylaşır mısınız?",
     taBtn: "⭐ TripAdvisor'da Değerlendir", gBtn: "Google'da Değerlendir",
@@ -31,6 +32,7 @@ const SURVEY_I18N = {
     photoTitle: "Share a moment (optional)",
     photoBtn: "📸 Add Photo", photoUploading: "Uploading...",
     photoConsent: "I allow the hotel to share my photo on its social media accounts.",
+    galleryBtn: "See Photo of the Month winners",
     thanks: "Your feedback has been submitted. Thank you for taking the time to share your experience.",
     promptMsg: "So glad you enjoyed your stay! Would you take a minute to share a review?",
     taBtn: "⭐ Review on TripAdvisor", gBtn: "Review on Google",
@@ -45,6 +47,7 @@ const SURVEY_I18N = {
     photoTitle: "Teilen Sie einen Moment (optional)",
     photoBtn: "📸 Foto hinzufügen", photoUploading: "Wird hochgeladen...",
     photoConsent: "Ich erlaube dem Hotel, mein Foto in den sozialen Medien zu teilen.",
+    galleryBtn: "Foto des Monats Gewinner ansehen",
     thanks: "Ihr Feedback wurde übermittelt. Vielen Dank, dass Sie sich die Zeit genommen haben.",
     promptMsg: "Schön, dass Ihnen Ihr Aufenthalt gefallen hat! Möchten Sie eine Bewertung hinterlassen?",
     taBtn: "⭐ Auf TripAdvisor bewerten", gBtn: "Auf Google bewerten",
@@ -66,6 +69,7 @@ export default function GuestSurveyPage({ token }) {
   const [photoUrl, setPhotoUrl] = useState("");
   const [photoConsent, setPhotoConsent] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [galleryPid, setGalleryPid] = useState("");
 
   const uploadPhoto = async (file) => {
     if (!file) return;
@@ -109,6 +113,7 @@ export default function GuestSurveyPage({ token }) {
         photo_consent: photoConsent,
       });
       if (data?.review_prompt?.show) setReviewPrompt(data.review_prompt);
+      if (data?.property_id) setGalleryPid(data.property_id);
       setSubmitted(true);
     } catch (e) {
       setError("Failed to submit. Please try again.");
@@ -156,6 +161,12 @@ export default function GuestSurveyPage({ token }) {
               )}
             </div>
           </div>
+        )}
+        {galleryPid && (
+          <a data-testid="survey-gallery-link" href={`/kareler/${galleryPid}`}
+            className="inline-block mt-5 px-4 py-2 rounded-full bg-stone-900 hover:bg-stone-800 text-amber-300 text-sm font-medium">
+            🏆 {L.galleryBtn}
+          </a>
         )}
       </motion.div>
     </div>

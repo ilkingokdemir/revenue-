@@ -781,6 +781,63 @@ def create_reputation_router(db, require_roles):
                           "image_url": d.get("image_url")})
         return {"hotel": prop.get("name", property_id), "items": items}
 
+    @router.get("/reputation/photo-contest-poster/{property_id}")
+    async def photo_contest_poster(property_id: str,
+                                   _: dict = Depends(require_roles("admin", "manager"))):
+        """Resepsiyon için QR'lı Ayın Karesi posteri (A4 PDF)."""
+        import qrcode
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas as pdfcanvas
+        from reportlab.lib.units import mm
+        from reportlab.lib.utils import ImageReader
+        prop = await db.properties.find_one(
+            {"id": property_id}, {"_id": 0, "name": 1})
+        if not prop:
+            raise HTTPException(404, "Otel bulunamadı")
+        base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+        gallery_url = f"{base}/kareler/{property_id}"
+        qr_img = qrcode.make(gallery_url)
+        os.makedirs("/app/backend/uploads/reports", exist_ok=True)
+        qr_path = f"/app/backend/uploads/reports/_qr_{property_id}.png"
+        qr_img.save(qr_path)
+        _tr = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+        fname = f"kareler-poster-{property_id}.pdf"
+        pdf_path = f"/app/backend/uploads/reports/{fname}"
+        c = pdfcanvas.Canvas(pdf_path, pagesize=A4)
+        w, h = A4
+        c.setFillColorRGB(0.07, 0.06, 0.05)
+        c.rect(0, 0, w, h, fill=1, stroke=0)
+        c.setFillColorRGB(0.96, 0.62, 0.04)
+        c.setFont("Helvetica-Bold", 15)
+        c.drawCentredString(w / 2, h - 40 * mm, "A  Y  I  N     K  A  R  E  S  I")
+        c.setFillColorRGB(1, 1, 1)
+        c.setFont("Helvetica-Bold", 30)
+        c.drawCentredString(w / 2, h - 58 * mm, prop.get("name", "").translate(_tr)[:32])
+        c.setFillColorRGB(0.8, 0.78, 0.75)
+        c.setFont("Helvetica", 13)
+        c.drawCentredString(w / 2, h - 72 * mm,
+                            "Konaklamanizdan bir kareyi anketimizle paylasin,")
+        c.drawCentredString(w / 2, h - 79 * mm,
+                            "ayin kazanani olun ve galerimizde yerinizi alin!")
+        qs = 90 * mm
+        c.setFillColorRGB(1, 1, 1)
+        c.roundRect((w - qs - 10 * mm) / 2, h - 190 * mm, qs + 10 * mm, qs + 10 * mm,
+                    6 * mm, fill=1, stroke=0)
+        c.drawImage(ImageReader(qr_path), (w - qs) / 2, h - 185 * mm, width=qs, height=qs)
+        c.setFillColorRGB(0.96, 0.62, 0.04)
+        c.setFont("Helvetica-Bold", 14)
+        c.drawCentredString(w / 2, h - 202 * mm, "Kazananlari gormek icin QR kodu okutun")
+        c.setFillColorRGB(0.55, 0.52, 0.5)
+        c.setFont("Helvetica", 9)
+        c.drawCentredString(w / 2, h - 212 * mm, gallery_url)
+        c.setFont("Helvetica", 8)
+        c.drawCentredString(w / 2, 15 * mm,
+                            "Fotograflar misafirlerimizin acik izniyle paylasilmaktadir.")
+        c.showPage()
+        c.save()
+        os.remove(qr_path)
+        return {"poster_url": f"/api/uploads/reports/{fname}", "gallery_url": gallery_url}
+
     @router.post("/reputation/photo-contest/run")
     async def photo_contest_run(_: dict = Depends(require_roles("admin", "manager"))):
         from workers import run_photo_contest

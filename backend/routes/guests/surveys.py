@@ -369,6 +369,7 @@ def create_surveys_router(db, require_roles, LlmChat, UserMessage, resend):
                 response["id"])
 
         return {"status": "submitted", "message": "Thank you for your feedback!",
+                "property_id": invite["property_id"],
                 "review_prompt": await _review_prompt(invite["property_id"], nps_score, avg_category)}
 
     async def _review_prompt(pid: str, nps: int, avg_cat: float):

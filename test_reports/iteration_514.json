@@ -1,0 +1,41 @@
+{
+  "summary": "Monthly full-platform regression (Iteration 514). 18/18 backend pytest cases PASS covering: auth login, properties, portfolio-report, reviews list, booking-widget book, public survey, public photo-contest + IP-protected vote (429 on duplicate), GDPR erasure, ProfitPricing matrix, ProfitPricing autopilot run, DecisionAssurance /aldgate-flats (120d), DataQuality per-property (health_score + issues), DataQuality summary/all (avg_score + properties), RevPAM (>=2 spaces), ABS public (5 attrs w/ image_url), Group Displacement analyze (rooms_requested 60 @ 70 -> new net fields), and Group Sales OS full lifecycle (create RFP 'Regresyon QA Grubu' -> quote v1 -> reschedule -> quote v2 -> won -> block.action='created' + bookings doc room_type='Group Block' status=confirmed + booking_ref returned -> RFP email returns status='mock' -> lost -> block.action='released' + booking cancelled). Frontend smoke: admin login, dashboard renders DataHealthStrip with dhs-chip-default (score 55, Franziskaner by Centra), and all 8 command-palette destinations (profit-pricing, data-quality, group-sales, decision-assurance, revpam, abs-selling, ai-reply-robot, calendar) render non-blank with 0 error boundaries and 0 pageerrors. Public /book/default flow works: search -> Reserve -> ABS section with 5 abs-attr-* cards (Deniz manzarası flagged 'Popüler') -> click adds abs-line, total £200 -> £230 (+£30) -> Pay-at-Property selectable + Complete Booking button visible.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Command palette DialogContent", "issues": ["Radix a11y warning 'Missing Description or aria-describedby for DialogContent' still present from prior iteration — a11y minor."]}
+    ]
+  },
+  "test_verifications": {
+    "core_regression": "login/properties/portfolio/reviews/widget-book/survey/photo-contest-vote all 200; vote 429 on duplicate IP+candidate confirmed; GDPR erasure returns affected.survey_responses >=1 and log entry present.",
+    "revenue_suite": "profit-pricing matrix+findings ok; autopilot POST ok; decision-assurance summary.decisions field present; data-quality health_score + issues present; summary/all avg_score+properties present; revpam >=2 spaces returned; abs/public/default returns >=5 attrs incl image_url + Popüler indicator; group-displacement analyze returns net_displacement_cost / breakeven_rate_net / suggested_min_rate_net / net_value_after_commission.",
+    "group_sales_lifecycle": "RFP created (12 rooms @ 85, T+60 days) -> quote v1 (recommendation + net_value + alternatives when reject) -> reschedule triggers quote v2 -> PUT status=won returns block.action='created' + booking_ref, verified in db.bookings (room_type='Group Block', status='confirmed') -> POST /email returns status='mock' -> PUT status=lost returns block.action='released', booking flipped to cancelled.",
+    "rfp_email": "Returns 200 with status='mock' as designed (Resend mocked).",
+    "frontend_dashboard": "DataHealthStrip present; dhs-chip-default score 55 for Franziskaner by Centra (only 1 chip returned by API — expected for properties with sufficient data).",
+    "frontend_pages": "profit-pricing (30 pp-* testids), data-quality (dq-score-card + dq-issues), group-sales (31 gs-* testids incl RFP list), decision-assurance (16 da-* testids), revpam (11 rp/revpam testids), abs-selling (31 abs-* admin testids), ai-reply-robot (renders), calendar (renders 30 bookings, 6 rooms, arrivals/departures). All 0 error boundaries.",
+    "public_booking_widget": "5 abs-attr-* rendered with Popüler badge on top attribute; clicking added abs-line, Total £200 -> £230, Pay-at-Property option selectable + Complete Booking button present.",
+    "group_block_in_calendar": "Not visible after lifecycle test because test ends with status=lost (block cancelled) as instructed by the review request ('leave clean: set status lost at end'). Existing 'Beta Kongre' block GRP-8A450D0D was not modified."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration514_monthly_regression.py",
+    "/app/test_reports/pytest/iteration_514.xml"
+  ],
+  "action_items": [
+    "(Optional) A11y: add aria-describedby to command-palette Radix DialogContent to silence console warning (carried over from iter 511)."
+  ],
+  "critical_code_review_comments": [
+    "group_sales.update_rfp reschedule/quote chain: when status=won -> lost, the code cancels the booking but does NOT $unset block_booking_id/ref — but on won->new/quoted/negotiating path it does $unset. Slight inconsistency: after status=lost, block_booking_id stays on the RFP with a cancelled booking. If a user then moves lost->won again, the guard `not rfp.get('block_booking_id')` prevents creating a new booking, potentially leaving the RFP in a state where the linked booking is cancelled but no new one is created. Suggest also $unset block_booking_id/ref on the 'lost' branch (or re-open the cancelled booking).",
+    "profit_pricing autopilot loop and data_quality_sentinel_loop are background workers — no test coverage for their failure/recovery paths; consider adding a lightweight healthcheck endpoint that exposes last_run_at + last_error.",
+    "GDPR erasure returns 200 with affected={} even when nothing matched (silent no-op). Consider surfacing 'not_found' hint so admins can distinguish 'redacted 0 rows' from 'user never existed'."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration514_monthly_regression.py"],
+  "success_rate": { "backend": "100% (18/18)", "frontend": "100% of smoke checks passed" },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (worked)",
+  "seed_data_creation": "Created one RFP 'Regresyon QA Grubu' on property 'default'; ended in status='lost' with block released (booking cancelled). Existing 'Beta Kongre' RFP untouched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend regression file at /app/backend/tests/test_iteration514_monthly_regression.py can be re-run any time (idempotent — each run creates fresh 'Regresyon QA Grubu' RFPs). All iteration 508-514 features validated end-to-end. Group Sales OS lifecycle (RFP -> quote -> reschedule -> won -> block booking -> lost -> release) verified via API + DB. Frontend command palette + all admin panels render without pageerrors.",
+  "rca of the issue": "N/A — no defects blocking. Only carry-over a11y warning and one small consistency suggestion around block_booking_id lifecycle on lost-branch."
+}

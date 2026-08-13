@@ -35,6 +35,7 @@ import SectionHub from "./components/SectionHub";
 import PwaInstallButton from "./components/PwaInstallButton";
 import MobileHome from "./components/MobileHome";
 import TodayHub from "./components/dashboard/TodayHub";
+import { DataHealthStrip } from "./components/dashboard/DataHealthStrip";
 import GlobalReportIssueFAB from "./components/dashboard/GlobalReportIssueFAB";
 import ActionFeedPanel from "./components/dashboard/ActionFeedPanel";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
@@ -897,12 +898,15 @@ const Dashboard = ({ user, onLogout, permissions }) => {
               }}
             />
           ) : (
+            <>
+            <DataHealthStrip onNavigate={navigate} />
             <TodayHub
               propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
               pickupScope={activePropertyId}
               hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
               onNavigate={navigate}
             />
+            </>
           )
         )}
 

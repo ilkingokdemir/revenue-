@@ -153,10 +153,51 @@ def create_group_sales_router(db, require_roles):
         if not upd:
             raise HTTPException(400, "Güncellenecek alan yok")
         upd["updated_at"] = datetime.now(timezone.utc).isoformat()
-        r = await db.group_rfps.update_one({"id": rfp_id}, {"$set": upd})
-        if not r.matched_count:
+        rfp = await db.group_rfps.find_one({"id": rfp_id}, {"_id": 0})
+        if not rfp:
             raise HTTPException(404, "RFP bulunamadı")
-        return {"ok": True}
+        await db.group_rfps.update_one({"id": rfp_id}, {"$set": upd})
+
+        # KAZANILAN RFP → takvime grup bloğu düşür / kaybedilirse bloğu iptal et
+        block_info = None
+        new_status = upd.get("status")
+        if new_status == "won" and not rfp.get("block_booking_id"):
+            last = (rfp.get("versions") or [{}])[-1]
+            rooms_block = int(last.get("expected_rooms") or rfp.get("rooms", 1))
+            nights = max((_d(rfp["check_out"]) - _d(rfp["check_in"])).days, 1)
+            rate = float(last.get("offered_rate", rfp.get("offered_rate", 0)) or 0)
+            booking = {
+                "id": str(uuid.uuid4()),
+                "booking_ref": f"GRP-{uuid.uuid4().hex[:8].upper()}",
+                "property_id": rfp["property_id"],
+                "guest_name": f"GRUP BLOĞU: {rfp['group_name']}",
+                "guest_email": rfp.get("contact_email", ""),
+                "room_type": "Group Block",
+                "check_in": rfp["check_in"], "check_out": rfp["check_out"],
+                "rooms": rooms_block, "guests": rooms_block,
+                "rate": rate,
+                "total_price": float(last.get("adj_group_revenue") or rooms_block * rate * nights),
+                "status": "confirmed", "source": "group_sales",
+                "group_rfp_id": rfp_id,
+                "special_requests": f"Group Sales OS — RFP kazanıldı (v{last.get('v', '?')})",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.bookings.insert_one(dict(booking))
+            await db.group_rfps.update_one(
+                {"id": rfp_id}, {"$set": {"block_booking_id": booking["id"],
+                                          "block_booking_ref": booking["booking_ref"]}})
+            block_info = {"action": "created", "booking_ref": booking["booking_ref"],
+                          "rooms": rooms_block}
+        elif new_status in ("lost", "new", "quoted", "negotiating") and rfp.get("block_booking_id") \
+                and rfp.get("status") == "won":
+            await db.bookings.update_one(
+                {"id": rfp["block_booking_id"]},
+                {"$set": {"status": "cancelled",
+                          "cancelled_at": datetime.now(timezone.utc).isoformat()}})
+            await db.group_rfps.update_one(
+                {"id": rfp_id}, {"$unset": {"block_booking_id": "", "block_booking_ref": ""}})
+            block_info = {"action": "released"}
+        return {"ok": True, "block": block_info}
 
     @router.post("/rfp/{rfp_id}/quote")
     async def quote(rfp_id: str, body: Dict,

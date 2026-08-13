@@ -3590,3 +3590,17 @@ d) GROUP SALES OS LITE: routes/revenue_ext/group_sales.py — group_rfps CRUD, w
   taşıma + otomatik fiyatlama + alt listesi temizlenir.
 - TEST: Beta Kongre 10-05→10-02 taşındı, v3 otomatik teklif ACCEPT, net 896 → 5104. UI'da v3 Kabul satırı görünür.
   Not: RFP en iyi tarihe taşındıktan sonra 'Alternatif tarih' haklı olarak boş döner (gain>0 filtresi).
+
+## Iter 514 (2026-06) — Kazanılan RFP Takvimi + Nöbetçi Özeti + AYLIK TAM REGRESYON
+1. KAZANILAN RFP → GRUP BLOĞU: group_sales.update_rfp — status 'won' olunca bookings'e
+   room_type='Group Block' confirmed rezervasyon düşer (expected_rooms oda, GRP-XXXX ref,
+   block_booking_id RFP'ye yazılır); won'dan çıkınca blok cancelled + alan temizlenir.
+   Envanter displacement/availability hesaplarında otomatik kilitlenir. TEST: 22 oda blok ↔ release ✓
+2. NÖBETÇİ ÖZETİ: GET /api/data-quality/summary/all (route /{property_id}'den ÖNCE tanımlı olmalı!) +
+   DataHealthStrip.js dashboard'da TodayHub üstünde renkli skor çipleri (yeşil≥80/amber≥60/kırmızı).
+3. AYLIK REGRESYON (iteration_514): backend 18/18 PASS, frontend tüm sayfalar 0 hata,
+   widget ABS akışı + grup yaşam döngüsü (create→quote→reschedule→won→blok→email mock→lost→release) ✓
+4. A11y: command.jsx DialogDescription (sr-only) eklendi — Radix uyarısı kalıcı çözüldü
+   (aria-describedby={undefined} yetmemişti).
+- NOT: uvicorn hot-reload bazen uzun sürüyor; health timeout olursa 'sudo supervisorctl restart backend'.
+- Anahtarlar 5+ hatırlatmaya rağmen HÂLÂ paylaşılmadı — Resend/Expo/Meta/Places mock.

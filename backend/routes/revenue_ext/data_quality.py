@@ -168,6 +168,24 @@ async def run_dq_sentinel(db, pid: str, threshold: int = 70, drop_alert: int = 1
 def create_data_quality_router(db, require_roles):
     router = APIRouter(prefix="/data-quality", tags=["data-quality"])
 
+    @router.get("/summary/all")
+    async def summary_all(_: dict = Depends(require_roles("admin", "manager"))):
+        """Nöbetçi özeti: tüm tesislerin son tarama skoru (dashboard sağlık şeridi)."""
+        props = await db.properties.find(
+            {"is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1}).to_list(50)
+        out = []
+        for p in props:
+            scan = await db.data_quality_scans.find_one(
+                {"property_id": p["id"]}, {"_id": 0, "health_score": 1, "run_at": 1, "issue_count": 1},
+                sort=[("run_at", -1)])
+            out.append({"property_id": p["id"], "name": p.get("name") or p["id"],
+                        "score": scan["health_score"] if scan else None,
+                        "issue_count": scan.get("issue_count") if scan else None,
+                        "last_scan": scan.get("run_at") if scan else None})
+        scored = [x["score"] for x in out if x["score"] is not None]
+        return {"properties": out,
+                "avg_score": round(sum(scored) / len(scored), 1) if scored else None}
+
     @router.get("/{property_id}")
     async def scan(property_id: str,
                    _: dict = Depends(require_roles("admin", "manager"))):

@@ -95,3 +95,13 @@ Kalan FLYR boşlukları (P1 adayı): ~~gün-içi re-price~~ (iter 450 DONE), ~~A
 - DONE: Eco Sweep nightly cron (03:30 UTC, tüm tesisler).
 - P0 (anahtar bekliyor): Resend, Twilio, OTA push, FCM, Lighthouse compset.
 - P2: Native Mobile App (React Native), PCI/SOC2 dokümantasyonu, gerçek IoT/Airbnb adaptörleri.
+
+## MVP Eklentisi — "Üç Bağımsız Rapor" Yol Haritası (Iter 511, 2026-06)
+- [x] P0: Decision Assurance / Kanıtlı Autopilot (P10/P50/P90 + readback + gözlemsel etki) — TAMAM
+- [x] P0: Data Quality Autopilot (mapping drift, orphan override auto-fix, birim anomalisi, bayat fiyat, mükerrer rez.) — TAMAM
+- [x] P1: Net Contribution v2 (ödeme ücreti + iade/chargeback riski + OTA promo fonlama + direct edinim maliyeti) — TAMAM
+- [x] P1: Group Sales OS lite (RFP yaşam döngüsü, wash/attrition, comp oda, teklif versiyonlama + PDF) — TAMAM
+- [ ] P2: Alternatif tarih önerisi (grup teklifi için düşük displacement'lı tarih arama)
+- [ ] P2: Oda tipi / rate-code seviyesinde bağımsız forecast
+- [ ] P2: Kontrollü deney (A/B) altyapısı ile NEDENSEL etki ölçümü (şimdiki etiket: gözlemsel)
+- [ ] P3: Search/flight/conference demand intelligence, portföyler arası substitution, LTV

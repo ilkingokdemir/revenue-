@@ -1,0 +1,39 @@
+{
+  "summary": "Frontend testing of 4 new revenue tools (Decision Assurance, Data Quality Autopilot, Profit Pricing v2 with new fee/DAC/refund inputs, Group Sales OS lite) plus regression on AI Reply Robot and public booking widget. All required data-testids render; all critical flows work end-to-end including RFP create -> quote -> PDF download -> status persistence.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Branch/Property switcher dropdown", "issues": ["Property names render with 'linked' suffix concatenated to the name (e.g., 'Aldgate Flatslinked', 'Camden Apartmentslinked') — likely a badge text rendered without whitespace/gap. Cosmetic only."]},
+      {"screen": "Command palette dialogs", "issues": ["React warning: 'Missing Description or aria-describedby for DialogContent' — a11y minor, not blocking."]}
+    ]
+  },
+  "test_verifications": {
+    "decision_assurance": "Panel renders. da-decisions-card, da-applied-card, da-observed-card, da-delta-card, da-disclaimer, da-list all visible. Both 'default' and 'aldgate-flats' properties show 0 decisions in UI (empty state message shown as documented in review request). Backend curl to /api/decision-assurance/aldgate-flats requires auth (401); could not confirm backend claim of 8 decisions from unauthenticated shell but panel handles empty gracefully.",
+    "data_quality": "dq-score-card shows 55 (amber), dq-issues renders 3 rows: dq-issue-mapping_drift (critical), dq-issue-stale_rates (warning), dq-issue-duplicate_bookings. dq-rescan-btn triggers reload without error.",
+    "profit_pricing_v2": "pp-cpor-input, pp-payfee-input, pp-dac-input all present. 6 per-channel pp-refund-* inputs render (direct, booking_com, expedia, airbnb, agoda, trip_com). Changing payment_fee to 2.5 and clicking pp-save-settings shows success toast 'Ayarlar kaydedildi' and matrix reloads.",
+    "group_sales": "RFP create form works (gs-name/checkin/checkout/rooms/rate inputs). Created 'Test QA Grubu' RFP -> appears in gs-rfp-list. gs-quote-<id> generated v1 quote row with recommendation + net value. gs-pdf-<id>-1 downloaded 'grup-teklif-Test-QA-Grubu.pdf'. gs-status-<id> select changed to 'Kazanıldı' (won) -> after reload+reopen, pipeline shows 1 RFP, Kazanılan £6930, Dönüşüm %100 confirming persistence.",
+    "regression_ai_reply_robot": "View loads without error boundary (body 8781 chars, 0 error elements).",
+    "regression_booking_widget": "/book/default loads Franziskaner by Centra widget with dates and CHECK AVAILABILITY button (no ABS)."
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Cosmetic: fix property switcher labels so 'linked' badge is rendered with proper spacing/element separation (not concatenated onto property name).",
+    "A11y: add aria-describedby (or Description) to command-palette DialogContent to silence radix warnings."
+  ],
+  "critical_code_review_comments": [
+    "DecisionAssurancePanel & DataQualityPanel swallow errors silently with `catch { /* silent */ }` — consider surfacing a toast on network failure so QA/users know when data cannot load.",
+    "GroupSalesPanel.pdf() uses axios blob download; success path fine, but any 4xx is only handled as generic 'PDF üretilemedi'; consider showing backend detail like other handlers do.",
+    "ProfitPricingPanel settings state is initialized from `d.settings.ancillary/refund_risk_pct/promo_funding_pct` — if backend omits any of these keys for a legacy property, spreads on undefined will throw. Add fallbacks (`... || {}`).",
+    "Command palette / DialogContent missing aria-describedby — accessibility."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "not tested (frontend-only per request)", "frontend": "100% of required flows passed" },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (worked)",
+  "seed_data_creation": "Created one RFP 'Test QA Grubu' on 'default' property (as instructed).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All 4 new revenue panels (decision-assurance, data-quality, profit-pricing v2, group-sales) tested and passing via Control+K command palette. Property switcher exposes propertyId to panels; default property has 0 assurance decisions (empty-state ok). One QA RFP now exists on default with status=won. Two minor cosmetic/a11y items reported but no blockers.",
+  "rca of the issue": "N/A — no defects blocking."
+}

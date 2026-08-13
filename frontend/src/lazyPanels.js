@@ -182,6 +182,9 @@ export const CompRadarPanel = L(() => import("./components/dashboard/CompRadarPa
 export const ProfitPricingPanel = L(() => import("./components/dashboard/ProfitPricingPanel"));
 export const AbsPanel = L(() => import("./components/dashboard/AbsPanel"));
 export const RevPAMPanel = L(() => import("./components/dashboard/RevPAMPanel"));
+export const DecisionAssurancePanel = L(() => import("./components/dashboard/DecisionAssurancePanel"));
+export const DataQualityPanel = L(() => import("./components/dashboard/DataQualityPanel"));
+export const GroupSalesPanel = L(() => import("./components/dashboard/GroupSalesPanel"));
 export const BeachPosPanel = L(() => import("./components/dashboard/BeachPosPanel"));
 export const PublicEventsPanel = L(() => import("./components/dashboard/PublicEventsPanel"));
 

@@ -1326,6 +1326,14 @@ api_router.include_router(create_abs_router(db, require_roles))
 from routes.revenue_ext.revpam import create_revpam_router
 api_router.include_router(create_revpam_router(db, require_roles))
 
+# Iter 511: Decision Assurance + Data Quality Autopilot + Group Sales OS (3 bağımsız rapor önerileri)
+from routes.revenue_ext.decision_assurance import create_decision_assurance_router
+api_router.include_router(create_decision_assurance_router(db, require_roles))
+from routes.revenue_ext.data_quality import create_data_quality_router
+api_router.include_router(create_data_quality_router(db, require_roles))
+from routes.revenue_ext.group_sales import create_group_sales_router
+api_router.include_router(create_group_sales_router(db, require_roles))
+
 async def _job_comp_radar(property_id: str) -> dict:
     try:
         return await comp_radar_router.run_comp_radar_internal(property_id or "")

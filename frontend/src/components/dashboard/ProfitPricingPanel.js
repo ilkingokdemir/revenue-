@@ -27,7 +27,10 @@ export default function ProfitPricingPanel({ propertyId }) {
     try {
       const { data: d } = await axios.get(`${API}/profit-pricing/${pid}?days=14`);
       setData(d);
-      setSettings({ cpor: d.settings.cpor, ancillary: { ...d.settings.ancillary } });
+      setSettings({ cpor: d.settings.cpor, payment_fee_pct: d.settings.payment_fee_pct,
+        direct_acquisition_cost: d.settings.direct_acquisition_cost,
+        ancillary: { ...d.settings.ancillary }, refund_risk_pct: { ...d.settings.refund_risk_pct },
+        promo_funding_pct: { ...d.settings.promo_funding_pct } });
     } catch (e) { toast.error(e?.response?.data?.detail || "Yüklenemedi"); }
     finally { setLoading(false); }
   }, [pid]);
@@ -181,20 +184,44 @@ export default function ProfitPricingPanel({ propertyId }) {
       {/* Settings */}
       {settings && (
         <div className="bg-white border border-stone-200 rounded-2xl p-5" data-testid="pp-settings">
-          <h2 className="text-sm font-black text-stone-900 mb-3">Maliyet & Ancillary Ayarları</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <h2 className="text-sm font-black text-stone-900 mb-3">Maliyet & Ancillary Ayarları <span className="text-[10px] font-normal text-stone-400">(net = fiyat − komisyon − ödeme ücreti − CPOR − iade riski − promo fonlama + ekstra harcama)</span></h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end mb-3">
             <div>
               <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">CPOR</label>
               <input type="number" min="0" value={settings.cpor}
                 onChange={(e) => setSettings({ ...settings, cpor: parseFloat(e.target.value) || 0 })}
                 data-testid="pp-cpor-input" className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
             </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Ödeme ücreti %</label>
+              <input type="number" min="0" max="10" step="0.1" value={settings.payment_fee_pct}
+                onChange={(e) => setSettings({ ...settings, payment_fee_pct: parseFloat(e.target.value) || 0 })}
+                data-testid="pp-payfee-input" className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Direct edinim maliyeti</label>
+              <input type="number" min="0" value={settings.direct_acquisition_cost}
+                onChange={(e) => setSettings({ ...settings, direct_acquisition_cost: parseFloat(e.target.value) || 0 })}
+                data-testid="pp-dac-input" className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end mb-3">
             {Object.keys(settings.ancillary).map((ch) => (
               <div key={ch}>
                 <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">{labels[ch] || ch} ekstra</label>
                 <input type="number" min="0" value={settings.ancillary[ch]}
                   onChange={(e) => setSettings({ ...settings, ancillary: { ...settings.ancillary, [ch]: parseFloat(e.target.value) || 0 } })}
                   data-testid={`pp-anc-${ch}`} className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
+            {Object.keys(settings.refund_risk_pct || {}).map((ch) => (
+              <div key={ch}>
+                <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">{labels[ch] || ch} iade riski %</label>
+                <input type="number" min="0" max="50" step="0.5" value={settings.refund_risk_pct[ch]}
+                  onChange={(e) => setSettings({ ...settings, refund_risk_pct: { ...settings.refund_risk_pct, [ch]: parseFloat(e.target.value) || 0 } })}
+                  data-testid={`pp-refund-${ch}`} className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
               </div>
             ))}
           </div>

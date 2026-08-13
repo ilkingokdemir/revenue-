@@ -186,6 +186,9 @@ import {
   ProfitPricingPanel,
   AbsPanel,
   RevPAMPanel,
+  DecisionAssurancePanel,
+  DataQualityPanel,
+  GroupSalesPanel,
   ProfitOSPanel,
   PromoCodesPanel,
   PropertyMappingPanel,
@@ -1697,6 +1700,15 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         )}
         {activeView === "revpam" && (
           <RevPAMPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
+        )}
+        {activeView === "decision-assurance" && (
+          <DecisionAssurancePanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
+        )}
+        {activeView === "data-quality" && (
+          <DataQualityPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
+        )}
+        {activeView === "group-sales" && (
+          <GroupSalesPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
         )}
     </>
   );

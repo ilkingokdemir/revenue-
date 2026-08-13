@@ -26,9 +26,19 @@ from routes.integrations_pkg.ota_commission import _get_rate, DEFAULT_RATES, CHA
 
 DEFAULT_SETTINGS = {
     "cpor": 18.0,  # cost per occupied room (temizlik, amenity, enerji)
+    "payment_fee_pct": 1.5,  # POS/sanal pos ödeme ücreti (%)
+    "direct_acquisition_cost": 5.0,  # direct rezervasyon başına pazarlama/sadakat maliyeti / oda-gece
     "ancillary": {  # kanal bazlı beklenen ekstra harcama / oda-gece (F&B, spa, upsell)
         "direct": 22.0, "booking_com": 10.0, "expedia": 8.0,
         "airbnb": 6.0, "agoda": 8.0, "trip_com": 8.0,
+    },
+    "refund_risk_pct": {  # kanal bazlı beklenen iptal/iade/chargeback kaybı (%)
+        "direct": 3.0, "booking_com": 8.0, "expedia": 8.0,
+        "airbnb": 5.0, "agoda": 8.0, "trip_com": 8.0,
+    },
+    "promo_funding_pct": {  # OTA kampanya fonlaması (otelin cebinden çıkan indirim %)
+        "direct": 0.0, "booking_com": 0.0, "expedia": 0.0,
+        "airbnb": 0.0, "agoda": 0.0, "trip_com": 0.0,
     },
 }
 
@@ -36,16 +46,26 @@ DEFAULT_SETTINGS = {
 async def _get_settings(db, pid: str) -> Dict:
     row = await db.profit_pricing_settings.find_one({"property_id": pid}, {"_id": 0})
     if not row:
-        return dict(DEFAULT_SETTINGS)
-    anc = dict(DEFAULT_SETTINGS["ancillary"])
-    anc.update(row.get("ancillary") or {})
-    return {"cpor": float(row.get("cpor", DEFAULT_SETTINGS["cpor"])), "ancillary": anc,
-            "autopilot_enabled": bool(row.get("autopilot_enabled", False))}
+        return {k: (dict(v) if isinstance(v, dict) else v) for k, v in DEFAULT_SETTINGS.items()}
+    out = {}
+    for key in ("ancillary", "refund_risk_pct", "promo_funding_pct"):
+        merged = dict(DEFAULT_SETTINGS[key])
+        merged.update(row.get(key) or {})
+        out[key] = merged
+    out["cpor"] = float(row.get("cpor", DEFAULT_SETTINGS["cpor"]))
+    out["payment_fee_pct"] = float(row.get("payment_fee_pct", DEFAULT_SETTINGS["payment_fee_pct"]))
+    out["direct_acquisition_cost"] = float(row.get("direct_acquisition_cost", DEFAULT_SETTINGS["direct_acquisition_cost"]))
+    out["autopilot_enabled"] = bool(row.get("autopilot_enabled", False))
+    return out
 
 
 async def compute_channel_nets(db, property_id: str, days: int = 14) -> Dict:
     s = await _get_settings(db, property_id)
     cpor, anc = s["cpor"], s["ancillary"]
+    pay_fee = s["payment_fee_pct"] / 100
+    dac = s["direct_acquisition_cost"]
+    refund = {ch: v / 100 for ch, v in s["refund_risk_pct"].items()}
+    promo = {ch: v / 100 for ch, v in s["promo_funding_pct"].items()}
     comm = {ch: await _get_rate(db, ch, property_id) for ch in DEFAULT_RATES}
     today = datetime.now(timezone.utc).date()
     rows, ch_totals = [], {ch: 0.0 for ch in DEFAULT_RATES}
@@ -55,8 +75,13 @@ async def compute_channel_nets(db, property_id: str, days: int = 14) -> Dict:
         cells = {}
         for ch in DEFAULT_RATES:
             commission = round(gross * comm[ch], 2)
-            net = round(gross - commission - cpor + anc.get(ch, 0), 2)
-            cells[ch] = {"gross": round(gross, 2), "commission": commission, "net": net}
+            deductions = round(
+                commission + gross * pay_fee + cpor
+                + gross * refund.get(ch, 0) + gross * promo.get(ch, 0)
+                + (dac if ch == "direct" else 0), 2)
+            net = round(gross - deductions + anc.get(ch, 0), 2)
+            cells[ch] = {"gross": round(gross, 2), "commission": commission,
+                         "deductions": deductions, "net": net}
             ch_totals[ch] += net
         rows.append({"date": d, "gross": round(gross, 2), "rate_source": src, "channels": cells})
     ch_avg = {ch: round(v / days, 2) for ch, v in ch_totals.items()}
@@ -136,18 +161,22 @@ def create_profit_pricing_router(db, require_roles):
     async def put_settings(property_id: str, body: Dict,
                            _: dict = Depends(require_roles("admin", "manager"))):
         cpor = max(0.0, float(body.get("cpor", DEFAULT_SETTINGS["cpor"]) or 0))
-        anc = {}
-        for ch in DEFAULT_RATES:
-            try:
-                anc[ch] = max(0.0, float((body.get("ancillary") or {}).get(ch, DEFAULT_SETTINGS["ancillary"].get(ch, 0))))
-            except (TypeError, ValueError):
-                anc[ch] = DEFAULT_SETTINGS["ancillary"].get(ch, 0)
+        pay_fee = max(0.0, min(float(body.get("payment_fee_pct", DEFAULT_SETTINGS["payment_fee_pct"]) or 0), 10))
+        dac = max(0.0, float(body.get("direct_acquisition_cost", DEFAULT_SETTINGS["direct_acquisition_cost"]) or 0))
+        upd = {"property_id": property_id, "cpor": cpor, "payment_fee_pct": pay_fee,
+               "direct_acquisition_cost": dac,
+               "updated_at": datetime.now(timezone.utc).isoformat()}
+        for key in ("ancillary", "refund_risk_pct", "promo_funding_pct"):
+            merged = {}
+            for ch in DEFAULT_RATES:
+                try:
+                    merged[ch] = max(0.0, float((body.get(key) or {}).get(ch, DEFAULT_SETTINGS[key].get(ch, 0))))
+                except (TypeError, ValueError):
+                    merged[ch] = DEFAULT_SETTINGS[key].get(ch, 0)
+            upd[key] = merged
         await db.profit_pricing_settings.update_one(
-            {"property_id": property_id},
-            {"$set": {"property_id": property_id, "cpor": cpor, "ancillary": anc,
-                      "updated_at": datetime.now(timezone.utc).isoformat()}},
-            upsert=True)
-        return {"ok": True, "cpor": cpor, "ancillary": anc}
+            {"property_id": property_id}, {"$set": upd}, upsert=True)
+        return {"ok": True, **{k: v for k, v in upd.items() if k not in ("property_id", "updated_at")}}
 
     @router.get("/{property_id}/autopilot")
     async def autopilot_status(property_id: str,
@@ -210,7 +239,8 @@ def create_profit_pricing_router(db, require_roles):
         worst = min(ch_avg, key=ch_avg.get)
         return {
             "property_id": property_id, "days": days,
-            "settings": {"cpor": s["cpor"], "ancillary": s["ancillary"]},
+            "settings": {k: s[k] for k in ("cpor", "payment_fee_pct", "direct_acquisition_cost",
+                                           "ancillary", "refund_risk_pct", "promo_funding_pct")},
             "autopilot_enabled": s.get("autopilot_enabled", False),
             "commission_rates": comm, "channel_labels": CHANNEL_LABELS,
             "channel_net_avg": ch_avg,

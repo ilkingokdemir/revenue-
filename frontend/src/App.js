@@ -651,7 +651,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
                   <SelectItem key={p.id} value={p.id} data-testid={`branch-${p.id}`}>
                     <div className="flex items-center gap-2">
                       <span>{p.name}</span>
-                      {p.external_id && <span className="text-[9px] text-emerald-600 ml-1">linked</span>}
+                      {p.external_id && <span className="text-[9px] text-emerald-600 ml-1.5 px-1 py-0.5 rounded bg-emerald-50 align-middle">linked</span>}
                     </div>
                   </SelectItem>
                 ))}

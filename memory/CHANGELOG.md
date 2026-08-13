@@ -3551,3 +3551,20 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
 - ≥3 satışı olan özelliğe "popular": true → widget'ta amber "Popüler" rozeti (abs-popular-{id} testid).
 - TEST: Sessiz oda'ya 4 test satışı eklendi → 4.→2. sıraya yükseldi + popüler rozeti; temizlik sonrası eski sıra. ✓
 - Anahtarlar HÂLÂ paylaşılmadı (Expo/Resend/Meta/Google Places) — kullanıcıya tekrar hatırlatıldı.
+
+## Iter 511 (2026-06) — "Üç Bağımsız Rapor" MVP Eksikleri Tamamlandı (4 özellik)
+a) DECISION ASSURANCE: routes/revenue_ext/decision_assurance.py — ai_pricing_decisions + pricing_explanations
+   birleşik listesi; P10/P50/P90 bandı (aynı DOW son 8 hafta satış dağılımı), readback (statü + rate_overrides
+   kanıtı), gözlemsel etki (fiili gelir vs P50, nedensellik disclaimer'ı). Panel: DecisionAssurancePanel (120g).
+b) DATA QUALITY AUTOPILOT: routes/revenue_ext/data_quality.py — 6 dedektör (mapping_drift, orphan_rate_overrides
+   AUTO-FIX, price_unit_anomaly, stale_rates, cost_defaults, duplicate_bookings) + health score + tarama geçmişi.
+   Gerçek veride yakaladı: 3 mapping drift, 16 gün bayat fiyat, 1 mükerrer şüphesi (skor 55).
+c) NET CONTRIBUTION v2: profit_pricing.py formül genişledi — payment_fee_pct, direct_acquisition_cost,
+   kanal bazlı refund_risk_pct + promo_funding_pct. Cell'lere 'deductions' alanı eklendi. Panel yeni inputlar:
+   pp-payfee-input, pp-dac-input, pp-refund-*.
+d) GROUP SALES OS LITE: routes/revenue_ext/group_sales.py — group_rfps CRUD, wash/attrition + comp oda,
+   teklif versiyonlama (her versiyon compute_displacement + group_displacement_analyses'e kayıt → mevcut
+   proposal-pdf endpoint'i ile PDF). Pipeline özeti (potansiyel/kazanılan/dönüşüm). Panel: GroupSalesPanel.
+- TEST: backend curl 4/4; testing agent iteration_511 frontend TÜM akışlar geçti (RFP create→quote→PDF→won).
+- Düzeltilen kozmetikler: property switcher 'linked' rozeti boşluklu, CommandDialog aria-describedby, DA paneli 120g.
+- ROADMAP.md'ye P2/P3 kalanlar eklendi (alternatif tarih önerisi, rate-code forecast, A/B nedensel etki, LTV).

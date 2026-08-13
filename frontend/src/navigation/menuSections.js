@@ -2,6 +2,8 @@
 // `core: true` marks items visible in Simple mode (~30 essential screens).
 import {
   Coins,
+  Pulse,
+  Handshake,
   AddressBook,
   ArrowSquareOut,
   ArrowsClockwise,
@@ -296,6 +298,9 @@ export function buildMenuSections(t, user) {
         { divider: true, label: "Tools" },
         { id: "group-displacement", icon: Scales, name: "Grup displacement analizi", testId: "group-displacement-btn" },
         { id: "profit-pricing", icon: Coins, name: "Kâr-öncelikli fiyatlama", testId: "profit-pricing-btn" },
+        { id: "decision-assurance", icon: ShieldCheck, name: "Decision Assurance (kanıtlı autopilot)", testId: "decision-assurance-btn" },
+        { id: "data-quality", icon: Pulse, name: "Data Quality Autopilot", testId: "data-quality-btn" },
+        { id: "group-sales", icon: Handshake, name: "Group Sales OS (RFP)", testId: "group-sales-btn" },
         { id: "abs-selling", icon: Bed, name: "Özellik bazlı satış (ABS)", testId: "abs-selling-btn" },
         { id: "revpam", icon: Briefcase, name: "Toplantı salonu RevPAM", testId: "revpam-btn" },
         { id: "rev-protection", icon: ShieldCheck, name: "Revenue protection", testId: "rev-protection-btn" },

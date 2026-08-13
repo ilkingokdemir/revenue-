@@ -14,6 +14,9 @@ const SURVEY_I18N = {
     rate: "Deneyiminizi puanlayın",
     commentPh: "Nelerden memnun kaldınız, neleri iyileştirebiliriz?",
     submit: "Geri Bildirimi Gönder", submitting: "Gönderiliyor...",
+    photoTitle: "Bir anınızı paylaşın (isteğe bağlı)",
+    photoBtn: "📸 Fotoğraf Ekle", photoUploading: "Yükleniyor...",
+    photoConsent: "Fotoğrafımın otelin sosyal medya hesaplarında paylaşılmasına izin veriyorum.",
     thanks: "Geri bildiriminiz alındı. Deneyiminizi paylaşmaya zaman ayırdığınız için içtenlikle teşekkür ederiz.",
     promptMsg: "Deneyiminizi çok beğendiğinize sevindik! Bir dakikanızı ayırıp yorumunuzu paylaşır mısınız?",
     taBtn: "⭐ TripAdvisor'da Değerlendir", gBtn: "Google'da Değerlendir",
@@ -25,6 +28,9 @@ const SURVEY_I18N = {
     rate: "Rate your experience",
     commentPh: "Tell us what you loved or what we can improve...",
     submit: "Submit Feedback", submitting: "Submitting...",
+    photoTitle: "Share a moment (optional)",
+    photoBtn: "📸 Add Photo", photoUploading: "Uploading...",
+    photoConsent: "I allow the hotel to share my photo on its social media accounts.",
     thanks: "Your feedback has been submitted. Thank you for taking the time to share your experience.",
     promptMsg: "So glad you enjoyed your stay! Would you take a minute to share a review?",
     taBtn: "⭐ Review on TripAdvisor", gBtn: "Review on Google",
@@ -36,6 +42,9 @@ const SURVEY_I18N = {
     rate: "Bewerten Sie Ihr Erlebnis",
     commentPh: "Was hat Ihnen gefallen, was können wir verbessern?",
     submit: "Feedback senden", submitting: "Wird gesendet...",
+    photoTitle: "Teilen Sie einen Moment (optional)",
+    photoBtn: "📸 Foto hinzufügen", photoUploading: "Wird hochgeladen...",
+    photoConsent: "Ich erlaube dem Hotel, mein Foto in den sozialen Medien zu teilen.",
     thanks: "Ihr Feedback wurde übermittelt. Vielen Dank, dass Sie sich die Zeit genommen haben.",
     promptMsg: "Schön, dass Ihnen Ihr Aufenthalt gefallen hat! Möchten Sie eine Bewertung hinterlassen?",
     taBtn: "⭐ Auf TripAdvisor bewerten", gBtn: "Auf Google bewerten",
@@ -54,6 +63,23 @@ export default function GuestSurveyPage({ token }) {
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [photoConsent, setPhotoConsent] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+
+  const uploadPhoto = async (file) => {
+    if (!file) return;
+    setPhotoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await axios.post(`${API}/surveys/public/${token}/photo`, fd);
+      setPhotoUrl(data.photo_url);
+    } catch (e) {
+      setError("Photo upload failed.");
+    }
+    setPhotoUploading(false);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -79,6 +105,8 @@ export default function GuestSurveyPage({ token }) {
         nps_score: nps,
         category_ratings: catRatings,
         comment,
+        photo_url: photoUrl,
+        photo_consent: photoConsent,
       });
       if (data?.review_prompt?.show) setReviewPrompt(data.review_prompt);
       setSubmitted(true);
@@ -216,6 +244,31 @@ export default function GuestSurveyPage({ token }) {
               className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-700 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
               data-testid="survey-comment"
             />
+          </div>
+
+          {/* Photo upload with consent */}
+          <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6 mb-6" data-testid="photo-section">
+            <h2 className="text-base font-semibold text-stone-800 mb-2">{L.photoTitle}</h2>
+            {photoUrl ? (
+              <div className="space-y-3">
+                <img src={`${process.env.REACT_APP_BACKEND_URL}${photoUrl}`} alt="upload"
+                  data-testid="survey-photo-preview"
+                  className="rounded-xl max-h-48 object-cover border border-stone-200" />
+                <label className="flex items-start gap-2 text-xs text-stone-600 cursor-pointer">
+                  <input type="checkbox" data-testid="photo-consent-checkbox"
+                    checked={photoConsent} onChange={(e) => setPhotoConsent(e.target.checked)}
+                    className="mt-0.5 accent-emerald-600" />
+                  {L.photoConsent}
+                </label>
+              </div>
+            ) : (
+              <label data-testid="photo-upload-label"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-stone-300 text-sm text-stone-600 hover:border-emerald-400 cursor-pointer">
+                {photoUploading ? L.photoUploading : L.photoBtn}
+                <input type="file" accept="image/*" className="hidden" data-testid="photo-file-input"
+                  onChange={(e) => uploadPhoto(e.target.files?.[0])} disabled={photoUploading} />
+              </label>
+            )}
           </div>
 
           {/* Submit */}

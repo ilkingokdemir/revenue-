@@ -86,6 +86,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [perfSummary, setPerfSummary] = useState(null);
   const [bestTime, setBestTime] = useState(null);
   const [sendingReport, setSendingReport] = useState(false);
+  const [guestPhotos, setGuestPhotos] = useState([]);
 
   const runInsight = async () => {
     setInsightLoading(true);
@@ -239,6 +240,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
       axios.get(`${API}/reputation/social-connection/${archivePid}`).then(({ data }) => setConnStatus(data)).catch(() => {});
       axios.get(`${API}/reputation/social-performance/${archivePid}`).then(({ data }) => setPerfSummary(data)).catch(() => {});
       axios.get(`${API}/reputation/best-time/${archivePid}`).then(({ data }) => setBestTime(data)).catch(() => {});
+      axios.get(`${API}/reputation/guest-photos/${archivePid}`).then(({ data }) => setGuestPhotos(data.items || [])).catch(() => {});
     }
   }, [tab, propertyId, archivePid, loadConfig, loadBench]);
 
@@ -1197,6 +1199,37 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+          {guestPhotos.length > 0 && (
+            <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="guest-photos">
+              <p className="text-sm font-medium text-stone-200">📸 İzinli Misafir Fotoğrafları ({guestPhotos.length}) — sosyal pakete hazır</p>
+              <div className="flex gap-3 flex-wrap">
+                {guestPhotos.map((g) => (
+                  <div key={g.id} data-testid={`guest-photo-${g.id}`} className="w-40 p-2 rounded-lg bg-stone-950 border border-stone-800">
+                    <img src={`${process.env.REACT_APP_BACKEND_URL}${g.photo_url}`} alt={g.guest_name}
+                      className="w-full h-28 object-cover rounded-md border border-stone-800" />
+                    <p className="text-[10px] text-stone-300 mt-1.5 truncate">{g.guest_name || "Misafir"} · NPS {g.nps_score}/10</p>
+                    {g.photo_draft_created ? (
+                      <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[9px]">✓ Taslağa çevrildi</span>
+                    ) : (
+                      <button data-testid={`guest-photo-draft-${g.id}`}
+                        onClick={async () => {
+                          try {
+                            await axios.post(`${API}/reputation/guest-photo-to-draft/${g.id}`);
+                            setGuestPhotos((prev) => prev.map((x) => x.id === g.id ? { ...x, photo_draft_created: true } : x));
+                            const { data: d } = await axios.get(`${API}/reputation/social-drafts/${archivePid}`);
+                            setSocialDrafts(d.items || []);
+                            toast.success("Misafir karesi taslağa çevrildi 📸");
+                          } catch (e) { toast.error(e?.response?.data?.detail || "Çevrilemedi"); }
+                        }}
+                        className="mt-1 w-full px-2 py-1 rounded text-[10px] bg-violet-600/80 hover:bg-violet-500 text-white">
+                        Taslağa Çevir
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
           <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="social-draft-archive">

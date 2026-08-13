@@ -712,6 +712,51 @@ def create_reputation_router(db, require_roles):
         pdf_url = await generate_social_report_pdf(db)
         return {"pdf_url": pdf_url}
 
+    @router.get("/reputation/guest-photos/{property_id}")
+    async def guest_photos(property_id: str,
+                           _: dict = Depends(require_roles("admin", "manager"))):
+        """İzinli misafir anket fotoğrafları."""
+        items = await db.survey_responses.find(
+            {"property_id": property_id, "photo_consent": True,
+             "photo_url": {"$nin": ["", None]}},
+            {"_id": 0, "id": 1, "guest_name": 1, "photo_url": 1, "comment": 1,
+             "nps_score": 1, "photo_draft_created": 1, "created_at": 1}
+        ).sort("created_at", -1).to_list(30)
+        return {"items": items}
+
+    @router.post("/reputation/guest-photo-to-draft/{response_id}")
+    async def guest_photo_to_draft(response_id: str,
+                                   _: dict = Depends(require_roles("admin", "manager"))):
+        """İzinli misafir fotoğrafını sosyal medya taslağına çevir."""
+        resp = await db.survey_responses.find_one({"id": response_id}, {"_id": 0})
+        if not resp or not resp.get("photo_url") or not resp.get("photo_consent"):
+            raise HTTPException(404, "İzinli fotoğraf bulunamadı")
+        if resp.get("photo_draft_created"):
+            raise HTTPException(400, "Bu fotoğraf zaten taslağa çevrildi")
+        prop = await db.properties.find_one(
+            {"id": resp["property_id"]}, {"_id": 0, "name": 1}) or {}
+        first_name = (resp.get("guest_name") or "Misafirimiz").split()[0]
+        draft_id = str(uuid.uuid4())
+        from PIL import Image
+        src = "/app/backend/uploads/survey_photos/" + resp["photo_url"].split("/")[-1]
+        if not os.path.exists(src):
+            raise HTTPException(404, "Fotoğraf dosyası bulunamadı")
+        os.makedirs("/app/backend/uploads/social_images", exist_ok=True)
+        Image.open(src).save(f"/app/backend/uploads/social_images/{draft_id}.png", "PNG")
+        quote = f" \"{(resp.get('comment') or '')[:120]}\"" if resp.get("comment") else ""
+        draft = (f"📸 Bu kare misafirimiz {first_name}'den geldi!{quote} "
+                 f"{prop.get('name', '')} deneyiminizi bizimle paylaştığınız için teşekkürler 🧡 "
+                 f"#misafirkaresi #otel #tesekkurler")
+        await db.social_drafts.insert_one({
+            "id": draft_id, "property_id": resp["property_id"],
+            "topic": "misafir karesi", "draft": draft, "source": "guest_photo",
+            "image_url": f"/api/uploads/social_images/{draft_id}.png",
+            "survey_response_id": response_id,
+            "created_at": datetime.now(timezone.utc).isoformat()})
+        await db.survey_responses.update_one(
+            {"id": response_id}, {"$set": {"photo_draft_created": True}})
+        return {"draft_id": draft_id, "draft": draft}
+
     @router.put("/reputation/social-drafts/{draft_id}/approve")
     async def social_draft_approve(draft_id: str,
                                    current_user: dict = Depends(require_roles("admin", "manager"))):

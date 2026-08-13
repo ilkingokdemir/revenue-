@@ -2,7 +2,7 @@
 Guest Satisfaction Survey Routes
 NPS + Category Ratings, configurable timing, multi-channel delivery, CRM integration
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List
 from collections import defaultdict
@@ -233,6 +233,28 @@ def create_surveys_router(db, require_roles, LlmChat, UserMessage, resend):
             "thank_you_message": settings.get("thank_you_message", "Thank you!") if settings else "Thank you!",
         }
 
+    @router.post("/surveys/public/{token}/photo")
+    async def upload_survey_photo(token: str, file: UploadFile = File(...)):
+        """Public: misafir anket fotoğrafı yükle (JPEG'e normalize edilir)."""
+        if not token.startswith("qr-"):
+            invite = await db.survey_invites.find_one({"token": token}, {"_id": 0, "id": 1})
+            if not invite:
+                raise HTTPException(404, "Survey not found")
+        raw = await file.read()
+        if len(raw) > 8 * 1024 * 1024:
+            raise HTTPException(400, "Fotoğraf 8MB'dan küçük olmalı")
+        import io
+        from PIL import Image
+        try:
+            img = Image.open(io.BytesIO(raw)).convert("RGB")
+        except Exception:
+            raise HTTPException(400, "Geçersiz görsel dosyası")
+        img.thumbnail((1600, 1600))
+        os.makedirs("/app/backend/uploads/survey_photos", exist_ok=True)
+        fname = f"{uuid.uuid4()}.jpg"
+        img.save(f"/app/backend/uploads/survey_photos/{fname}", "JPEG", quality=88)
+        return {"photo_url": f"/api/uploads/survey_photos/{fname}"}
+
     @router.post("/surveys/public/{token}")
     async def submit_public_survey(token: str, data: Dict):
         """Public endpoint - no auth required. Submit survey response."""
@@ -251,6 +273,8 @@ def create_surveys_router(db, require_roles, LlmChat, UserMessage, resend):
         nps_score = data.get("nps_score", 0)
         category_ratings = data.get("category_ratings", {})
         comment = data.get("comment", "")
+        photo_url = (data.get("photo_url") or "").strip()
+        photo_consent = bool(data.get("photo_consent"))
 
         # Calculate average category score
         cat_scores = [v for v in category_ratings.values() if isinstance(v, (int, float))]
@@ -267,6 +291,8 @@ def create_surveys_router(db, require_roles, LlmChat, UserMessage, resend):
             "category_ratings": category_ratings,
             "avg_category_score": avg_category,
             "comment": comment,
+            "photo_url": photo_url or None,
+            "photo_consent": photo_consent if photo_url else False,
             "nps_category": "promoter" if nps_score >= 9 else ("passive" if nps_score >= 7 else "detractor"),
             "check_in": invite.get("check_in", ""),
             "check_out": invite.get("check_out", ""),

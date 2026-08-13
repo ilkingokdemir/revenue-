@@ -3384,3 +3384,17 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
 - DERS (3. tekrar): reputation_benchmark.py'de paralel batch yine kuyruk bozdu (orphan blok
   721-728 + kaybolan endpoint). BU DOSYAYA DA edit'ler artık SIRALI yapılmalı.
 - BEKLEYEN: Expo token (13. kez) + Google Places + Meta anahtarları.
+
+## Iter 533 (2026-08-13) — Konuk Fotoğraf İzni TAMAMLANDI
+- 1) ANKET FOTOĞRAF YÜKLEME (public): POST /surveys/public/{token}/photo — multipart,
+  8MB limit, PIL ile JPEG normalize + 1600px thumbnail → /api/uploads/survey_photos/.
+  submit_public_survey artık photo_url + photo_consent kaydeder (izin yoksa consent=false).
+- 2) ANKET UI: GuestSurveyPage'e "Bir anınızı paylaşın" bölümü — 📸 Fotoğraf Ekle, önizleme,
+  izin checkbox'ı (TR/EN/DE i18n).
+- 3) PANEL: GET /reputation/guest-photos/{pid} (izinli fotoğraflar) +
+  POST /reputation/guest-photo-to-draft/{response_id} — fotoğraf social_images'a PNG kopyalanır,
+  misafir adı + yorum alıntılı taslak (topic "misafir karesi", dedupe photo_draft_created).
+  UI: "📸 İzinli Misafir Fotoğrafları" galerisi + "Taslağa Çevir" butonu.
+- TEST: curl uçtan uca (upload → submit → liste → taslak → dedupe 400) + 2 screenshot
+  (anket sayfası fotoğraf bölümü, panel galerisi + misafir karesi taslağı).
+- BEKLEYEN: Expo token (14. kez) + Google Places + Meta anahtarları.

@@ -303,22 +303,46 @@ async def run_photo_contest(db) -> dict:
             {"property_id": pid, "source": "guest_photo"},
             {"_id": 0, "id": 1, "image_url": 1, "performance": 1,
              "survey_response_id": 1}).to_list(100)
-        if not drafts:
+        voted = await db.survey_responses.find(
+            {"property_id": pid, "photo_consent": True,
+             "photo_url": {"$nin": ["", None]}, "gallery_votes": {"$gt": 0}},
+            {"_id": 0, "id": 1, "guest_name": 1, "guest_email": 1,
+             "photo_url": 1, "gallery_votes": 1}
+        ).sort("gallery_votes", -1).to_list(1)
+        if not drafts and not voted:
             continue
-        winner = max(drafts, key=lambda d: (d.get("performance") or {}).get("likes", 0))
-        resp = await db.survey_responses.find_one(
-            {"id": winner.get("survey_response_id")}, {"_id": 0, "guest_name": 1})
-        first_name = ((resp or {}).get("guest_name") or "Misafirimiz").split()[0]
-        likes = (winner.get("performance") or {}).get("likes", 0)
         draft_id = str(uuid.uuid4())
-        src = "/app/backend/uploads/social_images/" + winner["image_url"].split("?")[0].split("/")[-1]
         img_url = None
-        if os.path.exists(src):
-            import shutil
-            shutil.copyfile(src, f"/app/backend/uploads/social_images/{draft_id}.png")
-            img_url = f"/api/uploads/social_images/{draft_id}.png"
+        if voted:
+            resp = voted[0]
+            first_name = (resp.get("guest_name") or "Misafirimiz").split()[0]
+            likes = resp.get("gallery_votes", 0)
+            win_reason = f"{likes} misafir oyuyla"
+            src = "/app/backend/uploads/survey_photos/" + resp["photo_url"].split("/")[-1]
+            if os.path.exists(src):
+                from PIL import Image
+                Image.open(src).save(
+                    f"/app/backend/uploads/social_images/{draft_id}.png", "PNG")
+                img_url = f"/api/uploads/social_images/{draft_id}.png"
+            winner_response_id = resp["id"]
+            winner_email = resp.get("guest_email")
+        else:
+            winner = max(drafts, key=lambda d: (d.get("performance") or {}).get("likes", 0))
+            resp = await db.survey_responses.find_one(
+                {"id": winner.get("survey_response_id")},
+                {"_id": 0, "guest_name": 1, "guest_email": 1})
+            first_name = ((resp or {}).get("guest_name") or "Misafirimiz").split()[0]
+            likes = (winner.get("performance") or {}).get("likes", 0)
+            win_reason = f"{likes} beğeniyle" if likes else ""
+            src = "/app/backend/uploads/social_images/" + winner["image_url"].split("?")[0].split("/")[-1]
+            if os.path.exists(src):
+                import shutil
+                shutil.copyfile(src, f"/app/backend/uploads/social_images/{draft_id}.png")
+                img_url = f"/api/uploads/social_images/{draft_id}.png"
+            winner_response_id = winner.get("survey_response_id")
+            winner_email = (resp or {}).get("guest_email")
         draft = (f"🏆 AYIN KARESİ ({month}): Kazanan {first_name}! "
-                 + (f"{likes} beğeniyle " if likes else "")
+                 + (f"{win_reason} " if win_reason else "")
                  + f"misafirlerimizin favorisi oldu. Tebrikler! 🎉 Siz de karenizi anketimizle "
                  f"paylaşın, gelecek ayın yıldızı siz olun ⭐ #ayınkaresi #misafirkaresi #otel")
         await db.social_drafts.insert_one({
@@ -326,8 +350,21 @@ async def run_photo_contest(db) -> dict:
             "draft": draft, "source": "photo_contest", "contest_month": month,
             "auto": True, "approved": False, "winner_name": first_name,
             **({"image_url": img_url} if img_url else {}),
-            "winner_response_id": winner.get("survey_response_id"),
+            "winner_response_id": winner_response_id,
             "created_at": now_dt.isoformat()})
+        if winner_email:
+            base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+            await db.outbound_email_queue.insert_one({
+                "id": str(uuid.uuid4()), "property_id": pid, "to": winner_email,
+                "subject": f"🏆 Tebrikler {first_name} — Ayın Karesi sizsiniz!",
+                "body": (f"Merhaba {first_name},\n\nPaylaştığınız fotoğraf {month} ayının "
+                         f"kazananı seçildi! 🎉 Kareniz şeref duvarımızda:\n"
+                         f"{base}/kareler/{pid}\n\nBizimle paylaştığınız için teşekkürler — "
+                         f"sizi tekrar ağırlamayı çok isteriz.\n"
+                         f"— {p.get('name', 'Otel Yönetimi')}"),
+                "type": "contest_winner", "status": "queued",
+                "delivery_status": "mocked_email_queued",
+                "created_at": now_dt.isoformat()})
         created.append(pid)
     return {"drafts_created": len(created), "properties": created, "month": month}
 

@@ -779,7 +779,31 @@ def create_reputation_router(db, require_roles):
             items.append({"month": d.get("contest_month"),
                           "winner": name,
                           "image_url": d.get("image_url")})
-        return {"hotel": prop.get("name", property_id), "items": items}
+        candidates = await db.survey_responses.find(
+            {"property_id": property_id, "photo_consent": True,
+             "photo_url": {"$nin": ["", None]}, "photo_draft_created": {"$ne": True}},
+            {"_id": 0, "id": 1, "guest_name": 1, "photo_url": 1, "gallery_votes": 1}
+        ).sort("created_at", -1).to_list(12)
+        cands = [{"id": c["id"],
+                  "guest": (c.get("guest_name") or "Misafirimiz").split()[0],
+                  "photo_url": c["photo_url"],
+                  "votes": c.get("gallery_votes", 0)} for c in candidates]
+        return {"hotel": prop.get("name", property_id), "items": items,
+                "candidates": cands}
+
+    @router.post("/reputation/public/photo-contest/{property_id}/vote")
+    async def public_photo_vote(property_id: str, body: dict):
+        """Herkese açık: aday fotoğrafa oy ver."""
+        cid = (body.get("candidate_id") or "").strip()
+        if not cid:
+            raise HTTPException(400, "candidate_id gerekli")
+        res = await db.survey_responses.find_one_and_update(
+            {"id": cid, "property_id": property_id, "photo_consent": True},
+            {"$inc": {"gallery_votes": 1}},
+            projection={"_id": 0, "gallery_votes": 1})
+        if res is None:
+            raise HTTPException(404, "Aday bulunamadı")
+        return {"ok": True, "votes": (res.get("gallery_votes") or 0) + 1}
 
     @router.get("/reputation/room-qr-cards/{property_id}")
     async def room_qr_cards(property_id: str,

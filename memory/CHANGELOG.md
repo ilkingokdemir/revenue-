@@ -3447,3 +3447,18 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   Test suite: /app/backend/tests/test_iteration505_social_recent_features.py.
 - Not (kod inceleme): room-qr-cards bilinmeyen otelde 404 döner (Türkçe mesajlı, kabul).
 - BEKLEYEN: Expo token (18. kez) + gerçek RESEND_API_KEY + Google Places + Meta anahtarları.
+
+## Iter 538 (2026-08-13) — Kazanan Tebrik E-postası + Galeri Misafir Oylaması TAMAMLANDI
+- 1) TEBRİK E-POSTASI: run_photo_contest kazananın guest_email'ine otomatik tebrik e-postası
+  kuyruğa ekler (type contest_winner, galeri linkiyle; Resend anahtarı gelince gerçek gider).
+- 2) MİSAFİR OYLAMASI: public GET photo-contest artık candidates[] döner (izinli, henüz
+  taslağa çevrilmemiş fotoğraflar + gallery_votes). POST /reputation/public/photo-contest/
+  {pid}/vote {candidate_id} (auth yok, $inc gallery_votes; geçersiz aday 404).
+  Galeri sayfasında "🗳️ Bu Ayın Adayları" bölümü — 🤍 Oy Ver → ❤️ Oy verildi
+  (localStorage tekrar oy koruması). run_photo_contest kazanan seçimi artık ÖNCE misafir
+  oylarına bakar (gallery_votes desc), oy yoksa beğeni bazlı eski mantık; oylu kazananın
+  fotoğrafı survey_photos'tan kopyalanır, "X misafir oyuyla" metni.
+- TEST: curl (candidates, vote inc 0→1, invalid 404) + contest reset & re-run → Ali 1 oyla
+  kazandı + tebrik e-postası kuyruğa + screenshot (oy butonu ❤️'ye döndü, sayaç 2).
+- SIRADAKİ BACKLOG: PCI-DSS/SOC2 hazırlık dokümantasyonu (P2), IoT/Airbnb gerçek adaptörleri.
+- BEKLEYEN ANAHTARLAR: Expo token + RESEND_API_KEY + Google Places + Meta.

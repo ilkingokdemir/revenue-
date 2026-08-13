@@ -7,6 +7,21 @@ export default function PhotoContestPage() {
   const propertyId = window.location.pathname.split("/kareler/")[1]?.split("/")[0] || "";
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const [voting, setVoting] = useState(null);
+
+  const vote = async (cid) => {
+    if (localStorage.getItem(`voted_${cid}`)) return;
+    setVoting(cid);
+    try {
+      const { data: r } = await axios.post(`${API}/reputation/public/photo-contest/${propertyId}/vote`, { candidate_id: cid });
+      localStorage.setItem(`voted_${cid}`, "1");
+      setData((prev) => ({
+        ...prev,
+        candidates: prev.candidates.map((c) => c.id === cid ? { ...c, votes: r.votes } : c),
+      }));
+    } catch (e) { /* sessiz */ }
+    setVoting(null);
+  };
 
   useEffect(() => {
     axios.get(`${API}/reputation/public/photo-contest/${propertyId}`)
@@ -74,6 +89,35 @@ export default function PhotoContestPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+        {(data?.candidates || []).length > 0 && (
+          <div className="mt-14" data-testid="vote-section">
+            <h2 className="text-lg font-semibold text-stone-200 mb-1">🗳️ Bu Ayın Adayları — Oyunuzu Verin</h2>
+            <p className="text-xs text-stone-500 mb-6">En beğendiğiniz kareye oy verin; ay sonunda en çok oyu alan kazanır.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {data.candidates.map((c) => {
+                const voted = !!localStorage.getItem(`voted_${c.id}`);
+                return (
+                  <div key={c.id} data-testid={`candidate-${c.id}`}
+                    className="rounded-xl overflow-hidden bg-stone-900 border border-stone-800">
+                    <img src={`${process.env.REACT_APP_BACKEND_URL}${c.photo_url}`}
+                      alt={c.guest} className="w-full aspect-square object-cover" />
+                    <div className="p-2 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold truncate">{c.guest}</p>
+                        <p className="text-[10px] text-stone-500">{c.votes} oy</p>
+                      </div>
+                      <button data-testid={`vote-btn-${c.id}`} disabled={voted || voting === c.id}
+                        onClick={() => vote(c.id)}
+                        className={`px-2 py-1 rounded-full text-xs ${voted ? "bg-rose-500/20 text-rose-300" : "bg-stone-800 hover:bg-rose-500/20 hover:text-rose-300 text-stone-300"}`}>
+                        {voted ? "❤️ Oy verildi" : "🤍 Oy Ver"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
         <p className="text-[11px] text-stone-600 mt-12">

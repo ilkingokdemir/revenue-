@@ -118,6 +118,8 @@ export default function BookingWidgetPage({ propertyId }) {
   const [ecoBadge, setEcoBadge] = useState(null);  // { score, grade, show_badge, highlight_initiatives[] }
   const [carbonOffset, setCarbonOffset] = useState({ opt_in: false, total_fee: 0, co2_kg: 0 });
   const [coupon, setCoupon] = useState({ code: "", applied: null, checking: false, error: null });
+  const [absAttrs, setAbsAttrs] = useState([]);
+  const [absSelected, setAbsSelected] = useState([]);
   const [ab, setAb] = useState({ assigned: false, variant: null, experiment_id: null, show_badge: true });
 
   const abSessionId = (() => {
@@ -125,6 +127,10 @@ export default function BookingWidgetPage({ propertyId }) {
     if (!sid) { sid = crypto.randomUUID(); localStorage.setItem("be_session_id", sid); }
     return sid;
   })();
+
+  useEffect(() => {
+    axios.get(`${API}/abs/public/${propertyId}`).then(({ data }) => setAbsAttrs(data.attributes || [])).catch(() => {});
+  }, [propertyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     axios.post(`${API}/ab/assign`, { property_id: propertyId, key: "social_proof_badge", session_id: abSessionId })
@@ -324,6 +330,7 @@ export default function BookingWidgetPage({ propertyId }) {
         carbon_offset_fee: carbonOffset.opt_in ? carbonOffset.total_fee : 0,
         carbon_offset_co2_kg: carbonOffset.opt_in ? carbonOffset.co2_kg : 0,
         coupon_code: coupon.applied ? coupon.applied.coupon_code : null,
+        abs_attribute_ids: absSelected,
         origin_url: window.location.origin,
       });
       // Stripe path → redirect immediately (state lost on redirect; OK because effect picks
@@ -807,6 +814,25 @@ export default function BookingWidgetPage({ propertyId }) {
                 <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Special Requests</label>
                   <textarea value={form.special_requests} onChange={e => setForm({ ...form, special_requests: e.target.value })} rows={3} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none resize-none" placeholder="Late check-in, extra pillows..." data-testid="be-special-requests" /></div>
               </div>
+              {/* Attribute-Based Selling — ücretli oda tercihleri */}
+              {absAttrs.length > 0 && (
+                <div className="mt-5" data-testid="abs-section">
+                  <label className="text-xs font-semibold text-stone-500 mb-2 block">Room Preferences <span className="text-stone-400 font-normal">(paid extras)</span></label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {absAttrs.map(a => { const on = absSelected.includes(a.id); return (
+                      <button key={a.id} type="button" data-testid={`abs-attr-${a.id}`}
+                        onClick={() => setAbsSelected(p => on ? p.filter(x => x !== a.id) : [...p, a.id])}
+                        className={`flex items-center justify-between p-3 rounded-xl border-2 text-left transition-all ${on ? "border-sky-500 bg-sky-50" : "border-stone-200 hover:border-stone-300"}`}>
+                        <span>
+                          <span className="text-xs font-bold text-stone-800 block">{a.name}</span>
+                          {a.description && <span className="text-[10px] text-stone-400">{a.description}</span>}
+                        </span>
+                        <span className="text-xs font-semibold flex-shrink-0 ml-2" style={{ color: ac }}>+{cur(a.price, cc)}/night</span>
+                      </button>
+                    ); })}
+                  </div>
+                </div>
+              )}
               {/* Payment mode picker — guest chooses Pay Now (Stripe) vs Pay At Property */}
               <div className="mt-5">
                 <label className="text-xs font-semibold text-stone-500 mb-2 block">Payment</label>
@@ -858,6 +884,11 @@ export default function BookingWidgetPage({ propertyId }) {
               </div>
               <div className="border-t border-stone-100 mt-4 pt-4">
                 <div className="flex justify-between text-xs text-stone-400 mb-1"><span>{nights} night{nights > 1 ? "s" : ""} x {cur(selected?.base_rate, cc)}</span><span>{cur(selected?.total_rate, cc)}</span></div>
+                {absSelected.map(id => { const a = absAttrs.find(x => x.id === id); return a ? (
+                  <div key={id} className="flex justify-between text-xs text-sky-700 mb-1" data-testid={`abs-line-${id}`}>
+                    <span>+ {a.name}</span><span>+{cur(a.price * nights * roomCount, cc)}</span>
+                  </div>
+                ) : null; })}
                 {loyalty?.is_member && loyalty.discount_pct > 0 && (
                   <div className="flex justify-between text-xs text-emerald-600 font-bold mb-1" data-testid="loyalty-line">
                     <span>{(loyalty.tier || "").toUpperCase()} member discount</span>
@@ -910,6 +941,7 @@ export default function BookingWidgetPage({ propertyId }) {
                 <div className="flex justify-between"><span className="text-stone-500 font-medium">Total</span><span className="text-2xl font-bold" style={{ color: ac }}>{(() => {
                   let t = selected?.total_rate || 0;
                   if (loyalty?.is_member && loyalty.discount_pct > 0) t = Number((t * (1 - loyalty.discount_pct / 100)).toFixed(2));
+                  t += absSelected.reduce((s, id) => s + ((absAttrs.find(x => x.id === id)?.price || 0) * nights * roomCount), 0);
                   if (coupon.applied?.discount_pct) t = Number((t * (1 - coupon.applied.discount_pct / 100)).toFixed(2));
                   if (carbonOffset.opt_in) t += carbonOffset.total_fee;
                   return cur(t, cc);
@@ -1021,3 +1053,4 @@ export default function BookingWidgetPage({ propertyId }) {
     </div>
   );
 }
+

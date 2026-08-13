@@ -50,8 +50,23 @@ async def _bookings(db, pid: str, start: ddate, end: ddate):
         {"property_id": pid, "status": {"$ne": "cancelled"},
          "check_in": {"$lt": (end + timedelta(days=1)).isoformat()},
          "check_out": {"$gt": (start - timedelta(days=60)).isoformat()}},
-        {"_id": 0, "check_in": 1, "check_out": 1, "rooms": 1, "total_price": 1}
+        {"_id": 0, "check_in": 1, "check_out": 1, "rooms": 1, "total_price": 1, "source": 1}
     ).to_list(20000)
+
+
+def _commission_for(src: str) -> float:
+    s = (src or "").lower()
+    if "booking" in s:
+        return 0.15
+    if "expedia" in s:
+        return 0.18
+    if "airbnb" in s:
+        return 0.03
+    if "agoda" in s:
+        return 0.17
+    if "trip" in s:
+        return 0.15
+    return 0.0
 
 
 def _rooms_on(bookings, night: ddate) -> int:
@@ -126,14 +141,43 @@ async def compute_displacement(db, pid: str, start: ddate, end: ddate, rooms_req
     breakeven_rate = round(total_disp_cost / (rooms_requested * n_nights), 2) if n_nights else 0
     suggested_rate = round(max(breakeven_rate * 1.1, offered_rate), 2)
 
-    if total_displaced == 0:
+    # --- İkincil (shoulder-night) displacement + komisyon-sonrası net katkı ---
+    los_list, src_counts = [], {}
+    for b in bookings:
+        try:
+            los_list.append(max((_d(b["check_out"]) - _d(b["check_in"])).days, 1))
+        except (ValueError, KeyError, TypeError):
+            pass
+        s = (b.get("source") or "direct").lower()
+        src_counts[s] = src_counts.get(s, 0) + 1
+    avg_los = round(sum(los_list) / len(los_list), 1) if los_list else 1.5
+    tot_src = sum(src_counts.values()) or 1
+    avg_comm = round(sum(_commission_for(s) * c for s, c in src_counts.items()) / tot_src, 4)
+
+    disp_first = nights[0]["displaced_rooms"] if nights else 0
+    disp_last = nights[-1]["displaced_rooms"] if nights else 0
+    # Yerinden edilen kenar misafirleri ort. LOS kadar kalırdı → grup penceresi
+    # dışına taşan geceler shoulder kaybı (misafir başına max 2 ek gece).
+    edge_extra_nights = max(0.0, min((avg_los - 1) / 2.0, 2.0))
+    shoulder_loss = round((disp_first + disp_last) * edge_extra_nights * fallback_adr, 2)
+
+    gross_loss = total_disp_cost + shoulder_loss
+    net_displacement_cost = round(gross_loss * (1 - avg_comm), 2)
+    net_value_after_commission = round(total_group_rev - net_displacement_cost, 2)
+    breakeven_rate_net = round(net_displacement_cost / (rooms_requested * n_nights), 2) if n_nights else 0
+    suggested_min_rate_net = round(max(breakeven_rate_net * 1.1, offered_rate), 2)
+
+    if total_displaced == 0 and shoulder_loss == 0:
         recommendation, reason = "accept", "Hiç transient talep yerinden edilmiyor — grup net katkı sağlıyor."
-    elif net_total > 0 and total_disp_cost / max(total_group_rev, 1) < 0.35:
-        recommendation, reason = "accept", "Displacement maliyeti grup gelirinin %35'inin altında — kabul edilebilir."
-    elif net_total > 0:
-        recommendation, reason = "negotiate", f"Net pozitif ama displacement yüksek. Önerilen min fiyat: {suggested_rate}."
+    elif net_value_after_commission > 0 and net_displacement_cost / max(total_group_rev, 1) < 0.35:
+        recommendation, reason = "accept", (
+            f"Komisyon sonrası net displacement maliyeti (shoulder dahil) grup gelirinin %35'inin altında — kabul edilebilir.")
+    elif net_value_after_commission > 0:
+        recommendation, reason = "negotiate", (
+            f"Net pozitif ama displacement + shoulder kaybı yüksek. Önerilen min fiyat (net): {suggested_min_rate_net}.")
     else:
-        recommendation, reason = "reject", f"Grup geliri displacement maliyetini karşılamıyor. En az {suggested_rate} istenmeli."
+        recommendation, reason = "reject", (
+            f"Grup geliri komisyon-sonrası displacement maliyetini karşılamıyor. En az {suggested_min_rate_net} istenmeli.")
 
     return {
         "nights": n_nights, "fallback_adr": fallback_adr,
@@ -142,6 +186,14 @@ async def compute_displacement(db, pid: str, start: ddate, end: ddate, rooms_req
         "total_displacement_cost": round(total_disp_cost, 2),
         "net_value": net_total, "breakeven_rate": breakeven_rate,
         "suggested_min_rate": suggested_rate,
+        "avg_transient_los": avg_los,
+        "avg_commission_pct": avg_comm,
+        "shoulder_loss": shoulder_loss,
+        "shoulder_edge_nights": edge_extra_nights,
+        "net_displacement_cost": net_displacement_cost,
+        "net_value_after_commission": net_value_after_commission,
+        "breakeven_rate_net": breakeven_rate_net,
+        "suggested_min_rate_net": suggested_min_rate_net,
         "recommendation": recommendation, "reason": reason,
         "per_night": nights,
     }

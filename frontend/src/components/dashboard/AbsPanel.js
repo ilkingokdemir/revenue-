@@ -1,0 +1,142 @@
+import { useState, useEffect, useCallback } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { Bed, Plus, Trash, Sparkle } from "@phosphor-icons/react";
+import { Loader2 } from "lucide-react";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+export default function AbsPanel({ propertyId }) {
+  const pid = propertyId && propertyId !== "all" ? propertyId : "default";
+  const [attrs, setAttrs] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ name: "", price: "", description: "" });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/abs/${pid}`);
+      setAttrs(data.attributes || []);
+      setStats(data.stats || null);
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  }, [pid]);
+  useEffect(() => { load(); }, [load]);
+
+  const add = async () => {
+    if (!form.name.trim()) return toast.error("Özellik adı gerekli");
+    try {
+      await axios.post(`${API}/abs/${pid}`, { ...form, price: parseFloat(form.price) || 0 });
+      setForm({ name: "", price: "", description: "" });
+      toast.success("Özellik eklendi");
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Eklenemedi"); }
+  };
+  const toggle = async (a) => {
+    await axios.post(`${API}/abs/${pid}`, { ...a, active: !a.active });
+    load();
+  };
+  const remove = async (a) => {
+    await axios.delete(`${API}/abs/${pid}/${a.id}`);
+    toast.success("Pasifleştirildi");
+    load();
+  };
+  const seed = async () => {
+    try {
+      await axios.post(`${API}/abs/${pid}/seed`);
+      toast.success("Başlangıç seti yüklendi");
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Seed başarısız"); }
+  };
+
+  return (
+    <div className="p-6 max-w-5xl mx-auto space-y-5" data-testid="abs-panel">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-stone-900 flex items-center gap-2">
+            <Bed size={22} weight="fill" className="text-sky-600" /> Özellik Bazlı Satış (ABS)
+          </h1>
+          <p className="text-sm text-stone-500 mt-0.5">
+            Deniz manzarası, yüksek kat, balkon gibi oda özelliklerini gecelik ek ücretle satın.
+            Misafir booking widget'ta seçer, tutar rezervasyona otomatik eklenir.
+          </p>
+        </div>
+        {attrs.length === 0 && !loading && (
+          <button onClick={seed} data-testid="abs-seed-btn"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold">
+            <Sparkle size={14} /> Başlangıç seti yükle
+          </button>
+        )}
+      </div>
+
+      {stats && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="p-4 rounded-2xl bg-sky-50 border border-sky-200" data-testid="abs-revenue-card">
+            <div className="text-[10px] uppercase font-bold text-sky-600">ABS geliri (90g)</div>
+            <div className="text-lg font-black text-sky-900">{stats.revenue_90d}</div>
+          </div>
+          <div className="p-4 rounded-2xl bg-white border border-stone-200" data-testid="abs-count-card">
+            <div className="text-[10px] uppercase font-bold text-stone-400">Özellikli rezervasyon</div>
+            <div className="text-lg font-black text-stone-900">{stats.bookings_with_abs}</div>
+          </div>
+          <div className="p-4 rounded-2xl bg-white border border-stone-200" data-testid="abs-top-card">
+            <div className="text-[10px] uppercase font-bold text-stone-400">En popüler</div>
+            <div className="text-lg font-black text-stone-900">{stats.top_attribute || "—"}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Add form */}
+      <div className="bg-white border border-stone-200 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+        <div className="col-span-2">
+          <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Özellik adı</label>
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="ör. Köşe oda" data-testid="abs-name-input"
+            className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Fiyat / gece</label>
+          <input type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })}
+            data-testid="abs-price-input" className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Açıklama</label>
+          <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+            data-testid="abs-desc-input" className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
+        </div>
+        <button onClick={add} data-testid="abs-add-btn"
+          className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-stone-900 hover:bg-stone-700 text-white text-xs font-bold">
+          <Plus size={14} /> Ekle
+        </button>
+      </div>
+
+      {/* List */}
+      {loading ? (
+        <div className="p-8 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto text-stone-400" /></div>
+      ) : (
+        <div className="bg-white border border-stone-200 rounded-2xl divide-y divide-stone-100" data-testid="abs-list">
+          {attrs.length === 0 && <p className="p-6 text-sm text-stone-400 text-center">Henüz özellik yok — başlangıç setini yükleyin.</p>}
+          {attrs.map((a) => (
+            <div key={a.id} className="flex items-center gap-3 px-4 py-3" data-testid={`abs-row-${a.id}`}>
+              <div className="flex-1">
+                <p className={`text-sm font-bold ${a.active ? "text-stone-900" : "text-stone-400 line-through"}`}>{a.name}</p>
+                {a.description && <p className="text-[11px] text-stone-400">{a.description}</p>}
+              </div>
+              {stats?.attribute_counts?.[a.name] > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 font-bold">{stats.attribute_counts[a.name]} satış</span>
+              )}
+              <span className="text-sm font-black text-sky-700">+{a.price}/gece</span>
+              <button onClick={() => toggle(a)} data-testid={`abs-toggle-${a.id}`}
+                className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${a.active ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>
+                {a.active ? "Aktif" : "Pasif"}
+              </button>
+              <button onClick={() => remove(a)} data-testid={`abs-delete-${a.id}`}
+                className="text-stone-300 hover:text-rose-500"><Trash size={15} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1318,6 +1318,14 @@ from routes.revenue_ext.comp_radar import create_comp_radar_router
 comp_radar_router = create_comp_radar_router(db, require_roles)
 api_router.include_router(comp_radar_router)
 
+# Iter 508: Profit-first pricing + ABS + RevPAM (Total Revenue Management)
+from routes.revenue_ext.profit_pricing import create_profit_pricing_router
+api_router.include_router(create_profit_pricing_router(db, require_roles))
+from routes.revenue_ext.abs_selling import create_abs_router
+api_router.include_router(create_abs_router(db, require_roles))
+from routes.revenue_ext.revpam import create_revpam_router
+api_router.include_router(create_revpam_router(db, require_roles))
+
 async def _job_comp_radar(property_id: str) -> dict:
     try:
         return await comp_radar_router.run_comp_radar_internal(property_id or "")

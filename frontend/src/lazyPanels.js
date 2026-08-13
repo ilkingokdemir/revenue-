@@ -179,6 +179,9 @@ export const ChannelHealthPanel = L(() => import("./components/dashboard/Channel
 export const KeyFiguresPanel = L(() => import("./components/dashboard/KeyFiguresPanel"));
 export const AutomationHubPanel = L(() => import("./components/dashboard/AutomationHubPanel"));
 export const CompRadarPanel = L(() => import("./components/dashboard/CompRadarPanel"));
+export const ProfitPricingPanel = L(() => import("./components/dashboard/ProfitPricingPanel"));
+export const AbsPanel = L(() => import("./components/dashboard/AbsPanel"));
+export const RevPAMPanel = L(() => import("./components/dashboard/RevPAMPanel"));
 export const BeachPosPanel = L(() => import("./components/dashboard/BeachPosPanel"));
 export const PublicEventsPanel = L(() => import("./components/dashboard/PublicEventsPanel"));
 

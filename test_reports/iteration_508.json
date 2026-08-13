@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 508 RMS features (Profit-First Pricing, Group Displacement v2, ABS, RevPAM) tested end-to-end. Backend: 9 of 10 pytest cases passed, 1 skipped due to prior test-run booking collision (RevPAM override rate booking verified once at 130). Frontend: all 4 admin panels render, cpor save persists, ABS attribute add works (9→10 rows), RevPAM apply button clickable, GD analyzer shows gd-net-row + shoulder/comm/netafter KPIs. Widget booking with ABS now works after two bug fixes.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/booking-widget/check-availability", "issue": "Crashed with TypeError NoneType*int when a room_types record has base_rate=null (default property Standard Double). This blocked ALL public bookings on property 'default'. FIXED by changing 'room.get(base_rate, 100)' to 'room.get(base_rate) or 100' at booking_widget.py L150.", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BookingWidgetPage", "issue": "abs_attribute_ids not sent in POST /booking-widget/book payload — UI showed correct £230 total but backend stored abs_total=0 and total=200. FIXED by adding abs_attribute_ids: absSelected at L332 of BookingWidgetPage.js. Verified booking WEB-1E1278AC now stores total=230, abs_total=30.", "selector": "[data-testid=be-confirm-booking]", "priority": "HIGH"},
+      {"component": "BookingWidgetPage", "issue": "Missing data-testid='abs-line-<id>' on ABS lines inside the Booking Summary column (spec called for them). Total updates correctly but individual line testids not present.", "selector": "abs-line-*", "priority": "LOW"},
+      {"component": "GroupDisplacementPanel", "issue": "gd-rooms-input and gd-rate-input testids missing on the form inputs (analyze still works with defaults, but tests cannot programmatically set 60 rooms/70 rate via those testids).", "selector": "gd-rooms-input, gd-rate-input", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Public widget booking with ABS", "issue": "See BookingWidgetPage ABS bug above — root cause was missing abs_attribute_ids field in the /book payload.", "affected_selectors": ["[data-testid=abs-attr-*]", "[data-testid=be-confirm-booking]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration508_rms_features.py",
+    "/app/test_reports/pytest/iteration508.xml"
+  ],
+  "action_items": [
+    "Verify the two fixes applied (booking_widget.py L150 base_rate null-guard, BookingWidgetPage.js L332 abs_attribute_ids in payload) are acceptable.",
+    "Add data-testid abs-line-<id> to ABS entries in Booking Summary column in BookingWidgetPage.js.",
+    "Add data-testid gd-rooms-input and gd-rate-input to GroupDisplacementPanel form inputs.",
+    "Consider seeding non-null base_rate for room_types on property 'default' to remove reliance on fallback (100)."
+  ],
+  "critical_code_review_comments": [
+    "booking_widget.py used room.get('base_rate', 100) which does not guard against explicit null → caused 500 for the entire public booking flow. Prefer 'or 100' pattern for optional numeric fields anywhere DB may store null.",
+    "BookingWidgetPage.js iteration 508 wired absSelected in the UI total calculation but forgot to include it in the POST payload — indicative of missing an E2E integration test. Adding a small Playwright regression covering ABS+booking would catch this.",
+    "profit_pricing/abs/revpam/group_displacement route files load correctly; ObjectId is not serialized (all endpoints tested returned JSON without _id issues)."
+  ],
+  "updated_files": [
+    "/app/backend/routes/pms/booking_widget.py",
+    "/app/frontend/src/BookingWidgetPage.js",
+    "/app/backend/tests/test_iteration508_rms_features.py"
+  ],
+  "success_rate": {"backend": "100% (9/9 executed, 1 skipped due to conflict)", "frontend": "95% (all admin panels + widget ABS flow work after fixes; minor missing testids)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! — worked",
+  "seed_data_creation": "Added TEST_UI_Attr_508 (£17) via ABS panel; TEST_Balkon manzarası via backend upsert test (multiple duplicates due to running upsert repeatedly — recommend cleanup).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Two bugs fixed in this iteration — please keep the fixes: (1) booking_widget.py L150 uses 'or 100' fallback; (2) BookingWidgetPage.js POST payload includes abs_attribute_ids. Backend pytest file at /app/backend/tests/test_iteration508_rms_features.py can be reused as regression. The RevPAM apply/booking test skips if same date already booked earlier in the day — consider randomizing target_date.",
+  "rca of the issue": "1) Public booking widget 500: seeded room_types record had base_rate=null; .get(key, default) returns null (not default) if the key exists with a None value, then None*int throws TypeError. 2) ABS not saved on widget booking: frontend UI computed +£30 for Deniz manzarası but the POST body to /booking-widget/book did not include abs_attribute_ids, so the backend re-computed total from rate*nights and stored abs_total=0. Fix was adding abs_attribute_ids: absSelected to the payload."
+}

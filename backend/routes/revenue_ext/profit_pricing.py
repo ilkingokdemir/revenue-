@@ -1,0 +1,119 @@
+"""
+Profit-First Pricing (Net Contribution) — BEONx/Propeter paritesi.
+Fiyat kararlarını brüt ciro yerine NET KÂR üzerinden değerlendirir:
+  net = oda fiyatı − OTA komisyonu − CPOR (dolu oda başı maliyet) + beklenen ekstra harcama (kanal bazlı)
+
+Endpoints (/api/profit-pricing/*):
+- GET  /{property_id}?days=14      → kanal × tarih net katkı matrisi + bulgular
+- GET  /{property_id}/settings     → CPOR + kanal bazlı ancillary ayarları
+- PUT  /{property_id}/settings     → ayarları güncelle
+"""
+from datetime import datetime, timedelta, timezone
+from typing import Dict
+
+from fastapi import APIRouter, Depends
+
+from routes.distribution.push_history import resolve_rate
+from routes.integrations_pkg.ota_commission import _get_rate, DEFAULT_RATES, CHANNEL_LABELS
+
+DEFAULT_SETTINGS = {
+    "cpor": 18.0,  # cost per occupied room (temizlik, amenity, enerji)
+    "ancillary": {  # kanal bazlı beklenen ekstra harcama / oda-gece (F&B, spa, upsell)
+        "direct": 22.0, "booking_com": 10.0, "expedia": 8.0,
+        "airbnb": 6.0, "agoda": 8.0, "trip_com": 8.0,
+    },
+}
+
+
+def create_profit_pricing_router(db, require_roles):
+    router = APIRouter(prefix="/profit-pricing", tags=["profit-pricing"])
+
+    async def _settings(pid: str) -> Dict:
+        row = await db.profit_pricing_settings.find_one({"property_id": pid}, {"_id": 0})
+        if not row:
+            return dict(DEFAULT_SETTINGS)
+        anc = dict(DEFAULT_SETTINGS["ancillary"])
+        anc.update(row.get("ancillary") or {})
+        return {"cpor": float(row.get("cpor", DEFAULT_SETTINGS["cpor"])), "ancillary": anc}
+
+    @router.get("/{property_id}/settings")
+    async def get_settings(property_id: str,
+                           _: dict = Depends(require_roles("admin", "manager"))):
+        s = await _settings(property_id)
+        return {**s, "channel_labels": CHANNEL_LABELS}
+
+    @router.put("/{property_id}/settings")
+    async def put_settings(property_id: str, body: Dict,
+                           _: dict = Depends(require_roles("admin", "manager"))):
+        cpor = max(0.0, float(body.get("cpor", DEFAULT_SETTINGS["cpor"]) or 0))
+        anc = {}
+        for ch in DEFAULT_RATES:
+            try:
+                anc[ch] = max(0.0, float((body.get("ancillary") or {}).get(ch, DEFAULT_SETTINGS["ancillary"].get(ch, 0))))
+            except (TypeError, ValueError):
+                anc[ch] = DEFAULT_SETTINGS["ancillary"].get(ch, 0)
+        await db.profit_pricing_settings.update_one(
+            {"property_id": property_id},
+            {"$set": {"property_id": property_id, "cpor": cpor, "ancillary": anc,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True)
+        return {"ok": True, "cpor": cpor, "ancillary": anc}
+
+    @router.get("/{property_id}")
+    async def profit_matrix(property_id: str, days: int = 14,
+                            _: dict = Depends(require_roles("admin", "manager"))):
+        days = max(3, min(days, 30))
+        s = await _settings(property_id)
+        cpor, anc = s["cpor"], s["ancillary"]
+        comm = {ch: await _get_rate(db, ch, property_id) for ch in DEFAULT_RATES}
+
+        today = datetime.now(timezone.utc).date()
+        rows, ch_totals = [], {ch: 0.0 for ch in DEFAULT_RATES}
+        for i in range(days):
+            d = (today + timedelta(days=i)).isoformat()
+            gross, src = await resolve_rate(db, property_id, d)
+            cells = {}
+            for ch in DEFAULT_RATES:
+                commission = round(gross * comm[ch], 2)
+                net = round(gross - commission - cpor + anc.get(ch, 0), 2)
+                cells[ch] = {"gross": round(gross, 2), "commission": commission, "net": net}
+                ch_totals[ch] += net
+            rows.append({"date": d, "gross": round(gross, 2), "rate_source": src, "channels": cells})
+
+        ch_avg = {ch: round(v / days, 2) for ch, v in ch_totals.items()}
+        direct_net = ch_avg.get("direct", 0)
+        findings = []
+        for ch in DEFAULT_RATES:
+            if ch == "direct":
+                continue
+            gap = round(direct_net - ch_avg[ch], 2)
+            gap_pct = round(gap / direct_net * 100, 1) if direct_net else 0
+            avg_gross = rows[0]["gross"] if rows else 0
+            if ch_avg[ch] <= 0:
+                findings.append({
+                    "channel": ch, "label": CHANNEL_LABELS.get(ch, ch), "severity": "critical",
+                    "net_avg": ch_avg[ch], "gap_vs_direct": gap,
+                    "suggestion": f"{CHANNEL_LABELS.get(ch, ch)} kanalında net katkı NEGATİF — bu tarihlerde stop-sell veya en az %{max(5, round((abs(ch_avg[ch]) + 5) / max(avg_gross, 1) * 100))} kanal fiyat artışı önerilir."})
+            elif gap_pct >= 15:
+                markup = round(gap / max(1 - comm[ch], 0.01), 2)
+                findings.append({
+                    "channel": ch, "label": CHANNEL_LABELS.get(ch, ch), "severity": "warning",
+                    "net_avg": ch_avg[ch], "gap_vs_direct": gap,
+                    "suggestion": f"{CHANNEL_LABELS.get(ch, ch)} net kârı direktten %{gap_pct} düşük — kanal fiyatına +{markup} eklenirse net eşitlenir; ya da direct-conversion kuponu ile misafiri direkte çekin."})
+
+        best = max(ch_avg, key=ch_avg.get)
+        worst = min(ch_avg, key=ch_avg.get)
+        return {
+            "property_id": property_id, "days": days,
+            "settings": {"cpor": cpor, "ancillary": anc},
+            "commission_rates": comm, "channel_labels": CHANNEL_LABELS,
+            "channel_net_avg": ch_avg,
+            "summary": {
+                "best_channel": {"channel": best, "label": CHANNEL_LABELS.get(best, best), "net_avg": ch_avg[best]},
+                "worst_channel": {"channel": worst, "label": CHANNEL_LABELS.get(worst, worst), "net_avg": ch_avg[worst]},
+                "direct_premium": round(direct_net - ch_avg[worst], 2),
+            },
+            "findings": findings, "matrix": rows,
+        }
+
+    return router

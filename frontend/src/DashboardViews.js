@@ -183,6 +183,9 @@ import {
   PreAuthPanel,
   PreventiveMaintenancePanel,
   PricingExplainPanel,
+  ProfitPricingPanel,
+  AbsPanel,
+  RevPAMPanel,
   ProfitOSPanel,
   PromoCodesPanel,
   PropertyMappingPanel,
@@ -1685,6 +1688,15 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {activeView === "marketing-videos" && <MarketingVideosPanel />}
         {activeView === "brand-voice" && (
           <BrandVoicePanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
+        )}
+        {activeView === "profit-pricing" && (
+          <ProfitPricingPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
+        )}
+        {activeView === "abs-selling" && (
+          <AbsPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
+        )}
+        {activeView === "revpam" && (
+          <RevPAMPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
         )}
     </>
   );

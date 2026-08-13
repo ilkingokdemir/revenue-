@@ -56,7 +56,7 @@ export function GroupDisplacementPanel({ activePropertyId }) {
         </h1>
         <p className="text-sm text-stone-500 mt-0.5">
           Duetto BlockBuster tarzı: grup teklifi transient (bireysel) talebi ne kadar yerinden ediyor?
-          Kabul / pazarlık / red kararını veriyle verin.
+          Shoulder-night kaybı ve OTA komisyonu sonrası NET katkıyla kabul / pazarlık / red kararı verin.
         </p>
       </div>
 
@@ -80,12 +80,12 @@ export function GroupDisplacementPanel({ activePropertyId }) {
         </div>
         <div>
           <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Oda sayısı</label>
-          <input type="number" min="1" value={form.rooms_requested} onChange={e => setForm({ ...form, rooms_requested: e.target.value })}
+          <input type="number" min="1" value={form.rooms_requested} onChange={e => setForm({ ...form, rooms_requested: e.target.value })} data-testid="gd-rooms-input"
             data-testid="gd-rooms" className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
         </div>
         <div>
           <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Teklif (gecelik)</label>
-          <input type="number" min="0" value={form.offered_rate} onChange={e => setForm({ ...form, offered_rate: e.target.value })}
+          <input type="number" min="0" value={form.offered_rate} onChange={e => setForm({ ...form, offered_rate: e.target.value })} data-testid="gd-rate-input"
             data-testid="gd-rate" className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
         </div>
         <button onClick={analyze} disabled={loading} data-testid="gd-analyze-btn"
@@ -112,6 +112,15 @@ export function GroupDisplacementPanel({ activePropertyId }) {
             <Kpi label="Net değer" value={result.net_value} highlight testId="gd-kpi-net" />
             <Kpi label="Önerilen min fiyat" value={result.suggested_min_rate} testId="gd-kpi-minrate" />
           </div>
+          {result.net_value_after_commission !== undefined && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="gd-net-row">
+              <Kpi label="Shoulder-night kaybı" value={result.shoulder_loss} negative testId="gd-kpi-shoulder" />
+              <Kpi label="Ø transient LOS" value={result.avg_transient_los} plain testId="gd-kpi-los" />
+              <Kpi label="Ø OTA komisyonu" value={`%${Math.round((result.avg_commission_pct || 0) * 100)}`} plain testId="gd-kpi-comm" />
+              <Kpi label="Net displacement (komisyon sonrası)" value={result.net_displacement_cost} negative testId="gd-kpi-netcost" />
+              <Kpi label="Net değer (komisyon sonrası)" value={result.net_value_after_commission} highlight testId="gd-kpi-netafter" />
+            </div>
+          )}
           <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
             <table className="w-full text-xs" data-testid="gd-night-table">
               <thead className="bg-stone-50 text-stone-500 uppercase text-[10px]">

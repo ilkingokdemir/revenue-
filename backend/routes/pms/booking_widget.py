@@ -147,7 +147,7 @@ def create_booking_widget_router(db, require_roles):
                 except Exception:
                     nights = 1
 
-                rate = room.get("base_rate", 100)
+                rate = room.get("base_rate") or 100
                 default_photos = [
                     "https://images.unsplash.com/photo-1631048730670-ff5cd0d08f15?w=600&q=75",
                     "https://images.unsplash.com/photo-1629140727571-9b5c6f6267b4?w=600&q=75",
@@ -211,6 +211,21 @@ def create_booking_widget_router(db, require_roles):
         rate = float(data.get("rate", 0))
         total = round(rate * nights * int(data.get("rooms", 1)), 2)
 
+        # ABS — Attribute-Based Selling: seçilen oda özellikleri gecelik ek ücret
+        abs_ids = data.get("abs_attribute_ids") or []
+        abs_selected, abs_total = [], 0.0
+        if isinstance(abs_ids, list) and abs_ids:
+            attrs = await db.abs_attributes.find(
+                {"property_id": data["property_id"],
+                 "id": {"$in": [str(a) for a in abs_ids][:10]},
+                 "active": {"$ne": False}},
+                {"_id": 0, "id": 1, "name": 1, "price": 1}).to_list(10)
+            for a in attrs:
+                abs_selected.append(a)
+                abs_total += float(a.get("price", 0) or 0)
+            abs_total = round(abs_total * nights * int(data.get("rooms", 1)), 2)
+            total = round(total + abs_total, 2)
+
         # Direct conversion kuponu (iter 376) — total üzerinden indirim
         coupon_code = (data.get("coupon_code") or "").strip().upper()
         coupon_info = None
@@ -261,6 +276,8 @@ def create_booking_widget_router(db, require_roles):
             "status": "pending_payment" if pay_now else "confirmed",
             "payment_status": "pending" if pay_now else "pay_at_property",
             "source": "website_widget",
+            "abs_attributes": abs_selected,
+            "abs_total": abs_total,
             "special_requests": data.get("special_requests", ""),
             "guests": int(data.get("guests", 1)),
             "created_at": now,

@@ -3503,3 +3503,26 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   tek tek gezildi (calendar, revenue, ai-reply-robot, compset, channel-health, ops-v2, team-chat,
   housekeeping, portfolio-board, settings-hub, reports, promo-codes, gdpr, automation-hub) — 0 pageerror.
 - BEKLEYEN: Gerçek anahtarlar (Expo token, Resend, Meta/Instagram, Google Places) hâlâ kullanıcıdan bekleniyor.
+
+## Iter 508 (2026-06) — RMS Eksikleri Tamamlandı (4 yeni üst düzey özellik)
+1. KÂR-ÖNCELİKLİ FİYATLAMA (BEONx paritesi): routes/revenue_ext/profit_pricing.py
+   - GET /api/profit-pricing/{pid}?days=N → kanal × tarih net katkı matrisi (brüt − komisyon − CPOR + ancillary)
+   - PUT /{pid}/settings (cpor + kanal bazlı ancillary), bulgular (stop-sell / kanal markup önerisi)
+   - Panel: ProfitPricingPanel.js, menü id: profit-pricing
+2. SHOULDER-NIGHT GRUP DISPLACEMENT v2: group_displacement.py genişletildi
+   - Yeni alanlar: avg_transient_los, avg_commission_pct (booking source mix'inden), shoulder_loss,
+     net_displacement_cost, net_value_after_commission, breakeven_rate_net, suggested_min_rate_net
+   - Karar (accept/negotiate/reject) artık komisyon-sonrası nete dayanıyor. Panel: gd-net-row KPI satırı
+3. ATTRIBUTE-BASED SELLING (ABS): routes/revenue_ext/abs_selling.py
+   - abs_attributes CRUD + seed (5 başlangıç özelliği), GET /api/abs/public/{pid} (auth yok)
+   - booking_widget.py book endpoint abs_attribute_ids kabul ediyor → abs_total = fiyat × gece × oda, total'e ekleniyor
+   - Widget UI: details adımında abs-section, özette abs-line-*, Total hesapta ABS dahil. Admin: AbsPanel.js
+4. RevPAM TOPLANTI SALONU DİNAMİK FİYAT: routes/revenue_ext/revpam.py
+   - RevPASH metriği, haftagünü talebi + tarih doluluğu → çarpan (0.7–1.5), 14 günlük öneri
+   - POST /apply → space_rate_overrides; spaces.py _book_space override'ı kullanıyor (doğrulandı: 2s×65=130)
+   - Panel: RevPAMPanel.js, menü id: revpam
+- TEST: iteration_508 — backend 9/9, frontend %95. Testing agent 2 bug buldu+düzeltti:
+  (a) booking_widget.py L150 base_rate null guard ('or 100'), (b) payload'da abs_attribute_ids.
+  Main agent ek düzeltmeler: abs-line testid'leri geri eklendi, gd-rooms-input/gd-rate-input testid eklendi,
+  DB'deki TEST_ önekli duplicate abs attribute'ları temizlendi.
+- NOT: phosphor-icons'ta Loader2 YOK — lucide-react'ten import edilmeli (bir kez compile hatası verdi, düzeltildi).

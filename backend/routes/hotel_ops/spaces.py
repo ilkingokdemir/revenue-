@@ -204,6 +204,11 @@ def create_spaces_router(db, require_roles):
             days = max(1, (ed.date() - sd.date()).days)
             units = days
         price = round(units * float(space.get("rate_per_unit") or 0), 2)
+        # RevPAM dinamik fiyat override'ı (o günün önerilen salon fiyatı)
+        dyn = await db.space_rate_overrides.find_one(
+            {"space_id": space_id, "date": start[:10]}, {"_id": 0, "rate_per_unit": 1})
+        if dyn and dyn.get("rate_per_unit"):
+            price = round(units * float(dyn["rate_per_unit"]), 2)
         if source == "admin" and "price_override" in data and data["price_override"] is not None:
             price = round(float(data["price_override"]), 2)
 

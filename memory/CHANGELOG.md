@@ -3604,3 +3604,15 @@ d) GROUP SALES OS LITE: routes/revenue_ext/group_sales.py — group_rfps CRUD, w
    (aria-describedby={undefined} yetmemişti).
 - NOT: uvicorn hot-reload bazen uzun sürüyor; health timeout olursa 'sudo supervisorctl restart backend'.
 - Anahtarlar 5+ hatırlatmaya rağmen HÂLÂ paylaşılmadı — Resend/Expo/Meta/Places mock.
+
+## Iter 515 (2026-06) — Blok Pickup Takibi
+- group_sales.py yeni uçlar: POST /rfp/{id}/rooming (isimli misafir ekle, sadece won),
+  DELETE /rfp/{id}/rooming/{entry_id}, GET /rfp/{id}/pickup (picked/block %, lineer beklenen tempo
+  [won→giriş-7g cutoff], sapma puanı, on_track/behind/critical + öneri),
+  POST /rfp/{id}/pickup/release (dolmayan odaları satışa geri açar; isimli liste kadar oda korunur,
+  release_log tutulur, blok booking rooms küçültülür → envanter gerçek zamanlı serbest).
+- Panel: won RFP'lerde 'Pickup' butonu → renkli panel (progress bar, sapma rozeti, rooming input,
+  'Dolmayanları satışa aç'). Testid'ler: gs-pickup-btn-*, gs-pickup-*, gs-pickup-dev-*, gs-rooming-*.
+- TEST: 3 isimli oda eklendi (%13.6, on_track), release 5 → blok 22→17 (DB doğrulandı), UI'da 4/17 %23.5 ✓
+- NOT: Hot-reload iki kez takıldı (health timeout) — 'sudo supervisorctl restart backend' çözüyor.
+- Anahtarlar (7. hatırlatma) hâlâ paylaşılmadı.

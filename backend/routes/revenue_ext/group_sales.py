@@ -336,4 +336,98 @@ def create_group_sales_router(db, require_roles):
         return {"ok": True, "status": status, "to": to,
                 "note": "Resend anahtarı mock olduğu için e-posta simüle edildi" if status == "mock" else ""}
 
+    @router.post("/rfp/{rfp_id}/rooming")
+    async def add_rooming(rfp_id: str, body: Dict,
+                          user: dict = Depends(require_roles("admin", "manager"))):
+        """Grup bloğuna isimli misafir (rooming list) ekler."""
+        rfp = await db.group_rfps.find_one({"id": rfp_id}, {"_id": 0, "status": 1})
+        if not rfp:
+            raise HTTPException(404, "RFP bulunamadı")
+        if rfp.get("status") != "won":
+            raise HTTPException(400, "Rooming list sadece kazanılmış RFP'lere eklenir")
+        name = (body.get("guest_name") or "").strip()
+        if not name:
+            raise HTTPException(400, "guest_name gerekli")
+        entry = {"id": str(uuid.uuid4()), "guest_name": name,
+                 "guest_email": (body.get("guest_email") or "").strip(),
+                 "rooms": max(1, int(body.get("rooms", 1) or 1)),
+                 "added_at": datetime.now(timezone.utc).isoformat(),
+                 "added_by": user.get("email", "")}
+        await db.group_rfps.update_one({"id": rfp_id}, {"$push": {"rooming_list": entry}})
+        return {"ok": True, "entry": entry}
+
+    @router.delete("/rfp/{rfp_id}/rooming/{entry_id}")
+    async def remove_rooming(rfp_id: str, entry_id: str,
+                             _: dict = Depends(require_roles("admin", "manager"))):
+        await db.group_rfps.update_one(
+            {"id": rfp_id}, {"$pull": {"rooming_list": {"id": entry_id}}})
+        return {"ok": True}
+
+    @router.get("/rfp/{rfp_id}/pickup")
+    async def pickup(rfp_id: str,
+                     _: dict = Depends(require_roles("admin", "manager"))):
+        """Blok pickup takibi: kaç oda isimli listeye döndü, wash sapması var mı?"""
+        rfp = await db.group_rfps.find_one({"id": rfp_id}, {"_id": 0})
+        if not rfp:
+            raise HTTPException(404, "RFP bulunamadı")
+        if rfp.get("status") != "won" or not rfp.get("block_booking_id"):
+            raise HTTPException(400, "Pickup takibi sadece bloğu oluşmuş kazanılmış RFP'lerde")
+        block = await db.bookings.find_one(
+            {"id": rfp["block_booking_id"]}, {"_id": 0, "rooms": 1, "created_at": 1})
+        block_rooms = int((block or {}).get("rooms", 0) or 0)
+        picked = sum(int(e.get("rooms", 1) or 1) for e in (rfp.get("rooming_list") or []))
+        pickup_pct = round(picked / block_rooms * 100, 1) if block_rooms else 0
+
+        today = datetime.now(timezone.utc).date()
+        arrival = _d(rfp["check_in"])
+        won_at = _d(((block or {}).get("created_at") or rfp["created_at"])[:10])
+        cutoff = arrival - timedelta(days=7)  # rooming list son teslim: girişten 7 gün önce
+        total_days = max((cutoff - won_at).days, 1)
+        elapsed = max(min((today - won_at).days, total_days), 0)
+        expected_pct = round(elapsed / total_days * 100, 1)
+        deviation = round(pickup_pct - expected_pct, 1)
+        days_to_arrival = (arrival - today).days
+
+        if pickup_pct >= expected_pct - 5:
+            status, suggestion = "on_track", "Pickup beklenen tempoda — aksiyon gerekmez."
+        elif deviation > -20:
+            status = "behind"
+            suggestion = "Pickup temponun gerisinde — grup yetkilisine rooming list hatırlatması gönderin."
+        else:
+            status = "critical"
+            at_risk = max(block_rooms - picked - round(block_rooms * expected_pct / 100 * 0.3), 0)
+            suggestion = (f"Ciddi wash riski: tempoya göre ~{at_risk} oda dolmayabilir. "
+                          f"Attrition maddesini işletin veya odaların bir kısmını satışa geri açın.")
+        return {
+            "rfp_id": rfp_id, "block_rooms": block_rooms, "picked_rooms": picked,
+            "pickup_pct": pickup_pct, "expected_pct_now": expected_pct,
+            "deviation_pts": deviation, "days_to_arrival": days_to_arrival,
+            "rooming_deadline": cutoff.isoformat(), "status": status,
+            "suggestion": suggestion, "rooming_list": rfp.get("rooming_list") or [],
+        }
+
+    @router.post("/rfp/{rfp_id}/pickup/release")
+    async def release_rooms(rfp_id: str, body: Dict,
+                            user: dict = Depends(require_roles("admin", "manager"))):
+        """Dolmayan blok odalarını satışa geri açar (blok rezervasyonunu küçültür)."""
+        rfp = await db.group_rfps.find_one({"id": rfp_id}, {"_id": 0})
+        if not rfp or not rfp.get("block_booking_id"):
+            raise HTTPException(404, "Blok bulunamadı")
+        n = max(1, int(body.get("rooms", 1) or 1))
+        block = await db.bookings.find_one({"id": rfp["block_booking_id"]}, {"_id": 0, "rooms": 1})
+        cur = int((block or {}).get("rooms", 0) or 0)
+        picked = sum(int(e.get("rooms", 1) or 1) for e in (rfp.get("rooming_list") or []))
+        new_rooms = max(cur - n, picked, 1)
+        released = cur - new_rooms
+        if released <= 0:
+            raise HTTPException(400, "Serbest bırakılabilir oda yok (isimli liste kadar oda korunur)")
+        await db.bookings.update_one(
+            {"id": rfp["block_booking_id"]}, {"$set": {"rooms": new_rooms, "guests": new_rooms}})
+        await db.group_rfps.update_one(
+            {"id": rfp_id},
+            {"$push": {"release_log": {"released": released, "remaining": new_rooms,
+                                       "at": datetime.now(timezone.utc).isoformat(),
+                                       "by": user.get("email", "")}}})
+        return {"ok": True, "released": released, "block_rooms": new_rooms}
+
     return router

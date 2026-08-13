@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Handshake, Plus, Calculator, FilePdf, PaperPlaneTilt, CalendarPlus } from "@phosphor-icons/react";
+import { Handshake, Plus, Calculator, FilePdf, PaperPlaneTilt, CalendarPlus, UsersThree } from "@phosphor-icons/react";
 import { Loader2 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -17,6 +17,35 @@ export default function GroupSalesPanel({ propertyId }) {
   const [alts, setAlts] = useState({});
   const [altLoading, setAltLoading] = useState(null);
   const [emailing, setEmailing] = useState(null);
+  const [pickups, setPickups] = useState({});
+  const [roomingName, setRoomingName] = useState("");
+
+  const loadPickup = async (rfp) => {
+    if (pickups[rfp.id]) { setPickups((p) => ({ ...p, [rfp.id]: null })); return; }
+    try {
+      const { data: d } = await axios.get(`${API}/group-sales/rfp/${rfp.id}/pickup`);
+      setPickups((p) => ({ ...p, [rfp.id]: d }));
+    } catch (e) { toast.error(e?.response?.data?.detail || "Pickup alınamadı"); }
+  };
+  const addRooming = async (rfp) => {
+    if (!roomingName.trim()) return toast.error("Misafir adı gerekli");
+    try {
+      await axios.post(`${API}/group-sales/rfp/${rfp.id}/rooming`, { guest_name: roomingName });
+      setRoomingName("");
+      const { data: d } = await axios.get(`${API}/group-sales/rfp/${rfp.id}/pickup`);
+      setPickups((p) => ({ ...p, [rfp.id]: d }));
+    } catch (e) { toast.error(e?.response?.data?.detail || "Eklenemedi"); }
+  };
+  const releaseRooms = async (rfp) => {
+    const pk = pickups[rfp.id];
+    const n = Math.max(1, (pk?.block_rooms || 1) - (pk?.picked_rooms || 0) - 1);
+    try {
+      const { data: r } = await axios.post(`${API}/group-sales/rfp/${rfp.id}/pickup/release`, { rooms: n });
+      toast.success(`${r.released} oda satışa geri açıldı (blok: ${r.block_rooms})`);
+      const { data: d } = await axios.get(`${API}/group-sales/rfp/${rfp.id}/pickup`);
+      setPickups((p) => ({ ...p, [rfp.id]: d }));
+    } catch (e) { toast.error(e?.response?.data?.detail || "Serbest bırakılamadı"); }
+  };
   const [form, setForm] = useState({ group_name: "", contact_email: "", check_in: "", check_out: "", rooms: 10, offered_rate: 90, wash_pct: 10, comp_rooms: 0 });
 
   const load = useCallback(async () => {
@@ -191,6 +220,12 @@ export default function GroupSalesPanel({ propertyId }) {
                       {emailing === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PaperPlaneTilt size={13} weight="fill" />}
                       E-posta
                     </button>
+                    {r.status === "won" && r.block_booking_id && (
+                      <button onClick={() => loadPickup(r)} data-testid={`gs-pickup-btn-${r.id}`}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">
+                        <UsersThree size={13} weight="fill" /> Pickup
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -212,6 +247,37 @@ export default function GroupSalesPanel({ propertyId }) {
                   ))}
                 </div>
               )}
+              {pickups[r.id] && (() => { const pk = pickups[r.id]; return (
+                <div className={`mt-3 rounded-xl border p-3 ${pk.status === "on_track" ? "bg-emerald-50 border-emerald-200" : pk.status === "behind" ? "bg-amber-50 border-amber-200" : "bg-rose-50 border-rose-200"}`} data-testid={`gs-pickup-${r.id}`}>
+                  <div className="flex items-center gap-3 flex-wrap mb-2">
+                    <p className="text-[10px] font-black uppercase text-stone-600">Blok Pickup Takibi</p>
+                    <span className="text-[11px] font-bold text-stone-800">{pk.picked_rooms}/{pk.block_rooms} oda isimli (%{pk.pickup_pct})</span>
+                    <span className="text-[10px] text-stone-500">beklenen tempo: %{pk.expected_pct_now}</span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${pk.deviation_pts >= -5 ? "bg-emerald-100 text-emerald-700" : pk.deviation_pts > -20 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`} data-testid={`gs-pickup-dev-${r.id}`}>
+                      {pk.deviation_pts > 0 ? "+" : ""}{pk.deviation_pts} puan
+                    </span>
+                    <span className="text-[10px] text-stone-400 ml-auto">rooming son gün: {pk.rooming_deadline} · girişe {pk.days_to_arrival}g</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-stone-200 overflow-hidden mb-2">
+                    <div className={`h-full rounded-full ${pk.status === "on_track" ? "bg-emerald-500" : pk.status === "behind" ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${Math.min(pk.pickup_pct, 100)}%` }} />
+                  </div>
+                  <p className="text-[11px] text-stone-600 mb-2">{pk.suggestion}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input value={roomingName} onChange={(e) => setRoomingName(e.target.value)}
+                      placeholder="Misafir adı ekle..." data-testid={`gs-rooming-input-${r.id}`}
+                      className="border border-stone-300 rounded-lg px-2.5 py-1.5 text-xs w-48 bg-white" />
+                    <button onClick={() => addRooming(r)} data-testid={`gs-rooming-add-${r.id}`}
+                      className="px-3 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-700 text-white text-[10px] font-bold">+ İsimli oda</button>
+                    {pk.status !== "on_track" && pk.block_rooms - pk.picked_rooms > 1 && (
+                      <button onClick={() => releaseRooms(r)} data-testid={`gs-release-${r.id}`}
+                        className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold">Dolmayanları satışa aç</button>
+                    )}
+                    {(pk.rooming_list || []).slice(-5).map((e) => (
+                      <span key={e.id} className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-600">{e.guest_name}</span>
+                    ))}
+                  </div>
+                </div>
+              ); })()}
               {(r.versions || []).length > 0 && (
                 <div className="mt-3 space-y-1.5" data-testid={`gs-versions-${r.id}`}>
                   {r.versions.slice().reverse().map((v) => (

@@ -14,16 +14,73 @@ Endpoints (/api/group-sales/*):
 - PUT  /rfp/{rfp_id}                  → alan/statü güncelle
 - POST /rfp/{rfp_id}/quote            → yeni teklif versiyonu (displacement + PDF analiz id'si)
 """
+import base64
+import logging
 import math
+import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from routes.revenue_ext.group_displacement import compute_displacement, _d
+from routes.revenue_ext.group_displacement import compute_displacement, _d, _build_proposal_pdf
 
+try:
+    import resend
+except ImportError:
+    resend = None
+
+logger = logging.getLogger(__name__)
 STATUSES = ("new", "quoted", "negotiating", "won", "lost")
+ALT_OFFSETS = (-14, -10, -7, -5, -3, 3, 5, 7, 10, 14, 17, 21)
+
+
+async def _send_email_pdf(to_email: str, subject: str, html: str,
+                          pdf_bytes: bytes, filename: str) -> str:
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not resend or not api_key or api_key.startswith("re_1234"):
+        logger.info(f"[MOCK EMAIL] Group proposal to {to_email}: {subject} (+{filename}, {len(pdf_bytes)}b)")
+        return "mock"
+    try:
+        resend.api_key = api_key
+        resend.Emails.send({
+            "from": os.environ.get("RESEND_FROM", "MyHotelBox <onboarding@resend.dev>"),
+            "to": [to_email], "subject": subject, "html": html,
+            "attachments": [{"filename": filename,
+                             "content": base64.b64encode(pdf_bytes).decode()}],
+        })
+        return "sent"
+    except Exception as e:
+        logger.warning(f"Group proposal email failed: {e}")
+        return "failed"
+
+
+async def _find_alternative_dates(db, pid: str, check_in: str, check_out: str,
+                                  rooms: int, rate: float, current_net: float):
+    """Aynı uzunlukta kaydırılmış pencereleri tarar, en yüksek net katkılı 3 tarihi döner."""
+    start, end = _d(check_in), _d(check_out)
+    nights = (end - start).days
+    min_start = datetime.now(timezone.utc).date() + timedelta(days=3)
+    results = []
+    for off in ALT_OFFSETS:
+        s = start + timedelta(days=off)
+        if s < min_start:
+            continue
+        e = s + timedelta(days=nights)
+        try:
+            c = await compute_displacement(db, pid, s, e, rooms, rate)
+        except Exception:
+            continue
+        results.append({
+            "check_in": s.isoformat(), "check_out": e.isoformat(), "offset_days": off,
+            "net_value_after_commission": c["net_value_after_commission"],
+            "total_displaced_rooms": c["total_displaced_rooms"],
+            "recommendation": c["recommendation"],
+            "gain_vs_current": round(c["net_value_after_commission"] - current_net, 2),
+        })
+    results.sort(key=lambda x: -x["net_value_after_commission"])
+    return [r for r in results if r["gain_vs_current"] > 0][:3]
 
 
 def create_group_sales_router(db, require_roles):
@@ -154,6 +211,64 @@ def create_group_sales_router(db, require_roles):
              "$set": {"status": "quoted" if rfp.get("status") == "new" else rfp.get("status"),
                       "offered_rate": rate, "wash_pct": wash, "comp_rooms": comp,
                       "updated_at": datetime.now(timezone.utc).isoformat()}})
-        return {"ok": True, "version": version}
+
+        # RED çıkarsa satış ekibine otomatik alternatif tarih önerisi
+        alternatives = []
+        if computed["recommendation"] == "reject":
+            alternatives = await _find_alternative_dates(
+                db, rfp["property_id"], rfp["check_in"], rfp["check_out"],
+                expected_rooms, rate, real_net)
+        return {"ok": True, "version": version, "alternatives": alternatives}
+
+    @router.post("/rfp/{rfp_id}/alternatives")
+    async def alternatives(rfp_id: str,
+                           _: dict = Depends(require_roles("admin", "manager"))):
+        rfp = await db.group_rfps.find_one({"id": rfp_id}, {"_id": 0})
+        if not rfp:
+            raise HTTPException(404, "RFP bulunamadı")
+        last = (rfp.get("versions") or [{}])[-1]
+        rate = float(last.get("offered_rate", rfp["offered_rate"]) or rfp["offered_rate"])
+        expected = int(last.get("expected_rooms") or rfp["rooms"])
+        current_net = float(last.get("net_value_after_commission", 0) or 0)
+        alts = await _find_alternative_dates(
+            db, rfp["property_id"], rfp["check_in"], rfp["check_out"], expected, rate, current_net)
+        return {"ok": True, "current_net": current_net, "alternatives": alts}
+
+    @router.post("/rfp/{rfp_id}/email")
+    async def email_proposal(rfp_id: str, body: Dict,
+                             user: dict = Depends(require_roles("admin", "manager"))):
+        rfp = await db.group_rfps.find_one({"id": rfp_id}, {"_id": 0})
+        if not rfp:
+            raise HTTPException(404, "RFP bulunamadı")
+        versions = rfp.get("versions") or []
+        if not versions:
+            raise HTTPException(400, "Önce teklif oluşturun (Fiyatla)")
+        to = (body.get("to") or rfp.get("contact_email") or "").strip()
+        if not to or "@" not in to:
+            raise HTTPException(400, "Geçerli bir alıcı e-postası yok — RFP'ye iletişim e-postası ekleyin")
+        last = versions[-1]
+        a = await db.group_displacement_analyses.find_one({"id": last.get("analysis_id")}, {"_id": 0})
+        if not a:
+            raise HTTPException(404, "Teklif analizi bulunamadı")
+        prop = await db.properties.find_one({"id": rfp["property_id"]}, {"_id": 0, "name": 1}) or {}
+        hotel = prop.get("name") or "Otel"
+        pdf = _build_proposal_pdf(a, hotel, user.get("email", ""))
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px;">
+          <h2 style="color:#1a3c5e;">{hotel} — Grup Konaklama Teklifi</h2>
+          <p>Sayın {rfp.get('contact_name') or 'Yetkili'},</p>
+          <p><b>{rfp['group_name']}</b> için {rfp['check_in']} – {rfp['check_out']} tarihlerinde
+          {rfp['rooms']} odalık grup konaklama teklifimiz ekte yer almaktadır.</p>
+          <p>Gecelik oda fiyatı: <b>{last['offered_rate']:.2f}</b> (teklif v{last['v']})</p>
+          <p style="font-size:12px;color:#78716c;">Teklif 14 gün geçerlidir ve müsaitlik teyidine tabidir.</p>
+          <p>Saygılarımızla,<br/>{hotel} Grup Satış Ekibi</p>
+        </div>"""
+        fname = f"grup-teklif-{rfp['group_name'].replace(' ', '-')[:30]}.pdf"
+        status = await _send_email_pdf(to, f"{hotel} — Grup Teklifi: {rfp['group_name']}", html, pdf, fname)
+        log = {"to": to, "version": last["v"], "status": status,
+               "sent_at": datetime.now(timezone.utc).isoformat(), "by": user.get("email", "")}
+        await db.group_rfps.update_one({"id": rfp_id}, {"$push": {"emails_sent": log}})
+        return {"ok": True, "status": status, "to": to,
+                "note": "Resend anahtarı mock olduğu için e-posta simüle edildi" if status == "mock" else ""}
 
     return router

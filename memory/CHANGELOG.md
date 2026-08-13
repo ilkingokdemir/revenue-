@@ -3568,3 +3568,17 @@ d) GROUP SALES OS LITE: routes/revenue_ext/group_sales.py — group_rfps CRUD, w
 - TEST: backend curl 4/4; testing agent iteration_511 frontend TÜM akışlar geçti (RFP create→quote→PDF→won).
 - Düzeltilen kozmetikler: property switcher 'linked' rozeti boşluklu, CommandDialog aria-describedby, DA paneli 120g.
 - ROADMAP.md'ye P2/P3 kalanlar eklendi (alternatif tarih önerisi, rate-code forecast, A/B nedensel etki, LTV).
+
+## Iter 512 (2026-06) — Alternatif Tarih + Veri Nöbetçisi + RFP E-postası
+1. ALTERNATİF TARİH: group_sales.py _find_alternative_dates — ±14/+21 gün kaydırılmış pencereler
+   (12 offset) compute_displacement ile taranır, net kazancı pozitif ilk 3 döner. Quote RED çıkarsa
+   otomatik response'a eklenir; ayrıca POST /group-sales/rfp/{id}/alternatives endpoint'i + panelde
+   'Alternatif tarih' butonu (gs-alts-*, gs-alt-list-*). TEST: -3g penceresi +4538 net kazanç buldu ✓
+2. VERİ NÖBETÇİSİ: data_quality.py yeniden yazıldı — detect_issues/run_dq_scan/run_dq_sentinel modül
+   seviyesine taşındı. workers.data_quality_sentinel_loop (saatlik, UTC 01'de günde 1 kez,
+   dq_sentinel_state dedupe). Skor<70 veya ≥15 puan düşüş → manager bildirimi. TEST: skor 55 → bildirim ✓
+3. RFP E-POSTASI: POST /group-sales/rfp/{id}/email — teklif PDF'i base64 attachment ile Resend üzerinden
+   (mock modda simüle + not döner), emails_sent log'u RFP'ye eklenir. Panel: gs-email-* butonu. TEST: mock ✓
+- UYARI: data_quality.py'de iç fonksiyonu search_replace ile modül seviyesine taşırken dosya bozuldu,
+  create_file overwrite=true ile temiz yeniden yazma gerekti. Büyük refactor'da tam dosya yazmayı tercih et.
+- Anahtarlar HÂLÂ gelmedi (4. kez) — Expo/Resend/Meta/Google Places mock modda.

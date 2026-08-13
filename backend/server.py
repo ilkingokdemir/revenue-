@@ -2057,13 +2057,14 @@ async def startup_event():
 
     # tick workers (workers.py — ROADMAP P1 refactor)
     import asyncio
-    from workers import scheduled_checkout_loop, reports_loop, otb_snapshot_loop, str_scan_loop, revenue_brain_loop, complaint_task_sync_loop, complaint_sla_loop, rating_trend_alert_loop, winback_reminder_loop, publish_day_alert_loop, praise_hunter_loop, profit_autopilot_loop
+    from workers import scheduled_checkout_loop, reports_loop, otb_snapshot_loop, str_scan_loop, revenue_brain_loop, complaint_task_sync_loop, complaint_sla_loop, rating_trend_alert_loop, winback_reminder_loop, publish_day_alert_loop, praise_hunter_loop, profit_autopilot_loop, data_quality_sentinel_loop
     asyncio.create_task(scheduled_checkout_loop(db))
     asyncio.create_task(reports_loop(db))
     asyncio.create_task(otb_snapshot_loop(db))
     asyncio.create_task(str_scan_loop(db))
     asyncio.create_task(revenue_brain_loop(db))
     asyncio.create_task(profit_autopilot_loop(db))
+    asyncio.create_task(data_quality_sentinel_loop(db))
     asyncio.create_task(complaint_task_sync_loop(db))
     asyncio.create_task(complaint_sla_loop(db))
     asyncio.create_task(rating_trend_alert_loop(db))

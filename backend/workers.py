@@ -877,3 +877,30 @@ async def profit_autopilot_loop(db, interval_seconds: int = 3600):
         except Exception as e:
             logger.warning(f"profit_autopilot_loop error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+async def data_quality_sentinel_loop(db, interval_seconds: int = 3600):
+    """Veri Nöbetçisi — gece (UTC 01) veri kalitesi taraması, düşük skorda bildirim."""
+    import logging
+    logger = logging.getLogger(__name__)
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            if now.hour == 1:
+                from routes.revenue_ext.data_quality import run_dq_sentinel
+                today = now.date().isoformat()
+                props = await db.properties.find(
+                    {"is_active": {"$ne": False}}, {"_id": 0, "id": 1}).to_list(50)
+                for p in props:
+                    state = await db.dq_sentinel_state.find_one(
+                        {"property_id": p["id"]}, {"_id": 0, "last_run_date": 1})
+                    if state and state.get("last_run_date") == today:
+                        continue
+                    res = await run_dq_sentinel(db, p["id"])
+                    await db.dq_sentinel_state.update_one(
+                        {"property_id": p["id"]},
+                        {"$set": {"last_run_date": today}}, upsert=True)
+                    logger.info(f"dq_sentinel: {p['id']} skor={res['score']} alerted={res['alerted']}")
+        except Exception as e:
+            logger.warning(f"data_quality_sentinel_loop error: {e}")
+        await asyncio.sleep(interval_seconds)

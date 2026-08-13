@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Handshake, Plus, Calculator, FilePdf } from "@phosphor-icons/react";
+import { Handshake, Plus, Calculator, FilePdf, PaperPlaneTilt, CalendarPlus } from "@phosphor-icons/react";
 import { Loader2 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -14,6 +14,9 @@ export default function GroupSalesPanel({ propertyId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quoting, setQuoting] = useState(null);
+  const [alts, setAlts] = useState({});
+  const [altLoading, setAltLoading] = useState(null);
+  const [emailing, setEmailing] = useState(null);
   const [form, setForm] = useState({ group_name: "", contact_email: "", check_in: "", check_out: "", rooms: 10, offered_rate: 90, wash_pct: 10, comp_rooms: 0 });
 
   const load = useCallback(async () => {
@@ -40,9 +43,32 @@ export default function GroupSalesPanel({ propertyId }) {
     try {
       const { data: r } = await axios.post(`${API}/group-sales/rfp/${rfp.id}/quote`, {});
       toast.success(`v${r.version.v} teklifi: ${REC_TR[r.version.recommendation] || r.version.recommendation}`);
+      if ((r.alternatives || []).length > 0) {
+        setAlts((p) => ({ ...p, [rfp.id]: r.alternatives }));
+        toast.info(`Teklif RED — ${r.alternatives.length} alternatif tarih önerildi`);
+      }
       load();
     } catch (e) { toast.error(e?.response?.data?.detail || "Fiyatlanamadı"); }
     finally { setQuoting(null); }
+  };
+  const findAlts = async (rfp) => {
+    setAltLoading(rfp.id);
+    try {
+      const { data: r } = await axios.post(`${API}/group-sales/rfp/${rfp.id}/alternatives`);
+      setAlts((p) => ({ ...p, [rfp.id]: r.alternatives }));
+      toast[r.alternatives.length ? "success" : "info"](
+        r.alternatives.length ? `${r.alternatives.length} daha kârlı tarih bulundu` : "Mevcut tarihlerden daha iyi pencere yok");
+    } catch (e) { toast.error(e?.response?.data?.detail || "Aranamadı"); }
+    finally { setAltLoading(null); }
+  };
+  const sendEmail = async (rfp) => {
+    setEmailing(rfp.id);
+    try {
+      const { data: r } = await axios.post(`${API}/group-sales/rfp/${rfp.id}/email`, {});
+      toast.success(r.note || `Teklif ${r.to} adresine gönderildi`);
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Gönderilemedi"); }
+    finally { setEmailing(null); }
   };
   const setStatus = async (rfp, status) => {
     await axios.put(`${API}/group-sales/rfp/${rfp.id}`, { status });
@@ -141,7 +167,37 @@ export default function GroupSalesPanel({ propertyId }) {
                   {quoting === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calculator size={13} weight="fill" />}
                   Fiyatla (v{(r.versions?.length || 0) + 1})
                 </button>
+                {(r.versions || []).length > 0 && (
+                  <>
+                    <button onClick={() => findAlts(r)} disabled={altLoading === r.id} data-testid={`gs-alts-${r.id}`}
+                      title="Daha kârlı alternatif tarih ara"
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-stone-300 hover:bg-stone-50 text-stone-700 text-xs font-bold disabled:opacity-50">
+                      {altLoading === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarPlus size={13} />}
+                      Alternatif tarih
+                    </button>
+                    <button onClick={() => sendEmail(r)} disabled={emailing === r.id} data-testid={`gs-email-${r.id}`}
+                      title={r.contact_email ? `${r.contact_email} adresine gönder` : "İletişim e-postası tanımlı değil"}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold disabled:opacity-50">
+                      {emailing === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PaperPlaneTilt size={13} weight="fill" />}
+                      E-posta
+                    </button>
+                  </>
+                )}
               </div>
+              {(alts[r.id] || []).length > 0 && (
+                <div className="mt-3 bg-indigo-50 border border-indigo-200 rounded-xl p-3" data-testid={`gs-alt-list-${r.id}`}>
+                  <p className="text-[10px] font-black uppercase text-indigo-700 mb-1.5">📅 Daha kârlı alternatif tarihler</p>
+                  {alts[r.id].map((a, i) => (
+                    <div key={i} className="flex items-center gap-3 text-[11px] py-1 flex-wrap" data-testid={`gs-alt-${r.id}-${i}`}>
+                      <span className="font-bold text-stone-800">{a.check_in} → {a.check_out}</span>
+                      <span className="text-stone-500">({a.offset_days > 0 ? "+" : ""}{a.offset_days} gün)</span>
+                      <span className="text-stone-500">{a.total_displaced_rooms} displacement</span>
+                      <span className={`font-bold ${a.recommendation === "accept" ? "text-emerald-600" : "text-amber-600"}`}>{REC_TR[a.recommendation]}</span>
+                      <span className="font-black text-indigo-700 ml-auto">net +{a.gain_vs_current} kazanç</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {(r.versions || []).length > 0 && (
                 <div className="mt-3 space-y-1.5" data-testid={`gs-versions-${r.id}`}>
                   {r.versions.slice().reverse().map((v) => (

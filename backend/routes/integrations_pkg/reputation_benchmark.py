@@ -757,6 +757,30 @@ def create_reputation_router(db, require_roles):
             {"id": response_id}, {"$set": {"photo_draft_created": True}})
         return {"draft_id": draft_id, "draft": draft}
 
+    @router.get("/reputation/public/photo-contest/{property_id}")
+    async def public_photo_contest(property_id: str):
+        """Herkese açık: Ayın Karesi kazananları galerisi (auth yok)."""
+        import re as _re
+        prop = await db.properties.find_one(
+            {"id": property_id}, {"_id": 0, "name": 1})
+        if not prop:
+            raise HTTPException(404, "Otel bulunamadı")
+        drafts = await db.social_drafts.find(
+            {"property_id": property_id, "source": "photo_contest",
+             "image_url": {"$nin": ["", None]}},
+            {"_id": 0, "contest_month": 1, "winner_name": 1, "draft": 1,
+             "image_url": 1, "created_at": 1}).sort("contest_month", -1).to_list(24)
+        items = []
+        for d in drafts:
+            name = d.get("winner_name")
+            if not name:
+                m = _re.search(r"Kazanan (\S+)!", d.get("draft") or "")
+                name = m.group(1) if m else "Misafirimiz"
+            items.append({"month": d.get("contest_month"),
+                          "winner": name,
+                          "image_url": d.get("image_url")})
+        return {"hotel": prop.get("name", property_id), "items": items}
+
     @router.post("/reputation/photo-contest/run")
     async def photo_contest_run(_: dict = Depends(require_roles("admin", "manager"))):
         from workers import run_photo_contest

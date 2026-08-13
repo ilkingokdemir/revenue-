@@ -3408,3 +3408,17 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
 - FIX (test bulgusuna göre): survey_to_draft sıralaması submitted_at → created_at
   (public submit created_at yazıyor).
 - BEKLEYEN: Expo token (15. kez) + Google Places + Meta anahtarları.
+
+## Iter 535 (2026-08-13) — Galeri Sayfası + Teşekkür Kuponu + Resend Dispatcher TAMAMLANDI
+- 1) YARIŞMA DUYURU SAYFASI (public): GET /reputation/public/photo-contest/{pid} (auth yok,
+  winner_name + regex fallback). Yeni sayfa /kareler/{pid} → PhotoContestPage.js (koyu şık
+  galeri, Güncel Kazanan rozeti, izin notu). App.js route eklendi. Panelde "🌐 Galeri
+  Linkini Kopyala" butonu. TEST: sayfa render + Zeynep kazanan kartı screenshot OK.
+- 2) FOTOĞRAF TEŞEKKÜR KUPONU: submit_public_survey — photo_url + photo_consent +
+  guest_email varsa otomatik %10 winback teklifi (source_type photo_thanks, 30g) +
+  teşekkür e-postası kuyruğa. TEST: ali@test.com kupon + e-posta oluştu.
+- 3) RESEND DISPATCHER: workers.email_dispatch_loop (60 sn) — RESEND_API_KEY gerçekse
+  (re_ ile başlar, placeholder re_123456789 DEĞİLse) kuyruktaki e-postaları resend SDK ile
+  gönderir (asyncio.to_thread), status sent/failed. Şu an anahtar placeholder → MOCKED devam.
+  requirements.txt'de resend==2.27.0 mevcut.
+- BEKLEYEN: Expo token (16. kez) + GERÇEK RESEND_API_KEY + Google Places + Meta anahtarları.

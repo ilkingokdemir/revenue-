@@ -324,7 +324,7 @@ async def run_photo_contest(db) -> dict:
         await db.social_drafts.insert_one({
             "id": draft_id, "property_id": pid, "topic": "ayın karesi",
             "draft": draft, "source": "photo_contest", "contest_month": month,
-            "auto": True, "approved": False,
+            "auto": True, "approved": False, "winner_name": first_name,
             **({"image_url": img_url} if img_url else {}),
             "winner_response_id": winner.get("survey_response_id"),
             "created_at": now_dt.isoformat()})
@@ -340,6 +340,40 @@ async def photo_contest_loop(db, interval_seconds: int = 43200):
                 logger.info(f"photo contest: {res}")
         except Exception as e:
             logger.warning(f"photo contest tick error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
+async def email_dispatch_loop(db, interval_seconds: int = 60):
+    """Resend anahtarı gerçekse kuyruktaki e-postaları gönderir; yoksa MOCKED kalır."""
+    while True:
+        try:
+            key = os.environ.get("RESEND_API_KEY", "")
+            if key and key.startswith("re_") and key != "re_123456789":
+                import resend
+                resend.api_key = key
+                sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+                queued = await db.outbound_email_queue.find(
+                    {"status": "queued"}, {"_id": 0}).sort("created_at", 1).to_list(10)
+                for m in queued:
+                    try:
+                        html = "<div style='font-family:sans-serif;white-space:pre-wrap'>" \
+                               + (m.get("body") or "").replace("\n", "<br/>") + "</div>"
+                        params = {"from": sender, "to": [m["to"]],
+                                  "subject": m.get("subject", ""), "html": html}
+                        result = await asyncio.to_thread(resend.Emails.send, params)
+                        await db.outbound_email_queue.update_one(
+                            {"id": m["id"]},
+                            {"$set": {"status": "sent",
+                                      "delivery_status": "resend_sent",
+                                      "resend_id": (result or {}).get("id"),
+                                      "sent_at": datetime.now(timezone.utc).isoformat()}})
+                    except Exception as e:
+                        await db.outbound_email_queue.update_one(
+                            {"id": m["id"]},
+                            {"$set": {"status": "failed",
+                                      "delivery_status": f"resend_error: {str(e)[:150]}"}})
+        except Exception as e:
+            logger.warning(f"email dispatch tick error: {e}")
         await asyncio.sleep(interval_seconds)
 
 

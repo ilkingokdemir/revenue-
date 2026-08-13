@@ -1203,7 +1203,18 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
           )}
           {guestPhotos.length > 0 && (
             <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="guest-photos">
-              <p className="text-sm font-medium text-stone-200">📸 İzinli Misafir Fotoğrafları ({guestPhotos.length}) — sosyal pakete hazır</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-stone-200">📸 İzinli Misafir Fotoğrafları ({guestPhotos.length}) — sosyal pakete hazır</p>
+                <button data-testid="gallery-link-btn"
+                  onClick={async () => {
+                    const url = `${window.location.origin}/kareler/${archivePid}`;
+                    try { await navigator.clipboard.writeText(url); toast.success("Galeri linki kopyalandı 🌐 " + url); }
+                    catch { toast.info(url); }
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-[10px] bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200">
+                  🌐 Galeri Linkini Kopyala
+                </button>
+              </div>
               <div className="flex gap-3 flex-wrap">
                 {guestPhotos.map((g) => (
                   <div key={g.id} data-testid={`guest-photo-${g.id}`} className="w-40 p-2 rounded-lg bg-stone-950 border border-stone-800">

@@ -301,6 +301,34 @@ def create_surveys_router(db, require_roles, LlmChat, UserMessage, resend):
         await db.survey_responses.insert_one(response)
         response.pop("_id", None)
 
+        # Fotoğraf izni teşekkür kuponu: izin + e-posta varsa %10 kod + teşekkür e-postası
+        if photo_url and photo_consent and invite.get("guest_email"):
+            from datetime import timedelta
+            now_iso = datetime.now(timezone.utc).isoformat()
+            await db.winback_offers.insert_one({
+                "id": str(uuid.uuid4()), "property_id": invite["property_id"],
+                "source_type": "photo_thanks", "source_id": response["id"],
+                "discount_pct": 10,
+                "message": "Fotoğraf paylaşım izni teşekkür kuponu",
+                "guest_email": invite["guest_email"],
+                "expires_at": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+                "email_queued": True, "created_by": "Photo Thanks Bot",
+                "created_at": now_iso})
+            prop_doc = await db.properties.find_one(
+                {"id": invite["property_id"]}, {"_id": 0, "name": 1}) or {}
+            first = (invite.get("guest_name") or "Misafirimiz").split()[0]
+            await db.outbound_email_queue.insert_one({
+                "id": str(uuid.uuid4()), "property_id": invite["property_id"],
+                "to": invite["guest_email"],
+                "subject": f"📸 Fotoğrafınız için teşekkürler — size özel %10 indirim!",
+                "body": (f"Merhaba {first},\n\nAnımızı bizimle paylaştığınız ve sosyal medyada "
+                         f"kullanmamıza izin verdiğiniz için çok teşekkürler! 🧡\n"
+                         f"Bir sonraki konaklamanızda geçerli %10 indirim kodunuz: WELCOME10 "
+                         f"(30 gün geçerli).\n\nSizi tekrar ağırlamayı çok isteriz.\n"
+                         f"— {prop_doc.get('name', 'Otel Yönetimi')}"),
+                "type": "photo_thanks", "status": "queued",
+                "delivery_status": "mocked_email_queued", "created_at": now_iso})
+
         # Mark invite as completed
         if not invite.get("qr"):
             await db.survey_invites.update_one({"token": token}, {"$set": {"completed": True, "completed_at": datetime.now(timezone.utc).isoformat()}})

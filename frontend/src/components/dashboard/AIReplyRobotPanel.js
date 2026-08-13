@@ -83,6 +83,8 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [publishingDraft, setPublishingDraft] = useState(null);
   const [perfInputs, setPerfInputs] = useState({});
   const [perfSummary, setPerfSummary] = useState(null);
+  const [bestTime, setBestTime] = useState(null);
+  const [sendingReport, setSendingReport] = useState(false);
 
   const runInsight = async () => {
     setInsightLoading(true);
@@ -235,6 +237,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
       axios.get(`${API}/reputation/social-calendar/${archivePid}`).then(({ data }) => setSocialCalendar(data.items || [])).catch(() => {});
       axios.get(`${API}/reputation/social-connection/${archivePid}`).then(({ data }) => setConnStatus(data)).catch(() => {});
       axios.get(`${API}/reputation/social-performance/${archivePid}`).then(({ data }) => setPerfSummary(data)).catch(() => {});
+      axios.get(`${API}/reputation/best-time/${archivePid}`).then(({ data }) => setBestTime(data)).catch(() => {});
     }
   }, [tab, propertyId, archivePid, loadConfig, loadBench]);
 
@@ -1276,6 +1279,11 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   </button>
                 </div>
               )}
+              {bestTime?.has_data && (
+                <p data-testid="best-time-hint" className="text-[11px] text-sky-300 bg-sky-950/40 border border-sky-800/40 rounded-lg p-2">
+                  ⏰ {bestTime.message}
+                </p>
+              )}
               {socialDrafts.map((d) => (
                 <div key={d.id} data-testid={`social-draft-${d.id}`} className="p-3 rounded-lg bg-stone-950 border border-stone-800">
                   <div className="flex items-center justify-between mb-1">
@@ -1571,7 +1579,21 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
           )}
           {perfSummary?.rows?.length > 0 && (
             <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="perf-summary">
-              <p className="text-sm font-medium text-stone-200">📊 Gönderi Performansı — hangi konular tutuyor?</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-stone-200">📊 Gönderi Performansı — hangi konular tutuyor?</p>
+                <button data-testid="weekly-report-btn" disabled={sendingReport}
+                  onClick={async () => {
+                    setSendingReport(true);
+                    try {
+                      const { data } = await axios.post(`${API}/reputation/social-report/run`);
+                      toast.success(`🗞️ Haftalık rapor e-posta kuyruğuna eklendi (${data.published} yayın, ${data.pending} bekleyen)`);
+                    } catch { toast.error("Rapor gönderilemedi"); }
+                    setSendingReport(false);
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-[10px] bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200">
+                  {sendingReport ? "Gönderiliyor…" : "🗞️ Haftalık Raporu Şimdi Gönder"}
+                </button>
+              </div>
               {perfSummary.insight && (
                 <p data-testid="perf-insight" className="text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-800/40 rounded-lg p-2">💡 {perfSummary.insight}</p>
               )}

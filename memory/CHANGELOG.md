@@ -3356,3 +3356,17 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   sıralaması + insight cümlesi. UI: yayınlanmış taslakta beğeni/erişim inputları + 📊 Kaydet;
   "📊 Gönderi Performansı" kartı (sıralama + 💡 içgörü). TEST: 120/2400 kaydedildi, özet OK.
 - BEKLEYEN: Expo token (11. kez) + Google Places anahtarı + Meta anahtarları (yeni).
+
+## Iter 531 (2026-08-13) — En İyi Saat + Kazanan Konu + Haftalık Rapor TAMAMLANDI
+- 1) EN İYİ SAAT: GET /reputation/best-time/{pid} — yayınlanmış+performanslı gönderilerden
+  (weekday,hour) kovalarında ort. beğeni maksimumu. UI: arşivde "⏰ En iyi yayın zamanı..."
+  ipucu (sky renkli). TEST: Çarşamba 23:00 / 120 beğeni.
+- 2) KAZANAN KONU OTOMASYONU: workers.run_winning_topic_check + winning_topic_loop —
+  en iyi ort. beğenili konudan ayda 2, 10 gün arayla otomatik taslak (source
+  winning_topic_auto, auto/approved akışına girer). Manuel: POST /reputation/winning-topic/run.
+  TEST: startup'ta 1 taslak üretildi, dedupe 0.
+- 3) HAFTALIK SOSYAL RAPOR: workers.run_social_weekly_report + social_report_loop (7 gün
+  dedupe, social_weekly_reports koleksiyonu). Yayınlanan/bekleyen/en iyi konu/7 günlük plan —
+  NOTIFICATION_EMAIL'e MOCKED e-posta. Manuel: POST /reputation/social-report/run (force).
+  UI: performans kartında "🗞️ Haftalık Raporu Şimdi Gönder". TEST: e-posta kuyruğu içeriği OK.
+- BEKLEYEN: Expo token (12. kez) + Google Places + Meta anahtarları.

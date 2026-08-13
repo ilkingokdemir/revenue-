@@ -1,12 +1,125 @@
 """Background tick workers moved out of server.py (ROADMAP P1)."""
 import asyncio
 import logging
+import os
 import uuid
 from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 
 _TASK_DONE = {"done", "completed", "closed", "resolved"}
+
+
+async def run_winning_topic_check(db) -> dict:
+    """Kazanan konudan ayda 2 otomatik taslak üret (10 gün arayla, onay bekler)."""
+    now_dt = datetime.now(timezone.utc)
+    month_start = now_dt.replace(day=1).date().isoformat()
+    created = []
+    async for p in db.properties.find({}, {"_id": 0, "id": 1, "name": 1}):
+        pid = p["id"]
+        drafts = await db.social_drafts.find(
+            {"property_id": pid, "performance.likes": {"$gt": 0}},
+            {"_id": 0, "topic": 1, "performance": 1}).to_list(200)
+        if not drafts:
+            continue
+        topics = {}
+        for d in drafts:
+            t = d.get("topic") or "diğer"
+            a = topics.setdefault(t, [0, 0])
+            a[0] += d["performance"].get("likes", 0)
+            a[1] += 1
+        top = max(topics.items(), key=lambda kv: kv[1][0] / kv[1][1])[0]
+        this_month = await db.social_drafts.count_documents(
+            {"property_id": pid, "source": "winning_topic_auto",
+             "created_at": {"$gte": month_start}})
+        if this_month >= 2:
+            continue
+        last = await db.social_drafts.find_one(
+            {"property_id": pid, "source": "winning_topic_auto"},
+            {"_id": 0, "created_at": 1}, sort=[("created_at", -1)])
+        if last and last["created_at"] >= (now_dt - timedelta(days=10)).isoformat():
+            continue
+        draft = (f"✨ {p.get('name', '')} misafirlerinin favorisi: {top}! En çok beğeni alan "
+                 f"konumuzdan yeni bir kare ile karşınızdayız. Sizi de aramızda görmek isteriz 🧡 "
+                 f"#otel #{top.replace(' ', '')} #misafirmemnuniyeti")
+        await db.social_drafts.insert_one({
+            "id": str(uuid.uuid4()), "property_id": pid, "topic": top,
+            "draft": draft, "source": "winning_topic_auto",
+            "auto": True, "approved": False,
+            "created_at": now_dt.isoformat()})
+        created.append(pid)
+    return {"drafts_created": len(created), "properties": created}
+
+
+async def winning_topic_loop(db, interval_seconds: int = 21600):
+    while True:
+        try:
+            res = await run_winning_topic_check(db)
+            if res["drafts_created"]:
+                logger.info(f"winning topic drafts: {res}")
+        except Exception as e:
+            logger.warning(f"winning topic tick error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
+async def run_social_weekly_report(db, force: bool = False) -> dict:
+    """Haftalık sosyal medya özeti — yönetici e-postasına (MOCKED kuyruk)."""
+    now_dt = datetime.now(timezone.utc)
+    last = await db.social_weekly_reports.find_one(
+        {}, {"_id": 0, "created_at": 1}, sort=[("created_at", -1)])
+    if not force and last and last["created_at"] >= (now_dt - timedelta(days=7)).isoformat():
+        return {"sent": False, "reason": "son 7 günde rapor gönderildi"}
+    week_ago = (now_dt - timedelta(days=7)).isoformat()
+    week_ahead = (now_dt + timedelta(days=7)).date().isoformat()
+    published = await db.social_drafts.count_documents(
+        {"published": True, "published_at": {"$gte": week_ago}})
+    pending = await db.social_drafts.count_documents(
+        {"auto": True, "approved": {"$ne": True}})
+    upcoming = await db.social_drafts.find(
+        {"publish_date": {"$gte": now_dt.date().isoformat(), "$lte": week_ahead}},
+        {"_id": 0, "topic": 1, "publish_date": 1, "property_id": 1}
+    ).sort("publish_date", 1).to_list(20)
+    perf = await db.social_drafts.find(
+        {"performance.likes": {"$gt": 0}},
+        {"_id": 0, "topic": 1, "performance": 1}).to_list(200)
+    topics = {}
+    for d in perf:
+        t = d.get("topic") or "diğer"
+        a = topics.setdefault(t, [0, 0])
+        a[0] += d["performance"]["likes"]
+        a[1] += 1
+    top_line = ""
+    if topics:
+        t, a = max(topics.items(), key=lambda kv: kv[1][0] / kv[1][1])
+        top_line = f"En iyi konu: {t} (ort. {round(a[0] / a[1], 1)} beğeni)\n"
+    plan = "\n".join(f"- {u['publish_date']}: {u['topic']} ({u['property_id']})"
+                     for u in upcoming) or "- planlı gönderi yok"
+    body = (f"HAFTALIK SOSYAL MEDYA RAPORU ({now_dt.date().isoformat()})\n\n"
+            f"Son 7 günde yayınlanan paket: {published}\n"
+            f"Onay bekleyen otomatik taslak: {pending}\n{top_line}\n"
+            f"Önümüzdeki 7 günün yayın planı:\n{plan}")
+    await db.outbound_email_queue.insert_one({
+        "id": str(uuid.uuid4()), "property_id": "all",
+        "to": os.environ.get("NOTIFICATION_EMAIL", "yonetici@otel.com"),
+        "subject": f"🗞️ Haftalık Sosyal Medya Raporu — {now_dt.date().isoformat()}",
+        "body": body, "type": "social_weekly_report", "status": "queued",
+        "delivery_status": "mocked_email_queued", "created_at": now_dt.isoformat()})
+    await db.social_weekly_reports.insert_one({
+        "id": str(uuid.uuid4()), "created_at": now_dt.isoformat(),
+        "published": published, "pending": pending, "upcoming": len(upcoming)})
+    return {"sent": True, "published": published, "pending": pending,
+            "upcoming": len(upcoming)}
+
+
+async def social_report_loop(db, interval_seconds: int = 21600):
+    while True:
+        try:
+            res = await run_social_weekly_report(db)
+            if res.get("sent"):
+                logger.info(f"social weekly report: {res}")
+        except Exception as e:
+            logger.warning(f"social report tick error: {e}")
+        await asyncio.sleep(interval_seconds)
 
 
 async def run_rating_trend_check(db, threshold: float = -0.2) -> dict:

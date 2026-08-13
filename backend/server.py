@@ -2053,6 +2053,9 @@ async def startup_event():
     asyncio.create_task(winback_reminder_loop(db))
     asyncio.create_task(publish_day_alert_loop(db))
     asyncio.create_task(praise_hunter_loop(db))
+    from workers import winning_topic_loop, social_report_loop
+    asyncio.create_task(winning_topic_loop(db))
+    asyncio.create_task(social_report_loop(db))
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

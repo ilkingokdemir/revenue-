@@ -664,6 +664,42 @@ def create_reputation_router(db, require_roles):
             insight = f"Şu ana kadar tek konu ölçüldü: '{rows[0]['topic']}' ({rows[0]['avg_likes']} ort. beğeni)."
         return {"rows": rows, "insight": insight}
 
+    @router.get("/reputation/best-time/{property_id}")
+    async def best_publish_time(property_id: str,
+                                _: dict = Depends(require_roles("admin", "manager"))):
+        """Performans verisinden en iyi yayın gün/saatini öğren."""
+        drafts = await db.social_drafts.find(
+            {"property_id": property_id, "published": True,
+             "performance.likes": {"$gt": 0}},
+            {"_id": 0, "published_at": 1, "performance": 1}).to_list(200)
+        days_tr = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+        buckets = {}
+        for d in drafts:
+            try:
+                dt = datetime.fromisoformat(d["published_at"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            b = buckets.setdefault((dt.weekday(), dt.hour), {"likes": 0, "n": 0})
+            b["likes"] += d["performance"].get("likes", 0)
+            b["n"] += 1
+        if not buckets:
+            return {"has_data": False,
+                    "message": "Yayınlanan gönderilere beğeni girdikçe en iyi yayın zamanı önerisi burada oluşacak."}
+        (wd, hr), stats = max(buckets.items(), key=lambda kv: kv[1]["likes"] / kv[1]["n"])
+        avg = round(stats["likes"] / stats["n"], 1)
+        return {"has_data": True, "best_day": days_tr[wd], "best_hour": hr, "avg_likes": avg,
+                "message": f"En iyi yayın zamanı: {days_tr[wd]} {hr:02d}:00 civarı (ort. {avg} beğeni). Yayın tarihinizi buna göre seçin."}
+
+    @router.post("/reputation/winning-topic/run")
+    async def winning_topic_run(_: dict = Depends(require_roles("admin", "manager"))):
+        from workers import run_winning_topic_check
+        return await run_winning_topic_check(db)
+
+    @router.post("/reputation/social-report/run")
+    async def social_report_run(_: dict = Depends(require_roles("admin", "manager"))):
+        from workers import run_social_weekly_report
+        return await run_social_weekly_report(db, force=True)
+
     @router.put("/reputation/social-drafts/{draft_id}/approve")
     async def social_draft_approve(draft_id: str,
                                    current_user: dict = Depends(require_roles("admin", "manager"))):

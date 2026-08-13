@@ -369,12 +369,46 @@ async def run_photo_contest(db) -> dict:
     return {"drafts_created": len(created), "properties": created, "month": month}
 
 
+async def run_vote_announcement(db) -> dict:
+    """Ay başında 'Oylama açıldı!' duyuru taslağı üret (aday varsa, ayda 1)."""
+    now_dt = datetime.now(timezone.utc)
+    month = now_dt.strftime("%Y-%m")
+    base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+    created = []
+    async for p in db.properties.find({}, {"_id": 0, "id": 1, "name": 1}):
+        pid = p["id"]
+        existing = await db.social_drafts.find_one(
+            {"property_id": pid, "source": "vote_announce", "contest_month": month},
+            {"_id": 0, "id": 1})
+        if existing:
+            continue
+        n_cand = await db.survey_responses.count_documents(
+            {"property_id": pid, "photo_consent": True,
+             "photo_url": {"$nin": ["", None]}, "photo_draft_created": {"$ne": True}})
+        if n_cand == 0:
+            continue
+        draft = (f"🗳️ OYLAMA AÇILDI! {p.get('name', '')} Ayın Karesi yarışmasında "
+                 f"{n_cand} harika kare oylarınızı bekliyor. Favorinize oy verin, "
+                 f"kazananı siz seçin: {base}/kareler/{pid} 🏆 "
+                 f"#ayınkaresi #oylama #misafirkaresi")
+        await db.social_drafts.insert_one({
+            "id": str(uuid.uuid4()), "property_id": pid, "topic": "oylama duyurusu",
+            "draft": draft, "source": "vote_announce", "contest_month": month,
+            "auto": True, "approved": False,
+            "created_at": now_dt.isoformat()})
+        created.append(pid)
+    return {"drafts_created": len(created), "properties": created, "month": month}
+
+
 async def photo_contest_loop(db, interval_seconds: int = 43200):
     while True:
         try:
             res = await run_photo_contest(db)
             if res["drafts_created"]:
                 logger.info(f"photo contest: {res}")
+            res2 = await run_vote_announcement(db)
+            if res2["drafts_created"]:
+                logger.info(f"vote announcement: {res2}")
         except Exception as e:
             logger.warning(f"photo contest tick error: {e}")
         await asyncio.sleep(interval_seconds)

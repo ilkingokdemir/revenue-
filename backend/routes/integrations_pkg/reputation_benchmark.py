@@ -959,6 +959,11 @@ def create_reputation_router(db, require_roles):
         from workers import run_photo_contest
         return await run_photo_contest(db)
 
+    @router.post("/reputation/vote-announce/run")
+    async def vote_announce_run(_: dict = Depends(require_roles("admin", "manager"))):
+        from workers import run_vote_announcement
+        return await run_vote_announcement(db)
+
     @router.put("/reputation/social-drafts/{draft_id}/approve")
     async def social_draft_approve(draft_id: str,
                                    current_user: dict = Depends(require_roles("admin", "manager"))):

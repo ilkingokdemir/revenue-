@@ -3473,3 +3473,16 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   (TSC matrisi CC/A/P, kanıt haritası, denetim öncesi plan, yatırımcı özeti).
 - BEKLEYEN ANAHTARLAR: Expo token (19. kez) + RESEND_API_KEY + Google Places + Meta.
 - KALAN BACKLOG: gerçek IoT/Airbnb adaptörleri (anahtar/donanım gerekli), App.js refactor (ops.).
+
+## Iter 540 (2026-08-13) — Veri Silme + DR Runbook + Oylama Duyurusu TAMAMLANDI
+- 1) VERİ SİLME: mevcut POST /api/gdpr/erasure genişletildi — survey_responses (guest_email/
+  guest_name anonim + photo_url None + consent false), survey_invites, winback_offers,
+  outbound_email_queue (to/body redakte + cancelled) ve anket fotoğraf DOSYALARI diskten
+  silinir (affected.survey_photo_files). TEST: sentetik kayıt → 3 koleksiyon + dosya silindi.
+- 2) DR RUNBOOK: /app/docs/COMPLIANCE/YEDEKLEME_DR_RUNBOOK.md — RPO ≤24sa / RTO ≤4sa,
+  veri envanteri, mongodump/restore prosedürleri, 3. taraf kesinti davranışları, tatbikat
+  takvimi. SOC2 matrisi P6 ve A1.3 ✅ güncellendi.
+- 3) OYLAMA DUYURUSU: workers.run_vote_announcement (photo_contest_loop içinde, ayda 1,
+  aday varsa) — "🗳️ OYLAMA AÇILDI!" taslağı galeri linkiyle, onay akışına düşer.
+  Manuel: POST /reputation/vote-announce/run. TEST: startup'ta üretildi, dedupe 0.
+- BEKLEYEN ANAHTARLAR: Expo token (20. kez) + RESEND_API_KEY + Google Places + Meta.

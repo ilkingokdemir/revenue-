@@ -38,7 +38,7 @@ SaaS platformudur.
 |---|---|---|
 | A1.1 Kapasite | Kubernetes yatay ölçekleme; arka plan işleri async worker döngüleri | ✅ |
 | A1.2 Yedekleme | MongoDB yönetilen yedekleme politikası belgelenmeli | 🔶 |
-| A1.3 Kurtarma | DR runbook'u yazılmalı (RTO/RPO hedefleri) | 🔶 |
+| A1.3 Kurtarma | DR runbook'u mevcut: YEDEKLEME_DR_RUNBOOK.md (RTO ≤4sa / RPO ≤24sa) | ✅ |
 
 ### P — Gizlilik (Misafir PII)
 
@@ -47,7 +47,7 @@ SaaS platformudur.
 | P1-P2 Bildirim/Onay | Anket fotoğrafı için **açık izin checkbox'ı**; izinsiz fotoğraf asla sosyal akışa girmez | ✅ |
 | P4 Kullanım sınırı | Fotoğraflar yalnızca izinli galeride/paketlerde; galeri sayfasında izin beyanı görünür | ✅ |
 | P5 Saklama | Veri saklama süreleri politikası yazılmalı (ör. anket PII 24 ay) | 🔶 |
-| P6 Silme | Misafir verisi silme (right-to-erasure) prosedürü eklenecek | 🔶 |
+| P6 Silme | Misafir verisi silme endpoint'i (POST /api/gdpr/erasure — PII anonimleştirme + fotoğraf dosyası silme) | ✅ |
 
 ## 3. Mevcut Teknik Kontrollerin Kanıt Haritası
 

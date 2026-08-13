@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from datetime import datetime, timezone
 from typing import Optional
+import os
 import uuid
 import re
 
@@ -169,6 +170,22 @@ def create_gdpr_router(db):
             "surveys_responses": [
                 ({"email": email}, {"email": ANON_VALUE, "name": ANON_VALUE}),
             ],
+            "survey_responses": [
+                ({"guest_email": email},
+                 {"guest_email": ANON_VALUE, "guest_name": ANON_VALUE,
+                  "photo_url": None, "photo_consent": False}),
+            ],
+            "survey_invites": [
+                ({"guest_email": email},
+                 {"guest_email": ANON_VALUE, "guest_name": ANON_VALUE}),
+            ],
+            "winback_offers": [
+                ({"guest_email": email}, {"guest_email": ANON_VALUE}),
+            ],
+            "outbound_email_queue": [
+                ({"to": email},
+                 {"to": ANON_VALUE, "body": ANON_VALUE, "status": "cancelled"}),
+            ],
             "lost_found": [
                 ({"guest_email": email},
                  {"guest_email": ANON_VALUE, "guest_name": ANON_VALUE}),
@@ -176,6 +193,19 @@ def create_gdpr_router(db):
         }
 
         affected = {}
+        # İzinli anket fotoğraf dosyalarını diskten sil (right-to-erasure)
+        photos_deleted = 0
+        async for r in db.survey_responses.find(
+                {"guest_email": email, "photo_url": {"$nin": ["", None]}},
+                {"_id": 0, "photo_url": 1}):
+            fpath = "/app/backend/uploads/survey_photos/" + r["photo_url"].split("/")[-1]
+            try:
+                os.remove(fpath)
+                photos_deleted += 1
+            except OSError:
+                pass
+        if photos_deleted:
+            affected["survey_photo_files"] = photos_deleted
         for coll, pairs in ops.items():
             total = 0
             for query, update in pairs:

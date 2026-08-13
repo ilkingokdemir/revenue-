@@ -3462,3 +3462,14 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   kazandı + tebrik e-postası kuyruğa + screenshot (oy butonu ❤️'ye döndü, sayaç 2).
 - SIRADAKİ BACKLOG: PCI-DSS/SOC2 hazırlık dokümantasyonu (P2), IoT/Airbnb gerçek adaptörleri.
 - BEKLEYEN ANAHTARLAR: Expo token + RESEND_API_KEY + Google Places + Meta.
+
+## Iter 539 (2026-08-13) — Oy Hilesi Koruması + Uyumluluk Dokümanları TAMAMLANDI
+- 1) OY KORUMASI: vote endpoint'i IP bazlı sunucu taraflı korumalı — photo_votes
+  koleksiyonu (sha256 ip|candidate vote_hash dedupe → 429 "zaten oy verdiniz",
+  IP başına günlük 20 oy sınırı → 429). X-Forwarded-For'dan gerçek IP.
+  Frontend 429'da butonu "oy verildi"ye çevirir. TEST: 1. oy OK, 2. oy 429.
+- 2) UYUMLULUK: /app/docs/COMPLIANCE/PCI_DSS_HAZIRLIK.md (SAQ-A kapsam tespiti,
+  gereksinim matrisi, kart akış şeması, aksiyon planı) ve SOC2_HAZIRLIK.md
+  (TSC matrisi CC/A/P, kanıt haritası, denetim öncesi plan, yatırımcı özeti).
+- BEKLEYEN ANAHTARLAR: Expo token (19. kez) + RESEND_API_KEY + Google Places + Meta.
+- KALAN BACKLOG: gerçek IoT/Airbnb adaptörleri (anahtar/donanım gerekli), App.js refactor (ops.).

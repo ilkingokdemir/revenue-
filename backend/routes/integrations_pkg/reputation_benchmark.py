@@ -4,7 +4,7 @@ Reputation Benchmark — rakip otellerin Google puanlarını takip et, kıyasla.
 GOOGLE_PLACES_API_KEY varsa gerçek rating/userRatingCount; yoksa deterministik
 SIMULATED değerler. Günlük snapshot → trend. GuestRevu paritesi (5 rakip).
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import asyncio
 import hashlib
 import logging
@@ -12,7 +12,7 @@ import os
 import uuid
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 logger = logging.getLogger(__name__)
 
@@ -792,17 +792,34 @@ def create_reputation_router(db, require_roles):
                 "candidates": cands}
 
     @router.post("/reputation/public/photo-contest/{property_id}/vote")
-    async def public_photo_vote(property_id: str, body: dict):
-        """Herkese açık: aday fotoğrafa oy ver."""
+    async def public_photo_vote(property_id: str, body: dict, request: Request):
+        """Herkese açık: aday fotoğrafa oy ver (IP başına aday başına 1 oy)."""
         cid = (body.get("candidate_id") or "").strip()
         if not cid:
             raise HTTPException(400, "candidate_id gerekli")
+        ip = (request.headers.get("x-forwarded-for") or
+              (request.client.host if request.client else "")).split(",")[0].strip()
+        ip_hash = hashlib.sha256(f"{ip}|{cid}".encode()).hexdigest()
+        existing = await db.photo_votes.find_one({"vote_hash": ip_hash}, {"_id": 0, "id": 1})
+        if existing:
+            raise HTTPException(429, "Bu adaya zaten oy verdiniz")
+        day_count = await db.photo_votes.count_documents(
+            {"ip_hash": hashlib.sha256(ip.encode()).hexdigest(),
+             "created_at": {"$gte": (datetime.now(timezone.utc)
+                                     - timedelta(days=1)).isoformat()}})
+        if day_count >= 20:
+            raise HTTPException(429, "Günlük oy sınırına ulaşıldı")
         res = await db.survey_responses.find_one_and_update(
             {"id": cid, "property_id": property_id, "photo_consent": True},
             {"$inc": {"gallery_votes": 1}},
             projection={"_id": 0, "gallery_votes": 1})
         if res is None:
             raise HTTPException(404, "Aday bulunamadı")
+        await db.photo_votes.insert_one({
+            "id": str(uuid.uuid4()), "candidate_id": cid,
+            "vote_hash": ip_hash,
+            "ip_hash": hashlib.sha256(ip.encode()).hexdigest(),
+            "created_at": datetime.now(timezone.utc).isoformat()})
         return {"ok": True, "votes": (res.get("gallery_votes") or 0) + 1}
 
     @router.get("/reputation/room-qr-cards/{property_id}")

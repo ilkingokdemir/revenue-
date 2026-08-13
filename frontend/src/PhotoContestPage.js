@@ -19,7 +19,14 @@ export default function PhotoContestPage() {
         ...prev,
         candidates: prev.candidates.map((c) => c.id === cid ? { ...c, votes: r.votes } : c),
       }));
-    } catch (e) { /* sessiz */ }
+    } catch (e) {
+      setError("");
+      const msg = e?.response?.data?.detail;
+      if (msg) {
+        localStorage.setItem(`voted_${cid}`, "1");
+        setData((prev) => ({ ...prev }));
+      }
+    }
     setVoting(null);
   };
 

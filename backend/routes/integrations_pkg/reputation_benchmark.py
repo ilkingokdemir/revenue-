@@ -438,7 +438,7 @@ def create_reputation_router(db, require_roles):
             {"property_id": property_id, "nps_score": {"$gte": 9},
              "comment": {"$nin": ["", None]},
              "social_draft_created": {"$ne": True}},
-            {"_id": 0}, sort=[("submitted_at", -1)])
+            {"_id": 0}, sort=[("created_at", -1)])
         if not resp:
             raise HTTPException(404, "Sosyal medyaya çevrilecek yeni övgü dolu anket yorumu yok")
         prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "name": 1}) or {}
@@ -756,6 +756,11 @@ def create_reputation_router(db, require_roles):
         await db.survey_responses.update_one(
             {"id": response_id}, {"$set": {"photo_draft_created": True}})
         return {"draft_id": draft_id, "draft": draft}
+
+    @router.post("/reputation/photo-contest/run")
+    async def photo_contest_run(_: dict = Depends(require_roles("admin", "manager"))):
+        from workers import run_photo_contest
+        return await run_photo_contest(db)
 
     @router.put("/reputation/social-drafts/{draft_id}/approve")
     async def social_draft_approve(draft_id: str,

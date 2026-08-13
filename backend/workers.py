@@ -287,6 +287,62 @@ async def run_rating_trend_check(db, threshold: float = -0.2) -> dict:
     return {"alerts_created": len(alerts), "details": alerts}
 
 
+async def run_photo_contest(db) -> dict:
+    """Ayın Karesi: en beğenilen misafir fotoğrafını seç, kazanan duyurusu taslağı üret."""
+    now_dt = datetime.now(timezone.utc)
+    month = now_dt.strftime("%Y-%m")
+    created = []
+    async for p in db.properties.find({}, {"_id": 0, "id": 1, "name": 1}):
+        pid = p["id"]
+        existing = await db.social_drafts.find_one(
+            {"property_id": pid, "source": "photo_contest", "contest_month": month},
+            {"_id": 0, "id": 1})
+        if existing:
+            continue
+        drafts = await db.social_drafts.find(
+            {"property_id": pid, "source": "guest_photo"},
+            {"_id": 0, "id": 1, "image_url": 1, "performance": 1,
+             "survey_response_id": 1}).to_list(100)
+        if not drafts:
+            continue
+        winner = max(drafts, key=lambda d: (d.get("performance") or {}).get("likes", 0))
+        resp = await db.survey_responses.find_one(
+            {"id": winner.get("survey_response_id")}, {"_id": 0, "guest_name": 1})
+        first_name = ((resp or {}).get("guest_name") or "Misafirimiz").split()[0]
+        likes = (winner.get("performance") or {}).get("likes", 0)
+        draft_id = str(uuid.uuid4())
+        src = "/app/backend/uploads/social_images/" + winner["image_url"].split("?")[0].split("/")[-1]
+        img_url = None
+        if os.path.exists(src):
+            import shutil
+            shutil.copyfile(src, f"/app/backend/uploads/social_images/{draft_id}.png")
+            img_url = f"/api/uploads/social_images/{draft_id}.png"
+        draft = (f"🏆 AYIN KARESİ ({month}): Kazanan {first_name}! "
+                 + (f"{likes} beğeniyle " if likes else "")
+                 + f"misafirlerimizin favorisi oldu. Tebrikler! 🎉 Siz de karenizi anketimizle "
+                 f"paylaşın, gelecek ayın yıldızı siz olun ⭐ #ayınkaresi #misafirkaresi #otel")
+        await db.social_drafts.insert_one({
+            "id": draft_id, "property_id": pid, "topic": "ayın karesi",
+            "draft": draft, "source": "photo_contest", "contest_month": month,
+            "auto": True, "approved": False,
+            **({"image_url": img_url} if img_url else {}),
+            "winner_response_id": winner.get("survey_response_id"),
+            "created_at": now_dt.isoformat()})
+        created.append(pid)
+    return {"drafts_created": len(created), "properties": created, "month": month}
+
+
+async def photo_contest_loop(db, interval_seconds: int = 43200):
+    while True:
+        try:
+            res = await run_photo_contest(db)
+            if res["drafts_created"]:
+                logger.info(f"photo contest: {res}")
+        except Exception as e:
+            logger.warning(f"photo contest tick error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def rating_trend_alert_loop(db, interval_seconds: int = 21600):
     while True:
         try:

@@ -3398,3 +3398,13 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
 - TEST: curl uçtan uca (upload → submit → liste → taslak → dedupe 400) + 2 screenshot
   (anket sayfası fotoğraf bölümü, panel galerisi + misafir karesi taslağı).
 - BEKLEYEN: Expo token (14. kez) + Google Places + Meta anahtarları.
+
+## Iter 534 (2026-08-13) — Ayın Karesi Yarışması + TAM REGRESYON (iteration_504) TAMAMLANDI
+- AYIN KARESİ: workers.run_photo_contest + photo_contest_loop (12 saatte bir; ay bazlı dedupe
+  contest_month). En çok beğenili guest_photo taslağının kazananı duyurulur — görsel kopyalanır,
+  topic "ayın karesi", auto/onay akışına girer. Manuel: POST /reputation/photo-contest/run.
+- REGRESYON: testing_agent iteration_504 — backend 14/14 PASS, frontend tüm akışlar PASS
+  (%100). Test suite: /app/backend/tests/test_iteration504_social_media_module.py.
+- FIX (test bulgusuna göre): survey_to_draft sıralaması submitted_at → created_at
+  (public submit created_at yazıyor).
+- BEKLEYEN: Expo token (15. kez) + Google Places + Meta anahtarları.

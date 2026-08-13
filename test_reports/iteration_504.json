@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 504 — End-to-end regression of the Social Media Module inside AI Reply Robot > Benchmark tab (14+ features) plus the NEW 'Ayın Karesi' (photo contest) feature. Backend: 14/14 pytest tests PASSED in ~45s covering login, drafts list, survey→draft, real Gemini image gen (single + 3 variants + select + refine), send-package idempotency + calendar publish_time, publish (simulated MOCKED), performance, best-time, drafts-pending + bulk & single approve, weekly report + PDF download, guest photo upload → survey → guest-photos → photo-to-draft (with dedupe 400), photo-contest run (dedupe + Ayın Karesi draft with topic='ayın karesi', auto=true, image_url populated), 4 automation triggers, social-connection lifecycle with token masking and cleanup. Frontend: login → AI Yanıt Robotu → Benchmark tab renders all sections (archive-property-select, survey-to-draft-btn, social-conn-toggle, apply-best-time-btn, weekly-report-btn, report-pdf-btn) and drafts show 8 variants/image/edit buttons + 6 preview/date/time/refine sets, Instagram preview modal opens, 'Ayın Karesi' topic visible in archive. Report tab: ai-robot-winback-stats renders with all 5 KPI boxes (Üretilen 4, Kuyruk 3, Kullanılan 2, Süresi Dolan 1, Dönüşüm %50) and SMS Test offer rows. Portfolio tab: 13 rows with Ø/30g/Yorum/Anket columns. No blocking issues.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration504_social_media_module.py",
+    "/app/test_reports/pytest/iteration504_social.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "reputation_benchmark.py survey_to_draft sorts survey_responses by 'submitted_at' but surveys/public/{token} inserts 'created_at' only — sort field mismatch may cause non-deterministic ordering when picking latest praise. Consider unifying to 'created_at' or writing both.",
+    "photo_contest_run picks winner by performance.likes but new guest_photo drafts start without performance — currently first found wins. Fine for MVP but could add tie-break by created_at DESC.",
+    "social_draft_publish (simulated branch) does not verify image_url before returning 'simulated' — endpoint still requires image_url via the 400 check above (OK). Behavior matches spec.",
+    "run_social_weekly_report / generate_social_report_pdf endpoints return arbitrary shapes; consider a common {ok:true, ...} envelope for consistency with the rest of the API."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration504_social_media_module.py (new)"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% of tested flows"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Created TEST_ prefixed survey responses (TEST_Ayşe Yılmaz 10/10 praise, TEST_Mert Kaya with photo+consent) via public QR endpoint. social_connections.default record deleted at end of test to preserve simulated mode.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suite: /app/backend/tests/test_iteration504_social_media_module.py. Auth returns token under key 'token' (NOT 'access_token'). Real Gemini image gen (~10s single, ~30s 3-variant) uses EMERGENT_LLM_KEY. Photo contest dedupe by (property_id, source='photo_contest', contest_month=YYYY-MM). social_connections.default MUST stay empty for publish endpoint to return mode:'simulated' (test cleans up via MongoClient at end). Guest photo flow: POST /api/surveys/public/qr-{pid}/photo (multipart 'file') → returns photo_url → POST /api/surveys/public/qr-{pid} with photo_url + photo_consent:true. Frontend testid for winback is 'ai-robot-winback-stats' (with prefix), not 'winback-stats'.",
+  "rca of the issue": "N/A — all flows pass."
+}

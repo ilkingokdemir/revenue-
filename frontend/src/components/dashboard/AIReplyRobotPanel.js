@@ -67,6 +67,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [imageStyle, setImageStyle] = useState("sicak");
   const [packagingDraft, setPackagingDraft] = useState(null);
   const [publishDates, setPublishDates] = useState({});
+  const [publishTimes, setPublishTimes] = useState({});
   const [socialCalendar, setSocialCalendar] = useState([]);
   const [previewDraft, setPreviewDraft] = useState(null);
   const [surveyDrafting, setSurveyDrafting] = useState(false);
@@ -1280,9 +1281,31 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                 </div>
               )}
               {bestTime?.has_data && (
-                <p data-testid="best-time-hint" className="text-[11px] text-sky-300 bg-sky-950/40 border border-sky-800/40 rounded-lg p-2">
-                  ⏰ {bestTime.message}
-                </p>
+                <div data-testid="best-time-hint" className="flex items-center justify-between gap-2 text-[11px] text-sky-300 bg-sky-950/40 border border-sky-800/40 rounded-lg p-2">
+                  <span>⏰ {bestTime.message}</span>
+                  <button data-testid="apply-best-time-btn"
+                    onClick={() => {
+                      const daysTr = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
+                      const targetDow = daysTr.indexOf(bestTime.best_day);
+                      const now = new Date();
+                      const cur = (now.getDay() + 6) % 7;
+                      let diff = (targetDow - cur + 7) % 7;
+                      if (diff === 0) diff = 7;
+                      const target = new Date(now.getTime() + diff * 86400000);
+                      const dateStr = target.toISOString().slice(0, 10);
+                      const timeStr = `${String(bestTime.best_hour).padStart(2, "0")}:00`;
+                      const nd = {}; const nt = {};
+                      socialDrafts.forEach((d) => {
+                        if (!d.publish_date) { nd[d.id] = dateStr; nt[d.id] = timeStr; }
+                      });
+                      setPublishDates((p) => ({ ...p, ...nd }));
+                      setPublishTimes((p) => ({ ...p, ...nt }));
+                      toast.success(`Tarihsiz taslaklara ${bestTime.best_day} ${timeStr} uygulandı — "Pakete Gönder" ile kaydedin`);
+                    }}
+                    className="shrink-0 px-2 py-0.5 rounded text-[10px] bg-sky-600/80 hover:bg-sky-500 text-white">
+                    ⚡ Öneriyi Uygula
+                  </button>
+                </div>
               )}
               {socialDrafts.map((d) => (
                 <div key={d.id} data-testid={`social-draft-${d.id}`} className="p-3 rounded-lg bg-stone-950 border border-stone-800">
@@ -1461,12 +1484,17 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                           value={publishDates[d.id] || d.publish_date || ""}
                           onChange={(e) => setPublishDates((p) => ({ ...p, [d.id]: e.target.value }))}
                           className="px-2 py-1 rounded-lg text-[10px] bg-stone-950 border border-stone-700 text-stone-300 outline-none" />
+                        <input data-testid={`social-publish-time-${d.id}`} type="time"
+                          value={publishTimes[d.id] || d.publish_time || ""}
+                          onChange={(e) => setPublishTimes((p) => ({ ...p, [d.id]: e.target.value }))}
+                          className="px-2 py-1 rounded-lg text-[10px] bg-stone-950 border border-stone-700 text-stone-300 outline-none" />
                         <button data-testid={`social-draft-package-${d.id}`} disabled={packagingDraft === d.id}
                           onClick={async () => {
                             setPackagingDraft(d.id);
                             try {
                               const pd = publishDates[d.id] || d.publish_date || "";
-                              const { data } = await axios.post(`${API}/reputation/social-drafts/${d.id}/send-package`, { publish_date: pd });
+                              const pt = publishTimes[d.id] || d.publish_time || "";
+                              const { data } = await axios.post(`${API}/reputation/social-drafts/${d.id}/send-package`, { publish_date: pd, publish_time: pt });
                               toast.success(data.task_created
                                 ? "📦 Hazır paket pazarlama görevine iliştirildi"
                                 : data.date_updated ? "Yayın tarihi güncellendi 📅" : "Bu taslak için paket görevi zaten açık");
@@ -1561,8 +1589,8 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
               <p className="text-sm font-medium text-stone-200">📅 Yayın Planı ({socialCalendar.length})</p>
               {socialCalendar.map((c) => (
                 <div key={c.draft_id} data-testid={`calendar-item-${c.draft_id}`} className="flex items-center gap-3 p-2 rounded-lg bg-stone-950 border border-stone-800 text-xs">
-                  <span className={`shrink-0 w-24 font-mono ${c.publish_date ? "text-amber-300" : "text-stone-600"}`}>
-                    {c.publish_date || "tarihsiz"}
+                  <span className={`shrink-0 w-32 font-mono ${c.publish_date ? "text-amber-300" : "text-stone-600"}`}>
+                    {c.publish_date ? `${c.publish_date}${c.publish_time ? " " + c.publish_time : ""}` : "tarihsiz"}
                   </span>
                   {c.image_url && (
                     <img src={`${process.env.REACT_APP_BACKEND_URL}${c.image_url.split("?")[0]}`} alt=""
@@ -1581,7 +1609,20 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
             <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="perf-summary">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-stone-200">📊 Gönderi Performansı — hangi konular tutuyor?</p>
-                <button data-testid="weekly-report-btn" disabled={sendingReport}
+                <div className="flex items-center gap-2">
+                  <button data-testid="report-pdf-btn"
+                    onClick={async () => {
+                      try {
+                        toast.info("PDF hazırlanıyor…");
+                        const { data } = await axios.post(`${API}/reputation/social-report/pdf`);
+                        window.open(`${process.env.REACT_APP_BACKEND_URL}${data.pdf_url}`, "_blank");
+                        toast.success("Görselli PDF raporu hazır 📄");
+                      } catch { toast.error("PDF üretilemedi"); }
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[10px] bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200">
+                    📄 PDF İndir
+                  </button>
+                  <button data-testid="weekly-report-btn" disabled={sendingReport}
                   onClick={async () => {
                     setSendingReport(true);
                     try {
@@ -1593,6 +1634,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   className="px-2.5 py-1 rounded-lg text-[10px] bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200">
                   {sendingReport ? "Gönderiliyor…" : "🗞️ Haftalık Raporu Şimdi Gönder"}
                 </button>
+                </div>
               </div>
               {perfSummary.insight && (
                 <p data-testid="perf-insight" className="text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-800/40 rounded-lg p-2">💡 {perfSummary.insight}</p>

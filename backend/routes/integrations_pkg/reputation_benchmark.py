@@ -368,6 +368,7 @@ def create_reputation_router(db, require_roles):
                                         current_user: dict = Depends(require_roles("admin", "manager"))):
         """Metin + görseli hazır paket olarak pazarlama görevine iliştir."""
         publish_date = ((body or {}).get("publish_date") or "").strip()
+        publish_time = ((body or {}).get("publish_time") or "").strip()
         doc = await db.social_drafts.find_one({"id": draft_id}, {"_id": 0})
         if not doc:
             raise HTTPException(404, "Taslak bulunamadı")
@@ -378,23 +379,26 @@ def create_reputation_router(db, require_roles):
         if existing:
             if publish_date:
                 await db.staff_tasks.update_one(
-                    {"id": existing["id"]}, {"$set": {"publish_date": publish_date}})
+                    {"id": existing["id"]},
+                    {"$set": {"publish_date": publish_date, "publish_time": publish_time}})
                 await db.social_drafts.update_one(
                     {"id": draft_id},
-                    {"$set": {"publish_date": publish_date, "publish_alert_sent": False}})
+                    {"$set": {"publish_date": publish_date, "publish_time": publish_time,
+                              "publish_alert_sent": False}})
             return {"task_created": False, "task_id": existing["id"],
                     "date_updated": bool(publish_date)}
         desc = f"Yayına hazır sosyal medya paketi.\n\nGönderi metni:\n{doc.get('draft', '')}"
         if doc.get("image_url"):
             desc += f"\n\nGörsel: {doc['image_url']} (stil: {doc.get('image_style', 'sicak')})"
         if publish_date:
-            desc += f"\n\nPlanlanan yayın tarihi: {publish_date}"
+            desc += f"\n\nPlanlanan yayın: {publish_date}{' ' + publish_time if publish_time else ''}"
         task_id = str(uuid.uuid4())
         await db.staff_tasks.insert_one({
             "id": task_id, "property_id": doc["property_id"],
             "title": f"📦 Sosyal medya paketi: {doc.get('topic', '')}"[:120],
             "description": desc, "attachment_url": doc.get("image_url"),
             "publish_date": publish_date or None,
+            "publish_time": publish_time or None,
             "status": "open", "priority": "normal", "department": "marketing",
             "source": "social_package", "draft_id": draft_id,
             "created_by": current_user.get("email", ""),
@@ -402,7 +406,8 @@ def create_reputation_router(db, require_roles):
         await db.social_drafts.update_one(
             {"id": draft_id},
             {"$set": {"packaged_task_id": task_id,
-                      **({"publish_date": publish_date} if publish_date else {})}})
+                      **({"publish_date": publish_date, "publish_time": publish_time}
+                         if publish_date else {})}})
         return {"task_created": True, "task_id": task_id}
 
     @router.get("/reputation/social-calendar/{property_id}")
@@ -420,6 +425,7 @@ def create_reputation_router(db, require_roles):
                           "draft": (d.get("draft") or "")[:120],
                           "image_url": d.get("image_url"),
                           "publish_date": d.get("publish_date"),
+                          "publish_time": d.get("publish_time"),
                           "task_status": (task or {}).get("status", "open")})
         items.sort(key=lambda x: (x["publish_date"] is None, x["publish_date"] or "", ))
         return {"items": items}
@@ -699,6 +705,12 @@ def create_reputation_router(db, require_roles):
     async def social_report_run(_: dict = Depends(require_roles("admin", "manager"))):
         from workers import run_social_weekly_report
         return await run_social_weekly_report(db, force=True)
+
+    @router.post("/reputation/social-report/pdf")
+    async def social_report_pdf(_: dict = Depends(require_roles("admin", "manager"))):
+        from workers import generate_social_report_pdf
+        pdf_url = await generate_social_report_pdf(db)
+        return {"pdf_url": pdf_url}
 
     @router.put("/reputation/social-drafts/{draft_id}/approve")
     async def social_draft_approve(draft_id: str,

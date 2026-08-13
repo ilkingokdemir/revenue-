@@ -9,6 +9,122 @@ logger = logging.getLogger(__name__)
 
 _TASK_DONE = {"done", "completed", "closed", "resolved"}
 
+_TR_MAP = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+
+
+def _tr(s: str) -> str:
+    return (s or "").translate(_TR_MAP)
+
+
+async def generate_social_report_pdf(db) -> str:
+    """Görselli haftalık sosyal medya PDF raporu üret, URL döndür."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas as pdfcanvas
+    from reportlab.lib.units import mm
+    from reportlab.lib.utils import ImageReader
+    now_dt = datetime.now(timezone.utc)
+    week_ago = (now_dt - timedelta(days=7)).isoformat()
+    week_ahead = (now_dt + timedelta(days=7)).date().isoformat()
+    published = await db.social_drafts.count_documents(
+        {"published": True, "published_at": {"$gte": week_ago}})
+    pending = await db.social_drafts.count_documents(
+        {"auto": True, "approved": {"$ne": True}})
+    upcoming = await db.social_drafts.find(
+        {"publish_date": {"$gte": now_dt.date().isoformat(), "$lte": week_ahead}},
+        {"_id": 0, "topic": 1, "publish_date": 1, "publish_time": 1, "property_id": 1}
+    ).sort("publish_date", 1).to_list(10)
+    perf = await db.social_drafts.find(
+        {"performance.likes": {"$gt": 0}},
+        {"_id": 0, "topic": 1, "performance": 1}).to_list(200)
+    topics = {}
+    for d in perf:
+        t = d.get("topic") or "diger"
+        a = topics.setdefault(t, [0, 0, 0])
+        a[0] += d["performance"].get("likes", 0)
+        a[1] += d["performance"].get("reach", 0)
+        a[2] += 1
+    rows = sorted(
+        [(t, round(a[0] / a[2], 1), round(a[1] / a[2], 1), a[2]) for t, a in topics.items()],
+        key=lambda x: -x[1])
+    imgs = await db.social_drafts.find(
+        {"image_url": {"$exists": True}},
+        {"_id": 0, "image_url": 1, "topic": 1}).sort("created_at", -1).to_list(4)
+    os.makedirs("/app/backend/uploads/reports", exist_ok=True)
+    fname = f"sosyal-rapor-{now_dt.date().isoformat()}.pdf"
+    path = f"/app/backend/uploads/reports/{fname}"
+    c = pdfcanvas.Canvas(path, pagesize=A4)
+    w, h = A4
+    c.setFillColorRGB(0.75, 0.15, 0.55)
+    c.rect(0, h - 34 * mm, w, 34 * mm, fill=1, stroke=0)
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", 19)
+    c.drawString(18 * mm, h - 17 * mm, "Haftalik Sosyal Medya Raporu")
+    c.setFont("Helvetica", 11)
+    c.drawString(18 * mm, h - 25 * mm, f"MyHotelBox  ·  {now_dt.date().isoformat()}")
+    y = h - 46 * mm
+    c.setFillColorRGB(0.1, 0.1, 0.1)
+    for label, val in [("Son 7 gunde yayinlanan paket", str(published)),
+                       ("Onay bekleyen otomatik taslak", str(pending)),
+                       ("Planli gonderi (7 gun)", str(len(upcoming)))]:
+        c.setFont("Helvetica", 11)
+        c.drawString(18 * mm, y, label)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(95 * mm, y, val)
+        y -= 8 * mm
+    y -= 4 * mm
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(18 * mm, y, "Konu performansi (ort. begeni / erisim)")
+    y -= 8 * mm
+    for t, likes, reach, n in rows[:6] or []:
+        c.setFont("Helvetica", 10)
+        c.drawString(20 * mm, y, f"- {_tr(t)[:40]}")
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(95 * mm, y, f"{likes} begeni · {reach} erisim · {n} gonderi")
+        y -= 6.5 * mm
+    if not rows:
+        c.setFont("Helvetica", 10)
+        c.drawString(20 * mm, y, "- Henuz performans verisi girilmedi")
+        y -= 6.5 * mm
+    y -= 4 * mm
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(18 * mm, y, "Onumuzdeki 7 gunun yayin plani")
+    y -= 8 * mm
+    for u in upcoming or []:
+        tm = f" {u['publish_time']}" if u.get("publish_time") else ""
+        c.setFont("Helvetica", 10)
+        c.drawString(20 * mm, y, f"- {u['publish_date']}{tm}: {_tr(u.get('topic') or '')[:40]} ({u.get('property_id')})")
+        y -= 6.5 * mm
+    if not upcoming:
+        c.setFont("Helvetica", 10)
+        c.drawString(20 * mm, y, "- Planli gonderi yok")
+        y -= 6.5 * mm
+    y -= 6 * mm
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(18 * mm, y, "Son gorseller")
+    y -= 46 * mm
+    x = 18 * mm
+    for im in imgs:
+        fpath = "/app/backend/uploads/social_images/" + im["image_url"].split("?")[0].split("/")[-1]
+        if not os.path.exists(fpath):
+            continue
+        try:
+            c.drawImage(ImageReader(fpath), x, y, width=40 * mm, height=40 * mm,
+                        preserveAspectRatio=True, anchor='sw')
+            c.setFont("Helvetica", 7)
+            c.setFillColorRGB(0.35, 0.35, 0.35)
+            c.drawString(x, y - 4 * mm, _tr(im.get("topic") or "")[:24])
+            c.setFillColorRGB(0.1, 0.1, 0.1)
+            x += 45 * mm
+        except Exception as e:
+            logger.warning(f"pdf image skip: {e}")
+    c.setFont("Helvetica", 8)
+    c.setFillColorRGB(0.5, 0.5, 0.5)
+    c.drawString(18 * mm, 12 * mm,
+                 f"MyHotelBox Sosyal Medya Robotu · olusturma: {now_dt.isoformat()[:16]}")
+    c.showPage()
+    c.save()
+    return f"/api/uploads/reports/{fname}"
+
 
 async def run_winning_topic_check(db) -> dict:
     """Kazanan konudan ayda 2 otomatik taslak üret (10 gün arayla, onay bekler)."""
@@ -94,21 +210,29 @@ async def run_social_weekly_report(db, force: bool = False) -> dict:
         top_line = f"En iyi konu: {t} (ort. {round(a[0] / a[1], 1)} beğeni)\n"
     plan = "\n".join(f"- {u['publish_date']}: {u['topic']} ({u['property_id']})"
                      for u in upcoming) or "- planlı gönderi yok"
+    try:
+        pdf_url = await generate_social_report_pdf(db)
+    except Exception as e:
+        logger.warning(f"social report pdf failed: {e}")
+        pdf_url = None
     body = (f"HAFTALIK SOSYAL MEDYA RAPORU ({now_dt.date().isoformat()})\n\n"
             f"Son 7 günde yayınlanan paket: {published}\n"
             f"Onay bekleyen otomatik taslak: {pending}\n{top_line}\n"
-            f"Önümüzdeki 7 günün yayın planı:\n{plan}")
+            f"Önümüzdeki 7 günün yayın planı:\n{plan}"
+            + (f"\n\nGörselli PDF raporu: {pdf_url}" if pdf_url else ""))
     await db.outbound_email_queue.insert_one({
         "id": str(uuid.uuid4()), "property_id": "all",
         "to": os.environ.get("NOTIFICATION_EMAIL", "yonetici@otel.com"),
         "subject": f"🗞️ Haftalık Sosyal Medya Raporu — {now_dt.date().isoformat()}",
-        "body": body, "type": "social_weekly_report", "status": "queued",
+        "body": body, "attachment_url": pdf_url,
+        "type": "social_weekly_report", "status": "queued",
         "delivery_status": "mocked_email_queued", "created_at": now_dt.isoformat()})
     await db.social_weekly_reports.insert_one({
         "id": str(uuid.uuid4()), "created_at": now_dt.isoformat(),
-        "published": published, "pending": pending, "upcoming": len(upcoming)})
+        "published": published, "pending": pending, "upcoming": len(upcoming),
+        "pdf_url": pdf_url})
     return {"sent": True, "published": published, "pending": pending,
-            "upcoming": len(upcoming)}
+            "upcoming": len(upcoming), "pdf_url": pdf_url}
 
 
 async def social_report_loop(db, interval_seconds: int = 21600):
@@ -236,7 +360,9 @@ async def run_publish_day_check(db) -> dict:
             "id": str(uuid.uuid4()), "type": "info",
             "title": f"📣 Bugün yayınla — {d.get('topic', '')}",
             "message": (f"{prop.get('name', d['property_id'])} için '{d.get('topic')}' sosyal medya "
-                        f"paketinin yayın günü bugün ({today}). Paket pazarlama görevinde hazır."),
+                        f"paketinin yayın günü bugün ({today}"
+                        f"{', önerilen saat ' + d['publish_time'] if d.get('publish_time') else ''})."
+                        f" Paket pazarlama görevinde hazır."),
             "category": "publish_day", "property_id": d["property_id"],
             "target_user": "", "target_role": "", "link_to": "ai-reply-robot",
             "priority": "high", "read": False,

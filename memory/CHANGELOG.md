@@ -3370,3 +3370,17 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   NOTIFICATION_EMAIL'e MOCKED e-posta. Manuel: POST /reputation/social-report/run (force).
   UI: performans kartında "🗞️ Haftalık Raporu Şimdi Gönder". TEST: e-posta kuyruğu içeriği OK.
 - BEKLEYEN: Expo token (12. kez) + Google Places + Meta anahtarları.
+
+## Iter 532 (2026-08-13) — Yayın Saati + Görselli PDF Rapor TAMAMLANDI
+- 1) YAYIN SAATİ: send-package {publish_time}; task+draft'a yazılır, calendar döner,
+  publish-day bildirimi "önerilen saat HH:MM" içerir. UI: taslakta time input; takvimde
+  "tarih saat" gösterimi; best-time ipucunda "⚡ Öneriyi Uygula" — tarihsiz taslaklara
+  sonraki en iyi günü + saati otomatik doldurur. TEST: 2026-08-19 23:00 uçtan uca.
+- 2) GÖRSELLİ PDF RAPOR: workers.generate_social_report_pdf (reportlab, ASCII-TR konvansiyon,
+  istatistik + konu performansı + yayın planı + son 4 görsel grid) →
+  /api/uploads/reports/sosyal-rapor-{tarih}.pdf. Haftalık rapor e-postasına pdf_url eklenir
+  (attachment_url). POST /reputation/social-report/pdf + UI "📄 PDF İndir" butonu.
+  TEST: 1.8MB PDF üretildi, içerik + 2 görsel extract ile doğrulandı.
+- DERS (3. tekrar): reputation_benchmark.py'de paralel batch yine kuyruk bozdu (orphan blok
+  721-728 + kaybolan endpoint). BU DOSYAYA DA edit'ler artık SIRALI yapılmalı.
+- BEKLEYEN: Expo token (13. kez) + Google Places + Meta anahtarları.

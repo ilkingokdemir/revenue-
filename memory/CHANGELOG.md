@@ -3486,3 +3486,20 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   aday varsa) — "🗳️ OYLAMA AÇILDI!" taslağı galeri linkiyle, onay akışına düşer.
   Manuel: POST /reputation/vote-announce/run. TEST: startup'ta üretildi, dedupe 0.
 - BEKLEYEN ANAHTARLAR: Expo token (20. kez) + RESEND_API_KEY + Google Places + Meta.
+
+## Iter 507 (2026-06) — Aylık Regresyon Kapanışı + Güvenlik Rötuşları + App.js Refaktörü
+- iteration_506 raporu okundu: %100 geçti (backend 25/25, frontend tüm akışlar) — düzeltme gerekmedi.
+- GÜVENLİK: gdpr.py erasure dosya silme → basename + allowlist regex ([A-Za-z0-9][A-Za-z0-9._-]*)
+  + realpath containment (path traversal engellendi, test edildi: ../../server.py dokunulmadı).
+- GÜVENLİK: public_photo_vote dedupe hash artık sha256(ip|client_token|cid) — paylaşımlı IP (NAT)
+  arkasındaki farklı cihazlar oy verebiliyor; PhotoContestPage.js localStorage photo_vote_token gönderiyor.
+  Token'sız eski davranış (ip||cid) aynen 429 veriyor. Günlük IP başına 20 oy limiti duruyor.
+- REFAKTÖR: App.js 2807 → 1344 satır. ~120 activeView render bloğu yeni DashboardViews.js'e (1692 satır)
+  taşındı. Props sözleşmesi: activeView, activePropertyId, setActivePropertyId, properties, branding,
+  setBranding, user, permissions, navigate, setActiveView, commandItems, fetchDeptShortcuts.
+  App.js'te kalanlar: dashboard home (TodayHub/MobileHome), reviews, analytics/templates/approvals/integrations.
+  lazyPanels import listesi buduldu (262 kullanılmayan isim App.js'ten çıktı).
+- TEST: iteration_507 backend 2/2 (vote token + GDPR traversal); 14 taşınan görünüm Playwright ile
+  tek tek gezildi (calendar, revenue, ai-reply-robot, compset, channel-health, ops-v2, team-chat,
+  housekeeping, portfolio-board, settings-hub, reports, promo-codes, gdpr, automation-hub) — 0 pageerror.
+- BEKLEYEN: Gerçek anahtarlar (Expo token, Resend, Meta/Instagram, Google Places) hâlâ kullanıcıdan bekleniyor.

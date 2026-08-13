@@ -7,6 +7,7 @@ SIMULATED değerler. Günlük snapshot → trend. GuestRevu paritesi (5 rakip).
 from datetime import datetime, timedelta, timezone
 import asyncio
 import hashlib
+import re
 import logging
 import os
 import uuid
@@ -799,7 +800,8 @@ def create_reputation_router(db, require_roles):
             raise HTTPException(400, "candidate_id gerekli")
         ip = (request.headers.get("x-forwarded-for") or
               (request.client.host if request.client else "")).split(",")[0].strip()
-        ip_hash = hashlib.sha256(f"{ip}|{cid}".encode()).hexdigest()
+        client_token = re.sub(r"[^A-Za-z0-9-]", "", (body.get("client_token") or ""))[:64]
+        ip_hash = hashlib.sha256(f"{ip}|{client_token}|{cid}".encode()).hexdigest()
         existing = await db.photo_votes.find_one({"vote_hash": ip_hash}, {"_id": 0, "id": 1})
         if existing:
             raise HTTPException(429, "Bu adaya zaten oy verdiniz")

@@ -13,7 +13,9 @@ export default function PhotoContestPage() {
     if (localStorage.getItem(`voted_${cid}`)) return;
     setVoting(cid);
     try {
-      const { data: r } = await axios.post(`${API}/reputation/public/photo-contest/${propertyId}/vote`, { candidate_id: cid });
+      let ct = localStorage.getItem("photo_vote_token");
+      if (!ct) { ct = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`); localStorage.setItem("photo_vote_token", ct); }
+      const { data: r } = await axios.post(`${API}/reputation/public/photo-contest/${propertyId}/vote`, { candidate_id: cid, client_token: ct });
       localStorage.setItem(`voted_${cid}`, "1");
       setData((prev) => ({
         ...prev,

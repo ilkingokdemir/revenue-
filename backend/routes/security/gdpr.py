@@ -198,7 +198,13 @@ def create_gdpr_router(db):
         async for r in db.survey_responses.find(
                 {"guest_email": email, "photo_url": {"$nin": ["", None]}},
                 {"_id": 0, "photo_url": 1}):
-            fpath = "/app/backend/uploads/survey_photos/" + r["photo_url"].split("/")[-1]
+            fname = os.path.basename(r["photo_url"])
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", fname):
+                continue
+            base_dir = "/app/backend/uploads/survey_photos"
+            fpath = os.path.realpath(os.path.join(base_dir, fname))
+            if not fpath.startswith(base_dir + os.sep):
+                continue
             try:
                 os.remove(fpath)
                 photos_deleted += 1

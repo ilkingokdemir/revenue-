@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 506 — MONTHLY HEALTH SCAN. Backend: 25/25 pytest tests PASSED in ~7.6s. Covered: (a) PMS core: admin login, GET /api/properties (list), portfolio-report (rows with avg_rating/rating_trend/review_count), winback-stats/default (total/redeemed/expired/redeem_rate), winback-offers/default, public POST /api/booking-widget/book returns booking_ref. (b) Social module quick sweep (no image gen triggered): social-drafts/social-calendar/social-performance/best-time/social-drafts-pending/guest-photos all 200; POST /api/reputation/social-report/pdf returns pdf_url and PDF downloads (%PDF header); photo-contest-poster and room-qr-cards produce valid PDFs. (c) Public endpoints: /api/reputation/public/photo-contest/default (auth-free) returns {hotel, items, candidates}; vote flow — first vote 200, second vote from SAME X-Forwarded-For IP + candidate → 429 'Bu adaya zaten oy verdiniz' (IP protection working); invalid candidate → 404. POST /api/surveys/public/qr-default {nps_score:8} → 200 with property_id='default'. (d) GDPR/erasure: inserted synthetic survey_responses + winback_offers docs for monthlytest@test.com plus /app/backend/uploads/survey_photos/mt.jpg → POST /api/gdpr/erasure returned affected.survey_responses=1, affected.winback_offers=1, affected.survey_photo_files=1; disk file deleted; GET /api/gdpr/log contains erasure entry for that email. (e) All 7 automation triggers returned 200 (trend-alerts, publish-alerts, winning-topic, photo-contest, vote-announce, social-report, winback-reminders — dedupe means 0 results is normal). Frontend: /login → dashboard loads; AI Yanıt Robotu opens; Benchmark tab renders all 5 testids (social-draft-archive, social-calendar, perf-summary, best-time-hint, guest-photos); Rapor tab shows ai-robot-winback-stats; Portföy tab renders portfolio table with 'Ø Puan' and '30g Trend' columns and 13+ rows. Public /kareler/default renders photo-contest-page + gallery-item-0 (Güncel Kazanan: Ali, 2026-08) + vote-section (Ali 4 oy candidate). /survey/qr-default → NPS 8 + Submit Feedback → Thank You screen with survey-gallery-link (See Photo of the Month winners) visible. No blocking issues; mocked services (Resend, Instagram, Google Places) behave as expected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration506_monthly_health.py",
+    "/app/test_reports/pytest/iteration506.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GDPR erasure builds file path from URL basename ('/api/uploads/survey_photos/<file>' → uploads/survey_photos/<file>). Works today but a malicious/malformed photo_url could resolve to unexpected paths — consider validating against a stored uuid whitelist or using os.path.basename with an allowlist regex.",
+    "public_photo_vote uses (ip, candidate_id) hash for dedupe but relies on x-forwarded-for from the ingress; behind a shared proxy pool (mobile carriers) multiple guests may share IP and be blocked. For MVP this is acceptable; consider fingerprinting or cookie hint as secondary dedupe when abuse is not a concern.",
+    "reputation.social_drafts sort uses 'contest_month' desc — older draft rows without contest_month sort as null/last; documented in prior iteration, still fine."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration506_monthly_health.py (new)"
+  ],
+  "success_rate": {"backend": "100% (25/25)", "frontend": "100% of tested flows"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Vote test: seeded a TEST_CAND_<uuid> survey_responses candidate only if no existing candidate present (deleted post-test). GDPR test: inserted TEST_SR_<uuid> survey_responses + TEST_WB_<uuid> winback_offers for monthlytest@test.com + a small JPEG at /app/backend/uploads/survey_photos/mt.jpg; erasure endpoint deletes the file and anonymises rows, then the test cleans up remaining docs. Booking widget test creates a real bookings row (guest_name='TEST_MonthlyScan') which per request note does not need to be deleted.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=<preview> MONGO_URL=mongodb://localhost:27017 DB_NAME=test_database pytest /app/backend/tests/test_iteration506_monthly_health.py -v. The vote IP-protection test sets a unique X-Forwarded-For per run (203.0.113.<time%250+1>) so re-runs stay green. Login endpoint returns token under key 'token'. Public survey submit path is /api/surveys/public/qr-default (not /surveys/public). Frontend admin routes must be entered via /login (root '/' is the marketing page). Portföy tab columns render with 'Ø Puan' and '30g Trend' headers. Prior iteration_505 already covered image-generation flows deeply — no need to retest Gemini variants/refine/send-package here.",
+  "rca of the issue": "N/A — full green pass on monthly health scan."
+}

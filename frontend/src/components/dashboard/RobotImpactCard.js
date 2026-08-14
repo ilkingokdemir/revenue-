@@ -54,12 +54,38 @@ export default function RobotImpactCard({ propertyId, onNavigate }) {
         🤖 {d.headline}
       </div>
 
+      {(d.daily_series || []).length >= 2 && <Sparkline series={d.daily_series} />}
+
       {onNavigate && (
         <button onClick={() => onNavigate("revenue-brain")} data-testid="robot-impact-goto"
           className="mt-3 text-[11px] font-bold text-violet-300 hover:text-violet-200 inline-flex items-center gap-1">
           Revenue Robotu'na git <ArrowRight size={12} weight="bold" />
         </button>
       )}
+    </div>
+  );
+}
+
+function Sparkline({ series }) {
+  const W = 560, H = 44, P = 4;
+  const vals = series.map((p) => p.cumulative);
+  const min = Math.min(0, ...vals), max = Math.max(...vals, 1);
+  const x = (i) => P + (i / (series.length - 1)) * (W - 2 * P);
+  const y = (v) => H - P - ((v - min) / (max - min || 1)) * (H - 2 * P);
+  const pts = series.map((p, i) => `${x(i)},${y(p.cumulative)}`).join(" ");
+  const lastUp = vals[vals.length - 1] >= 0;
+  return (
+    <div className="mt-3" data-testid="robot-impact-sparkline">
+      <div className="flex items-center justify-between text-[9px] text-stone-500 mb-1">
+        <span>Aylık katkı birikimi</span>
+        <span>{series[0].date.slice(5)} → {series[series.length - 1].date.slice(5)}</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-11" preserveAspectRatio="none">
+        <polygon points={`${x(0)},${y(0)} ${pts} ${x(series.length - 1)},${y(0)}`}
+          fill={lastUp ? "rgba(52,211,153,0.12)" : "rgba(251,113,133,0.12)"} />
+        <polyline points={pts} fill="none" stroke={lastUp ? "#34d399" : "#fb7185"} strokeWidth="2" strokeLinejoin="round" />
+        <circle cx={x(series.length - 1)} cy={y(vals[vals.length - 1])} r="3" fill={lastUp ? "#34d399" : "#fb7185"} />
+      </svg>
     </div>
   );
 }

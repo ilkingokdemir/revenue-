@@ -581,6 +581,7 @@ async def build_impact_summary(db, pid: str) -> dict:
         {"property_id": pid, "measured_at": {"$gte": month_start}}, {"_id": 0}).to_list(500)
     pricing_impact, worked, hurt = 0.0, 0, 0
     rate_cache = {}
+    daily = {}
     for o in outcomes:
         ds = o.get("stay_date")
         if ds not in rate_cache:
@@ -589,7 +590,11 @@ async def build_impact_summary(db, pid: str) -> dict:
         base = rate_cache[ds]
         occ_gain_rooms = ((o.get("final_occ") or 0) - (o.get("baseline_occ") or 0)) / 100.0 * total_rooms
         rate_effect = base * ((o.get("delta_pct") or 0) / 100.0) * ((o.get("final_occ") or 0) / 100.0 * total_rooms)
-        pricing_impact += occ_gain_rooms * base + rate_effect
+        day_impact = occ_gain_rooms * base + rate_effect
+        pricing_impact += day_impact
+        mday = (o.get("measured_at") or "")[:10]
+        if mday:
+            daily[mday] = daily.get(mday, 0.0) + day_impact
         if o.get("verdict") == "worked":
             worked += 1
         elif o.get("verdict") == "hurt":
@@ -607,6 +612,14 @@ async def build_impact_summary(db, pid: str) -> dict:
         avg_rate, _src = await resolve_rate(db, pid, now.strftime("%Y-%m-%d"))
         avg_rate = avg_rate or 0.0
     campaign_impact = round(max(rooms_gained, 0) * avg_rate, 2)
+    for c in camp_month:
+        g = float(c.get("pickup_gain") or 0)
+        if g > 0 and c.get("date"):
+            daily[c["date"][:10]] = daily.get(c["date"][:10], 0.0) + g * avg_rate
+    series, cum = [], 0.0
+    for day in sorted(daily.keys()):
+        cum += daily[day]
+        series.append({"date": day, "delta": round(daily[day], 2), "cumulative": round(cum, 2)})
     total = round(pricing_impact + campaign_impact, 2)
     goal = await build_goal_progress(db, pid)
     mtd = goal.get("mtd_revenue") or 0
@@ -632,6 +645,7 @@ async def build_impact_summary(db, pid: str) -> dict:
             "est_campaign_impact": campaign_impact,
             "est_total_contribution": total,
             "mtd_revenue": mtd,
+            "daily_series": series,
             "contribution_pct_of_mtd": round(total / mtd * 100, 1) if mtd else None,
             "headline": headline,
             "note": "Tahmini katkı = doluluk farkı × baz fiyat + fiyat değişimi etkisi + kampanya pickup geliri."}

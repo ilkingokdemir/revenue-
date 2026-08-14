@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Scale, Loader2, CheckCircle2, AlertTriangle, XCircle, Users, FileDown } from "lucide-react";
+import { Scale, Loader2, CheckCircle2, AlertTriangle, XCircle, Users, FileDown, CalendarSearch } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -23,6 +23,22 @@ export function GroupDisplacementPanel({ activePropertyId }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [alt, setAlt] = useState(null);
+  const [altLoading, setAltLoading] = useState(false);
+
+  const findAlternatives = async () => {
+    setAltLoading(true);
+    setAlt(null);
+    try {
+      const { data } = await axios.post(`${API}/group-displacement/alternative-dates`, {
+        property_id: pid, check_in: form.check_in, check_out: form.check_out,
+        rooms_requested: Number(form.rooms_requested), offered_rate: Number(form.offered_rate),
+        group_name: form.group_name,
+      });
+      setAlt(data);
+    } catch (e) { toast.error(e?.response?.data?.detail || "Alternatif tarih araması başarısız"); }
+    finally { setAltLoading(false); }
+  };
 
   const downloadPdf = async () => {
     if (!result?.id) return;
@@ -106,11 +122,67 @@ export function GroupDisplacementPanel({ activePropertyId }) {
             data-testid="gd-rate" className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
         </div>
         <button onClick={analyze} disabled={loading} data-testid="gd-analyze-btn"
-          className="col-span-2 md:col-span-6 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-br from-violet-600 to-purple-700 hover:from-violet-500 hover:to-purple-600 text-white text-sm font-bold disabled:opacity-50 shadow">
+          className="col-span-2 md:col-span-4 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-br from-violet-600 to-purple-700 hover:from-violet-500 hover:to-purple-600 text-white text-sm font-bold disabled:opacity-50 shadow">
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Scale className="w-4 h-4" />}
           Analiz Et
         </button>
+        <button onClick={findAlternatives} disabled={altLoading} data-testid="gd-alt-btn"
+          className="col-span-2 md:col-span-2 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-stone-900 hover:bg-stone-700 text-white text-sm font-bold disabled:opacity-50 shadow">
+          {altLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarSearch className="w-4 h-4" />}
+          Alternatif Tarih Öner
+        </button>
       </div>
+
+      {/* Alternatif tarih önerileri */}
+      {alt && (
+        <div className="bg-white border border-stone-200 rounded-2xl p-5" data-testid="gd-alt-result">
+          <h2 className="text-sm font-black text-stone-900 flex items-center gap-2 mb-1">
+            <CalendarSearch className="w-4 h-4 text-stone-400" /> Alternatif Tarih Önerileri
+            <span className="text-[10px] text-stone-400 font-normal">— ±30 günde {alt.scanned_windows} pencere tarandı</span>
+          </h2>
+          <p className="text-xs text-violet-800 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2 mb-3" data-testid="gd-alt-summary">
+            💡 {alt.summary}
+          </p>
+          <table className="w-full text-xs" data-testid="gd-alt-table">
+            <thead className="text-stone-400 uppercase text-[10px] border-b border-stone-100">
+              <tr>
+                <th className="py-1.5 text-left">Pencere</th>
+                <th className="text-right">Kaydırma</th>
+                <th className="text-right">Yerinden edilen</th>
+                <th className="text-right">Net katkı (kom. sonrası)</th>
+                <th className="text-right">Fark</th>
+                <th className="text-right">Karar</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-stone-50 bg-stone-50/60">
+                <td className="py-2 font-semibold text-stone-700">{alt.requested.check_in} → {alt.requested.check_out} <span className="text-stone-400">(talep edilen)</span></td>
+                <td className="text-right text-stone-400">—</td>
+                <td className="text-right">{alt.requested.displaced_rooms}</td>
+                <td className="text-right font-bold">{Number(alt.requested.net_value_after_commission).toLocaleString()}</td>
+                <td className="text-right text-stone-400">—</td>
+                <td className="text-right">{(REC_STYLES[alt.requested.recommendation] || {}).label || "-"}</td>
+              </tr>
+              {alt.alternatives.map((a, idx) => (
+                <tr key={a.check_in} className="border-b border-stone-50" data-testid={`gd-alt-row-${idx}`}>
+                  <td className="py-2 font-semibold text-stone-800">{a.check_in} → {a.check_out}</td>
+                  <td className="text-right text-stone-500">{a.shift_days > 0 ? `+${a.shift_days}` : a.shift_days} gün</td>
+                  <td className={`text-right font-bold ${a.displaced_rooms > 0 ? "text-rose-600" : "text-emerald-600"}`}>{a.displaced_rooms}</td>
+                  <td className="text-right font-bold">{Number(a.net_value_after_commission).toLocaleString()}</td>
+                  <td className={`text-right font-black ${a.gain_vs_requested > 0 ? "text-emerald-700" : a.gain_vs_requested < 0 ? "text-rose-700" : "text-stone-400"}`}>
+                    {a.gain_vs_requested > 0 ? "+" : ""}{Number(a.gain_vs_requested).toLocaleString()}
+                  </td>
+                  <td className="text-right">
+                    <span className={`px-2 py-0.5 rounded-full border text-[9px] font-bold ${(REC_STYLES[a.recommendation] || {}).bg} ${(REC_STYLES[a.recommendation] || {}).text}`}>
+                      {(REC_STYLES[a.recommendation] || {}).label || "-"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Result */}
       {result && rec && (

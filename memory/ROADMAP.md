@@ -112,3 +112,20 @@ Kalan FLYR boşlukları (P1 adayı): ~~gün-içi re-price~~ (iter 450 DONE), ~~A
 - [x] c) P1: A/B Nedensel Etki (TAMAM iter 517) — holdout deney altyapısı (uygulanmış vs tutulmuş kararların gerçek uplift'i)
 - [x] d) P1: Oda tipi bazlı bağımsız forecast (TAMAM iter 517)
 - [x] e) P2: Group Sales kalanları (TAMAM iter 518)
+
+## MVP Eklentisi 3 — RMS Rakip Denetimi (Iter 532, 2026-08-14, kullanıcı talebi: "eksikleri tespit et, MVP'ye kaydet, sırayla tamamla")
+DENETİM SONUCU: Kullanıcının paylaştığı 2026 RMS karşılaştırmasında "❌ YOK" denilen 4 özellik
+ZATEN MEVCUT ve derin (bir sonraki agent tekrar önermesin):
+- [x] Kâr-Öncelikli Fiyatlama (BEONx paritesi) → profit_pricing.py (CPOR + komisyon + ödeme ücreti + iade riski + gece yarısı Kâr Otopilotu)
+- [x] Shoulder-Night Grup Displacement (FLYR/IDeaS paritesi) → group_displacement.py (shoulder_loss + breakeven_rate_net)
+- [x] Attribute-Based Selling → abs_selling.py (widget + 90g gelir istatistiği)
+- [x] RevPAM Toplantı Salonu Dinamik Fiyat → revpam.py (RevPASH + 14g öneri + apply)
+GERÇEK EKSİKLER (bu iterasyonda tamamlandı):
+- [x] a) Grup Alternatif Tarih Önerisi (FLYR "⚠️ Kısmen" kapandı) — POST /api/group-displacement/alternative-dates
+      (±30 gün, 56 pencere taraması, komisyon-sonrası net katkı sıralaması, gain_vs_requested, Türkçe özet).
+      UI: GroupDisplacementPanel "Alternatif Tarih Öner" butonu + karşılaştırma tablosu (gd-alt-*)
+- [x] b) Tur Genişletme — RevenueRobotTour generic steps prop'u aldı; PANEL_TOURS ile Rate Calendar (4 adım)
+      ve AI Dynamic Pricing (4 adım) turları; otomatik ilk açılış + breadcrumb'da manuel buton (rev-tour-btn-{tab})
+- [x] c) Katkı Grafiği — impact-summary'ye daily_series (günlük delta + kümülatif) eklendi;
+      RobotImpactCard'da SVG sparkline (robot-impact-sparkline)
+KALAN (P2/P3): Oda tipi/rate-code bağımsız forecast zaten var (iter 517); söz konusu denetimde yeni eksik çıkmadı.

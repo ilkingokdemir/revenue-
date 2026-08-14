@@ -44,6 +44,28 @@ import {
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const RevenueBrainPanel = lazy(() => import("./RevenueBrainPanel"));
+const RevenueRobotTour = lazy(() => import("./RevenueRobotTour"));
+
+const PANEL_TOURS = {
+  calendar: {
+    key: "rate_cal_tour_done",
+    steps: [
+      { title: "Rate Calendar'a hoş geldiniz", body: "Aylık fiyat takvimi: her günün fiyatını doğrudan hücreye tıklayarak düzenlersiniz. Kısa bir turla özellikleri tanıyalım." },
+      { target: "rev-cal-next", title: "Ay gezinme", body: "Ok butonlarıyla aylar arasında gezinin; gelecek 18 aya kadar fiyat planlayabilirsiniz." },
+      { target: "rev-cal-bulk", title: "Toplu Düzenleme", body: "Bulk Edit ile tarih aralığı seçip tek seferde onlarca günün fiyatını güncelleyin — sezon açılışlarında dakikalar kazandırır." },
+      { target: "rev-rate-calendar-tab", title: "Takvim ızgarası", body: "Hücrelerdeki renkler doluluk seviyesini gösterir; robotun önerdiği fiyat değişiklikleri de bu takvime işlenir. İyi gelirler! 🚀" },
+    ],
+  },
+  "dynamic-pricing": {
+    key: "dyn_pricing_tour_done",
+    steps: [
+      { title: "AI Dynamic Pricing'e hoş geldiniz", body: "Motor; talep, pace, rakip fiyatları ve robotun öğrenilmiş derslerini birleştirerek her gün için fiyat önerir." },
+      { target: "dp-nights-30", title: "Fiyatlama ufku", body: "7 günden 1 yıla kadar ufuk seçin — motor seçtiğiniz aralıktaki her gece için öneri üretir." },
+      { target: "dp-calculate", title: "Hesapla", body: "Tek tıkla tüm aralığı analiz eder: doluluk, pickup hızı, rakip konumu ve öğrenilmiş çarpanlar hesaba katılır." },
+      { target: "dp-apply", title: "Tek tıkla uygula", body: "Önerileri beğendiyseniz Apply ile hepsini fiyat takvimine yazın — guardrail (±15%) otomatik korur. İyi gelirler! 🚀" },
+    ],
+  },
+};
 
 const NAV_SECTIONS = [
   {
@@ -127,6 +149,12 @@ export const RevenuePanel = ({ properties, activePropertyId, initialTab }) => {
     typeof window !== "undefined" && window.innerWidth < 1024
   );
   const pid = activePropertyId || "all";
+  const [panelTour, setPanelTour] = useState(null);
+
+  useEffect(() => {
+    const cfg = PANEL_TOURS[tab];
+    if (cfg && !localStorage.getItem(cfg.key)) setPanelTour(tab);
+  }, [tab]);
 
   useEffect(() => {
     axios.get(`${API}/revenue/pricing-strategy-full/${pid}`).then(r => setRoomTypes(r.data.room_types || [])).catch(() => {});
@@ -228,7 +256,20 @@ export const RevenuePanel = ({ properties, activePropertyId, initialTab }) => {
               <button onClick={() => setTab("dashboard")} className="hover:text-stone-600 transition-colors">{t("rev.breadcrumb.home")}</button>
               <ChevronRight className="w-3 h-3" />
               <span className="text-stone-600 font-medium">{label(currentItem)}</span>
+              {PANEL_TOURS[tab] && (
+                <button onClick={() => setPanelTour(tab)} data-testid={`rev-tour-btn-${tab}`}
+                  className="ml-auto px-2.5 py-1 rounded-md border border-stone-200 text-stone-500 hover:border-stone-400 hover:text-stone-700 text-[11px] font-semibold">
+                  ▶ Tanıtım Turu
+                </button>
+              )}
             </div>
+          )}
+
+          {PANEL_TOURS[tab] && panelTour === tab && (
+            <Suspense fallback={null}>
+              <RevenueRobotTour open steps={PANEL_TOURS[tab].steps}
+                onClose={() => { localStorage.setItem(PANEL_TOURS[tab].key, "1"); setPanelTour(null); }} />
+            </Suspense>
           )}
 
           <AnimatePresence mode="wait">

@@ -3786,3 +3786,12 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   string build hatası) — temizlendi; render bloğu yeniden eklendi.
 - E2E DOĞRULANDI: 10 tur adımı sekme geçişleriyle çalışıyor, kart her iki yerde, eski buton 0,
   konsol temiz. Expo build hâlâ token bekliyor (kullanıcı 'yes' dedi ama token yapıştırmadı).
+
+## Iter 532 (2026-08-14) — RMS Denetimi + 3 Gerçek Eksik Tamamlandı
+- Kullanıcının "bizde yok" listesindeki 4 özellik ZATEN VARDI (profit_pricing, shoulder displacement, ABS, RevPAM) — ROADMAP'e kaydedildi.
+- YENİ: alternative-dates endpoint'i (compute_displacement'e opsiyonel bookings/capacity preload eklendi — 60 pencere tek DB fetch ile).
+- YENİ: PANEL_TOURS (calendar + dynamic-pricing turları), RevenueRobotTour steps prop ile genericleşti.
+- YENİ: daily_series + sparkline (RobotImpactCard).
+- DERS: Aynı dosyaya AYNI paralel batch'te birden çok search_replace yapma — RevenuePanel.js'te
+  ilk edit (PANEL_TOURS tanımı) sessizce kayboldu, "PANEL_TOURS is not defined" runtime hatası verdi. Seri düzelt.
+- E2E DOĞRULANDI: alt-dates tablosu (5 satır + özet), 2 tur (4'er adım, auto+manuel), sparkline dashboard'da.

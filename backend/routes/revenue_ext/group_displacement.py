@@ -202,10 +202,12 @@ def _adr_on(bookings, night: ddate, fallback: float) -> float:
     return round(sum(rates) / len(rates), 2) if rates else fallback
 
 
-async def compute_displacement(db, pid: str, start: ddate, end: ddate, rooms_requested: int, offered_rate: float):
+async def compute_displacement(db, pid: str, start: ddate, end: ddate, rooms_requested: int, offered_rate: float,
+                               bookings=None, capacity=None):
     """Modül seviyesi: AI Auto-Quote gibi diğer modüller de kullanır."""
-    capacity = await _capacity(db, pid)
-    bookings = await _bookings(db, pid, start, end)
+    capacity = capacity if capacity else await _capacity(db, pid)
+    if bookings is None:
+        bookings = await _bookings(db, pid, start, end)
     base_prices = [float(rt.get("base_price", 0) or 0)
                    async for rt in db.room_types.find({"property_id": pid},
                                                       {"_id": 0, "base_price": 1})]
@@ -336,6 +338,67 @@ def create_group_displacement_router(db):
         await db.group_displacement_analyses.insert_one(dict(result))
         result.pop("_id", None)
         return result
+
+    @router.post("/alternative-dates")
+    async def alternative_dates(body: AnalyzeIn,
+                                current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
+        """Alternatif tarih önerisi — ±30 günde en düşük displacement'lı pencereleri bulur (FLYR paritesi)."""
+        try:
+            start, end = _d(body.check_in), _d(body.check_out)
+        except ValueError:
+            raise HTTPException(400, "Dates must be YYYY-MM-DD")
+        n_nights = (end - start).days
+        if n_nights < 1 or n_nights > 30:
+            raise HTTPException(400, "1-30 gece arası olmalı")
+        if body.rooms_requested < 1:
+            raise HTTPException(400, "rooms_requested must be >= 1")
+        pid = body.property_id
+        capacity = await _capacity(db, pid)
+        bookings = await _bookings(db, pid, start - timedelta(days=30), end + timedelta(days=31))
+        baseline = await compute_displacement(db, pid, start, end, body.rooms_requested, body.offered_rate,
+                                              bookings=bookings, capacity=capacity)
+        today = ddate.today()
+        candidates = []
+        for shift in range(-30, 31):
+            if shift == 0:
+                continue
+            s2 = start + timedelta(days=shift)
+            if s2 <= today:
+                continue
+            e2 = s2 + timedelta(days=n_nights)
+            c = await compute_displacement(db, pid, s2, e2, body.rooms_requested, body.offered_rate,
+                                           bookings=bookings, capacity=capacity)
+            candidates.append({
+                "shift_days": shift,
+                "check_in": s2.isoformat(), "check_out": e2.isoformat(),
+                "net_value_after_commission": c["net_value_after_commission"],
+                "net_displacement_cost": c["net_displacement_cost"],
+                "displaced_rooms": c["total_displaced_rooms"],
+                "shoulder_loss": c["shoulder_loss"],
+                "recommendation": c["recommendation"],
+                "gain_vs_requested": round(c["net_value_after_commission"] - baseline["net_value_after_commission"], 2),
+            })
+        candidates.sort(key=lambda x: x["net_value_after_commission"], reverse=True)
+        top = candidates[:5]
+        best = top[0] if top else None
+        if best and best["gain_vs_requested"] > 0:
+            yon = "ileri" if best["shift_days"] > 0 else "öne"
+            summary = (f"En kârlı pencere: {best['check_in']} → {best['check_out']} "
+                       f"({abs(best['shift_days'])} gün {yon}). Komisyon sonrası net katkı "
+                       f"{best['net_value_after_commission']:,.0f} — talep edilen tarihe göre "
+                       f"{best['gain_vs_requested']:+,.0f} fark. Satış ekibi önerisi: grubu bu tarihe kaydırmayı teklif edin.")
+        else:
+            summary = "Talep edilen tarih zaten ±30 gün içindeki en kârlı pencere — kaydırma önerilmez."
+        return {
+            "requested": {
+                "check_in": body.check_in, "check_out": body.check_out,
+                "net_value_after_commission": baseline["net_value_after_commission"],
+                "net_displacement_cost": baseline["net_displacement_cost"],
+                "displaced_rooms": baseline["total_displaced_rooms"],
+                "recommendation": baseline["recommendation"],
+            },
+            "alternatives": top, "scanned_windows": len(candidates), "summary": summary,
+        }
 
     @router.post("/proposal-pdf/{analysis_id}")
     async def proposal_pdf(analysis_id: str,

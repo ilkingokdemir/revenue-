@@ -14,7 +14,8 @@ const STEPS = [
   { tab: "memory", title: "Hazırsınız! 🚀", body: "Turu istediğiniz an üstteki 'Tanıtım Turu' butonuyla tekrar izleyebilirsiniz. İyi gelirler!" },
 ];
 
-export default function RevenueRobotTour({ open, onClose, setMainTab }) {
+export default function RevenueRobotTour({ open, onClose, setMainTab, steps }) {
+  const STEPS_LIST = steps || STEPS;
   const [i, setI] = useState(0);
   const [rect, setRect] = useState(null);
   const timer = useRef(null);
@@ -23,8 +24,8 @@ export default function RevenueRobotTour({ open, onClose, setMainTab }) {
 
   useEffect(() => {
     if (!open) return;
-    const step = STEPS[i];
-    if (step.tab) setMainTab(step.tab);
+    const step = STEPS_LIST[i];
+    if (step.tab && setMainTab) setMainTab(step.tab);
     setRect(null);
     let tries = 0;
     const find = () => {
@@ -49,8 +50,8 @@ export default function RevenueRobotTour({ open, onClose, setMainTab }) {
   }, [open, i, setMainTab]);
 
   if (!open) return null;
-  const step = STEPS[i];
-  const last = i === STEPS.length - 1;
+  const step = STEPS_LIST[i];
+  const last = i === STEPS_LIST.length - 1;
 
   const cardW = 380;
   let cardStyle;
@@ -93,7 +94,7 @@ export default function RevenueRobotTour({ open, onClose, setMainTab }) {
         <p className="text-xs text-stone-600 leading-relaxed mb-4" data-testid="tour-step-body">{step.body}</p>
         <div className="flex items-center justify-between">
           <div className="flex gap-1">
-            {STEPS.map((_, idx) => (
+            {STEPS_LIST.map((_, idx) => (
               <span key={idx} className={`w-1.5 h-1.5 rounded-full ${idx === i ? "bg-violet-600" : "bg-stone-200"}`} />
             ))}
           </div>
@@ -110,7 +111,7 @@ export default function RevenueRobotTour({ open, onClose, setMainTab }) {
             </button>
           </div>
         </div>
-        <div className="mt-2 text-[10px] text-stone-400 text-right">{i + 1} / {STEPS.length}</div>
+        <div className="mt-2 text-[10px] text-stone-400 text-right">{i + 1} / {STEPS_LIST.length}</div>
       </div>
     </div>
   );

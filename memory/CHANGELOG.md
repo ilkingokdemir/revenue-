@@ -3830,3 +3830,10 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - E) Otopark RMS: parking_rms.py (RevPAS, otel doluluğu vekiliyle 14 gün dinamik fiyat) + ParkingRmsPanel.js.
 - Ayrıca: Arşiv Trend Grafiği (recharts) + Rakip Karşılaştırma Sunum Modu (9 slayt, ESC/ok tuşları).
 - TEST: iteration_536.json — backend 7/7 pytest, frontend %100, regresyon temiz.
+
+## Iter 537 (2026-08-14) — Direktif Etki İzleme
+- YENİ backend: GET /api/strategy-directives/{pid}/impact — direktif sonrası (created_at ve varsa
+  scope tarihleri filtreli) ai_pricing_decisions özeti: karar sayısı, ort Δ%, ↑/↓ dağılımı,
+  ölçülen sonuç başarısı + öncelik/agresifliğe göre UYUM verdiği (aligned true/false/null).
+- UI: StrategyDirectivesCard her direktif altında etki satırı (directive-impact-{id}) + uyum mesajı.
+- E2E DOĞRULANDI: /impact endpoint + kartta "0 karar / henüz ölçülmedi" durumu ekranda görüldü.

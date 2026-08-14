@@ -7,6 +7,7 @@ const API = process.env.REACT_APP_BACKEND_URL;
 
 export default function StrategyDirectivesCard({ propertyId }) {
   const [items, setItems] = useState([]);
+  const [impact, setImpact] = useState({});
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -14,6 +15,8 @@ export default function StrategyDirectivesCard({ propertyId }) {
     try {
       const r = await axios.get(`${API}/api/strategy-directives/${propertyId}`, { withCredentials: true });
       setItems(r.data.items || []);
+      const ri = await axios.get(`${API}/api/strategy-directives/${propertyId}/impact`, { withCredentials: true });
+      setImpact(ri.data.items || {});
     } catch { /* */ }
   }, [propertyId]);
 
@@ -59,7 +62,9 @@ export default function StrategyDirectivesCard({ propertyId }) {
         <div className="text-[11px] text-stone-400">Aktif direktif yok.</div>
       ) : (
         <div className="space-y-2">
-          {items.map((d) => (
+          {items.map((d) => {
+            const im = impact[d.id];
+            return (
             <div key={d.id} className="flex items-start gap-2 bg-violet-50/60 border border-violet-100 rounded-lg px-3 py-2" data-testid={`directive-${d.id}`}>
               <div className="flex-1">
                 <div className="text-xs text-stone-800">{d.text}</div>
@@ -67,12 +72,25 @@ export default function StrategyDirectivesCard({ propertyId }) {
                   {PRIO[d.parsed?.priority] || "Dengeli"} · agresiflik {d.parsed?.aggressiveness ?? 0}
                   {d.parsed?.scope_start ? ` · ${d.parsed.scope_start} → ${d.parsed.scope_end || "…"}` : " · süresiz"}
                 </div>
+                {im && (
+                  <div className="mt-1.5 pt-1.5 border-t border-violet-100" data-testid={`directive-impact-${d.id}`}>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-stone-600">
+                      <span><b>{im.decisions}</b> karar</span>
+                      <span>ort Δ <b className={im.avg_delta_pct > 0 ? "text-emerald-700" : im.avg_delta_pct < 0 ? "text-rose-700" : ""}>{im.avg_delta_pct > 0 ? "+" : ""}{im.avg_delta_pct}%</b></span>
+                      <span>↑{im.ups} / ↓{im.downs}</span>
+                      {im.success_rate != null && <span>başarı <b>%{im.success_rate}</b></span>}
+                    </div>
+                    <div className={`text-[10px] mt-0.5 font-semibold ${im.aligned === false ? "text-amber-700" : im.aligned ? "text-emerald-700" : "text-stone-400"}`}>
+                      {im.alignment}
+                    </div>
+                  </div>
+                )}
               </div>
               <button onClick={() => remove(d.id)} data-testid={`directive-remove-${d.id}`} className="text-stone-400 hover:text-rose-600 mt-0.5">
                 <X size={13} weight="bold" />
               </button>
             </div>
-          ))}
+          );})}
         </div>
       )}
     </div>

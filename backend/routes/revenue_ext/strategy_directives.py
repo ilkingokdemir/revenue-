@@ -69,6 +69,48 @@ def create_strategy_directives_router(db, require_roles):
         await db.strategy_directives.insert_one({**doc})
         return doc
 
+    @router.get("/{pid}/impact")
+    async def directives_impact(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Direktif Etki İzleme — her aktif direktiften sonra alınan fiyat kararlarının özeti + uyum verdiği."""
+        items = await db.strategy_directives.find(
+            {"property_id": pid, "active": True}, {"_id": 0}).to_list(20)
+        out = {}
+        for d in items:
+            p = d.get("parsed") or {}
+            q = {"property_id": pid, "decided_at": {"$gte": d["created_at"]},
+                 "status": {"$ne": "rejected"}}
+            if p.get("scope_start"):
+                q["date"] = {"$gte": p["scope_start"]}
+                if p.get("scope_end"):
+                    q["date"]["$lte"] = p["scope_end"]
+            decs = await db.ai_pricing_decisions.find(
+                q, {"_id": 0, "delta_pct": 1}).to_list(500)
+            n = len(decs)
+            deltas = [float(x.get("delta_pct") or 0) for x in decs]
+            avg_delta = round(sum(deltas) / n, 2) if n else 0.0
+            ups = sum(1 for x in deltas if x > 0.5)
+            downs = sum(1 for x in deltas if x < -0.5)
+            oq = {"property_id": pid, "measured_at": {"$gte": d["created_at"]}}
+            outs = await db.ai_pricing_outcomes.find(oq, {"_id": 0, "verdict": 1}).to_list(500)
+            worked = sum(1 for o in outs if o.get("verdict") == "worked")
+            success = round(worked / len(outs) * 100, 1) if outs else None
+            prio, aggr = p.get("priority", "balanced"), int(p.get("aggressiveness", 0) or 0)
+            if n == 0:
+                alignment, aligned = "Henüz bu direktif kapsamında karar alınmadı — kararlar geldikçe ölçülecek.", None
+            else:
+                if prio == "occupancy":
+                    aligned = avg_delta <= 1.0 if aggr <= 0 else downs >= ups
+                elif prio == "adr":
+                    aligned = avg_delta >= -1.0 if aggr <= 0 else ups >= downs
+                else:
+                    aligned = abs(avg_delta) <= (3 if aggr <= 0 else 8)
+                alignment = ("✓ Direktife uyumlu: kararlar beklenen yönde ilerliyor." if aligned
+                             else "⚠ Kısmen uyumsuz: kararların yönü direktifle çelişiyor, robot izlemede.")
+            out[d["id"]] = {"decisions": n, "avg_delta_pct": avg_delta, "ups": ups, "downs": downs,
+                            "outcomes_measured": len(outs), "success_rate": success,
+                            "aligned": aligned, "alignment": alignment}
+        return {"items": out}
+
     @router.delete("/{pid}/{did}")
     async def deactivate(pid: str, did: str, _u: dict = Depends(require_roles(*ROLES))):
         r = await db.strategy_directives.update_one(

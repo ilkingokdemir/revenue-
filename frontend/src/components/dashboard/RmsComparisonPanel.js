@@ -61,18 +61,20 @@ const UNIQUE = [
 const TOTAL_SLIDES = COMPETITORS.length + 5; // giriş + 6 rakip + farklar + robot kanıtı + RGI + kapanış
 
 export default function RmsComparisonPanel({ activePropertyId, properties = [] }) {
-  const pid = activePropertyId && activePropertyId !== "all" ? activePropertyId : properties[0]?.id || "default";
+  const defaultPid = activePropertyId && activePropertyId !== "all" ? activePropertyId : properties[0]?.id || "default";
+  const [demoPid, setDemoPid] = useState(defaultPid);
   const [presenting, setPresenting] = useState(false);
   const [slide, setSlide] = useState(0);
   const [proof, setProof] = useState(null);
+  const demoName = properties.find((p) => p.id === demoPid)?.name || demoPid;
 
   useEffect(() => {
     if (!presenting || proof) return;
     Promise.all([
-      axios.get(`${API}/api/revenue-brain/${pid}/impact-summary`, { withCredentials: true }),
-      axios.get(`${API}/api/rgi-proof/${pid}`, { withCredentials: true }),
+      axios.get(`${API}/api/revenue-brain/${demoPid}/impact-summary`, { withCredentials: true }),
+      axios.get(`${API}/api/rgi-proof/${demoPid}`, { withCredentials: true }),
     ]).then(([a, b]) => setProof({ impact: a.data, rgi: b.data })).catch(() => setProof({}));
-  }, [presenting, proof, pid]);
+  }, [presenting, proof, demoPid]);
 
   const next = useCallback(() => setSlide((s) => Math.min(s + 1, TOTAL_SLIDES - 1)), []);
   const prev = useCallback(() => setSlide((s) => Math.max(s - 1, 0)), []);
@@ -90,7 +92,7 @@ export default function RmsComparisonPanel({ activePropertyId, properties = [] }
 
   return (
     <div className="p-5 max-w-[1400px] mx-auto" data-testid="rms-comparison-panel">
-      {presenting && <PresentationDeck slide={slide} next={next} prev={prev} exit={() => setPresenting(false)} proof={proof} />}
+      {presenting && <PresentationDeck slide={slide} next={next} prev={prev} exit={() => setPresenting(false)} proof={proof} demoName={demoName} />}
 
       <div className="bg-stone-900 rounded-2xl p-6 text-stone-100 mb-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -104,10 +106,22 @@ export default function RmsComparisonPanel({ activePropertyId, properties = [] }
               En iyi 6 hotel revenue yazılımının fark yaratan özellikleri — ve her birinin bizdeki karşılığı.
             </p>
           </div>
-          <button onClick={() => { setSlide(0); setPresenting(true); }} data-testid="rmsc-present-btn"
-            className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-900 text-sm font-black inline-flex items-center gap-2">
-            <Presentation size={16} weight="fill" /> Sunum Modu
-          </button>
+          <div className="flex items-end gap-2">
+            {properties.length > 1 && (
+              <label className="text-[10px] text-stone-400">
+                Demo verisi (şube)
+                <select value={demoPid} data-testid="rmsc-demo-branch"
+                  onChange={(e) => { setDemoPid(e.target.value); setProof(null); }}
+                  className="block mt-1 bg-stone-800 border border-stone-700 text-stone-200 text-xs rounded-lg px-2.5 py-2 max-w-[200px]">
+                  {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </label>
+            )}
+            <button onClick={() => { setSlide(0); setPresenting(true); }} data-testid="rmsc-present-btn"
+              className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-900 text-sm font-black inline-flex items-center gap-2">
+              <Presentation size={16} weight="fill" /> Sunum Modu
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2 mt-4">
           <Chip label="6 rakip analiz edildi" testId="rmsc-kpi-competitors" />
@@ -174,7 +188,7 @@ export default function RmsComparisonPanel({ activePropertyId, properties = [] }
   );
 }
 
-function PresentationDeck({ slide, next, prev, exit, proof }) {
+function PresentationDeck({ slide, next, prev, exit, proof, demoName }) {
   const isFirst = slide === 0;
   const isUnique = slide === COMPETITORS.length + 1;
   const isRobot = slide === COMPETITORS.length + 2;

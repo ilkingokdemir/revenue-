@@ -3879,3 +3879,10 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   sunum açılınca impact-summary + rgi-proof canlı çekiliyor.
 - E2E DOĞRULANDI: landing ROI slider canlı hesaplıyor, 11 slayt akışı + kapanış, radar loop importu OK.
 - Expo token 5. kez istendi, hâlâ yok.
+
+## Iter 541 (2026-08-14) — RoiCalculatorSection Hatası RCA + Sunum Şube Seçici
+- HATA (kullanıcı bildirdi): "RoiCalculatorSection is not defined" — kök neden: LandingPage.js'e
+  ROI section JSX'i eklenirken import satırı AYRI batch'te kalmıştı; kullanıcı fix öncesi bundle'ı gördü.
+  Import eklendi; / ve /reveniq canlı doğrulandı (0 hata kartı, ROI section her ikisinde render oluyor).
+- YENİ: Sunum modunda "Demo verisi (şube)" seçici (rmsc-demo-branch) — seçilen şubenin canlı
+  impact + RGI verisi kanıt slaytlarına akıyor (şube değişince proof reset). E2E doğrulandı.

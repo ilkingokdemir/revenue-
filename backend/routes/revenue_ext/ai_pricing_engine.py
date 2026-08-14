@@ -527,6 +527,7 @@ def create_ai_pricing_router(db, require_roles):
             "property_id": property_id,
             "enabled": bool(data.get("enabled", True)),
             "auto_apply": bool(data.get("auto_apply", False)),
+            "experiment_holdout_pct": max(0.0, min(float(data.get("experiment_holdout_pct", 0) or 0), 30)),
             "auto_apply_threshold_pct": max(0.5, min(25.0, float(data.get("auto_apply_threshold_pct", 5.0)))),
             "use_llm": bool(data.get("use_llm", True)),
             "min_rate_pct": max(10, min(100, int(data.get("min_rate_pct", 60)))),
@@ -646,6 +647,9 @@ def create_ai_pricing_router(db, require_roles):
         lrv_map = await compute_lrv_floor(db, property_id, days)
         applied = 0
         lrv_clamped = 0
+        holdout_n = 0
+        import random as _rnd
+        hpct = float(cfg.get("experiment_holdout_pct", 0) or 0)
         for s in payload["suggestions"]:
             if s["status"] != "pending":
                 continue
@@ -653,6 +657,19 @@ def create_ai_pricing_router(db, require_roles):
                 continue
             # extra guardrail: don't bother if the change is < 0.5%
             if abs(s["delta_vs_current_pct"]) < 0.5:
+                continue
+            if hpct > 0 and _rnd.random() * 100 < hpct:
+                # A/B deney: bu karar HOLDOUT — fiyat uygulanmaz, nedensel kıyas için saklanır
+                await db.ai_pricing_decisions.update_one(
+                    {"property_id": property_id, "date": s["date"], "room_type_id": s.get("room_type_id", "")},
+                    {"$set": {"property_id": property_id, "date": s["date"],
+                              "room_type_id": s.get("room_type_id", ""),
+                              "room_type_name": s.get("room_type_name"),
+                              "prev_rate": s.get("current_rate"), "new_rate": float(s["suggested_rate"]),
+                              "delta_pct": s.get("delta_vs_current_pct"), "days_out": s.get("days_out"),
+                              "status": "holdout", "set_by": "experiment",
+                              "decided_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+                holdout_n += 1
                 continue
             floor = lrv_map.get(s.get("date", ""))
             if floor and float(s["suggested_rate"]) < floor:

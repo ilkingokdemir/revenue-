@@ -185,6 +185,8 @@ export const RevPAMPanel = L(() => import("./components/dashboard/RevPAMPanel"))
 export const DecisionAssurancePanel = L(() => import("./components/dashboard/DecisionAssurancePanel"));
 export const DataQualityPanel = L(() => import("./components/dashboard/DataQualityPanel"));
 export const GroupSalesPanel = L(() => import("./components/dashboard/GroupSalesPanel"));
+export const OverbookingControlPanel = L(() => import("./components/dashboard/OverbookingControlPanel"));
+export const RoomTypeForecastPanel = L(() => import("./components/dashboard/RoomTypeForecastPanel"));
 export const BeachPosPanel = L(() => import("./components/dashboard/BeachPosPanel"));
 export const PublicEventsPanel = L(() => import("./components/dashboard/PublicEventsPanel"));
 

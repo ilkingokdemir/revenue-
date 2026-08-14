@@ -80,6 +80,16 @@ export default function OpenPricingPanel({ propertyId }) {
           </p>
         </div>
         <div className="flex gap-2 items-center">
+          <button onClick={async () => {
+            try {
+              const { data: r } = await axios.post(`${API}/open-pricing/optimize`, { property_id: propertyId, days: 14, apply: true }, { withCredentials: true });
+              toast.success(`Optimizer: ${r.overrides_written} hücre fiyatı bağımsız üretildi ve uygulandı`);
+              reload();
+            } catch { toast.error("Optimizer çalıştırılamadı"); }
+          }} data-testid="op-optimize-btn"
+                  className="text-sm px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg inline-flex items-center gap-1.5">
+            ⚡ Optimizer (14g)
+          </button>
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
                  data-testid="op-date-select"
                  className="px-3 py-1.5 text-sm border border-stone-300 rounded-lg bg-white" />

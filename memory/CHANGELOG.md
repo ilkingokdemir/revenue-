@@ -3624,3 +3624,19 @@ d) GROUP SALES OS LITE: routes/revenue_ext/group_sales.py — group_rfps CRUD, w
 - Panel: pickup panelinde çok satırlı textarea (gs-bulk-input-*) + 'Toplu yükle' (gs-bulk-btn-*).
 - TEST: 4 satırlık karışık format → 3 eklendi (6 oda) + 1 skip; UI'dan 2 misafir daha → 12/17 (%70.6) ✓
 - Anahtarlar (8. hatırlatma) hâlâ değer olarak paylaşılmadı.
+
+## Iter 517 (2026-06) — Rapor Eksikleri a-d TAMAMLANDI (kullanıcı: "mvp kayıt et ve yap sırayla")
+a) OPEN PRICING OPTIMIZER: open_pricing.py POST /open-pricing/optimize {property_id, days, apply} —
+   hücre = baz × segment faktörü (transient 1.0 … group 0.85) × kanal net-eşitleme (1+komisyon×0.6,
+   direct 0.97) × talep (0.92-1.25, dolulukla). apply=true → reason='optimizer' override'ları yenilenir
+   (48 hücre × gün). Panel: OpenPricingPanel'e op-optimize-btn. TEST: 240 override yazıldı, matriste görünür ✓
+b) OVERBOOKING & WASH CONTROL: overbooking_control.py — kaynak bazlı no-show/iptal oranları (180g),
+   günlük önerilen limit (beklenen no-show × 0.7), walk maliyeti (1.5×ADR+50), net beklenti,
+   %98+ dolulukta acil stop-sell bayrağı. Panel: OverbookingControlPanel (menu: overbooking-control) ✓
+c) A/B NEDENSEL ETKİ: ai_pricing_engine auto-apply döngüsüne experiment_holdout_pct (config, max %30) —
+   rastgele kararlar status='holdout' ile uygulanmadan saklanır. decision_assurance GET /{pid}/experiment
+   → applied vs holdout gerçekleşen gecelik gelir kıyası + uplift. Panelde da-experiment-card. Config PUT
+   /api/revenue/ai-pricing/{pid}/config ile holdout %10 açıldı ✓ (holdout örneklemi zamanla birikecek)
+d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø), kapasite sınırlı, ısı
+   haritalı panel (RoomTypeForecastPanel, menu: room-type-forecast). TEST: 2 oda tipi, doğru OTB ✓
+- ROADMAP güncellendi: a-d işaretlendi; kalan P2: Group Sales patterned block/rebate/F&B, arama/uçuş verisi, LTV.

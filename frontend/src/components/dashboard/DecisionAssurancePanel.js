@@ -9,6 +9,11 @@ export default function DecisionAssurancePanel({ propertyId }) {
   const pid = propertyId && propertyId !== "all" ? propertyId : "default";
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [exp, setExp] = useState(null);
+
+  useEffect(() => {
+    axios.get(`${API}/decision-assurance/${pid}/experiment`).then(({ data: d }) => setExp(d)).catch(() => {});
+  }, [pid]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,6 +63,20 @@ export default function DecisionAssurancePanel({ propertyId }) {
       <p className="text-[11px] text-stone-400 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2" data-testid="da-disclaimer">
         ⚠ {s.impact_disclaimer}
       </p>
+
+      {exp && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4" data-testid="da-experiment-card">
+          <p className="text-[10px] font-black uppercase text-indigo-700 mb-1">🧪 A/B Nedensel Etki (kontrollü holdout)</p>
+          {exp.holdout_n > 0 ? (
+            <p className="text-sm text-stone-700">
+              Uygulanan {exp.applied_n} karar Ø <b>{exp.applied_avg_revenue}</b>/gece · Holdout {exp.holdout_n} karar Ø <b>{exp.holdout_avg_revenue}</b>/gece →
+              nedensel uplift: <b className={exp.causal_uplift_per_night >= 0 ? "text-emerald-700" : "text-rose-700"}> {exp.causal_uplift_per_night > 0 ? "+" : ""}{exp.causal_uplift_per_night}/gece</b>
+            </p>
+          ) : (
+            <p className="text-xs text-stone-500">{exp.label} — aktif holdout oranı: %{exp.holdout_pct}. Deney açıkken kararların bir kısmı rastgele uygulanmaz ve gerçek nedensel etki ölçülür.</p>
+          )}
+        </div>
+      )}
 
       <div className="bg-white border border-stone-200 rounded-2xl divide-y divide-stone-100" data-testid="da-list">
         {data.decisions.length === 0 && <p className="p-6 text-sm text-stone-400 text-center">Son 120 günde fiyat kararı yok — AI fiyatlamayı çalıştırın.</p>}

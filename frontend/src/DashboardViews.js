@@ -189,6 +189,8 @@ import {
   DecisionAssurancePanel,
   DataQualityPanel,
   GroupSalesPanel,
+  OverbookingControlPanel,
+  RoomTypeForecastPanel,
   ProfitOSPanel,
   PromoCodesPanel,
   PropertyMappingPanel,
@@ -1709,6 +1711,12 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         )}
         {activeView === "group-sales" && (
           <GroupSalesPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
+        )}
+        {activeView === "overbooking-control" && (
+          <OverbookingControlPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
+        )}
+        {activeView === "room-type-forecast" && (
+          <RoomTypeForecastPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
         )}
     </>
   );

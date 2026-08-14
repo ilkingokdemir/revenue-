@@ -131,4 +131,41 @@ def create_decision_assurance_router(db, require_roles):
             "decisions": decisions,
         }
 
+    @router.get("/{property_id}/experiment")
+    async def experiment(property_id: str, days: int = 90,
+                         _: dict = Depends(require_roles("admin", "manager"))):
+        """A/B nedensel etki: uygulanmış vs HOLDOUT kararların gerçekleşen gelir kıyası."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        today = datetime.now(timezone.utc).date().isoformat()
+        groups = {"applied": [], "holdout": []}
+        async for d in db.ai_pricing_decisions.find(
+                {"property_id": property_id, "decided_at": {"$gte": cutoff},
+                 "status": {"$in": ["auto-applied", "accepted", "holdout"]},
+                 "date": {"$lt": today}}, {"_id": 0}):
+            g = "holdout" if d["status"] == "holdout" else "applied"
+            td = d.get("date")
+            actual = 0.0
+            async for b in db.bookings.find(
+                    {"property_id": property_id, "status": {"$nin": ["cancelled"]},
+                     "check_in": {"$lte": td}, "check_out": {"$gt": td}},
+                    {"_id": 0, "total_price": 1, "total": 1, "check_in": 1, "check_out": 1}):
+                try:
+                    n = max((datetime.fromisoformat(b["check_out"]).date()
+                             - datetime.fromisoformat(b["check_in"]).date()).days, 1)
+                    actual += float(b.get("total_price") or b.get("total") or 0) / n
+                except (ValueError, KeyError, TypeError):
+                    continue
+            groups[g].append(actual)
+        avg_a = round(sum(groups["applied"]) / len(groups["applied"]), 2) if groups["applied"] else None
+        avg_h = round(sum(groups["holdout"]) / len(groups["holdout"]), 2) if groups["holdout"] else None
+        uplift = round(avg_a - avg_h, 2) if (avg_a is not None and avg_h is not None) else None
+        cfg = await db.ai_pricing_config.find_one({"property_id": property_id}, {"_id": 0, "experiment_holdout_pct": 1})
+        return {"holdout_pct": (cfg or {}).get("experiment_holdout_pct", 0),
+                "applied_n": len(groups["applied"]), "holdout_n": len(groups["holdout"]),
+                "applied_avg_revenue": avg_a, "holdout_avg_revenue": avg_h,
+                "causal_uplift_per_night": uplift,
+                "label": "deneysel (kontrollü holdout)" if groups["holdout"] else
+                         "yetersiz holdout örneklemi — AI Pricing ayarlarından experiment_holdout_pct > 0 yapın",
+                "note": "Uplift, uygulanmış ve rastgele tutulmuş (holdout) kararların gerçekleşen gecelik gelir ortalaması farkıdır."}
+
     return router

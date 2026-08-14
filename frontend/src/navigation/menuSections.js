@@ -301,6 +301,8 @@ export function buildMenuSections(t, user) {
         { id: "decision-assurance", icon: ShieldCheck, name: "Decision Assurance (kanıtlı autopilot)", testId: "decision-assurance-btn" },
         { id: "data-quality", icon: Pulse, name: "Data Quality Autopilot", testId: "data-quality-btn" },
         { id: "group-sales", icon: Handshake, name: "Group Sales OS (RFP)", testId: "group-sales-btn" },
+        { id: "overbooking-control", icon: Warning, name: "Overbooking & wash control", testId: "overbooking-control-btn" },
+        { id: "room-type-forecast", icon: ChartLineUp, name: "Oda tipi forecast", testId: "room-type-forecast-btn" },
         { id: "abs-selling", icon: Bed, name: "Özellik bazlı satış (ABS)", testId: "abs-selling-btn" },
         { id: "revpam", icon: Briefcase, name: "Toplantı salonu RevPAM", testId: "revpam-btn" },
         { id: "rev-protection", icon: ShieldCheck, name: "Revenue protection", testId: "rev-protection-btn" },

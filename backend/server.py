@@ -1334,6 +1334,12 @@ api_router.include_router(create_data_quality_router(db, require_roles))
 from routes.revenue_ext.group_sales import create_group_sales_router
 api_router.include_router(create_group_sales_router(db, require_roles))
 
+# Iter 517: Kalan rapor eksikleri — Overbooking Control + Room-Type Forecast (optimizer open_pricing içinde)
+from routes.revenue_ext.overbooking_control import create_overbooking_control_router
+api_router.include_router(create_overbooking_control_router(db, require_roles))
+from routes.revenue_ext.room_type_forecast import create_room_type_forecast_router
+api_router.include_router(create_room_type_forecast_router(db, require_roles))
+
 async def _job_comp_radar(property_id: str) -> dict:
     try:
         return await comp_radar_router.run_comp_radar_internal(property_id or "")

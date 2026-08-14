@@ -312,6 +312,20 @@ const AIPricingEnginePanel = ({ propertyId }) => {
         </div>
       </div>
 
+      {/* ROLLBACK + FREEZE */}
+      <div className="flex justify-end">
+        <button onClick={async () => {
+          try {
+            const r = await axios.post(`${API}/revenue/ai-pricing/${propertyId}/rollback-last`, {}, { headers: authHeaders() });
+            if (r.data.ok) toast.success(`${r.data.reverted} fiyat geri alındı (${(r.data.run_at || "").slice(0, 16)} koşusu)`);
+            else toast.info(r.data.reason || "Geri alınacak koşu yok");
+          } catch { toast.error("Geri alma başarısız"); }
+        }} data-testid="ai-pricing-rollback-btn"
+          className="px-3 py-1.5 text-xs font-bold rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50">
+          ↩ Son Koşuyu Geri Al
+        </button>
+      </div>
+
       {/* FREEZE BANNER */}
       {cfg?.freeze?.active && (
         <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-wrap items-center gap-3" data-testid="ai-pricing-freeze-banner">

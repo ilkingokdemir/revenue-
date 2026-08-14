@@ -623,6 +623,44 @@ def create_ai_pricing_router(db, require_roles):
             {"property_id": property_id, "active": True}, {"_id": 0})
         return cfg
 
+    @router.post("/revenue/ai-pricing/{property_id}/rollback-last")
+    async def rollback_last(property_id: str,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Tek Tık Toplu Geri Alma — son otomatik/toplu fiyat koşusunu eski değerlere döndürür."""
+        import uuid as _uuid
+        last = await db.ai_pricing_run_log.find_one(
+            {"property_id": property_id, "applied": {"$gt": 0}}, {"_id": 0}, sort=[("run_at", -1)])
+        if not last:
+            return {"ok": False, "reverted": 0, "reason": "Geri alınacak koşu bulunamadı"}
+        run_at = last["run_at"]
+        lo = run_at[:16]
+        decs = await db.ai_pricing_decisions.find(
+            {"property_id": property_id, "status": {"$in": ["auto-applied", "accepted"]},
+             "decided_at": {"$gte": lo}}, {"_id": 0}).to_list(500)
+        reverted = 0
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for d in decs:
+            prev = d.get("prev_rate")
+            if prev is None:
+                continue
+            await db.rate_overrides.update_one(
+                {"property_id": property_id, "date": d["date"], "room_type_id": d.get("room_type_id", "")},
+                {"$set": {"custom_rate": float(prev), "set_by": "rollback",
+                          "reason": f"Toplu geri alma ({current_user.get('email', '')}) — {run_at[:16]} koşusu",
+                          "updated_at": now_iso}})
+            await db.ai_pricing_decisions.update_one(
+                {"property_id": property_id, "date": d["date"], "room_type_id": d.get("room_type_id", "")},
+                {"$set": {"status": "rolled-back", "rolled_back_at": now_iso}})
+            reverted += 1
+        await db.notifications.insert_one({
+            "id": str(_uuid.uuid4()), "type": "info",
+            "title": "Toplu geri alma tamamlandı",
+            "message": f"{reverted} fiyat, {run_at[:16]} koşusu öncesi değerlere döndürüldü.",
+            "category": "revenue", "target_user": "", "target_role": "manager",
+            "link_to": "revenue", "priority": "normal", "read": False,
+            "created_by": current_user.get("email", ""), "created_at": now_iso})
+        return {"ok": True, "reverted": reverted, "run_at": run_at}
+
     @router.post("/revenue/ai-pricing/{property_id}/unfreeze")
     async def unfreeze(property_id: str,
                         current_user: dict = Depends(require_roles("admin", "manager"))):

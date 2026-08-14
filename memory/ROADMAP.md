@@ -147,3 +147,24 @@ GERÇEK EKSİKLER (önem sırasıyla):
       direktif ("Eylül'de doluluk önceliği") fiyat motoru parametrelerine çevrilir, kural yazmadan.
 - [ ] D) P2: ROI Hesaplayıcı (satış/landing lead aracı — FLYR ana sayfa paritesi; Price Checker'ın yanına).
 - [ ] E) P3: Otopark RMS (IDeaS Car Park RMS) — otopark alanı için doluluk bazlı dinamik fiyat (niş).
+
+## MVP Eklentisi 5 — Rakip Kıyası v2 (Iter 543, 2026-08-14, canlı web: Duetto/Mews/Lighthouse/trendler)
+PARİTEDE (tekrar önerme): Open Pricing, 5dk-gün içi otomatik fiyat, grup displacement+min fiyat+alternatif
+tarih (Mews'ten üstün), 24 ay forecast, dinamik kısıtlar, agentic yönetişim merdiveni (öneri/onaylı/sınırlı
+otonomi+anomali dondurma), kaynak izlenebilirliği, RGI, kâr-öncelikli fiyat, MAPE.
+EKSİKLER (öncelik sırasıyla):
+- [x] 1) P1 Talep Takvimi (TAMAM iter 544) ısı haritası + tarihe tek tık AI analizi (Duetto Advance 2026 paritesi)
+- [x] 2) P1 Tek Tık Toplu Geri Alma (TAMAM iter 544) — son auto-apply koşusunu tüm tarihlerde geri yükleme (agentic rollback standardı)
+- [ ] 3) P2 Grup Wash Projeksiyonu — grup bloğu erime tahmini (Duetto BlockBuster)
+- [ ] 4) P2 TRevPOR / RevPAG / GOPPAR metrik paketi (2026 ölçüm standardı)
+- [ ] 5) P3 Fonksiyon alanı online teklif/booking motoru (Duetto OpenSpace paritesi; RevPAM'e satış aracı)
+- [~] E-posta uyarıları: teknik hazır, Resend API anahtarı bekliyor (BLOKLU)
+
+## MVP Eklentisi 5b — Top-20 Rakip Listesi Kıyası (Iter 543 devam)
+13/20 rakiple parite (IDeaS, Duetto, Atomize, RPG, Cloudbeds, Lighthouse*, FLYR, BEONx, Pricepoint,
+happyhotel, Smartpricing, Profitroom, roomMaster). Revolution Plus/Otamiser = hizmet modeli.
+YENİ eksikler (PriceLabs/Beyond/Wheelhouse'dan): 
+- [x] 3) P1 Orphan Gap Doldurma (TAMAM iter 544) (yetim 1-2 gece boşluklarına oto indirim + min-stay gevşetme)
+- [ ] 4) P2 LOS Bazlı Fiyatlama (3+/7+ gece kademeli fiyat önerisi)
+Nihai sıra: 1-TalepTakvimi, 2-TopluGeriAlma, 3-OrphanGap, 4-LOS, 5-GrupWash, 6-TRevPOR/GOPPAR, 7-FonksiyonBooking.
+*Lighthouse rate-shop gerçek verisi API anahtarı bekliyor (BLOKLU).

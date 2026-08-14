@@ -32,6 +32,7 @@ export const MarketingRadarPanel = L(() => import("./components/dashboard/Market
 export const BIChatPanel = L(() => import("./components/dashboard/BIChatPanel"));
 export const ParkingRmsPanel = L(() => import("./components/dashboard/ParkingRmsPanel"));
 export const ErrorSentinelPanel = L(() => import("./components/dashboard/ErrorSentinelPanel"));
+export const DemandCalendarPanel = L(() => import("./components/dashboard/DemandCalendarPanel"));
 export const KDSPanel = L(() => import("./components/dashboard/KDSPanel"));
 export const LoyaltyV2Panel = L(() => import("./components/dashboard/LoyaltyV2Panel"));
 export const ExternalLoyaltyPanel = L(() => import("./components/dashboard/ExternalLoyaltyPanel"));

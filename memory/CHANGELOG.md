@@ -3897,3 +3897,18 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   kampanya sonuç tablosu: OTB açılışta / +X oda / ölçülüyor).
 - E2E DOĞRULANDI: dedupe (2× tekrarlandı rozeti), Çözüldü→boş durum 🎉, radar geçmişi 1 tarama + 14 kampanya.
 - Expo token 6. kez istendi, hâlâ yok.
+
+## Iter 543-544 (2026-08-14) — Rakip Kıyası v2 P1'leri: Talep Takvimi + Rollback + Yetim Geceler
+- 1) TALEP TAKVİMİ (Duetto Advance paritesi): demand_calendar.py — GET /{pid} ısı haritası
+  (hot/warm/cool/cold + DOW anomali bayrağı spike/dip), GET /analyze?date= gpt-5.2 ile sade Türkçe
+  talep hikâyesi (doluluk+fiyat+pazar+kampanya+robot kararı verileriyle). UI: DemandCalendarPanel
+  (demand-calendar-btn, Revenue & rates), grid tıkla→hikâye, ay gezinme.
+- 2) TEK TIK TOPLU GERİ ALMA: POST /revenue/ai-pricing/{pid}/rollback-last — son applied>0 koşusunun
+  kararlarını rate_overrides'ta prev_rate'e döndürür, status=rolled-back + bildirim.
+  UI: AIPricingEnginePanel "↩ Son Koşuyu Geri Al" (ai-pricing-rollback-btn).
+- 3) YETİM GECELER (PriceLabs paritesi): GET /orphan-gaps (oda bazlı ardışık rezervasyon arası 1-2 gece
+  boşluk tespiti) + POST /fill (orphan_fill kampanyası %10+min-stay 1). UI: takvim altında çipler +
+  "Tümünü Doldur". Test: 11 boşluk / 16 oda-gece bulundu.
+- E2E DOĞRULANDI: 31 günlük grid + AI hikâyesi ekranda, rollback doğru cevap, gaps 11 çip.
+- KALAN (sıradaki): 4-LOS Bazlı Fiyatlama, 5-Grup Wash Projeksiyonu, 6-TRevPOR/RevPAG/GOPPAR,
+  7-Fonksiyon alanı booking motoru (ROADMAP MVP Eklentisi 5/5b'de kayıtlı).

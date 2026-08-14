@@ -3640,3 +3640,14 @@ c) A/B NEDENSEL ETKİ: ai_pricing_engine auto-apply döngüsüne experiment_hold
 d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø), kapasite sınırlı, ısı
    haritalı panel (RoomTypeForecastPanel, menu: room-type-forecast). TEST: 2 oda tipi, doğru OTB ✓
 - ROADMAP güncellendi: a-d işaretlendi; kalan P2: Group Sales patterned block/rebate/F&B, arama/uçuş verisi, LTV.
+
+## Iter 518 (2026-06) — P2'ler + Optimizer Zamanlayıcı + TAM REGRESYON
+1. GROUP SALES P2: quote artık pattern (gün gün oda listesi, nights uzunluğunda), rebate_pct (max 20),
+   fb_contribution alıyor. Patterned: room_nights toplamı wash'lı, displacement max-gece odasıyla;
+   adj_revenue = paying_rn × rate × (1−rebate) + F&B. Create/PUT de bu alanları taşıyor.
+   Panel: gs-pattern-input (virgüllü), gs-rebate-input, gs-fb-input. TEST: 4647.5 ve 3749.0 birebir ✓
+2. OPTIMIZER ZAMANLAYICI: run_open_pricing_optimizer modül seviyesine alındı; workers.open_pricing_optimizer_loop
+   (UTC 02, op_optimizer_state dedupe) optimizer kullanan tesislerin (reason='optimizer' distinct) matrisini tazeler.
+3. TAM REGRESYON iteration_518: backend 13/13 PASS, frontend 7/7 panel OK, kritik/minör 0. retest gerekmez.
+- ROADMAP: 'Group Sales kalanları (patterned block, rebate, F&B)' maddesi de TAMAM. Kalan: harici arama/uçuş
+  verisi + LTV (API anlaşması ister). Anahtarlar (9. hatırlatma) hâlâ değer olarak paylaşılmadı.

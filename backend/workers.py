@@ -904,3 +904,29 @@ async def data_quality_sentinel_loop(db, interval_seconds: int = 3600):
         except Exception as e:
             logger.warning(f"data_quality_sentinel_loop error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+async def open_pricing_optimizer_loop(db, interval_seconds: int = 3600):
+    """Optimizer Zamanlayıcı — gece (UTC 02) optimizer kullanan tesislerin matrisini tazeler."""
+    import logging
+    logger = logging.getLogger(__name__)
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            if now.hour == 2:
+                from routes.revenue_ext.open_pricing import run_open_pricing_optimizer
+                today = now.date().isoformat()
+                pids = await db.open_pricing_overrides.distinct(
+                    "property_id", {"reason": "optimizer"})
+                for pid in pids:
+                    state = await db.op_optimizer_state.find_one(
+                        {"property_id": pid}, {"_id": 0, "last_run_date": 1})
+                    if state and state.get("last_run_date") == today:
+                        continue
+                    res = await run_open_pricing_optimizer(db, pid, days=14, apply=True)
+                    await db.op_optimizer_state.update_one(
+                        {"property_id": pid}, {"$set": {"last_run_date": today}}, upsert=True)
+                    logger.info(f"op_optimizer: {pid} → {res['overrides_written']} override tazelendi")
+        except Exception as e:
+            logger.warning(f"open_pricing_optimizer_loop error: {e}")
+        await asyncio.sleep(interval_seconds)

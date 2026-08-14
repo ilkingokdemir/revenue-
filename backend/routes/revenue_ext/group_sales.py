@@ -126,6 +126,9 @@ def create_group_sales_router(db, require_roles):
             "rooms": rooms, "offered_rate": rate,
             "wash_pct": max(0.0, min(float(body.get("wash_pct", 10) or 0), 60)),
             "comp_rooms": max(0, int(body.get("comp_rooms", 0) or 0)),
+            "rebate_pct": max(0.0, min(float(body.get("rebate_pct", 0) or 0), 20)),
+            "fb_contribution": max(0.0, float(body.get("fb_contribution", 0) or 0)),
+            "pattern": [int(p) for p in (body.get("pattern") or []) if str(p).isdigit()][:31],
             "notes": body.get("notes", ""), "status": "new", "versions": [],
             "created_at": datetime.now(timezone.utc).isoformat(),
             "created_by": user.get("email", ""),
@@ -208,13 +211,25 @@ def create_group_sales_router(db, require_roles):
         rate = float(body.get("offered_rate", rfp["offered_rate"]) or rfp["offered_rate"])
         wash = max(0.0, min(float(body.get("wash_pct", rfp.get("wash_pct", 10)) or 0), 60))
         comp = max(0, int(body.get("comp_rooms", rfp.get("comp_rooms", 0)) or 0))
+        rebate = max(0.0, min(float(body.get("rebate_pct", rfp.get("rebate_pct", 0)) or 0), 20))
+        fb = max(0.0, float(body.get("fb_contribution", rfp.get("fb_contribution", 0)) or 0))
+        pattern = body.get("pattern") or rfp.get("pattern") or []
         rooms = int(rfp["rooms"])
         start, end = _d(rfp["check_in"]), _d(rfp["check_out"])
         nights = (end - start).days
 
-        expected_rooms = max(1, math.ceil(rooms * (1 - wash / 100)))
-        paying_rooms = max(0, expected_rooms - comp)
-        adj_revenue = round(paying_rooms * rate * nights, 2)
+        if isinstance(pattern, list) and len(pattern) == nights and all(
+                isinstance(p, (int, float)) and p >= 0 for p in pattern):
+            # patterned block: gün gün değişen oda adedi
+            room_nights = sum(int(p) for p in pattern)
+            expected_rooms = max(1, math.ceil(max(int(p) for p in pattern) * (1 - wash / 100)))
+            paying_room_nights = max(0, math.ceil(room_nights * (1 - wash / 100)) - comp * nights)
+            adj_revenue = round(paying_room_nights * rate * (1 - rebate / 100) + fb, 2)
+        else:
+            pattern = []
+            expected_rooms = max(1, math.ceil(rooms * (1 - wash / 100)))
+            paying_rooms = max(0, expected_rooms - comp)
+            adj_revenue = round(paying_rooms * rate * nights * (1 - rebate / 100) + fb, 2)
 
         computed = await compute_displacement(db, rfp["property_id"], start, end, expected_rooms, rate)
         # comp odalar ve wash sonrası GERÇEK grup geliri üzerinden net değer
@@ -235,6 +250,8 @@ def create_group_sales_router(db, require_roles):
             "v": len(rfp.get("versions") or []) + 1,
             "offered_rate": rate, "rooms": rooms, "expected_rooms": expected_rooms,
             "wash_pct": wash, "comp_rooms": comp, "nights": nights,
+            "rebate_pct": rebate, "fb_contribution": fb,
+            "pattern": pattern,
             "adj_group_revenue": adj_revenue,
             "recommendation": computed["recommendation"],
             "net_value_after_commission": real_net,
@@ -251,6 +268,7 @@ def create_group_sales_router(db, require_roles):
             {"$push": {"versions": version},
              "$set": {"status": "quoted" if rfp.get("status") == "new" else rfp.get("status"),
                       "offered_rate": rate, "wash_pct": wash, "comp_rooms": comp,
+                      "rebate_pct": rebate, "fb_contribution": fb, "pattern": pattern,
                       "updated_at": datetime.now(timezone.utc).isoformat()}})
 
         # RED çıkarsa satış ekibine otomatik alternatif tarih önerisi

@@ -1,0 +1,35 @@
+{
+  "summary": "Iter 518 regression: NEW endpoints (Open Pricing Optimizer, Overbooking Control, Room-Type Forecast, Decision Assurance A/B holdout, Group Sales patterned quote) + regression sweep. Backend 13/13 pytest PASS. Frontend smoke via Ctrl+K palette: 7/7 test-id panels rendered non-blank (ob-table, rtf-panel, da-experiment-card, op-optimize-btn+toast, gs-pattern-input, gs-rebate-input, gs-fb-input). Patterned quote math verified numerically: adj_group_revenue = ceil(40*0.9)*95*0.95+500 = 3749.0 (exact match); expected_rooms=18. Optimizer returns 48 cells/day (6 segments x 8 channels) with channel_factors.direct=0.97 and apply:true wrote overrides. Holdout PUT persisted to 10%.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "GuestProfilesPanel", "issues": ["React warning: 'Each child in a list should have a unique key prop' — non-blocking but should be fixed"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration518_regression.py",
+    "/app/test_reports/pytest/iter518_results.xml"
+  ],
+  "action_items": [
+    "(Low) Fix missing React key warning in GuestProfilesPanel list render",
+    "(Info) Palette match relies on exact display names; consider adding English aliases (e.g. 'Group Sales', 'Overbooking') to Turkish menu items for search-friendliness"
+  ],
+  "critical_code_review_comments": [
+    "open_pricing.py run_open_pricing_optimizer is idempotent (delete_many with reason=optimizer + date>=today before inserts) — good",
+    "group_sales.create_rfp reuses request field 'offered_rate' (not 'rate') — front-end/back-end names consistent",
+    "group_displacement analyze endpoint requires both rooms_requested and offered_rate (in addition to quoted_price); acceptable but slightly redundant",
+    "DashboardViews.js is a very large monolith (>1700 lines controlling activeView routing) — flagged for future modularization"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration518_regression.py"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (7/7 smoke)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created RFP 'QA Pattern 518' via API during test (marked as 'lost' at end). Optimizer wrote optimizer-tagged open_pricing_overrides for 5 future days (idempotent, safe to re-run).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Ctrl+K palette in this app uses Turkish menu item names ('Overbooking & wash control', 'Oda tipi forecast', 'Decision Assurance (kanıtlı autopilot)', 'Open Pricing matrisi', 'Group Sales OS (RFP)'). Use page.get_by_text(exact_name, exact=True) after typing a substring to pick the correct row — using role=option first hit or Enter can land on unintended items like Guest CRM 360. group-sales create endpoint is POST /api/group-sales/{property_id}/rfp (not /api/group-sales/rfp) with body keys check_in/check_out/offered_rate/rooms/pattern/wash_pct/rebate_pct/fb_contribution. group-displacement analyze needs rooms_requested + offered_rate + quoted_price + check_in/check_out.",
+  "rca of the issue": "No production bugs identified in iter 518 additions. Initial test-script failures were selector/field-name mismatches (fixed): (a) OP matrix key is 'matrix' not 'days'; (b) group-sales route is prefixed with {property_id} and uses 'offered_rate'; (c) group-displacement requires 'rooms_requested' + 'offered_rate' + 'quoted_price'. Frontend palette navigation initially matched wrong items via 'Enter'; resolved by clicking exact Turkish label text."
+}

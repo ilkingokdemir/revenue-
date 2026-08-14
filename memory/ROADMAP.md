@@ -111,4 +111,4 @@ Kalan FLYR boşlukları (P1 adayı): ~~gün-içi re-price~~ (iter 450 DONE), ~~A
 - [x] b) P0: Gelişmiş Overbooking (TAMAM iter 517) & Wash Control — kaynak/lead-time bazlı no-show modeli + günlük limit + walk riski
 - [x] c) P1: A/B Nedensel Etki (TAMAM iter 517) — holdout deney altyapısı (uygulanmış vs tutulmuş kararların gerçek uplift'i)
 - [x] d) P1: Oda tipi bazlı bağımsız forecast (TAMAM iter 517)
-- [ ] e) P2: Group Sales kalanları (patterned block, rebate/concession, F&B katkısı)
+- [x] e) P2: Group Sales kalanları (TAMAM iter 518)

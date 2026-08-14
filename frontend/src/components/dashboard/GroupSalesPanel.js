@@ -74,7 +74,8 @@ export default function GroupSalesPanel({ propertyId }) {
   const createRfp = async () => {
     if (!form.check_in || !form.check_out) return toast.error("Tarihler gerekli");
     try {
-      await axios.post(`${API}/group-sales/${pid}/rfp`, form);
+      const pattern = (form.pattern_text || "").split(",").map((s) => s.trim()).filter((s) => /^\d+$/.test(s)).map(Number);
+      await axios.post(`${API}/group-sales/${pid}/rfp`, { ...form, pattern });
       toast.success("RFP oluşturuldu");
       setForm({ ...form, group_name: "", contact_email: "" });
       load();
@@ -196,6 +197,15 @@ export default function GroupSalesPanel({ propertyId }) {
           className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold">
           <Plus size={14} /> RFP
         </button>
+        <div className="col-span-2 md:col-span-4">
+          <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Patterned blok (gün gün oda, virgüllü — ör: 10,25,25,10)</label>
+          <input value={form.pattern_text} onChange={(e) => setForm({ ...form, pattern_text: e.target.value })} data-testid="gs-pattern-input"
+            className="w-full border border-stone-200 rounded-lg px-2 py-2 text-xs" placeholder="boş = her gece aynı oda" />
+        </div>
+        <div><label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Rebate %</label>
+          <input type="number" min="0" max="20" value={form.rebate_pct} onChange={(e) => setForm({ ...form, rebate_pct: e.target.value })} data-testid="gs-rebate-input" className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" /></div>
+        <div><label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">F&B katkısı</label>
+          <input type="number" min="0" value={form.fb_contribution} onChange={(e) => setForm({ ...form, fb_contribution: e.target.value })} data-testid="gs-fb-input" className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" /></div>
       </div>
 
       {/* RFP list */}

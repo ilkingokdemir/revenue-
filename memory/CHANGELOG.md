@@ -3708,3 +3708,30 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - Refactor: simulate_lesson_impact ve generate_expert_brief modül seviyesine alındı (chat + router ortak kullanır).
 - Test: iteration_522.json — backend 8/8, frontend %100 PASS (yeni menü girişi olmadığı da doğrulandı).
 - BACKLOG (test ajanı önerisi): RM_KNOWLEDGE'ı Mongo'ya taşı ki robot rakip kartlarını çalışma zamanında güncelleyebilsin.
+
+## Iter 525 (2026-08-14) — Robot 2 dış dokümanı inceledi + kanıt disiplini
+- Kullanıcının paylaştığı AI konuşması (ileri RMS mimarisi) ve öz-eleştirel analiz (uydurma yüzde uyarısı, veri mühendisliği)
+  robotun kütüphanesine damıtıldı: kütüphane 25 → 44 kayıt (yeni kategori: veri_muhendisligi).
+- Yeni dersler: top-20 RMS haritası, metacognition (MAPE ile model seçici), denials&regrets, fiyat savaşı oyun teorisi kapısı,
+  anomali filtresi, dış sinyaller (Open-Meteo/pytrends/Ticketmaster/OpenSky + look-ahead bias tuzağı), iptal olasılık skoru,
+  spillage/spoilage, billboard/CUG, Bellman/MDP, kanıt hijyeni (patent kaynağı), OTB matrisi, ENDOJENİTE (ε-greedy/Thompson keşif,
+  Expedia ICDM 2013), kalibrasyon>AUC (isotonic), model ölçeği (tek otelde LSTM overfit → LightGBM+hiyerarşik TS),
+  Antonio 2019 seti, talep simülatörü zorunluluğu, ufuk bulgusu (zekâ uzak ufukta kazandırır).
+- DÜZELTME (kanıt hijyeni): eski kartlardaki doğrulanmamış satıcı yüzdeleri (%4-7 RevPAR, %18 isabet, %8-11 ADR, %12 kâr kaybı)
+  'doğrulanmamış pazarlama iddiası' olarak yeniden yazıldı — robot uydurma katsayıları gerçek gibi sunmayacak.
+- İçselleştirme motoruna 7. kural eklendi: Spillage/Spoilage radarı (erken dolan günler + yaklaşan boş günler, canlı veriden).
+- Canlı doğrulama: chat robotu naif esneklik regresyonu önerisine sansürleme/endojenite gerekçeleriyle karşı çıktı; fiyat savaşı
+  sorusunda 'anomali filtresi' diyerek fiyat korumayı savundu. Kütüphane araması yeni dersleri buluyor (44 kayıt).
+- NOT: watchfiles reload hang tekrarladı (backend restart ile çözüldü). Login yanıt alanı 'token' (access_token değil).
+
+## Iter 526 (2026-08-14) — Yüklenen LightGBM Pickup Modeli robota organ olarak entegre edildi
+- Kullanıcı gerçek eğitilmiş LightGBM pickup modelini (500 ağaç, Antonio 2019 verisi, 9 özellik) yükledi →
+  /app/backend/models/pickup_model.txt. lightgbm pip kuruldu (requirements güncel).
+- ml_pickup.py (YENİ): lazy Booster, ÖLÇEK TRANSFERİ (küçük otel → k=100/cap ile model uzayı → geri ölçek),
+  SAĞDUYU TABANI (nihai ≥ OTB×0.85; ilk denemede tüm günler %110 sonra %15-45 çıktı — iki yönlü düzeltme gerekti).
+  GET /api/rm-expertise/{pid}/ml-pickup?days=. ml_pickup_summary_for_llm → chat context'ine boş gece riski/sıcak günler beslenir.
+- UI: Alan Uzmanlığı'na "ML Pickup Tahmini" sekmesi (rmx-tab-mlpickup, risk şeridi rmx-ml-risk, renkli tablo).
+- Kütüphane kartı: data_ml_pickup_model (45 kayıt). Kural notu: tahmin-vs-gerçek aylık MAPE takibi önerisi kartta.
+- Ayrıca fark edildi ve düzeltildi: iter 522'de copilot'a eklenen expertise_context_for_llm enjeksiyonu dosyadan kaybolmuştu
+  (muhtemelen çakışan düzenleme) — geri eklendi + ML özeti eklendi.
+- Test: iteration_525.json — backend %100 (9 pytest), frontend %100. Chat 'response' alanı döner (reply değil).

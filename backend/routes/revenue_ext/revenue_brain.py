@@ -326,8 +326,9 @@ async def run_learning_cycle(db, pid: str) -> dict:
     global_mem = await consolidate_global_memory(db)
     regional_mem = await consolidate_regional_memory(db)
     try:
-        from routes.revenue_ext.rm_expertise import compute_sensitivity
+        from routes.revenue_ext.rm_expertise import compute_sensitivity, internalize_expertise
         await compute_sensitivity(db, pid)
+        await internalize_expertise(db, pid)
     except Exception:
         pass
     if measured > 0:

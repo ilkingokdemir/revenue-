@@ -16,6 +16,11 @@ export default function RmExpertisePanel({ properties = [], activePropertyId, em
   const [sens, setSens] = useState(null);
   const [brief, setBrief] = useState(null);
   const [busy, setBusy] = useState("");
+  const [lib, setLib] = useState({ items: [], total: 0, categories: [] });
+  const [libQ, setLibQ] = useState("");
+  const [libCat, setLibCat] = useState("");
+  const [rules, setRules] = useState([]);
+  const [mlp, setMlp] = useState(null);
 
   useEffect(() => {
     if (embeddedPropertyId) setPropertyId(embeddedPropertyId);
@@ -32,9 +37,26 @@ export default function RmExpertisePanel({ properties = [], activePropertyId, em
       setKnowledge(k.data.items || []);
       setSens(s.data);
       setBrief(b.data);
+      try {
+        const r = await axios.get(`${API}/rm-expertise/${propertyId}/expert-rules`, { withCredentials: true });
+        setRules(r.data.rules || []);
+      } catch { /* */ }
+      try {
+        const m = await axios.get(`${API}/rm-expertise/${propertyId}/ml-pickup?days=24`, { withCredentials: true });
+        setMlp(m.data);
+      } catch { /* */ }
     } catch { toast.error("Uzmanlık verileri yüklenemedi"); }
   }, [propertyId]);
   useEffect(() => { load(); }, [load]);
+
+  const loadLibrary = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/rm-expertise/library`, {
+        params: { q: libQ, category: libCat }, withCredentials: true });
+      setLib(r.data);
+    } catch { /* */ }
+  }, [libQ, libCat]);
+  useEffect(() => { loadLibrary(); }, [loadLibrary]);
 
   const analyze = async () => {
     setBusy("sens");
@@ -54,8 +76,20 @@ export default function RmExpertisePanel({ properties = [], activePropertyId, em
     } catch { toast.error("Brifing üretilemedi"); } finally { setBusy(""); }
   };
 
+  const internalize = async () => {
+    setBusy("rules");
+    try {
+      const r = await axios.post(`${API}/rm-expertise/${propertyId}/internalize`, {}, { withCredentials: true });
+      setRules(r.data.rules || []);
+      toast.success(`${r.data.rules_count} uzman kuralı bu otelin verisiyle içselleştirildi`);
+    } catch { toast.error("İçselleştirme başarısız"); } finally { setBusy(""); }
+  };
+
   const TABS = [
     { id: "brief", label: "Uzman Brifingi", icon: Sparkle },
+    { id: "rules", label: "Uzman Kuralları", icon: Medal },
+    { id: "mlpickup", label: "ML Pickup Tahmini", icon: ChartLineUp },
+    { id: "library", label: "Bilgi Kütüphanesi", icon: BookOpen },
     { id: "sensitivity", label: "Fiyat Duyarlılığı", icon: ChartLineUp },
     { id: "principles", label: "RM Prensipleri", icon: BookOpen },
     { id: "market", label: "Rakipler & Pazar", icon: Buildings },
@@ -116,6 +150,103 @@ export default function RmExpertisePanel({ properties = [], activePropertyId, em
           ) : (
             <div className="text-xs text-stone-500 py-8 text-center">Henüz brifing yok — "Yeni Brifing Üret" ile uzman robotun tam strateji raporunu alın.</div>
           )}
+        </div>
+      )}
+
+      {tab === "rules" && (
+        <div className="bg-white border border-stone-200 rounded-xl p-5" data-testid="rmx-rules">
+          <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
+            <div className="text-sm font-semibold text-stone-900">İçselleştirilmiş Uzman Kuralları
+              <span className="text-[10px] text-stone-400 font-normal ml-2">robot sektör bilgisini BU otelin canlı rakamlarıyla uygulanabilir kurallara dönüştürür — chat ve stratejist bunları kullanır</span>
+            </div>
+            <button onClick={internalize} disabled={busy === "rules"} data-testid="rmx-internalize"
+              className="px-3 py-2 text-xs rounded-md bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 font-medium">
+              {busy === "rules" ? "İçselleştiriliyor…" : "Yeniden İçselleştir"}
+            </button>
+          </div>
+          {rules.length === 0 ? (
+            <div className="text-xs text-stone-500 py-6 text-center">Henüz kural yok — "Yeniden İçselleştir" ile robotun bilgiyi bu otele uygulamasını başlatın.</div>
+          ) : (
+            <div className="space-y-2 mt-3">
+              {rules.map((r) => (
+                <div key={r.id} className="border border-emerald-100 bg-emerald-50/40 rounded-xl px-4 py-3" data-testid={`rmx-rule-${r.source_id}`}>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5">{r.sira}</span>
+                    <span className="text-sm font-semibold text-stone-900">{r.baslik}</span>
+                  </div>
+                  <div className="text-xs text-stone-700 leading-relaxed">{r.kural}</div>
+                  <div className="text-[10px] text-stone-400 mt-1">Hesaplandı: {r.computed_at?.slice(0, 16).replace("T", " ")}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "mlpickup" && (
+        <div className="bg-white border border-stone-200 rounded-xl p-5" data-testid="rmx-mlpickup">
+          <div className="text-sm font-semibold text-stone-900 mb-1">ML Pickup Tahmini
+            <span className="text-[10px] text-stone-400 font-normal ml-2">{mlp?.model} — {mlp?.note}</span>
+          </div>
+          {mlp?.empty_risk_dates?.length > 0 && (
+            <div className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 mb-2" data-testid="rmx-ml-risk">
+              Boş gece riski (&lt;%50 tahmini): {mlp.empty_risk_dates.slice(0, 6).join(", ")}
+            </div>
+          )}
+          {mlp?.hot_dates?.length > 0 && (
+            <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-2" data-testid="rmx-ml-hot">
+              Sıcak günler (≥%90): {mlp.hot_dates.slice(0, 6).join(", ")} — fiyat artış penceresi
+            </div>
+          )}
+          {(!mlp?.days || mlp.days.length === 0) ? (
+            <div className="text-xs text-stone-500 py-6 text-center">Tahmin üretilemedi.</div>
+          ) : (
+            <table className="w-full text-xs mt-2">
+              <thead><tr className="text-left text-stone-400 border-b border-stone-100">
+                <th className="py-1.5">Tarih</th><th>Gün kala</th><th>OTB</th><th>Son 7g pickup</th>
+                <th>ML nihai oda</th><th>ML doluluk</th><th>Naif</th><th>Durum</th></tr></thead>
+              <tbody>
+                {mlp.days.map((r) => (
+                  <tr key={r.date} className={`border-b border-stone-50 ${r.risk === "bos_gece" ? "bg-rose-50/50" : r.risk === "sicak" ? "bg-emerald-50/50" : ""}`}>
+                    <td className="py-1.5 font-semibold text-stone-700">{r.date}</td>
+                    <td>T-{r.days_out}</td><td>{r.otb}</td><td>{r.pickup_last7}</td>
+                    <td className="font-bold">{r.ml_final_rooms}</td>
+                    <td className={`font-bold ${r.ml_final_occ_pct < 50 ? "text-rose-600" : r.ml_final_occ_pct >= 90 ? "text-emerald-600" : "text-stone-700"}`}>%{r.ml_final_occ_pct}</td>
+                    <td className="text-stone-400">{r.naive_final_rooms}</td>
+                    <td>{r.risk === "bos_gece" ? "⚠ boş gece" : r.risk === "sicak" ? "▲ sıcak" : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {tab === "library" && (
+        <div className="bg-white border border-stone-200 rounded-xl p-5" data-testid="rmx-library">
+          <div className="text-sm font-semibold text-stone-900 mb-1">Derin Bilgi Kütüphanesi
+            <span className="text-[10px] text-stone-400 font-normal ml-2">{lib.total} kayıt — RMS çalışma prensipleri, akademik vakalar, eğitim müfredatı, teknik modeller. Chat robotu sorunuza göre buradan otomatik beslenir.</span>
+          </div>
+          <div className="flex gap-2 mb-3 flex-wrap">
+            <input value={libQ} onChange={(e) => setLibQ(e.target.value)} data-testid="rmx-lib-search"
+              placeholder="Ara: pickup, overbooking, IHG, esneklik, displacement…"
+              className="flex-1 min-w-[220px] px-3 py-2 text-xs border border-stone-300 rounded-lg" />
+            <select value={libCat} onChange={(e) => setLibCat(e.target.value)} data-testid="rmx-lib-cat"
+              className="px-2 py-2 text-xs border border-stone-300 rounded-lg bg-white">
+              <option value="">Tüm kategoriler</option>
+              {lib.categories.map((c) => <option key={c} value={c}>{c.replace(/_/g, " ")}</option>)}
+            </select>
+          </div>
+          <div className="grid md:grid-cols-2 gap-3">
+            {lib.items.map((d) => (
+              <div key={d.id} className="border border-stone-200 rounded-xl p-4 bg-stone-50/50" data-testid={`rmx-lib-${d.id}`}>
+                <div className="text-[10px] font-black uppercase text-indigo-600 mb-1">{d.category.replace(/_/g, " ")}</div>
+                <div className="text-sm font-semibold text-stone-900 mb-1">{d.title}</div>
+                <div className="text-xs text-stone-600 leading-relaxed">{d.body}</div>
+              </div>
+            ))}
+            {lib.items.length === 0 && <div className="text-xs text-stone-500 py-6 text-center col-span-2">Sonuç bulunamadı.</div>}
+          </div>
         </div>
       )}
 

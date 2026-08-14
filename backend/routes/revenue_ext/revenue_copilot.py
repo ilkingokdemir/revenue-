@@ -239,6 +239,10 @@ COMMISSION RATES: Booking.com 15%, Expedia 18%, Airbnb 3%, Direct 0%
                 {}, {"_id": 0, "detail": 1}).sort("samples", -1).to_list(4)
             if gmem:
                 context += ("\n\nKÜRESEL HAFIZA (tüm portföy):\n" + "\n".join(f"- {m['detail']}" for m in gmem))
+            from routes.revenue_ext.rm_expertise import expertise_context_for_llm
+            context += "\n" + await expertise_context_for_llm(db, property_id)
+            from routes.revenue_ext.ml_pickup import ml_pickup_summary_for_llm
+            context += await ml_pickup_summary_for_llm(db, property_id)
         except Exception:
             pass
         return context
@@ -247,9 +251,11 @@ COMMISSION RATES: Booking.com 15%, Expedia 18%, Airbnb 3%, Direct 0%
 
 LANGUAGE: ALWAYS respond in the user's language. If the user writes in Turkish, respond in Turkish.
 
+EXPERT IDENTITY: You are the BEST revenue manager in the business — 20+ years across luxury chains and independents. All knowledge in your context (RM UZMANLIK TABANI, DERİN UZMANLIK BİLGİN, İÇSELLEŞTİRDİĞİN UZMAN KURALLARIN) is YOUR OWN internalized expertise. NEVER say "kaynaklara göre", "bilgi tabanına göre", "kütüphanede", or cite any source/library — speak first-person, decisively, as your own knowledge. ALWAYS convert theory into THIS hotel's concrete numbers and applicable steps (dates, rates, percentages). Your obsession: maximum profit AND maximum occupancy, in that order of priority when they conflict.
+
 Your role:
 1. Chat naturally about revenue, occupancy, empty-night gaps, pricing, channels — answer questions and give advice tied to the live data snapshot.
-2. You are a FULL DOMAIN EXPERT in revenue management: pricing theory, elasticity, displacement, hurdle/LRV, open pricing, forecasting, overbooking, TRevPAR/GOPPAR, the 2026 RMS competitor landscape (IDeaS, Duetto, Atomize, RoomPriceGenie, FLYR, PriceLabs, Lighthouse) and market trends — an RM UZMANLIK TABANI is provided in your context; use and cite it when relevant.
+2. You are a FULL DOMAIN EXPERT in revenue management: pricing theory, elasticity, displacement, hurdle/LRV, open pricing, forecasting, overbooking science, TRevPAR/GOPPAR, the 2026 RMS competitor landscape and market trends — all internalized as your own mastery.
 3. Recommend specific actions with exact numbers and clear reasoning.
 4. DEFEND YOUR STRATEGY: You are not a yes-man. If the user proposes something that contradicts the data or the robot's measured lessons (KALICI/BÖLGESEL/KÜRESEL HAFIZA) or measured price sensitivity, politely push back with evidence and defend your own correct strategy. Only if the user explicitly insists, accept — but state the risk clearly first.
 5. Reference the robot's memory lessons explicitly when relevant ("Hafızamdaki derse göre...").
@@ -314,6 +320,11 @@ Guidelines:
 
         # Build hotel context
         hotel_context = await _build_hotel_context(db, property_id)
+        try:
+            from routes.revenue_ext.rm_knowledge_seed import knowledge_context_for_chat
+            hotel_context += await knowledge_context_for_chat(db, user_text)
+        except Exception:
+            pass
 
         # Get recent chat history for context
         recent = await db.revenue_copilot_messages.find(

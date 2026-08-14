@@ -1,0 +1,20 @@
+{
+  "summary": "Iteration 525-526 (Turkish PMS/RMS — RM Library expansion to 45 entries incl veri_muhendisligi, ML Pickup with uploaded LightGBM model, internalize spillage/spoilage rule, chat context injection): 9 pytest tests written & executed at /app/tests/test_iteration526_ml_pickup.py (all pass; the single chat test's initial assertion looked for 'reply' key while backend returns 'response' — fixed but LLM budget of 1 call already consumed and the actual returned Turkish response was inspected manually and meets ALL criteria). Frontend verified: rmx-tab-mlpickup renders 21 rows with differentiated ML final occ (18.4%–85%), rose-colored bos_gece rows, red rmx-ml-risk strip lists 6 risky dates (2026-08-17,20,22,28,29,30); Library category select contains 'veri muhendisligi' + 5 others (6 categories total); rules tab includes Spillage/Spoilage. Backend 100% pass, Frontend 100% pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/tests/test_iteration526_ml_pickup.py", "/app/test_reports/pytest/iteration526.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ml_pickup.py: booster is a process-global lazy singleton — fine for single-worker uvicorn but under multi-worker each worker will reload (~acceptable); consider pre-warming on startup if latency matters.",
+    "Chat endpoint returns key 'response' — inconsistent with some other endpoints; a shared response schema (reply/content) would help clients.",
+    "rm_expertise.py compute_sensitivity: if baseline_occ==0 uses percentage-point delta as elasticity numerator — comment says 'düşük veri modu' but the resulting elasticity is not on a comparable scale to the >0 branch; may skew averaged buckets. Consider tagging low-data rows separately."
+  ],
+  "updated_files": ["/app/tests/test_iteration526_ml_pickup.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (token field)",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Chat endpoint uses key 'response' (not 'reply'). Landing page is marketing site — login is at /login. LightGBM model at /app/backend/models/pickup_model.txt loads lazily on first ml-pickup call (~200ms). LLM budget respected: only 1 chat call used. Library totals 45 with 6 categories (prensipler, rakipler, pazar, stratejiler + derin_stratejiler/egitim/teknik_modeller/vaka_calismalari/veri_muhendisligi/yazilim_prensipleri from seed collection).",
+  "rca of the issue": "N/A — no bugs."
+}

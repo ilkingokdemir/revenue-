@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 523 (RM knowledge library — 25 deep entries) fully validated. Backend (6/6 pytest at /app/tests/test_iteration523_rm_library.py): GET /api/rm-expertise/library returns total=25 with 5 categories {derin_stratejiler,egitim,teknik_modeller,vaka_calismalari,yazilim_prensipleri} and items containing {id,category,title,tags,body}; ?q=overbooking returns overbooking/newsvendor hits; ?q=IHG returns IHG case; ?category=yazilim_prensipleri returns exactly 5 items including IDeaS/Duetto/Atomize/RoomPriceGenie/ortak mimari; idempotency confirmed (repeat calls stay at 25); chat expert feeding (1 LLM call) with 'Rezervasyon eğrisi ve pickup tahmini nasıl çalışır, MAPE hedefi ne olmalı?' returned Turkish response referencing pickup/MAPE/eğri concepts (knowledge injection working). Frontend (Playwright, property=city-gate): Login → Öğrenen Beyin → Alan Uzmanlığı & Rakip Pazarı tab shows all 5 sub-tabs (rmx-tab-brief/library/sensitivity/principles/market); new rmx-tab-library renders 25 cards (27 total rmx-lib-* testids including rmx-lib-search + rmx-lib-cat); search 'overbooking' filters to 3 relevant cards; category select 'yazilim_prensipleri' filters to exactly 5 cards. Regression OK: all other expertise sub-tabs clickable; brain-tab-memory shows brain-permanent-memory. LLM budget: 1 call used (within limit).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/tests/test_iteration523_rm_library.py",
+    "/app/test_reports/pytest/iter523.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "DEEP_KNOWLEDGE is 25 static seed entries in rm_knowledge_seed.py — good persistence to Mongo (rm_knowledge_library) via ensure_knowledge_seeded, but there is no admin UI/API to add/edit/delete entries at runtime, so 'self-development' still cannot truly grow the library without a code deploy.",
+    "retrieve_knowledge appears to be token-based scoring (TR-normalized) — for large libraries consider Mongo text index on title+body+tags for scalability; current linear scan is fine at N=25 but will degrade if the library grows beyond a few hundred entries.",
+    "knowledge_context_for_chat is appended to hotel_context per chat request — verify that context size stays within model limits when many high-scoring entries are retrieved (add a top-K cap and per-entry char limit if not already present).",
+    "Library UI cards render full body text inline — for readability consider expand/collapse or a modal detail view; also add a 'source/citation' field to each entry (Cornell/HSMAI/STR/etc.) to visually credit sources cited in the request."
+  ],
+  "updated_files": ["/app/tests/test_iteration523_rm_library.py"],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (all required testids + counts verified)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None. Relied on existing seeded rm_knowledge_library (25 entries). LLM budget used: 1 chat call.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Landing page is marketing; login via 'Sign In' button (button, not link). After login redirect land on /login for a moment then dashboard loads. Property picker is a native <select> in Öğrenen Beyin header — must select 'city-gate' to see city-gate memory/sensitivity/simulate. Expertise sub-tabs: rmx-tab-brief|library|sensitivity|principles|market. Library card testid pattern: rmx-lib-<slug> (e.g., rmx-lib-ideas_g3_engine, rmx-lib-duetto_algorithm, rmx-lib-atomize_engine, rmx-lib-rpg_hybrid). Search testid: rmx-lib-search; category select testid: rmx-lib-cat with option values matching category slugs (yazilim_prensipleri, vaka_calismalari, egitim, teknik_modeller, derin_stratejiler). Backend endpoint: GET /api/rm-expertise/library?q=...&category=... returns {total, categories, items:[{id,category,title,tags,body}]}. Login response field 'access_token'.",
+  "rca of the issue": "N/A — no issues found"
+}

@@ -145,12 +145,143 @@ async def compute_sensitivity(db, pid: str) -> dict:
     return doc
 
 
+async def internalize_expertise(db, pid: str) -> dict:
+    """İçselleştirme: kütüphane bilgisini BU OTELİN verisiyle birleştirip
+    uygulanabilir uzman kurallarına dönüştürür. Robot bunları kendi uzmanlığı olarak kullanır."""
+    from datetime import timedelta
+    now = _now()
+    today = datetime.now(timezone.utc).date()
+    rules = []
+
+    # Otel temel verileri
+    total_rooms = await db.rooms.count_documents({"property_id": pid}) or 20
+    adr_rows = [float(b.get("rate") or 0) async for b in db.bookings.find(
+        {"property_id": pid, "rate": {"$gt": 0}}, {"_id": 0, "rate": 1}).limit(500)]
+    adr = round(sum(adr_rows) / len(adr_rows), 2) if adr_rows else 100.0
+
+    # 1) Newsvendor: bu otele özel optimum overbooking kritik oranı
+    cu = adr * 0.7
+    co = adr * 1.5 + 50
+    critical = round(cu / (cu + co) * 100, 1)
+    rules.append({"source_id": "edu_overbooking_model", "baslik": "Optimum Overbooking Oranın",
+                  "kural": f"Bu otelin newsvendor kritik oranı %{critical} (boş oda maliyeti ~{round(cu,0)} vs walk ~{round(co,0)}). "
+                           f"No-show dağılımının %{critical}'lik dilimine denk gelen değeri günlük limit olarak uygula — "
+                           f"Overbooking panelindeki öneriler bu disiplinle çalışır.",
+                  "rakamlar": {"kritik_oran_pct": critical, "adr": adr, "walk_maliyeti": round(co, 2)}})
+
+    # 2) Kanal miksi: direkt pay ve kâr fırsatı
+    src_counts = {}
+    async for b in db.bookings.find({"property_id": pid, "status": {"$nin": ["cancelled"]}},
+                                    {"_id": 0, "source": 1}).limit(1000):
+        s = (b.get("source") or "direct").lower()
+        src_counts[s] = src_counts.get(s, 0) + 1
+    total_b = sum(src_counts.values()) or 1
+    direct_pct = round(src_counts.get("direct", 0) / total_b * 100, 1)
+    rules.append({"source_id": "strat_max_profit_deep", "baslik": "Direkt Kanal Payın ve Kâr Kaldıracın",
+                  "kural": f"Direkt pay şu an %{direct_pct}. Her +10 puan direkt pay ≈ ciroda %1.5-2 net kâr (OTA komisyon tasarrufu). "
+                           f"Hedef: %{min(direct_pct + 10, 65):.0f} — web'e en iyi fiyat garantisi + üye fiyatı fence'i uygula.",
+                  "rakamlar": {"direkt_pay_pct": direct_pct, "hedef_pct": round(min(direct_pct + 10, 65), 1)}})
+
+    # 3) Fiyat değişkenliği: kendi ayar sıklığın vs +%3.07 bulgusu
+    d60 = (today - timedelta(days=60)).isoformat()
+    changes = await db.ai_pricing_decisions.count_documents({"property_id": pid, "run_at": {"$gte": d60}})
+    per_week = round(changes / 8.6, 1)
+    yeterli = per_week >= 7
+    rules.append({"source_id": "study_variability", "baslik": "Fiyat Ayar Sıklığın",
+                  "kural": (f"Son 60 günde {changes} fiyat kararı (haftada ~{per_week}). " +
+                            ("Sıklık iyi — sık küçük ayarlar RevPAR'a ~+%3 katkı sağlar; guardrail bandında sürdür."
+                             if yeterli else
+                             "Bu az — fiyat değişkenliğini artıran oteller ~+%3.07 gelir kazanıyor. Gece optimizer'ını "
+                             "günlük çalıştır, elle fiyat sabitleme.")),
+                  "rakamlar": {"karar_60g": changes, "haftalik": per_week, "hedef_haftalik": 7}})
+
+    # 4) Duyarlılık → ADR taktiği (kendi ölçümünden)
+    sens = await db.revenue_sensitivity.find_one({"property_id": pid}, {"_id": 0})
+    inel = [b for b in (sens or {}).get("buckets", []) if "inelastik" in b.get("label", "")]
+    if inel:
+        ctxs = ", ".join(f"{'hafta sonu' if b['dow_type']=='weekend' else 'hafta içi'} {b['band']} gün kala" for b in inel[:3])
+        rules.append({"source_id": "study_elasticity", "baslik": "İnelastik Bağlamlarında Cesur ADR",
+                      "kural": f"Kendi ölçümlerine göre şu bağlamlarda talep İNELASTİK: {ctxs}. Buralarda fiyat kırma — "
+                               f"+%5-10 ADR testleri uygula; doluluk bozulmaz, kâr artar. Sonuçlar otomatik ölçülüp hafızana işlenir.",
+                      "rakamlar": {"inelastik_baglam": len(inel)}})
+
+    # 5) LRV disiplini: önümüzdeki 14 günde yüksek doluluk günleri
+    high_days = []
+    for i in range(14):
+        ds = (today + timedelta(days=i)).isoformat()
+        sold = await db.bookings.count_documents({
+            "property_id": pid, "status": {"$nin": ["cancelled"]},
+            "check_in": {"$lte": ds}, "check_out": {"$gt": ds}})
+        if sold / total_rooms >= 0.9:
+            high_days.append(ds)
+    if high_days:
+        rules.append({"source_id": "study_unavailability", "baslik": "Son Oda Değeri (LRV) Koruması",
+                      "kural": f"Önümüzdeki 14 günde {len(high_days)} gün %90+ doluluk ({', '.join(high_days[:4])}…). "
+                               f"Bu günlerde düşük fiyatlı segment/kanalları stratejik kapat — son odaları geç gelen yüksek "
+                               f"değerli talebe sakla (bu disiplin +%34'e kadar gelir farkı yaratır).",
+                      "rakamlar": {"yuksek_doluluk_gun": len(high_days), "gunler": high_days[:5]}})
+
+    # 6) Pace okuma: son 7 gün vs önceki 7 gün rezervasyon hızı
+    d7 = (today - timedelta(days=7)).isoformat()
+    d14 = (today - timedelta(days=14)).isoformat()
+    p1 = await db.bookings.count_documents({"property_id": pid, "created_at": {"$gte": d7}})
+    p0 = await db.bookings.count_documents({"property_id": pid, "created_at": {"$gte": d14, "$lt": d7}})
+    trend = round((p1 - p0) / p0 * 100, 1) if p0 else 0.0
+    if abs(trend) >= 15 and p0:
+        aksiyon = ("pickup hızlanıyor → fiyat artış penceresi açık; inelastik bağlamlardan başla."
+                   if trend > 0 else
+                   "pickup yavaşlıyor → önce segment kırılımına bak; genel yavaşlamaysa fence'li hedefli teklif aç, fiyat kırma.")
+    else:
+        aksiyon = "pace normal bantta → rakip fiyat hareketlerine refleks verme, kendi eğrine güven."
+    rules.append({"source_id": "tech_pace_signals", "baslik": "Güncel Pace Okuman",
+                  "kural": f"Son 7 gün {p1} rezervasyon vs önceki 7 gün {p0} (%{trend:+}). Uzman okuma: {aksiyon}",
+                  "rakamlar": {"son7": p1, "onceki7": p0, "trend_pct": trend}})
+
+    # 7) Spillage / Spoilage radarı (yeni içselleştirilen denge dersi)
+    spill_days, spoil_days = [], []
+    for i in range(30):
+        ds = (today + timedelta(days=i)).isoformat()
+        sold = await db.bookings.count_documents({
+            "property_id": pid, "status": {"$nin": ["cancelled"]},
+            "check_in": {"$lte": ds}, "check_out": {"$gt": ds}})
+        occ_r = sold / total_rooms
+        if occ_r >= 0.95 and i > 7:
+            spill_days.append(ds)
+        elif occ_r < 0.5 and i <= 7:
+            spoil_days.append(ds)
+    if spill_days or spoil_days:
+        parca = []
+        if spill_days:
+            parca.append(f"{len(spill_days)} gün 7+ gün kala %95+ doldu ({spill_days[0]}…) → SPILLAGE işareti: bu günler "
+                         f"muhtemelen ucuza satıldı, benzer günlerde fiyat tabanını yükselt")
+        if spoil_days:
+            parca.append(f"{len(spoil_days)} gün 7 gün içinde <%50 doluluk ({spoil_days[0]}…) → SPOILAGE riski: fence'li "
+                         f"hedefli teklif aç (üye fiyatı/min-2-gece), fiyatı çıplak kırma")
+        rules.append({"source_id": "edu_spillage_spoilage", "baslik": "Spillage/Spoilage Dengesi",
+                      "kural": "İki zarar radarın: " + "; ".join(parca) + ".",
+                      "rakamlar": {"spillage_gun": len(spill_days), "spoilage_gun": len(spoil_days)}})
+
+    # Kaydet (property başına güncel set)
+    await db.rm_expert_rules.delete_many({"property_id": pid})
+    for i, r in enumerate(rules):
+        r.update({"id": str(uuid.uuid4())[:8], "property_id": pid, "sira": i + 1,
+                  "status": "aktif", "computed_at": now})
+        await db.rm_expert_rules.insert_one(r)
+        r.pop("_id", None)
+    return {"property_id": pid, "rules_count": len(rules), "rules": rules, "computed_at": now}
+
+
 async def expertise_context_for_llm(db, pid: str) -> str:
     """Copilot/Stratejist prompt'una eklenen uzmanlık özeti."""
-    parts = ["\nRM UZMANLIK TABANI (robot bu alanda tam uzmandır — gerektiğinde atıf yap):"]
+    parts = ["\nRM UZMANLIK TABANI (bunlar SENİN içselleştirilmiş bilgindir — kaynak anmadan kendi uzmanlığın olarak uygula):"]
     for k in RM_KNOWLEDGE:
         if k["category"] in ("prensipler", "stratejiler"):
             parts.append(f"- {k['title']}: {k['body'][:160]}")
+    er = await db.rm_expert_rules.find({"property_id": pid}, {"_id": 0}).sort("sira", 1).to_list(10)
+    if er:
+        parts.append("\nBU OTELE ÖZEL İÇSELLEŞTİRDİĞİN UZMAN KURALLARIN (rakamlar canlı veriden — tavsiyelerini bunlara dayandır):")
+        for r in er:
+            parts.append(f"- {r['baslik']}: {r['kural']}")
     sens = await db.revenue_sensitivity.find_one({"property_id": pid}, {"_id": 0})
     if sens and sens.get("buckets"):
         parts.append("\nFİYAT DUYARLILIK ÖLÇÜMLERİ (bu otelin kendi verisi):")
@@ -175,6 +306,13 @@ async def generate_expert_brief(db, pid: str, user_email: str = "robot") -> dict
     occ = round(booked / total_rooms * 100, 1)
     mem = await db.revenue_brain_memory.find({"property_id": pid}, {"_id": 0, "detail": 1}).to_list(6)
     expertise = await expertise_context_for_llm(db, pid)
+    try:
+        from routes.revenue_ext.rm_knowledge_seed import retrieve_knowledge
+        deep = await retrieve_knowledge(db, "maksimum karlilik doluluk strateji fiyat esneklik pace", k=5)
+        expertise += "\n\nDERİN BİLGİ (vakalar/modeller — brifingde kullan):\n" + "\n".join(
+            f"- [{d['title']}] {d['body'][:220]}" for d in deep)
+    except Exception:
+        pass
     prompt = (f"Otel: {pid} · Bugün doluluk %{occ} ({booked}/{total_rooms}).\n"
               f"KALICI HAFIZA DERSLERİ:\n" + "\n".join(f"- {m['detail']}" for m in mem) + "\n" + expertise +
               "\n\nGÖREV: Bu otelin yöneticisi için TÜRKÇE, uzman seviyesinde bir revenue strateji brifingi yaz. Bölümler: "
@@ -201,6 +339,37 @@ def create_rm_expertise_router(db, require_roles):
         items = [k for k in RM_KNOWLEDGE if not category or k["category"] == category]
         cats = sorted({k["category"] for k in RM_KNOWLEDGE})
         return {"count": len(items), "items": items, "categories": cats}
+
+    @router.get("/library")
+    async def library(q: str = "", category: str = "", _u: dict = Depends(require_roles(*ROLES))):
+        """Derin bilgi kütüphanesi — RMS çalışma prensipleri, akademik vakalar, eğitim, teknik modeller."""
+        from routes.revenue_ext.rm_knowledge_seed import ensure_knowledge_seeded, retrieve_knowledge
+        total = await ensure_knowledge_seeded(db)
+        if q:
+            items = await retrieve_knowledge(db, q, k=10)
+            if category:
+                items = [i for i in items if i["category"] == category]
+        else:
+            flt = {"category": category} if category else {}
+            items = await db.rm_knowledge_library.find(flt, {"_id": 0}).to_list(100)
+        cats = await db.rm_knowledge_library.distinct("category")
+        return {"count": len(items), "total": total, "items": items, "categories": sorted(cats)}
+
+    @router.get("/{pid}/ml-pickup")
+    async def ml_pickup(pid: str, days: int = 30, _u: dict = Depends(require_roles(*ROLES))):
+        """Kullanıcının yüklediği eğitilmiş LightGBM modeliyle nihai doluluk tahmini."""
+        from routes.revenue_ext.ml_pickup import ml_pickup_forecast
+        return await ml_pickup_forecast(db, pid, days)
+
+    @router.post("/{pid}/internalize")
+    async def internalize(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Kütüphane bilgisini bu otelin verisiyle uygulanabilir uzman kurallarına dönüştür."""
+        return await internalize_expertise(db, pid)
+
+    @router.get("/{pid}/expert-rules")
+    async def expert_rules(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        rules = await db.rm_expert_rules.find({"property_id": pid}, {"_id": 0}).sort("sira", 1).to_list(20)
+        return {"property_id": pid, "count": len(rules), "rules": rules}
 
     @router.post("/{pid}/analyze-sensitivity")
     async def analyze_sensitivity(pid: str, _u: dict = Depends(require_roles(*ROLES))):

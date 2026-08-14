@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 524 (İçselleştirme / Uzman Kuralları / no-citation chat persona) fully validated. Backend pytest 4/4 at /app/tests/test_iteration524_expert_rules.py: (1) POST /api/rm-expertise/default/internalize returns rules_count=5 with all required source_ids {edu_overbooking_model, strat_max_profit_deep, study_variability, tech_pace_signals} plus tech_pace_signals; each rule has {sira, baslik, kural, rakamlar, source_id, computed_at}; (2) GET /api/rm-expertise/default/expert-rules persists same count and re-running internalize keeps count stable (delete+insert, no duplication) with no _id leakage; (3) POST /api/revenue-brain/city-gate/learn auto-refreshes rules — GET expert-rules returns count>=4 with fresh computed_at; (4) POST /api/revenue/copilot/default/chat with Turkish max-profit question returns Turkish response with ZERO forbidden citation tokens ('kaynak', 'kütüphane', 'bilgi taban') — 1 LLM call used, within budget. Frontend (Playwright, property=default): login → Öğrenen Beyin → Alan Uzmanlığı & Rakip Pazarı → 'Uzman Kuralları' sub-tab (rmx-tab-rules) renders 5 rule cards (rmx-rule-*) with numbered badges 1-5, titles (Optimum Overbooking Oranın, Direkt Kanal Payın ve Kâr Kaldıracın, Fiyat Ayar Sıklığın, Son Oda Değeri LRV Koruması, Güncel Pace Okuman), Turkish rule bodies with live hotel numbers (%26.2 kritik oran, %4.2 direkt pay, +383.3% pace, 6 gün %90+ doluluk), and 'Hesaplandı: 2026-08-14 12:05' timestamps. 'Yeniden İçselleştir' (rmx-internalize) button click succeeded and cards remained at 5 (idempotent refresh). Regression: rmx-tab-library still shows 25 cards.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/tests/test_iteration524_expert_rules.py",
+    "/app/test_reports/pytest/iter524.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Login response returns field 'token' (not 'access_token' as documented in /app/memory/test_credentials.md line for admin). Consider updating test_credentials.md or aliasing so downstream test agents don't fail — I added a fallback (access_token or token) in the test file to keep this iteration green.",
+    "internalize_expertise (rm_expertise.py ~L210) recomputes rules on every learning cycle via delete_many + insert_one loop; for high-frequency learn cycles this could churn the collection — consider upsert-by-source_id or a single bulk write.",
+    "Rule count varies (5 for 'default' vs 4-6 depending on data — inelastic bucket and LRV rule are conditional). Assertion rules_count>=5 currently passes for default but city-gate can return 4 (asserted >=4). Consider documenting the min/max range in the endpoint response schema.",
+    "expertise_context_for_llm truncates knowledge bodies to 160 chars — combined with 10 expert rules and sensitivity buckets this may still balloon the system prompt for chat; consider a total-char cap.",
+    "No admin API to edit/disable a specific expert rule at runtime; entire set is regenerated. If a user wants to override or pin a rule, they can't."
+  ],
+  "updated_files": ["/app/tests/test_iteration524_expert_rules.py"],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% (all required testids + counts verified + regression)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! — login response uses field 'token' (fallback for 'access_token' handled)",
+  "seed_data_creation": "None. Used existing seeded rm_knowledge_library + live 'default' and 'city-gate' hotel data. LLM budget used: 1 chat call.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 524 adds 'Uzman Kuralları' sub-tab. Backend: POST /api/rm-expertise/{pid}/internalize returns {property_id, rules_count, rules:[{sira,baslik,kural,rakamlar,source_id,computed_at,id,status,property_id}], computed_at}. GET /api/rm-expertise/{pid}/expert-rules returns {property_id,count,rules}. Learning cycle POST /api/revenue-brain/{pid}/learn refreshes rules via internalize_expertise. Frontend testids: rmx-tab-rules (sub-tab button), rmx-internalize (Yeniden İçselleştir button), rmx-rule-* (rule cards). Chat expert persona forbids tokens 'kaynak', 'kütüphane', 'bilgi taban' in reply. Login field is 'token' (not access_token) — memory doc is stale.",
+  "rca of the issue": "N/A — all tests passed on first substantive run. Only setup fix was auth token field name ('token' vs documented 'access_token')."
+}

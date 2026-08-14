@@ -3886,3 +3886,14 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   Import eklendi; / ve /reveniq canlı doğrulandı (0 hata kartı, ROI section her ikisinde render oluyor).
 - YENİ: Sunum modunda "Demo verisi (şube)" seçici (rmsc-demo-branch) — seçilen şubenin canlı
   impact + RGI verisi kanıt slaytlarına akıyor (şube değişince proof reset). E2E doğrulandı.
+
+## Iter 542 (2026-08-14) — Hata Nöbetçisi + Radar Geçmişi
+- HATA NÖBETÇİSİ: routes/client_errors.py — POST auth'suz (ErrorBoundary fetch ile otomatik raporlar,
+  fingerprint sha1(message|url) ile dedupe + count artışı, yeni benzersiz hatada admin'e high bildirim,
+  link_to: error-sentinel). GET liste + /resolve (admin/manager). ErrorBoundary.componentDidCatch'e
+  fire-and-forget fetch eklendi. UI: ErrorSentinelPanel (Settings & Admin > Hata Nöbetçisi, yalnız admin).
+- RADAR GEÇMİŞİ: GET /api/marketing-radar/{pid}/history (radar_state taramaları + uye_fence radar
+  kampanyaları + ölçülen pickup toplamı). MarketingRadarPanel'e geçmiş bölümü (hafta çipleri +
+  kampanya sonuç tablosu: OTB açılışta / +X oda / ölçülüyor).
+- E2E DOĞRULANDI: dedupe (2× tekrarlandı rozeti), Çözüldü→boş durum 🎉, radar geçmişi 1 tarama + 14 kampanya.
+- Expo token 6. kez istendi, hâlâ yok.

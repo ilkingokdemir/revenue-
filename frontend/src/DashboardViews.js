@@ -213,6 +213,7 @@ import {
   MarketingRadarPanel,
   BIChatPanel,
   ParkingRmsPanel,
+  ErrorSentinelPanel,
   RevenueStrategistPanel,
   ReviewAgentPanel,
   ReviewSentimentPanel,
@@ -805,6 +806,11 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {/* Otopark RMS (IDeaS Car Park paritesi) */}
         {activeView === "parking-rms" && (
           <ParkingRmsPanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+
+        {/* Hata Nöbetçisi */}
+        {activeView === "error-sentinel" && (
+          <ErrorSentinelPanel />
         )}
 
         {/* Setup Wizard */}

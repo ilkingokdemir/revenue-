@@ -493,6 +493,7 @@ export function buildMenuSections(t, user) {
         { id: "onboarding", icon: MagicWand, name: "First-run wizard", testId: "onboarding-btn" },
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
         ...(user?.role === "admin" ? [{ id: "settings-hub", icon: Gear, name: "Settings hub", testId: "settings-hub-btn", core: true }] : []),
+        ...(user?.role === "admin" ? [{ id: "error-sentinel", icon: Gear, name: "Hata Nöbetçisi", testId: "error-sentinel-btn" }] : []),
 
         { divider: true, label: "Team & Access" },
         ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: t("nav.team"), testId: "team-btn", core: true }] : []),

@@ -1736,6 +1736,8 @@ from routes.revenue_ext.parking_rms import create_parking_rms_router
 api_router.include_router(create_parking_rms_router(db, require_roles))
 from routes.revenue_ext.rgi_proof import create_rgi_proof_router
 api_router.include_router(create_rgi_proof_router(db, require_roles))
+from routes.client_errors import create_client_errors_router
+api_router.include_router(create_client_errors_router(db, require_roles))
 
 from routes.integrations_pkg.ota_inbound import create_ota_inbound_router
 api_router.include_router(create_ota_inbound_router(db, require_roles))

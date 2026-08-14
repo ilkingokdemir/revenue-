@@ -72,6 +72,20 @@ def create_marketing_radar_router(db, require_roles):
     async def radar(pid: str, days: int = 60, _u: dict = Depends(require_roles(*ROLES))):
         return await compute_radar(db, pid, days)
 
+    @router.get("/{pid}/history")
+    async def history(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Radar Geçmişi — haftalık taramalar + radar kampanyalarının ölçülen sonuçları."""
+        scans = await db.radar_state.find(
+            {"property_id": pid}, {"_id": 0}).sort("at", -1).to_list(26)
+        camps = await db.promo_campaigns.find(
+            {"property_id": pid, "type": "uye_fence",
+             "aciklama": {"$regex": "Radar", "$options": "i"}},
+            {"_id": 0}).sort("date", -1).to_list(100)
+        measured = [c for c in camps if c.get("measured")]
+        total_gain = round(sum(float(c.get("pickup_gain") or 0) for c in measured), 1)
+        return {"scans": scans, "campaigns": camps,
+                "measured_count": len(measured), "total_pickup_gain": total_gain}
+
     @router.post("/{pid}/activate")
     async def activate(pid: str, body: Dict, current_user: dict = Depends(require_roles(*ROLES))):
         from routes.revenue_ext.ml_pickup import _stay_counts

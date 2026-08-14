@@ -18,6 +18,23 @@ export default class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error("ErrorBoundary caught:", error, errorInfo);
+    try {
+      const api = process.env.REACT_APP_BACKEND_URL;
+      fetch(`${api}/api/client-errors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ref: this.state.errorId,
+          message: String(error?.message || error).slice(0, 500),
+          stack: String(error?.stack || "").slice(0, 2000),
+          component_stack: String(errorInfo?.componentStack || "").slice(0, 1500),
+          url: window.location.href,
+          user_agent: navigator.userAgent,
+        }),
+      }).catch(() => {});
+    } catch {
+      /* raporlama asla boundary'yi düşürmesin */
+    }
     if (typeof window !== "undefined" && typeof window.__APP_ERROR_HOOK__ === "function") {
       try {
         window.__APP_ERROR_HOOK__(error, errorInfo, this.state.errorId);

@@ -65,9 +65,15 @@ async def run_open_pricing_optimizer(db, pid: str, days: int = 14, apply: bool =
     from datetime import timedelta
     days = max(3, min(days, 30))
     if guardrail_pct is None:
-        st = await db.rms_settings.find_one({"property_id": pid}, {"_id": 0, "guardrail_pct": 1})
+        st = await db.rms_settings.find_one({"property_id": pid}, {"_id": 0, "guardrail_pct": 1, "exploration_pct": 1})
         guardrail_pct = float((st or {}).get("guardrail_pct") or 15.0)
+        exploration_pct = float((st or {}).get("exploration_pct", 5.0))
+    else:
+        st = await db.rms_settings.find_one({"property_id": pid}, {"_id": 0, "exploration_pct": 1})
+        exploration_pct = float((st or {}).get("exploration_pct", 5.0))
     guardrail_pct = max(5.0, min(guardrail_pct, 50.0))
+    exploration_pct = max(0.0, min(exploration_pct, 15.0))
+    import random
     prev = {}
     async for o in db.open_pricing_overrides.find(
             {"property_id": pid, "reason": "optimizer"},
@@ -100,9 +106,17 @@ async def run_open_pricing_optimizer(db, pid: str, days: int = 14, apply: bool =
         demand = round(0.92 + occ * 0.33, 4)
         cells = {}
         clamped_day = 0
+        explored_day = 0
         for seg, sf in SEG_FACTOR.items():
             for ch, cf in ch_factor.items():
                 rate = round(base * sf * cf * demand, 2)
+                # Keşif modu: hücrelerin ~%exploration_pct'i kontrollü rastgele ±%5 sapar
+                # (esneklik eğrisini KENDİ verimizden öğrenmek için — sonuçlar ölçülüp hafızaya işlenir)
+                explore_delta = 0.0
+                if exploration_pct > 0 and i >= 3 and random.random() < exploration_pct / 100:
+                    explore_delta = random.choice([-5.0, 5.0])
+                    rate = round(rate * (1 + explore_delta / 100), 2)
+                    explored_day += 1
                 p = prev.get((seg, ch, d), 0)
                 if p > 0:
                     lo, hi = round(p * (1 - guardrail_pct / 100), 2), round(p * (1 + guardrail_pct / 100), 2)
@@ -115,13 +129,21 @@ async def run_open_pricing_optimizer(db, pid: str, days: int = 14, apply: bool =
                         "id": str(uuid.uuid4()), "property_id": pid, "room_type_id": None,
                         "segment": seg, "channel": ch, "date": d, "rate": rate,
                         "reason": "optimizer", "scope_label": f"{seg} × {ch}", "is_active": True,
+                        "explore": bool(explore_delta),
                         "created_at": datetime.now(timezone.utc).isoformat(),
                         "created_by": "Open Pricing Optimizer"})
                     writes += 1
+                    if explore_delta:
+                        await db.ai_pricing_decisions.insert_one({
+                            "id": str(uuid.uuid4()), "property_id": pid, "date": d,
+                            "room_type_id": "", "delta_pct": explore_delta, "days_out": i,
+                            "occupancy_pct": round(occ * 100, 1), "set_by": "explorer",
+                            "run_at": datetime.now(timezone.utc).isoformat()})
         matrix.append({"date": d, "base": round(base, 2), "occupancy_pct": round(occ * 100, 1),
-                       "demand_factor": demand, "cells": cells})
+                       "demand_factor": demand, "explored_cells": explored_day, "cells": cells})
     return {"ok": True, "applied": apply, "overrides_written": writes,
-            "guardrail_pct": guardrail_pct,
+            "guardrail_pct": guardrail_pct, "exploration_pct": exploration_pct,
+            "total_explored_cells": sum(r.get("explored_cells", 0) for r in matrix),
             "segment_factors": SEG_FACTOR, "channel_factors": ch_factor,
             "days": days, "matrix": matrix}
 

@@ -289,7 +289,8 @@ Guidelines:
                                   current_user: dict = Depends(require_roles("admin", "manager"))):
         user_id = current_user.get("email", "")
         messages = await db.revenue_copilot_messages.find(
-            {"property_id": property_id, "user_id": user_id},
+            {"property_id": property_id,
+             "user_id": {"$in": [user_id, "robot-brifing"]}},
             {"_id": 0}
         ).sort("created_at", 1).to_list(50)
         return {"messages": messages}

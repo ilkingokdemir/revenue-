@@ -793,6 +793,39 @@ async def revenue_brain_loop(db, interval_seconds: int = 21600):
         await asyncio.sleep(interval_seconds)
 
 
+async def weekly_brief_loop(db, interval_seconds: int = 3600):
+    """Haftalık robot brifingi — her pazartesi uzman brifingini üretip sohbete bırakır."""
+    import logging
+    import uuid as _uuid
+    logger = logging.getLogger(__name__)
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            if now.weekday() == 0:
+                week_key = now.strftime("%G-W%V")
+                props = await db.properties.find(
+                    {"is_active": {"$ne": False}}, {"_id": 0, "id": 1}).to_list(50)
+                for p in props:
+                    pid = p["id"]
+                    done = await db.weekly_brief_state.find_one(
+                        {"property_id": pid, "week": week_key}, {"_id": 0})
+                    if done:
+                        continue
+                    from routes.revenue_ext.rm_expertise import generate_expert_brief
+                    doc = await generate_expert_brief(db, pid, "robot-haftalik")
+                    await db.revenue_copilot_messages.insert_one({
+                        "id": str(_uuid.uuid4())[:8], "property_id": pid,
+                        "user_id": "robot-brifing", "role": "assistant",
+                        "content": "📋 **HAFTALIK UZMAN BRİFİNGİ** (robot tarafından otomatik hazırlandı)\n\n" + doc["content"],
+                        "created_at": now.isoformat()})
+                    await db.weekly_brief_state.insert_one(
+                        {"property_id": pid, "week": week_key, "at": now.isoformat()})
+                    logger.info(f"weekly_brief_loop: {pid} haftalık brifing bırakıldı ({week_key})")
+        except Exception as e:
+            logger.warning(f"weekly_brief_loop error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def onboarding_drip_loop(db, interval_seconds: int = 1800):
     """İlk 7 Gün aktivasyon e-posta serisi — 30 dk'da bir süresi gelenleri gönderir."""
     import logging

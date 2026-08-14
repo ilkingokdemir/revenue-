@@ -21,6 +21,8 @@ export default function RmExpertisePanel({ properties = [], activePropertyId, em
   const [libCat, setLibCat] = useState("");
   const [rules, setRules] = useState([]);
   const [mlp, setMlp] = useState(null);
+  const [scard, setScard] = useState(null);
+  const [camps, setCamps] = useState([]);
 
   useEffect(() => {
     if (embeddedPropertyId) setPropertyId(embeddedPropertyId);
@@ -44,6 +46,12 @@ export default function RmExpertisePanel({ properties = [], activePropertyId, em
       try {
         const m = await axios.get(`${API}/rm-expertise/${propertyId}/ml-pickup?days=24`, { withCredentials: true });
         setMlp(m.data);
+        const [sc, cm] = await Promise.all([
+          axios.get(`${API}/rm-expertise/${propertyId}/forecast-scorecard`, { withCredentials: true }),
+          axios.get(`${API}/rm-expertise/${propertyId}/empty-night-campaigns`, { withCredentials: true }),
+        ]);
+        setScard(sc.data);
+        setCamps(cm.data.items || []);
       } catch { /* */ }
     } catch { toast.error("Uzmanlık verileri yüklenemedi"); }
   }, [propertyId]);
@@ -83,6 +91,16 @@ export default function RmExpertisePanel({ properties = [], activePropertyId, em
       setRules(r.data.rules || []);
       toast.success(`${r.data.rules_count} uzman kuralı bu otelin verisiyle içselleştirildi`);
     } catch { toast.error("İçselleştirme başarısız"); } finally { setBusy(""); }
+  };
+
+  const applyCampaigns = async () => {
+    setBusy("camp");
+    try {
+      const r = await axios.post(`${API}/rm-expertise/${propertyId}/empty-night-campaigns`, {}, { withCredentials: true });
+      toast.success(r.data.detail);
+      const cm = await axios.get(`${API}/rm-expertise/${propertyId}/empty-night-campaigns`, { withCredentials: true });
+      setCamps(cm.data.items || []);
+    } catch { toast.error("Kampanya uygulanamadı"); } finally { setBusy(""); }
   };
 
   const TABS = [
@@ -185,9 +203,32 @@ export default function RmExpertisePanel({ properties = [], activePropertyId, em
 
       {tab === "mlpickup" && (
         <div className="bg-white border border-stone-200 rounded-xl p-5" data-testid="rmx-mlpickup">
-          <div className="text-sm font-semibold text-stone-900 mb-1">ML Pickup Tahmini
-            <span className="text-[10px] text-stone-400 font-normal ml-2">{mlp?.model} — {mlp?.note}</span>
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+            <div className="text-sm font-semibold text-stone-900">ML Pickup Tahmini
+              <span className="text-[10px] text-stone-400 font-normal ml-2">{mlp?.model}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {scard && (
+                <span data-testid="rmx-scorecard"
+                  className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${scard.alert ? "bg-rose-50 border-rose-200 text-rose-700" : "bg-stone-50 border-stone-200 text-stone-600"}`}>
+                  Tahmin Karnesi: {scard.overall_mape != null ? `MAPE %${scard.overall_mape} (${scard.scored} skor)` : "henüz skor yok — tahminler kaydediliyor"}
+                  {scard.alert ? " ⚠ SAPMA" : ""}
+                </span>
+              )}
+              {mlp?.empty_risk_dates?.length > 0 && (
+                <button onClick={applyCampaigns} disabled={busy === "camp"} data-testid="rmx-apply-campaigns"
+                  className="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50">
+                  {busy === "camp" ? "Uygulanıyor…" : `Riskli ${mlp.empty_risk_dates.length} Geceye Fence'li Kampanya (1 tık)`}
+                </button>
+              )}
+            </div>
           </div>
+          <p className="text-[10px] text-stone-400 mb-2">{mlp?.note}</p>
+          {camps.length > 0 && (
+            <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-2" data-testid="rmx-camp-active">
+              ✓ {camps.length} gecede aktif fence'li kampanya (üye fiyatı %8, min 2 gece): {camps.slice(0, 5).map((c) => c.date).join(", ")}{camps.length > 5 ? "…" : ""}
+            </div>
+          )}
           {mlp?.empty_risk_dates?.length > 0 && (
             <div className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 mb-2" data-testid="rmx-ml-risk">
               Boş gece riski (&lt;%50 tahmini): {mlp.empty_risk_dates.slice(0, 6).join(", ")}

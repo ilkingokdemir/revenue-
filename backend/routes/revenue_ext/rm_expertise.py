@@ -361,6 +361,50 @@ def create_rm_expertise_router(db, require_roles):
         from routes.revenue_ext.ml_pickup import ml_pickup_forecast
         return await ml_pickup_forecast(db, pid, days)
 
+    @router.get("/{pid}/forecast-scorecard")
+    async def forecast_scorecard(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Tahmin karnesi: ML tahminleri vs gerçekleşen — ufuk bazlı MAPE."""
+        from routes.revenue_ext.ml_pickup import log_ml_forecasts, score_forecasts
+        await log_ml_forecasts(db, pid)
+        return await score_forecasts(db, pid)
+
+    @router.post("/{pid}/empty-night-campaigns")
+    async def empty_night_campaigns(pid: str, current_user: dict = Depends(require_roles(*ROLES))):
+        """Boş gece otomasyonu: ML'in işaretlediği riskli gecelere fence'li kampanya (1 tık)."""
+        from routes.revenue_ext.ml_pickup import ml_pickup_forecast
+        f = await ml_pickup_forecast(db, pid, days=30)
+        now, created = _now(), []
+        for ds in f["empty_risk_dates"]:
+            await db.promo_campaigns.update_one(
+                {"property_id": pid, "date": ds, "type": "uye_fence"},
+                {"$set": {"property_id": pid, "date": ds, "type": "uye_fence",
+                          "discount_pct": 8, "min_los": 2, "channel": "direct",
+                          "status": "aktif", "applied_at": now,
+                          "applied_by": current_user.get("email", ""),
+                          "aciklama": "ML boş gece riski — üye fiyatı (CUG) %8 + min 2 gece; ADR tabanı korunur"},
+                 "$setOnInsert": {"id": str(uuid.uuid4())[:8]}}, upsert=True)
+            created.append(ds)
+        return {"ok": True, "campaign_dates": created,
+                "detail": f"{len(created)} riskli geceye fence'li kampanya uygulandı (üye fiyatı %8, min 2 gece — açık fiyat kırılmadı)"}
+
+    @router.get("/{pid}/empty-night-campaigns")
+    async def list_campaigns(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        items = await db.promo_campaigns.find(
+            {"property_id": pid, "type": "uye_fence", "status": "aktif"},
+            {"_id": 0}).sort("date", 1).to_list(60)
+        return {"count": len(items), "items": items}
+
+    @router.post("/{pid}/weekly-brief-now")
+    async def weekly_brief_now(pid: str, current_user: dict = Depends(require_roles(*ROLES))):
+        """Haftalık uzman brifingini şimdi üret ve sohbete bırak."""
+        doc = await generate_expert_brief(db, pid, current_user.get("email", ""))
+        await db.revenue_copilot_messages.insert_one({
+            "id": str(uuid.uuid4())[:8], "property_id": pid, "user_id": "robot-brifing",
+            "role": "assistant",
+            "content": "📋 **HAFTALIK UZMAN BRİFİNGİ** (robot tarafından otomatik hazırlandı)\n\n" + doc["content"],
+            "created_at": _now()})
+        return {"ok": True, "detail": "Brifing üretildi ve sohbete bırakıldı", "brief_id": doc["id"]}
+
     @router.post("/{pid}/internalize")
     async def internalize(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         """Kütüphane bilgisini bu otelin verisiyle uygulanabilir uzman kurallarına dönüştür."""

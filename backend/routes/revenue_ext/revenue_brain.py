@@ -329,6 +329,13 @@ async def run_learning_cycle(db, pid: str) -> dict:
         from routes.revenue_ext.rm_expertise import compute_sensitivity, internalize_expertise
         await compute_sensitivity(db, pid)
         await internalize_expertise(db, pid)
+        from routes.revenue_ext.ml_pickup import log_ml_forecasts, score_forecasts
+        await log_ml_forecasts(db, pid)
+        card = await score_forecasts(db, pid)
+        if card.get("alert"):
+            await _timeline_event(db, pid, "tahmin_sapmasi",
+                                  f"UYARI: ML tahmin karnesi sapıyor — son 35 gün MAPE %{card['overall_mape']} "
+                                  f"({card['scored']} skor). Model yeniden eğitim/kalibrasyon gerektirebilir.")
     except Exception:
         pass
     if measured > 0:

@@ -80,6 +80,66 @@ async def ml_pickup_forecast(db, pid: str, days: int = 30) -> dict:
                     "yakın ufukta guardrail istikrarı korur."}
 
 
+async def log_ml_forecasts(db, pid: str) -> int:
+    """Tahmin karnesi 1/2: bugünkü ML tahminlerini kaydet (sonradan gerçekleşenle kıyaslanır)."""
+    try:
+        f = await ml_pickup_forecast(db, pid, days=45)
+    except Exception:
+        return 0
+    log_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    n = 0
+    for r in f["days"]:
+        await db.ml_forecast_log.update_one(
+            {"property_id": pid, "stay_date": r["date"], "log_date": log_date},
+            {"$set": {"property_id": pid, "stay_date": r["date"], "log_date": log_date,
+                      "days_out": r["days_out"], "otb": r["otb"],
+                      "predicted_final": r["ml_final_rooms"],
+                      "logged_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True)
+        n += 1
+    return n
+
+
+async def score_forecasts(db, pid: str) -> dict:
+    """Tahmin karnesi 2/2: geçmiş tahminleri gerçekleşenle kıyasla, ufuk bazlı MAPE karnesi tut."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    actual_cache = {}
+    async for log in db.ml_forecast_log.find(
+            {"property_id": pid, "stay_date": {"$lt": today}, "ape": {"$exists": False}},
+            {"_id": 0, "stay_date": 1, "log_date": 1, "predicted_final": 1}).limit(500):
+        sd = log["stay_date"]
+        if sd not in actual_cache:
+            actual = 0
+            async for b in db.bookings.find(
+                    {"property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
+                     "check_in": {"$lte": sd}, "check_out": {"$gt": sd}}, {"_id": 0, "rooms": 1}):
+                actual += int(b.get("rooms", 1) or 1)
+            actual_cache[sd] = actual
+        actual = actual_cache[sd]
+        ape = round(abs(log["predicted_final"] - actual) / max(actual, 1) * 100, 1)
+        await db.ml_forecast_log.update_one(
+            {"property_id": pid, "stay_date": sd, "log_date": log["log_date"]},
+            {"$set": {"actual_final": actual, "ape": ape}})
+    bands = {"yakin_3_7": [], "orta_8_14": [], "uzak_15plus": []}
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=35)).strftime("%Y-%m-%d")
+    async for log in db.ml_forecast_log.find(
+            {"property_id": pid, "ape": {"$exists": True}, "stay_date": {"$gte": cutoff}},
+            {"_id": 0, "days_out": 1, "ape": 1}):
+        t = log["days_out"]
+        key = "yakin_3_7" if t <= 7 else ("orta_8_14" if t <= 14 else "uzak_15plus")
+        bands[key].append(log["ape"])
+    band_stats = {k: {"mape": round(sum(v) / len(v), 1) if v else None, "n": len(v)}
+                  for k, v in bands.items()}
+    all_apes = [a for v in bands.values() for a in v]
+    overall = round(sum(all_apes) / len(all_apes), 1) if all_apes else None
+    card = {"property_id": pid, "overall_mape": overall, "bands": band_stats,
+            "scored": len(all_apes), "updated_at": datetime.now(timezone.utc).isoformat(),
+            "alert": bool(overall is not None and overall > 25 and len(all_apes) >= 10),
+            "note": "APE = |tahmin - gerçekleşen| / gerçekleşen. Son 35 günün skorları; ufuk bandına göre kırılım."}
+    await db.ml_forecast_scorecard.update_one({"property_id": pid}, {"$set": card}, upsert=True)
+    return card
+
+
 async def ml_pickup_summary_for_llm(db, pid: str) -> str:
     try:
         f = await ml_pickup_forecast(db, pid, days=16)

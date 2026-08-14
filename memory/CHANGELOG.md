@@ -3735,3 +3735,16 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - Ayrıca fark edildi ve düzeltildi: iter 522'de copilot'a eklenen expertise_context_for_llm enjeksiyonu dosyadan kaybolmuştu
   (muhtemelen çakışan düzenleme) — geri eklendi + ML özeti eklendi.
 - Test: iteration_525.json — backend %100 (9 pytest), frontend %100. Chat 'response' alanı döner (reply değil).
+
+## Iter 527 (2026-08-14) — Tahmin Karnesi + Keşif Modu + Boş Gece Otomasyonu + Haftalık Brifing
+- Tahmin Karnesi: ml_forecast_log (günlük tahmin kaydı, öğrenme döngüsünde otomatik) + score_forecasts (geçen günler
+  gerçekleşenle kıyaslanır, APE) → ml_forecast_scorecard: ufuk bantlı MAPE (yakın 3-7/orta 8-14/uzak 15+); MAPE>25 &
+  n>=10 → 'tahmin_sapmasi' timeline uyarısı. GET /api/rm-expertise/{pid}/forecast-scorecard. UI: karne rozeti (rmx-scorecard).
+- Keşif Modu: optimizer hücrelerinin ~%5'i (rms_settings.exploration_pct, tavan 15) ±%5 kontrollü rastgele sapar
+  (guardrail içinde), ai_pricing_decisions'a set_by='explorer' yazılır → esneklik KENDİ veriden öğrenilir (endojenite çözümü).
+  Yanıtta exploration_pct + total_explored_cells.
+- Boş Gece Otomasyonu: POST/GET /api/rm-expertise/{pid}/empty-night-campaigns — ML riskli gecelere üye-fiyatı fence
+  kampanyası (%8, min 2 gece, promo_campaigns, idempotent upsert). UI: kırmızı 1-tık butonu + yeşil aktif şerit.
+- Haftalık Robot Brifingi: workers.weekly_brief_loop (pazartesi, weekly_brief_state ISO-hafta dedup) → brifing
+  copilot sohbetine user_id='robot-brifing' ile düşer (history $in filtresi). Manuel: POST /{pid}/weekly-brief-now.
+- Test: iteration_526.json (iter 527 kapsar) — backend 5/5 pytest, frontend %100, 0 LLM bütçesi harcandı.

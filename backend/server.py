@@ -2072,6 +2072,8 @@ async def startup_event():
     asyncio.create_task(otb_snapshot_loop(db))
     asyncio.create_task(str_scan_loop(db))
     asyncio.create_task(revenue_brain_loop(db))
+    from workers import weekly_brief_loop
+    asyncio.create_task(weekly_brief_loop(db))
     asyncio.create_task(profit_autopilot_loop(db))
     asyncio.create_task(data_quality_sentinel_loop(db))
     asyncio.create_task(open_pricing_optimizer_loop(db))

@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend-only regression for Iteration 529 nav consolidation. Verified BASIT-mode sidebar cleanup, Revenue Robotu (Öğrenen Uzman) panel with 3 main tabs (memory/expertise/strategist), Expertise sub-tabs (brief/rules/mlpickup/explore/library/sensitivity/principles/market), Explore KPIs, ML Pickup scorecard, property switch, revenue panel regression. Found ONE bug: 'Open pricing & yield' → 'Kanal yield yönetimi' rename was applied in menuSections.js but NOT in i18n translations, so at runtime the sidebar item still reads 'Open pricing & yield' (EN) / 'Açık fiyat ve verim' (TR).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Sidebar (PRO mode) → channel-revenue-btn", "issue": "Label still renders as 'Open pricing & yield' (EN) / 'Açık fiyat ve verim' (TR). Requirement 3 (rename to 'Kanal yield yönetimi') is NOT applied. Cause: i18n key `nav.channel_revenue` in /app/frontend/src/i18n/en.json (line 397), tr.json (line 397), and de/es/fr/ar/ru still hold the old string. Because runtime resolves the label via i18n it overrides the updated `name` in /app/frontend/src/navigation/menuSections.js:295. Both `channel-revenue-btn` and `hub-card-channel-revenue-btn` show the old text.", "selector": "[data-testid='channel-revenue-btn']", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Update i18n key `nav.channel_revenue` in /app/frontend/src/i18n/tr.json (line 397) to 'Kanal yield yönetimi' and in en.json (line 397) to 'Kanal yield yönetimi' (or English equivalent) so the sidebar label matches menuSections.js. Consider also de/es/fr/ar/ru locales for consistency.",
+    "Fix React warning in RevenueBrainPanel: 'Each child in a list should have a unique key prop.' — likely a missing key in one of the mapped arrays (memory cards or tabs)."
+  ],
+  "critical_code_review_comments": [
+    "menuSections.js `name` field is overridden by t('nav.channel_revenue') at render time — renames applied to `name` alone will silently no-op. Add code comment or centralize the label in one place to prevent future regressions.",
+    "5 KPI card testids on Keşif Raporu are rmx-exp-total / rmx-exp-pending / rmx-exp-measured / rmx-exp-verdicts / rmx-exp-elasticity — different from spec (avg/max/recent/lift) but 5 cards do render. Update spec/tests to match reality if intended."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "~92%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent updates i18n JSON files, re-verify PRO-mode sidebar shows 'Kanal yield yönetimi' for channel-revenue-btn and no 'Open pricing & yield' text remains. All other consolidation tasks (sidebar order in BASIT, revenue-brain-btn label 'Revenue Robotu (Öğrenen Uzman)', 3 main brain tabs, expertise sub-tabs, strategist tab loaded lazily, memory property switch to city-gate) verified working. Do not click 'Şimdi Analiz Et' or send LLM messages.",
+  "rca of the issue": "Iteration 529 renamed the sidebar item in navigation/menuSections.js from 'Open pricing & yield' → 'Kanal yield yönetimi', but the runtime label comes from i18n key nav.channel_revenue defined in /app/frontend/src/i18n/*.json. Those translation files were not updated, so the visible label remains the old text. Reproduction: login as admin, toggle to PRO mode, open Revenue & rates hub → item still shows 'Open pricing & yield'. Mitigation: update nav.channel_revenue in tr.json and en.json (and other locales) to the new label."
+}

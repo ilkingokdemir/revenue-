@@ -6,6 +6,7 @@ import {
 } from "@phosphor-icons/react";
 
 const RmExpertisePanel = lazy(() => import("./RmExpertisePanel"));
+const RevenueStrategistPanel = lazy(() => import("./RevenueStrategistPanel"));
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const BAND_TR = { "0-3": "Son 3 gün", "4-7": "4-7 gün", "8-21": "1-3 hafta", "22+": "3+ hafta" };
@@ -124,7 +125,17 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
           className={`px-3 py-1.5 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 border ${mainTab === "expertise" ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"}`}>
           <Medal size={13} /> Alan Uzmanlığı & Rakip Pazarı
         </button>
+        <button onClick={() => setMainTab("strategist")} data-testid="brain-tab-strategist"
+          className={`px-3 py-1.5 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 border ${mainTab === "strategist" ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"}`}>
+          <Target size={13} /> AI Strateji
+        </button>
       </div>
+
+      {mainTab === "strategist" && (
+        <Suspense fallback={<div className="p-8 text-sm text-stone-400">Yükleniyor…</div>}>
+          <RevenueStrategistPanel propertyId={propertyId || "default"} />
+        </Suspense>
+      )}
 
       {mainTab === "expertise" && (
         <Suspense fallback={<div className="p-8 text-sm text-stone-400">Yükleniyor…</div>}>
@@ -356,8 +367,8 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
             <thead><tr className="text-left text-stone-400 border-b border-stone-100">
               <th className="py-1.5">Konaklama</th><th>Değişim</th><th>Nihai Doluluk</th><th>Baseline</th><th className="text-right">Sonuç</th></tr></thead>
             <tbody>
-              {data.recent_outcomes.map((o) => (
-                <tr key={o.id} className="border-b border-stone-50">
+              {data.recent_outcomes.map((o, i) => (
+                <tr key={o.id || `${o.stay_date}-${o.bucket_key}-${i}`} className="border-b border-stone-50">
                   <td className="py-1.5 text-stone-700">{o.stay_date} <span className="text-stone-400">({o.band}, {o.dow_type === "weekend" ? "hs" : "hi"})</span></td>
                   <td className={o.direction === "up" ? "text-emerald-600" : "text-amber-600"}>{o.delta_pct > 0 ? "+" : ""}{o.delta_pct}%</td>
                   <td className="text-stone-700">%{o.final_occ}</td>

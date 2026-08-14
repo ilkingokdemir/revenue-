@@ -263,6 +263,7 @@ export function buildMenuSections(t, user) {
         { divider: true, label: "Pricing" },
         { id: "my-rates", icon: ChartLine, name: "My Rates (Daily Grid)", testId: "my-rates-btn", core: true },
         { id: "revenue", icon: ChartLine, name: "Revenue management", testId: "revenue-btn", core: true },
+        { id: "revenue-brain", icon: Brain, name: "Revenue Robotu (Öğrenen Uzman)", testId: "revenue-brain-btn", core: true },
         { id: "profit-os", icon: Target, name: "Profit OS", testId: "profit-os-btn" },
         { id: "rate-manager", icon: ChartLine, name: "Rate manager", testId: "rate-manager-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "rate-matrix", icon: Users, name: "Rate matrix", testId: "rate-matrix-btn" }] : []),
@@ -278,8 +279,6 @@ export function buildMenuSections(t, user) {
         { id: "pace-reports", icon: ChartLine, name: "Pace reports", testId: "pace-reports-btn" },
 
         { divider: true, label: "AI & Insights" },
-        { id: "revenue-strategist", icon: Robot, name: "AI Strateji Robotu", testId: "revenue-strategist-btn", core: true },
-        { id: "revenue-brain", icon: Brain, name: "Öğrenen Beyin", testId: "revenue-brain-btn", core: true },
         { id: "ai-pricing-v2", icon: Lightning, name: "AI pricing", testId: "ai-pricing-v2-btn" },
         { id: "base-curve", icon: ChartLine, name: "Baz fiyat eğrisi (18 ay)", testId: "base-curve-btn" },
         { id: "intraday-reprice", icon: Lightning, name: "Gün-içi re-price (pickup spike)", testId: "intraday-reprice-btn" },
@@ -293,7 +292,7 @@ export function buildMenuSections(t, user) {
         { id: "compset", icon: Target, name: "Compset yönetimi", testId: "compset-btn", core: true },
         { id: "parity-heatmap", icon: CalendarBlank, name: "Parity heatmap", testId: "parity-heatmap-btn" },
         { id: "ota-forecast", icon: TrendUp, name: "OTA stop-sell forecast", testId: "ota-forecast-btn" },
-        { id: "channel-revenue", icon: Lightning, name: "Open pricing & yield", testId: "channel-revenue-btn" },
+        { id: "channel-revenue", icon: Lightning, name: "Kanal yield yönetimi", testId: "channel-revenue-btn" },
 
         { divider: true, label: "Tools" },
         { id: "group-displacement", icon: Scales, name: "Grup displacement analizi", testId: "group-displacement-btn" },

@@ -3762,3 +3762,12 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   (build hatası) + Promise.all güncellemesi kayboldu. Kuyruk kırpıldı, edit yeniden uygulandı. DERS: bu dosyada edit sonrası
   grep ile doğrulama şart.
 - Test: kapsamlı self-test (curl E2E: ölçüm seed'leriyle 3 akış + 2 ekran görüntüsü). Testing agent bu turda KULLANILMADI.
+
+## Iter 530 (2026-08-14) — i18n Etiket + React Key Uyarısı Düzeltmesi
+- FIX 1: `nav.channel_revenue` çeviri anahtarı 7 dil dosyasında (tr,en,de,es,fr,ar,ru)
+  "Kanal yield yönetimi" olarak güncellendi (Iter 527 bulgusu — menuSections.js'teki isim
+  i18n tarafından eziliyordu).
+- FIX 2: RevenueBrainPanel "unique key" uyarısı — kök neden: ai_pricing_outcomes'ta seed
+  edilmiş 1 dokümanda `id` alanı yoktu (None). DB backfill (uuid) + frontend'te
+  recent_outcomes map'ine defensif fallback key eklendi.
+- E2E DOĞRULANDI: sidebar etiketi doğru, konsolda 0 key uyarısı (memory+expertise sekmeleri gezildi).

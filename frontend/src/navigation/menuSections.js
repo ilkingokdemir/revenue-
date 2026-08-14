@@ -263,7 +263,6 @@ export function buildMenuSections(t, user) {
         { divider: true, label: "Pricing" },
         { id: "my-rates", icon: ChartLine, name: "My Rates (Daily Grid)", testId: "my-rates-btn", core: true },
         { id: "revenue", icon: ChartLine, name: "Revenue management", testId: "revenue-btn", core: true },
-        { id: "revenue-brain", icon: Brain, name: "Revenue Robotu (Öğrenen Uzman)", testId: "revenue-brain-btn", core: true },
         { id: "profit-os", icon: Target, name: "Profit OS", testId: "profit-os-btn" },
         { id: "rate-manager", icon: ChartLine, name: "Rate manager", testId: "rate-manager-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "rate-matrix", icon: Users, name: "Rate matrix", testId: "rate-matrix-btn" }] : []),

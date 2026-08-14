@@ -2,8 +2,10 @@ import React, { useEffect, useState, useCallback, lazy, Suspense } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-  Brain, Target, TrendUp, Warning, GraduationCap, ArrowsClockwise, Scales, Archive, Globe, ClockCounterClockwise, MapPin, FilePdf, Flask, Medal,
+  Brain, Target, TrendUp, Warning, GraduationCap, ArrowsClockwise, Scales, Archive, Globe, ClockCounterClockwise, MapPin, FilePdf, Flask, Medal, Play,
 } from "@phosphor-icons/react";
+import RobotImpactCard from "./RobotImpactCard";
+import RevenueRobotTour from "./RevenueRobotTour";
 
 const RmExpertisePanel = lazy(() => import("./RmExpertisePanel"));
 const RevenueStrategistPanel = lazy(() => import("./RevenueStrategistPanel"));
@@ -19,6 +21,16 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
   const [simResults, setSimResults] = useState({});
   const [simBusy, setSimBusy] = useState("");
   const [mainTab, setMainTab] = useState("memory");
+  const [tourOpen, setTourOpen] = useState(false);
+
+  useEffect(() => {
+    if (data && !localStorage.getItem("rr_tour_done")) setTourOpen(true);
+  }, [data]);
+  const closeTour = () => {
+    localStorage.setItem("rr_tour_done", "1");
+    setTourOpen(false);
+    setMainTab("memory");
+  };
 
   const simulate = async (bucketKey) => {
     setSimBusy(bucketKey);
@@ -86,6 +98,7 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
 
   return (
     <div className="p-5 max-w-[1400px] mx-auto" data-testid="revenue-brain-panel">
+      <RevenueRobotTour open={tourOpen} onClose={closeTour} setMainTab={setMainTab} />
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-stone-500 mb-1">
@@ -105,6 +118,10 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
               {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           )}
+          <button onClick={() => setTourOpen(true)} data-testid="brain-tour-btn"
+            className="px-3 py-2 text-xs rounded-md bg-white border border-stone-300 text-stone-700 hover:border-stone-500 inline-flex items-center gap-1.5 font-medium">
+            <Play size={13} weight="fill" className="text-violet-600" /> Tanıtım Turu
+          </button>
           <button onClick={downloadPdf} data-testid="brain-pdf-btn"
             className="px-3 py-2 text-xs rounded-md bg-stone-900 text-white hover:bg-stone-700 inline-flex items-center gap-1.5 font-medium">
             <FilePdf size={13} weight="fill" /> PDF İndir
@@ -144,6 +161,7 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
       )}
 
       {mainTab === "memory" && (<>
+      <div className="mb-4"><RobotImpactCard propertyId={propertyId} /></div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <Kpi icon={Scales} color="violet" label="Ölçülen Karar" value={data.outcomes_measured} testId="brain-kpi-outcomes" />
         <Kpi icon={TrendUp} color="emerald" label="Başarı Oranı" value={data.success_rate != null ? `%${data.success_rate}` : "—"} testId="brain-kpi-success" />

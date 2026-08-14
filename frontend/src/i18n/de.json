@@ -417,5 +417,6 @@
   "nav.self_checkin_auto": "Auto pre-arrival trigger",
   "nav.lock_sdk": "Hardware lock SDK",
   "nav.recipe_cogs": "Recipe COGS & modifiers",
-  "rev.tab.rms_pro": "RMS Pro Suite"
+  "rev.tab.rms_pro": "RMS Pro Suite",
+  "rev.tab.learning_robot": "Revenue Robotu (Öğrenen Uzman)"
 }

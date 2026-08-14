@@ -3771,3 +3771,18 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   edilmiş 1 dokümanda `id` alanı yoktu (None). DB backfill (uuid) + frontend'te
   recent_outcomes map'ine defensif fallback key eklendi.
 - E2E DOĞRULANDI: sidebar etiketi doğru, konsolda 0 key uyarısı (memory+expertise sekmeleri gezildi).
+
+## Iter 531 (2026-08-14) — Tanıtım Turu + Robot Başarı Panosu + Menü Konsolidasyonu
+- YENİ backend: GET /api/revenue-brain/{pid}/impact-summary — aylık tahmini kâr katkısı
+  (fiyat kararları etkisi + kampanya pickup geliri, MTD gelir yüzdesi, Türkçe headline).
+- YENİ frontend: RobotImpactCard.js (yönetici özet kartı; ana Dashboard/TodayHub + robot paneli
+  üstünde), RevenueRobotTour.js (10 adımlı spotlight onboarding turu; sekme geçişli, ilk açılışta
+  otomatik [localStorage rr_tour_done], 'Tanıtım Turu' butonuyla manuel).
+- KONSOLİDASYON (kullanıcı isteği a şıkkı): Revenue Robotu artık RevenuePanel içinde sekme
+  (rev-tab-learning-robot, AI Copilot altında). Kenar çubuğundaki ayrı revenue-brain girişi
+  KALDIRILDI. Geriye dönük: activeView=revenue-brain → RevenuePanel(initialTab=learning-robot).
+  i18n anahtarı rev.tab.learning_robot 7 dilde eklendi.
+- DİKKAT: search_replace RevenuePanel.js'te bir kez dosya sonuna çöp blok ekledi (Unterminated
+  string build hatası) — temizlendi; render bloğu yeniden eklendi.
+- E2E DOĞRULANDI: 10 tur adımı sekme geçişleriyle çalışıyor, kart her iki yerde, eski buton 0,
+  konsol temiz. Expo build hâlâ token bekliyor (kullanıcı 'yes' dedi ama token yapıştırmadı).

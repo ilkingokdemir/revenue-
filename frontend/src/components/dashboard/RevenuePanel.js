@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "@/i18n";
@@ -43,12 +43,15 @@ import {
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+const RevenueBrainPanel = lazy(() => import("./RevenueBrainPanel"));
+
 const NAV_SECTIONS = [
   {
     labelKey: "nav.dashboard",
     items: [
       { id: "dashboard", labelKey: "rev.tab.dashboard", icon: BarChart3 },
       { id: "ai-copilot", labelKey: "rev.tab.ai_copilot", icon: Bot },
+      { id: "learning-robot", labelKey: "rev.tab.learning_robot", fallback: "Revenue Robotu (Öğrenen Uzman)", icon: BrainCircuit },
       { id: "wizard", labelKey: "nav.setup_wizard", icon: Wand2 },
     ],
   },
@@ -115,9 +118,9 @@ const NAV_SECTIONS = [
   },
 ];
 
-export const RevenuePanel = ({ properties, activePropertyId }) => {
+export const RevenuePanel = ({ properties, activePropertyId, initialTab }) => {
   const { t } = useTranslation();
-  const [tab, setTab] = useState("dashboard");
+  const [tab, setTab] = useState(initialTab || "dashboard");
   const [roomTypes, setRoomTypes] = useState([]);
   // Auto-collapse on mobile so the inner nav doesn't force horizontal overflow
   const [collapsed, setCollapsed] = useState(() =>
@@ -232,6 +235,11 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
             <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
               {tab === "dashboard" && <RevenueDashboardEnhanced propertyId={pid} onNavigate={handleNavigate} />}
               {tab === "ai-copilot" && <RevenueAICopilot propertyId={pid} />}
+              {tab === "learning-robot" && (
+                <Suspense fallback={<div className="p-8 text-sm text-stone-400">Yükleniyor…</div>}>
+                  <RevenueBrainPanel properties={properties || []} activePropertyId={pid} />
+                </Suspense>
+              )}
               {tab === "calendar" && <RateCalendarEditable propertyId={pid} />}
               {tab === "smart-rate-control" && <SmartRateControlPanel activePropertyId={pid} />}
               {tab === "dynamic-pricing" && <DynamicPricingEngine propertyId={pid} />}
@@ -274,3 +282,4 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
     </div>
   );
 };
+

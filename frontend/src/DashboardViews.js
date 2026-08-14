@@ -206,7 +206,6 @@ import {
   ReportsSettings,
   ResQualityPanel,
   RestrictionAdvisorPanel,
-  RevenueBrainPanel,
   RevenueHealthPanel,
   RevenuePanel,
   RevenueProtectionPanel,
@@ -779,9 +778,9 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
           <BasePriceCurvePanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
-        {/* Öğrenen Revenue Beyni (closed learning loop) */}
+        {/* Öğrenen Revenue Beyni — artık Revenue management içinde sekme (geriye dönük yönlendirme) */}
         {activeView === "revenue-brain" && (
-          <RevenueBrainPanel properties={properties} activePropertyId={activePropertyId} />
+          <RevenuePanel properties={properties} activePropertyId={activePropertyId} initialTab="learning-robot" />
         )}
 
         {/* Setup Wizard */}

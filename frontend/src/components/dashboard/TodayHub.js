@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import RobotImpactCard from "./RobotImpactCard";
 import axios from "axios";
 import DeparturesBoard from "./DeparturesBoard";
 import { Pickup24Card } from "./Pickup24Card";
@@ -390,6 +391,11 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
       {/* 24-Hour Pickup (Pulse) */}
       <div className="mt-5">
         <Pickup24Card propertyId={pickupScope || propertyId} />
+      </div>
+
+      {/* Robot Başarı Panosu — aylık kâr katkısı */}
+      <div className="mt-5">
+        <RobotImpactCard propertyId={propertyId} onNavigate={onNavigate} />
       </div>
 
       {/* Scheduled Departures Board (Mews parity) */}

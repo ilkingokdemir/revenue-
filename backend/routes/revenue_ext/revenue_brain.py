@@ -570,6 +570,73 @@ def _build_memory_pdf(hotel_name: str, region: str, memory: list, regional: list
     return buf.getvalue()
 
 
+async def build_impact_summary(db, pid: str) -> dict:
+    """Robot Başarı Panosu — robotun bu ayki tahmini kâr katkısı (yönetici özeti)."""
+    from routes.distribution.push_history import resolve_rate
+    now = datetime.now(timezone.utc)
+    month_key = now.strftime("%Y-%m")
+    month_start = now.replace(day=1).strftime("%Y-%m-%d")
+    total_rooms = await db.rooms.count_documents({"property_id": pid}) or 20
+    outcomes = await db.ai_pricing_outcomes.find(
+        {"property_id": pid, "measured_at": {"$gte": month_start}}, {"_id": 0}).to_list(500)
+    pricing_impact, worked, hurt = 0.0, 0, 0
+    rate_cache = {}
+    for o in outcomes:
+        ds = o.get("stay_date")
+        if ds not in rate_cache:
+            base, _src = await resolve_rate(db, pid, ds)
+            rate_cache[ds] = base or 0.0
+        base = rate_cache[ds]
+        occ_gain_rooms = ((o.get("final_occ") or 0) - (o.get("baseline_occ") or 0)) / 100.0 * total_rooms
+        rate_effect = base * ((o.get("delta_pct") or 0) / 100.0) * ((o.get("final_occ") or 0) / 100.0 * total_rooms)
+        pricing_impact += occ_gain_rooms * base + rate_effect
+        if o.get("verdict") == "worked":
+            worked += 1
+        elif o.get("verdict") == "hurt":
+            hurt += 1
+    decisions_applied = await db.ai_pricing_decisions.count_documents(
+        {"property_id": pid, "status": {"$in": ["accepted", "auto-applied", "applied"]},
+         "decided_at": {"$gte": month_start}})
+    camps = await db.promo_campaigns.find(
+        {"property_id": pid, "measured": True}, {"_id": 0, "pickup_gain": 1, "date": 1}).to_list(500)
+    camp_month = [c for c in camps if (c.get("date") or "") >= month_start]
+    rooms_gained = round(sum(float(c.get("pickup_gain") or 0) for c in camp_month), 1)
+    if rate_cache:
+        avg_rate = sum(rate_cache.values()) / len(rate_cache)
+    else:
+        avg_rate, _src = await resolve_rate(db, pid, now.strftime("%Y-%m-%d"))
+        avg_rate = avg_rate or 0.0
+    campaign_impact = round(max(rooms_gained, 0) * avg_rate, 2)
+    total = round(pricing_impact + campaign_impact, 2)
+    goal = await build_goal_progress(db, pid)
+    mtd = goal.get("mtd_revenue") or 0
+    n = len(outcomes)
+    success = round(worked / n * 100, 1) if n else None
+    if n == 0 and not camp_month:
+        headline = "Robot bu ay henüz ölçülmüş karar biriktirmedi — kararlar ölçüldükçe kâr katkısı burada birikecek."
+    elif total >= 0:
+        headline = (f"Robot bu ay {n} kararı ölçtü"
+                    + (f", %{success} başarı" if success is not None else "")
+                    + f" — tahmini net katkı £{total:,.0f}."
+                    + (f" Kampanyalar +{rooms_gained} oda pickup getirdi." if rooms_gained > 0 else ""))
+    else:
+        headline = (f"Robot bu ay {n} karar ölçtü; tahmini etki £{total:,.0f} — "
+                    "zarar veren bağlamlar frenlendi, dersler hafızaya işlendi.")
+    return {"property_id": pid, "month": month_key,
+            "outcomes_measured": n, "worked": worked, "hurt": hurt,
+            "success_rate": success,
+            "decisions_applied": decisions_applied,
+            "est_pricing_impact": round(pricing_impact, 2),
+            "campaign_nights_measured": len(camp_month),
+            "campaign_rooms_gained": rooms_gained,
+            "est_campaign_impact": campaign_impact,
+            "est_total_contribution": total,
+            "mtd_revenue": mtd,
+            "contribution_pct_of_mtd": round(total / mtd * 100, 1) if mtd else None,
+            "headline": headline,
+            "note": "Tahmini katkı = doluluk farkı × baz fiyat + fiyat değişimi etkisi + kampanya pickup geliri."}
+
+
 def create_revenue_brain_router(db, require_roles):
     router = APIRouter(prefix="/revenue-brain", tags=["revenue-brain"])
     ROLES = ("admin", "manager")
@@ -660,6 +727,11 @@ def create_revenue_brain_router(db, require_roles):
     async def simulate_lesson(pid: str, body: Dict, _u: dict = Depends(require_roles(*ROLES))):
         key = (body.get("bucket_key") or "").strip()
         return await simulate_lesson_impact(db, pid, key)
+
+    @router.get("/{pid}/impact-summary")
+    async def impact_summary(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Robot Başarı Panosu — aylık kâr katkısı yönetici özeti."""
+        return await build_impact_summary(db, pid)
 
     @router.get("/{pid}/timeline")
     async def timeline(pid: str, _u: dict = Depends(require_roles(*ROLES))):

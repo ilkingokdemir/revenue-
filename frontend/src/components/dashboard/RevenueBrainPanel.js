@@ -6,6 +6,7 @@ import {
 } from "@phosphor-icons/react";
 import RobotImpactCard from "./RobotImpactCard";
 import RevenueRobotTour from "./RevenueRobotTour";
+import ExecReportArchive from "./ExecReportArchive";
 
 const RmExpertisePanel = lazy(() => import("./RmExpertisePanel"));
 const RevenueStrategistPanel = lazy(() => import("./RevenueStrategistPanel"));
@@ -416,6 +417,8 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
           </table>
         )}
       </div>
+
+      <ExecReportArchive propertyId={propertyId} />
       </>)}
     </div>
   );

@@ -855,6 +855,27 @@ def create_revenue_brain_router(db, require_roles):
         key = (body.get("bucket_key") or "").strip()
         return await simulate_lesson_impact(db, pid, key)
 
+    @router.get("/{pid}/exec-reports")
+    async def exec_reports_list(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Rapor Arşivi — geçmiş haftalık yönetici raporu anlık görüntüleri."""
+        items = await db.exec_reports.find(
+            {"property_id": pid}, {"_id": 0}).sort("week", -1).to_list(52)
+        return {"property_id": pid, "count": len(items), "items": items}
+
+    @router.post("/{pid}/exec-reports/snapshot")
+    async def exec_reports_snapshot(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Bu haftanın raporunu manuel arşivle (pazartesi cron'u beklemeden)."""
+        now = datetime.now(timezone.utc)
+        week_key = now.strftime("%G-W%V")
+        impact = await build_impact_summary(db, pid)
+        goal = await build_goal_progress(db, pid)
+        await db.exec_reports.update_one(
+            {"property_id": pid, "week": week_key},
+            {"$set": {"id": str(uuid.uuid4()), "property_id": pid, "week": week_key,
+                      "impact": impact, "goal": goal, "created_at": now.isoformat()}},
+            upsert=True)
+        return {"ok": True, "week": week_key}
+
     @router.get("/{pid}/executive-report-pdf")
     async def executive_report_pdf(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         """Haftalık Yönetici Raporu PDF — robot katkısı + hedef + dersler."""

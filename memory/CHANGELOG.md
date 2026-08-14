@@ -3806,3 +3806,13 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   notifications bildirimi (link_to: revenue-brain), exec_report_state ile haftada 1 garanti. server.py'ye kayıtlı.
 - UI: RevenueBrainPanel header'a yeşil "Yönetici Raporu" indirme butonu (brain-exec-report-btn).
 - E2E DOĞRULANDI: sayfa 6 satır + 9 kart, PDF %PDF-1.4 2 sayfa 24KB, loop body manuel çalıştırıldı, backend log temiz.
+
+## Iter 534 (2026-08-14) — Rapor Arşivi
+- YENİ backend: GET /api/revenue-brain/{pid}/exec-reports (52 haftaya kadar liste) +
+  POST /{pid}/exec-reports/snapshot (haftalık manuel arşiv, week bazlı upsert).
+- YENİ frontend: ExecReportArchive.js — RevenueBrainPanel hafıza sekmesinin altında;
+  hafta hafta karşılaştırma tablosu (katkı, Δ önceki hafta ▲▼, ölçülen karar, başarı, MTD, hedef ilerleme)
+  + "Bu Haftayı Arşivle" butonu. Pazartesi cron'u (weekly_exec_report_loop) arşivi otomatik doldurur.
+- FIX: phosphor'da ArchiveBox yok → Archive kullanıldı.
+- E2E DOĞRULANDI: snapshot 2026-W33 kaydı oluşturdu, tablo satır + toast OK.
+- NOT: Kullanıcı 2 kez "Mobil derleme" seçti ama Expo Access Token hâlâ YAPIŞTIRILMADI — bloklu.

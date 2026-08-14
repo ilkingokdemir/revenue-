@@ -826,6 +826,44 @@ async def weekly_brief_loop(db, interval_seconds: int = 3600):
         await asyncio.sleep(interval_seconds)
 
 
+async def marketing_radar_loop(db, interval_seconds: int = 3600):
+    """Fırsat Radarı otomasyonu — haftada bir tesis başına tarar, pencere bulursa bildirim düşer."""
+    import logging
+    logger = logging.getLogger(__name__)
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            week_key = now.strftime("%G-W%V")
+            props = await db.properties.find(
+                {"is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1}).to_list(50)
+            for p in props:
+                pid = p["id"]
+                done = await db.radar_state.find_one({"property_id": pid, "week": week_key}, {"_id": 0})
+                if done:
+                    continue
+                from routes.revenue_ext.marketing_radar import compute_radar
+                r = await compute_radar(db, pid, days=60)
+                wins = r.get("windows") or []
+                if wins:
+                    top = wins[0]
+                    await db.notifications.insert_one({
+                        "id": str(uuid.uuid4()), "type": "info",
+                        "title": "Fırsat Radarı: düşük talepli pencere bulundu",
+                        "message": (f"{p.get('name') or pid}: {len(wins)} pencere. En büyüğü {top['start']}"
+                                    f"{'→' + top['end'] if top['nights'] > 1 else ''} ({top['nights']} gece, "
+                                    f"ort. doluluk %{top['avg_occ']}, beklenen etki £{top['est_revenue_roi']:,.0f}). "
+                                    "Radar panelinden tek tıkla kampanya açın."),
+                        "category": "revenue", "target_user": "", "target_role": "manager",
+                        "link_to": "marketing-radar", "priority": "normal",
+                        "read": False, "created_by": "Fırsat Radarı", "created_at": now.isoformat()})
+                await db.radar_state.insert_one(
+                    {"property_id": pid, "week": week_key, "windows": len(wins), "at": now.isoformat()})
+                logger.info(f"marketing_radar_loop: {pid} {len(wins)} pencere ({week_key})")
+        except Exception as e:
+            logger.warning(f"marketing_radar_loop error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def weekly_exec_report_loop(db, interval_seconds: int = 3600):
     """Haftalık Yönetici Raporu — her pazartesi robot katkısı + hedef + dersleri hazırlar, bildirim bırakır."""
     import logging

@@ -1,8 +1,11 @@
 import React, { useEffect, useState, useCallback } from "react";
+import axios from "axios";
 import {
   Trophy, CheckCircle, Brain, Sparkle, Flask, Target, ShieldCheck, Pulse, ChartLineUp, Robot, Medal,
   Presentation, X, ArrowLeft, ArrowRight,
 } from "@phosphor-icons/react";
+
+const API = process.env.REACT_APP_BACKEND_URL;
 
 const COMPETITORS = [
   {
@@ -55,11 +58,21 @@ const UNIQUE = [
   { icon: Medal, title: "Tek Platform", desc: "PMS + RMS + Kanal + F&B + CRM tek çatıda — rakip RMS'ler yalnız fiyatlama katmanı." },
 ];
 
-const TOTAL_SLIDES = 2 + COMPETITORS.length + 1; // giriş + 6 rakip + farklar + kapanış
+const TOTAL_SLIDES = COMPETITORS.length + 5; // giriş + 6 rakip + farklar + robot kanıtı + RGI + kapanış
 
-export default function RmsComparisonPanel() {
+export default function RmsComparisonPanel({ activePropertyId, properties = [] }) {
+  const pid = activePropertyId && activePropertyId !== "all" ? activePropertyId : properties[0]?.id || "default";
   const [presenting, setPresenting] = useState(false);
   const [slide, setSlide] = useState(0);
+  const [proof, setProof] = useState(null);
+
+  useEffect(() => {
+    if (!presenting || proof) return;
+    Promise.all([
+      axios.get(`${API}/api/revenue-brain/${pid}/impact-summary`, { withCredentials: true }),
+      axios.get(`${API}/api/rgi-proof/${pid}`, { withCredentials: true }),
+    ]).then(([a, b]) => setProof({ impact: a.data, rgi: b.data })).catch(() => setProof({}));
+  }, [presenting, proof, pid]);
 
   const next = useCallback(() => setSlide((s) => Math.min(s + 1, TOTAL_SLIDES - 1)), []);
   const prev = useCallback(() => setSlide((s) => Math.max(s - 1, 0)), []);
@@ -77,7 +90,7 @@ export default function RmsComparisonPanel() {
 
   return (
     <div className="p-5 max-w-[1400px] mx-auto" data-testid="rms-comparison-panel">
-      {presenting && <PresentationDeck slide={slide} next={next} prev={prev} exit={() => setPresenting(false)} />}
+      {presenting && <PresentationDeck slide={slide} next={next} prev={prev} exit={() => setPresenting(false)} proof={proof} />}
 
       <div className="bg-stone-900 rounded-2xl p-6 text-stone-100 mb-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -161,11 +174,15 @@ export default function RmsComparisonPanel() {
   );
 }
 
-function PresentationDeck({ slide, next, prev, exit }) {
+function PresentationDeck({ slide, next, prev, exit, proof }) {
   const isFirst = slide === 0;
-  const isUnique = slide === TOTAL_SLIDES - 2;
+  const isUnique = slide === COMPETITORS.length + 1;
+  const isRobot = slide === COMPETITORS.length + 2;
+  const isRgi = slide === COMPETITORS.length + 3;
   const isLast = slide === TOTAL_SLIDES - 1;
-  const comp = !isFirst && !isUnique && !isLast ? COMPETITORS[slide - 1] : null;
+  const comp = slide >= 1 && slide <= COMPETITORS.length ? COMPETITORS[slide - 1] : null;
+  const imp = proof?.impact;
+  const rgi = proof?.rgi;
 
   return (
     <div className="fixed inset-0 z-[1100] bg-stone-950 text-stone-100 flex flex-col" data-testid="rmsc-slide-deck">
@@ -229,6 +246,42 @@ function PresentationDeck({ slide, next, prev, exit }) {
             </div>
           </div>
         )}
+        {isRobot && (
+          <div className="max-w-3xl w-full text-center" data-testid="rmsc-slide-robot">
+            <div className="text-stone-500 text-xs font-bold uppercase tracking-[0.25em] mb-4">Kanıt 1 · Robot Başarı Panosu</div>
+            <h2 className="text-3xl font-black mb-8">Robot sadece öneri yapmaz — <span className="text-emerald-400">katkısını ölçer</span></h2>
+            {imp ? (
+              <>
+                <div className="text-6xl font-black text-emerald-400">
+                  {(imp.est_total_contribution || 0) >= 0 ? "+" : ""}£{Math.round(imp.est_total_contribution || 0).toLocaleString("tr-TR")}
+                </div>
+                <div className="text-stone-400 text-sm mt-2">bu ayki tahmini net katkı{imp.contribution_pct_of_mtd != null ? ` · ay içi gelirin %${imp.contribution_pct_of_mtd}'i` : ""}</div>
+                <div className="grid grid-cols-3 gap-4 mt-8">
+                  <Stat v={imp.outcomes_measured} l="ölçülen karar" />
+                  <Stat v={imp.success_rate != null ? `%${imp.success_rate}` : "—"} l="başarı oranı" />
+                  <Stat v={imp.decisions_applied} l="uygulanan karar" />
+                </div>
+              </>
+            ) : <div className="text-stone-500">Canlı veri yükleniyor…</div>}
+          </div>
+        )}
+        {isRgi && (
+          <div className="max-w-3xl w-full text-center" data-testid="rmsc-slide-rgi">
+            <div className="text-stone-500 text-xs font-bold uppercase tracking-[0.25em] mb-4">Kanıt 2 · RGI Pazar Endeksi</div>
+            <h2 className="text-3xl font-black mb-8">"RevPAR arttı" demiyoruz — <span className="text-indigo-400">pazara göre kanıtlıyoruz</span></h2>
+            {rgi ? (
+              <>
+                <div className="flex items-center justify-center gap-10">
+                  <div><div className="text-4xl font-black text-stone-400">{rgi.avg_rgi_before ?? "—"}</div><div className="text-xs text-stone-500 mt-1">RGI · robot öncesi</div></div>
+                  <ArrowRight size={28} className="text-stone-600" />
+                  <div><div className="text-6xl font-black text-indigo-400">{rgi.avg_rgi_after ?? "—"}</div><div className="text-xs text-stone-500 mt-1">RGI · robot dönemi</div></div>
+                </div>
+                <p className="text-stone-400 text-sm mt-8 max-w-xl mx-auto">{rgi.verdict}</p>
+                <p className="text-stone-600 text-[11px] mt-4">RGI = bizim RevPAR / pazar RevPAR × 100. 100 üzeri = pazardan iyi.</p>
+              </>
+            ) : <div className="text-stone-500">Canlı veri yükleniyor…</div>}
+          </div>
+        )}
         {isLast && (
           <div className="text-center max-w-3xl">
             <h2 className="text-4xl sm:text-5xl font-black leading-tight">Tek platform.<br /><span className="text-emerald-400">6/6 parite.</span> <span className="text-violet-400">9 benzersiz fark.</span></h2>
@@ -253,6 +306,15 @@ function PresentationDeck({ slide, next, prev, exit }) {
           {isLast ? "Bitir" : "İleri"} {!isLast && <ArrowRight size={14} weight="bold" />}
         </button>
       </div>
+    </div>
+  );
+}
+
+function Stat({ v, l }) {
+  return (
+    <div className="bg-stone-900 border border-stone-800 rounded-xl p-4">
+      <div className="text-2xl font-black">{v}</div>
+      <div className="text-[11px] text-stone-500 mt-1">{l}</div>
     </div>
   );
 }

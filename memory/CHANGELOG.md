@@ -3866,3 +3866,16 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - NOT: Kullanıcı 4. kez mobil derleme seçti, Expo token HÂLÂ YOK.
 - UI ipucu: Şube değiştirmek için shadcn Select: [data-testid='branch-selector-container'] button →
   [role='option'] tıkla (düz text tıklaması çalışmıyor).
+
+## Iter 540 (2026-08-14) — Radar Otomasyonu + Ana Sayfa ROI + Sunum Kanıt Slaytları
+- marketing_radar.py yeniden yapılandırıldı: compute_radar() modül seviyesine alındı (worker importu için).
+- workers.py: marketing_radar_loop — haftada 1 tesis başına tarama (radar_state), pencere bulursa
+  Türkçe bildirim (link_to: marketing-radar). server.py'ye kayıtlı.
+- LandingPage.js (ana MyHotelBox "/"): RoiCalculatorSection koyu section sarmalayıcıda eklendi
+  (landing-roi-wrap). DİKKAT: import unutulmuştu → "RoiCalculatorSection is not defined" runtime
+  hatası ana sayfayı çökertti; import eklenerek düzeltildi. JSX eklerken importu AYNI edit'te yap!
+- RmsComparisonPanel: 2 canlı kanıt slaytı (Robot Başarı +£1.851 canlı, RGI önce/sonra) —
+  TOTAL_SLIDES=11, props (activePropertyId, properties) DashboardViews'tan geçiyor,
+  sunum açılınca impact-summary + rgi-proof canlı çekiliyor.
+- E2E DOĞRULANDI: landing ROI slider canlı hesaplıyor, 11 slayt akışı + kapanış, radar loop importu OK.
+- Expo token 5. kez istendi, hâlâ yok.

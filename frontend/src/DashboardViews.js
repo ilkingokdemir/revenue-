@@ -789,7 +789,7 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
 
         {/* RMS Rakip Karşılaştırma — satış demosu sayfası */}
         {activeView === "rms-comparison" && (
-          <RmsComparisonPanel />
+          <RmsComparisonPanel activePropertyId={activePropertyId} properties={properties} />
         )}
 
         {/* Pazarlama Fırsat Radarı (IDeaS Marketing Optimization paritesi) */}

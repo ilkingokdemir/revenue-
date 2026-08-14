@@ -7,6 +7,7 @@ import {
   BarChart3, CreditCard, Zap, ShieldCheck, Building2, Menu, X, ClipboardCheck,
 } from "lucide-react";
 import { DemoForm, FaqItem, fadeUp, goLogin, scrollTo } from "./landing/shared";
+import RoiCalculatorSection from "./components/public/RoiCalculatorSection";
 
 const NAV_LINKS = [
   { label: "Product", href: "#product" },
@@ -322,6 +323,11 @@ export default function LandingPage() {
             ))}
           </motion.div>
         </div>
+      </section>
+
+      {/* ROI Calculator (lead aracı) */}
+      <section className="relative bg-[#0A0F1C] text-white overflow-hidden" data-testid="landing-roi-wrap">
+        <RoiCalculatorSection onDemo={() => scrollTo("#demo")} />
       </section>
 
       {/* Testimonials */}

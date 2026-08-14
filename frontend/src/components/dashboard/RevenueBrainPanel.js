@@ -8,6 +8,7 @@ import RobotImpactCard from "./RobotImpactCard";
 import RevenueRobotTour from "./RevenueRobotTour";
 import ExecReportArchive from "./ExecReportArchive";
 import StrategyDirectivesCard from "./StrategyDirectivesCard";
+import RgiProofCard from "./RgiProofCard";
 
 const RmExpertisePanel = lazy(() => import("./RmExpertisePanel"));
 const RevenueStrategistPanel = lazy(() => import("./RevenueStrategistPanel"));
@@ -421,6 +422,7 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
       </div>
 
       <ExecReportArchive propertyId={propertyId} />
+      <RgiProofCard propertyId={propertyId} />
       </>)}
     </div>
   );

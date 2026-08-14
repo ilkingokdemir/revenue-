@@ -148,6 +148,7 @@ DEFAULT_CONFIG = {
     "max_rate_pct": 250,                  # ceiling as % of base rate
     "days_horizon": 30,                   # how many days ahead to compute
     "target_updates_per_day": 12,         # autopilot cadence target (RPG parity)
+    "anomaly_mode": "human",              # anomali: "human" = dondur + onay iste, "auto" = bildir + devam
     "last_run_at": None,
     "last_auto_applied": 0,
     "last_pending": 0,
@@ -253,7 +254,7 @@ def create_ai_pricing_router(db, require_roles):
         base_rate_avg = (
             sum(float(r.get("base_rate", 0) or 0) for r in room_types) / max(len(room_types), 1)
             if room_types else 130
-        )
+        ) or 130.0
 
         today = datetime.now(timezone.utc)
         today_str = today.strftime("%Y-%m-%d")
@@ -315,6 +316,26 @@ def create_ai_pricing_router(db, require_roles):
         for g in g_rows:
             if g["bucket_key"] not in learned_map:
                 learned_map[g["bucket_key"]] = round(1 + (float(g["factor"]) - 1) * 0.5, 4)
+
+        # 💰 Net RevPAR hedef fonksiyonu — karma kanal kesintisi (komisyon+ödeme+iade+promo) + CPOR
+        from routes.revenue_ext.profit_pricing import _get_settings as _profit_settings, _get_rate as _comm_rate, DEFAULT_RATES as _CHS
+        _ps = await _profit_settings(db, property_id)
+        _mix_rows = await db.bookings.aggregate([
+            {"$match": {"property_id": property_id, "status": {"$nin": ["cancelled", "no_show"]},
+                        "created_at": {"$gte": (today - timedelta(days=60)).isoformat()}}},
+            {"$group": {"_id": "$source", "n": {"$sum": 1}}}]).to_list(20)
+        _tot = sum(r["n"] for r in _mix_rows) or 1
+        _ded_pct = 0.0
+        for _r in _mix_rows:
+            _ch = (_r["_id"] or "direct").lower()
+            if _ch not in _CHS:
+                _ch = "booking" if "book" in _ch else ("expedia" if "exped" in _ch else "direct")
+            _c = await _comm_rate(db, _ch, property_id)
+            _ded_pct += (_r["n"] / _tot) * (_c + _ps["payment_fee_pct"] / 100
+                        + _ps["refund_risk_pct"].get(_ch, 0) / 100 + _ps["promo_funding_pct"].get(_ch, 0) / 100)
+        if not _mix_rows:
+            _ded_pct = (await _comm_rate(db, "booking", property_id)) + _ps["payment_fee_pct"] / 100
+        _cpor = float(_ps["cpor"])
 
         # Parallel occupancy fan-out per date
         async def _occ_for(snap):
@@ -405,6 +426,15 @@ def create_ai_pricing_router(db, require_roles):
                     "auto_apply_eligible": abs(calc["delta_vs_current_pct"]) <= float(cfg.get("auto_apply_threshold_pct", 5.0)),
                     "rationale": prev_decision.get("rationale"),
                 }
+                if current_rate > 0 and float(calc.get("suggested_rate") or 0) > 0:
+                    _net_cur = round(current_rate * (1 - _ded_pct) - _cpor, 2)
+                    _net_new = round(calc["suggested_rate"] * (1 - _ded_pct) - _cpor, 2)
+                    item["net_current_rate"] = _net_cur
+                    item["net_new_rate"] = _net_new
+                    item["net_delta_pct"] = round((_net_new - _net_cur) / abs(_net_cur) * 100, 2) if _net_cur else None
+                    if calc["suggested_rate"] != current_rate:
+                        item["net_note"] = (f"NET RevPAR: £{_net_cur} → £{_net_new}"
+                                            f" (kesinti %{_ded_pct * 100:.0f} + CPOR £{_cpor:.0f} düşülmüş)")
                 suggestions.append(item)
 
                 # Build LLM input for primary room type only (avoid burning tokens on duplicates)
@@ -522,18 +552,85 @@ def create_ai_pricing_router(db, require_roles):
                 "str_unavailable_pct": item.get("str_unavailable_pct"),
                 "learned_mult": item.get("learned_mult", 1.0),
                 "learned_bucket": item.get("learned_bucket"),
-                "rationale": rationale or item.get("rationale"),
+                "net_prev_rate": item.get("net_current_rate"),
+                "net_new_rate": item.get("net_new_rate"),
+                "net_delta_pct": item.get("net_delta_pct"),
+                "rationale": ((rationale or item.get("rationale") or "")
+                              + ((" · " + item["net_note"]) if item.get("net_note") else "")) or None,
                 "decided_at": now_iso,
             }},
             upsert=True,
         )
+
+    async def _detect_anomaly(property_id: str, suggestions: list):
+        """Anomali tespiti: rakip verisi saçmalaması veya OTB ani sıçraması."""
+        for s in suggestions[:80]:
+            ma, br = float(s.get("market_avg") or 0), float(s.get("base_rate") or 0)
+            if ma and br and (ma < br * 0.35 or ma > br * 3.0):
+                return f"Rakip verisi anormal: {s['date']} pazar ort £{ma:.0f} vs baz fiyat £{br:.0f}"
+        now = datetime.now(timezone.utc)
+        cnts = []
+        for i in range(8):
+            d0 = (now - timedelta(days=i)).strftime("%Y-%m-%d")
+            d1 = (now - timedelta(days=i - 1)).strftime("%Y-%m-%d")
+            c = await db.bookings.count_documents(
+                {"property_id": property_id, "created_at": {"$gte": d0, "$lt": d1}})
+            cnts.append(c)
+        prior_avg = sum(cnts[1:]) / 7
+        if cnts[0] >= 5 and cnts[0] > 3 * max(prior_avg, 0.5):
+            return f"OTB ani sıçrama: bugün {cnts[0]} rezervasyon (7 gün ort. {prior_avg:.1f}) — talep şoku olabilir"
+        return None
+
+    async def _handle_anomaly(property_id: str, cfg: dict, suggestions: list):
+        """Anomali varsa moda göre işlem: human=dondur+onay iste, auto=bildir+devam. (frozen, reason) döner."""
+        import uuid as _uuid
+        now_iso = datetime.now(timezone.utc).isoformat()
+        frozen = await db.pricing_freeze.find_one({"property_id": property_id, "active": True}, {"_id": 0})
+        if frozen and cfg.get("anomaly_mode", "human") == "human":
+            return True, frozen.get("reason")
+        anomaly = await _detect_anomaly(property_id, suggestions)
+        if not anomaly:
+            return False, None
+        if cfg.get("anomaly_mode", "human") == "human":
+            await db.pricing_freeze.update_one(
+                {"property_id": property_id},
+                {"$set": {"property_id": property_id, "active": True, "reason": anomaly,
+                          "frozen_at": now_iso}}, upsert=True)
+            await db.notifications.insert_one({
+                "id": str(_uuid.uuid4()), "type": "warning",
+                "title": "İnsan onayı gerekli — fiyat oto-uygulama donduruldu",
+                "message": f"{anomaly}. Robot fiyatları dondurdu; kontrol edip 'Dondurmayı Kaldır' ile devam ettirin.",
+                "category": "revenue", "target_user": "", "target_role": "manager",
+                "link_to": "revenue", "priority": "high", "read": False,
+                "created_by": "Anomali Guardrail", "created_at": now_iso})
+            return True, anomaly
+        await db.notifications.insert_one({
+            "id": str(_uuid.uuid4()), "type": "info",
+            "title": "Anomali algılandı (otomatik mod)",
+            "message": f"{anomaly}. Mod 'otomatik' olduğu için uygulamaya devam edildi — izlemede.",
+            "category": "revenue", "target_user": "", "target_role": "manager",
+            "link_to": "revenue", "priority": "normal", "read": False,
+            "created_by": "Anomali Guardrail", "created_at": now_iso})
+        return False, anomaly
 
     # ---------------- ROUTES ----------------
 
     @router.get("/revenue/ai-pricing/{property_id}/config")
     async def get_config(property_id: str,
                           _u: dict = Depends(require_roles("admin", "manager"))):
-        return await _get_cfg(property_id)
+        cfg = await _get_cfg(property_id)
+        cfg["freeze"] = await db.pricing_freeze.find_one(
+            {"property_id": property_id, "active": True}, {"_id": 0})
+        return cfg
+
+    @router.post("/revenue/ai-pricing/{property_id}/unfreeze")
+    async def unfreeze(property_id: str,
+                        current_user: dict = Depends(require_roles("admin", "manager"))):
+        await db.pricing_freeze.update_one(
+            {"property_id": property_id},
+            {"$set": {"active": False, "cleared_by": current_user.get("email", ""),
+                      "cleared_at": datetime.now(timezone.utc).isoformat()}})
+        return {"ok": True}
 
     @router.put("/revenue/ai-pricing/{property_id}/config")
     async def put_config(property_id: str, data: Dict,
@@ -549,6 +646,7 @@ def create_ai_pricing_router(db, require_roles):
             "max_rate_pct": max(100, min(500, int(data.get("max_rate_pct", 250)))),
             "days_horizon": max(1, min(540, int(data.get("days_horizon", 30)))),
             "target_updates_per_day": max(1, min(24, int(data.get("target_updates_per_day", 12)))),
+            "anomaly_mode": data.get("anomaly_mode") if data.get("anomaly_mode") in ("human", "auto") else "human",
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.ai_pricing_config.update_one(
@@ -658,6 +756,13 @@ def create_ai_pricing_router(db, require_roles):
 
         days = int(cfg.get("days_horizon", 30))
         payload = await _build_suggestions(property_id, days, use_llm=False)
+        frozen, freeze_reason = await _handle_anomaly(property_id, cfg, payload["suggestions"])
+        if frozen:
+            await db.ai_pricing_run_log.insert_one({
+                "property_id": property_id, "applied": 0, "source": "frozen-anomaly",
+                "reason": freeze_reason, "run_at": datetime.now(timezone.utc).isoformat()})
+            return {"applied": 0, "frozen": True, "freeze_reason": freeze_reason,
+                    "summary": payload["summary"]}
         from routes.revenue_ext.hurdle_lrv import compute_lrv_floor
         lrv_map = await compute_lrv_floor(db, property_id, days)
         applied = 0
@@ -726,6 +831,9 @@ def create_ai_pricing_router(db, require_roles):
             return {"applied": 0, "skipped_reason": "auto_apply disabled"}
         days = int(cfg.get("days_horizon", 30))
         payload = await _build_suggestions(property_id, days, use_llm=False)
+        frozen, freeze_reason = await _handle_anomaly(property_id, cfg, payload["suggestions"])
+        if frozen:
+            return {"applied": 0, "frozen": True, "freeze_reason": freeze_reason}
         from routes.revenue_ext.hurdle_lrv import compute_lrv_floor
         lrv_map = await compute_lrv_floor(db, property_id, days)
         applied = 0

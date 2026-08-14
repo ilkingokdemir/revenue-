@@ -3837,3 +3837,21 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   ölçülen sonuç başarısı + öncelik/agresifliğe göre UYUM verdiği (aligned true/false/null).
 - UI: StrategyDirectivesCard her direktif altında etki satırı (directive-impact-{id}) + uyum mesajı.
 - E2E DOĞRULANDI: /impact endpoint + kartta "0 karar / henüz ölçülmedi" durumu ekranda görüldü.
+
+## Iter 538 (2026-08-14) — Stratejik Analiz 3 Maddesi: Net RevPAR + Anomali Dondurma + RGI
+- 1) NET REVPAR HEDEF FONKSİYONU: ai_pricing_engine._build_suggestions artık profit_pricing
+  ayarlarından karma kanal kesintisi (60g rezervasyon kanal karması × komisyon + ödeme + iade + promo)
+  ve CPOR hesaplar; her öneriye net_current_rate/net_new_rate/net_delta_pct/net_note ekler;
+  _apply_one karara net alanları + gerekçeye "NET RevPAR: £X → £Y" ekler.
+- 2) ANOMALİ DONDURMA (kullanıcı isteği: SEÇMELİ MOD): cfg.anomaly_mode = "human"(varsayılan)|"auto".
+  _detect_anomaly: pazar ort/baz oranı <0.35 veya >3.0 YA DA günlük rezervasyon 7g ortalamasının 3 katı.
+  human: pricing_freeze aktif + yüksek öncelikli bildirim + auto-apply bloklanır; auto: bildir + devam.
+  GET config'e freeze eklendi; POST /unfreeze temizler. UI: AIPricingEnginePanel'de mod select
+  (ai-pricing-cfg-anomaly) + amber banner + "Dondurmayı Kaldır" (ai-pricing-unfreeze-btn).
+  NOT: AIPricingEnginePanel, Market Robot > AI Pricing SUB-tab'ında ve belirli şube seçili olmalı.
+- 3) RGI KANIT: rgi_proof.py (haftalık bizim RevPAR vs pazar RevPAR proxy'si [avg_price×unavail%],
+  robot öncesi/sonrası ortalama + Türkçe verdict) + RgiProofCard.js (Robot paneli hafıza sekmesi altı).
+- BONUS FIX (önceden var olan bug): default tesisin room_types.base_rate boştu → TÜM öneriler £0'a
+  çakılıyordu (delta -100%). Motor: base_rate_avg'e "or 130" fallback; veri: Standard 125/Deluxe 185 set.
+- TEST: net alanlar curl'de doğru (£98.37→£171.99, kesinti %7+CPOR £18), freeze run-auto-apply'ı blokladı,
+  unfreeze çalıştı, RGI kartı 10 hafta çubuğuyla ekranda. Banner UI backend'i doğrulandı (curl).

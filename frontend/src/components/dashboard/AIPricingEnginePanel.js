@@ -299,8 +299,38 @@ const AIPricingEnginePanel = ({ propertyId }) => {
             </div>
             <p className="text-[10px] text-stone-500">GPT-4o-mini ile günlük TR açıklama</p>
           </div>
+          <div className="flex flex-col gap-2 p-3 rounded-lg bg-stone-50 border border-stone-200">
+            <span className="text-xs font-semibold text-stone-700">Anomali Modu</span>
+            <select value={cfg?.anomaly_mode || "human"} data-testid="ai-pricing-cfg-anomaly"
+              onChange={(e) => { setCfg({ ...cfg, anomaly_mode: e.target.value }); saveCfg({ anomaly_mode: e.target.value }); }}
+              className="h-8 text-xs border border-stone-300 rounded-md px-2 bg-white">
+              <option value="human">İnsan onayı (dondur + sor)</option>
+              <option value="auto">Otomatik (bildir + devam)</option>
+            </select>
+            <p className="text-[10px] text-stone-500">Rakip verisi saçmalarsa / OTB sıçrarsa</p>
+          </div>
         </div>
       </div>
+
+      {/* FREEZE BANNER */}
+      {cfg?.freeze?.active && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-wrap items-center gap-3" data-testid="ai-pricing-freeze-banner">
+          <div className="flex-1 min-w-[250px]">
+            <div className="text-sm font-bold text-amber-800">⚠ Fiyat oto-uygulama DONDURULDU — insan onayı bekleniyor</div>
+            <div className="text-xs text-amber-700 mt-0.5">{cfg.freeze.reason}</div>
+          </div>
+          <button onClick={async () => {
+            try {
+              await axios.post(`${API}/revenue/ai-pricing/${propertyId}/unfreeze`, {}, { headers: authHeaders() });
+              toast.success("Dondurma kaldırıldı — robot devam ediyor");
+              loadCfg();
+            } catch { toast.error("Kaldırılamadı"); }
+          }} data-testid="ai-pricing-unfreeze-btn"
+            className="px-4 py-2 text-xs font-bold rounded-lg bg-amber-600 text-white hover:bg-amber-700">
+            Dondurmayı Kaldır
+          </button>
+        </div>
+      )}
 
       {/* STATS GRID */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="ai-pricing-stats">

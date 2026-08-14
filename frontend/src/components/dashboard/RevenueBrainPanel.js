@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-  Brain, Target, TrendUp, Warning, GraduationCap, ArrowsClockwise, Scales, Archive,
+  Brain, Target, TrendUp, Warning, GraduationCap, ArrowsClockwise, Scales, Archive, Globe, ClockCounterClockwise,
 } from "@phosphor-icons/react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -11,6 +11,7 @@ const BAND_TR = { "0-3": "Son 3 gün", "4-7": "4-7 gün", "8-21": "1-3 hafta", "
 export default function RevenueBrainPanel({ properties = [], activePropertyId }) {
   const [propertyId, setPropertyId] = useState(activePropertyId && activePropertyId !== "all" ? activePropertyId : properties[0]?.id || "default");
   const [data, setData] = useState(null);
+  const [timeline, setTimeline] = useState([]);
   const [busy, setBusy] = useState(false);
   const [goalInput, setGoalInput] = useState("");
 
@@ -22,6 +23,10 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
     try {
       const r = await axios.get(`${API}/api/revenue-brain/${propertyId}/status`, { withCredentials: true });
       setData(r.data);
+      try {
+        const t = await axios.get(`${API}/api/revenue-brain/${propertyId}/timeline`, { withCredentials: true });
+        setTimeline(t.data.items || []);
+      } catch { /* */ }
       if (r.data.goal?.target_revenue) {
         setGoalInput((prev) => prev || String(r.data.goal.target_revenue));
       }
@@ -198,6 +203,57 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      {/* Küresel Hafıza — tüm otellerin birleşik dersleri */}
+      <div className="bg-white border border-stone-200 rounded-xl p-4 mt-4" data-testid="brain-global-memory">
+        <div className="text-sm font-semibold text-stone-900 mb-1 flex items-center gap-2">
+          <Globe size={16} weight="fill" className="text-sky-500" /> Küresel Hafıza
+          <span className="text-[10px] text-stone-400 font-normal">— tüm otellerin birleşik dersleri ({data.global_memory_count || 0} kayıt)</span>
+        </div>
+        <p className="text-[11px] text-stone-500 mb-3">
+          Robot her oteldeki ölçülmüş fiyat sonuçlarını bağlam kovalarında birleştirir. Yeni bir otel — hangi bölgede veya ülkede olursa olsun —
+          portföye eklendiğinde, yerel veri birikene kadar bu dersler <b>yarı etkiyle önsel (prior)</b> olarak fiyat motoruna uygulanır. Yerel ders oluşunca öncelik yerele geçer.
+        </p>
+        {(!data.global_memory || data.global_memory.length === 0) ? (
+          <div className="text-xs text-stone-500 py-3 text-center">Henüz küresel ders yok — oteller genelinde ölçümler biriktikçe burada belirecek.</div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-2">
+            {data.global_memory.map((g) => (
+              <div key={g.bucket_key} className="bg-sky-50/60 border border-sky-100 rounded-lg px-3 py-2.5" data-testid={`brain-global-${g.bucket_key}`}>
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <span className="text-xs font-semibold text-stone-800">{g.title}</span>
+                  <span className={`text-[10px] font-bold ${g.factor < 1 ? "text-amber-600" : g.factor > 1 ? "text-emerald-600" : "text-stone-400"}`}>×{g.factor}</span>
+                </div>
+                <div className="text-[11px] text-stone-600">{g.detail}</div>
+                <div className="text-[10px] text-stone-400 mt-1">{g.properties_contributing} otel katkısı · {g.samples} örnek · başarı %{Math.round((g.worked_rate || 0) * 100)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Öğrenme Yolculuğu — zaman çizelgesi */}
+      <div className="bg-white border border-stone-200 rounded-xl p-4 mt-4" data-testid="brain-timeline">
+        <div className="text-sm font-semibold text-stone-900 mb-3 flex items-center gap-2">
+          <ClockCounterClockwise size={16} weight="fill" className="text-violet-500" /> Öğrenme Yolculuğu
+          <span className="text-[10px] text-stone-400 font-normal">— hafıza olayları, tarih sıralı</span>
+        </div>
+        {timeline.length === 0 ? (
+          <div className="text-xs text-stone-500 py-3 text-center">Henüz olay yok — döngüler çalıştıkça robotun yolculuğu burada birikecek.</div>
+        ) : (
+          <ol className="relative border-l border-stone-200 ml-2 space-y-3">
+            {timeline.map((ev) => (
+              <li key={ev.id} className="ml-4" data-testid={`brain-timeline-${ev.id}`}>
+                <span className={`absolute -left-[5px] mt-1.5 w-2.5 h-2.5 rounded-full border-2 border-white ${
+                  ev.type === "yeni_ders" ? "bg-emerald-500" : ev.type === "ders_izlemede" ? "bg-amber-500"
+                  : ev.type === "ders_dogrulandi" ? "bg-sky-500" : "bg-violet-400"}`} />
+                <div className="text-[10px] text-stone-400">{ev.at?.slice(0, 16).replace("T", " ")}</div>
+                <div className="text-xs text-stone-700">{ev.text}</div>
+              </li>
+            ))}
+          </ol>
         )}
       </div>
 

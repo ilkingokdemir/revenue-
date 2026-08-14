@@ -56,13 +56,17 @@ SEG_FACTOR = {"transient": 1.0, "corporate": 0.92, "group": 0.85,
 
 
 async def run_open_pricing_optimizer(db, pid: str, days: int = 14, apply: bool = False,
-                                      guardrail_pct: float = 15.0):
+                                      guardrail_pct: float = None):
     """Her segment×kanal×tarih hücresi için bağımsız fiyat üretir (cron + endpoint ortak).
-    GUARDRAIL: yeni hücre fiyatı, önceki optimizer fiyatının ±guardrail_pct bandına kırpılır."""
+    GUARDRAIL: yeni hücre fiyatı, önceki optimizer fiyatının ±guardrail_pct bandına kırpılır.
+    guardrail_pct verilmezse tesis ayarından (rms_settings) okunur, varsayılan 15."""
     from routes.distribution.push_history import resolve_rate
     from routes.integrations_pkg.ota_commission import _get_rate
     from datetime import timedelta
     days = max(3, min(days, 30))
+    if guardrail_pct is None:
+        st = await db.rms_settings.find_one({"property_id": pid}, {"_id": 0, "guardrail_pct": 1})
+        guardrail_pct = float((st or {}).get("guardrail_pct") or 15.0)
     guardrail_pct = max(5.0, min(guardrail_pct, 50.0))
     prev = {}
     async for o in db.open_pricing_overrides.find(
@@ -117,6 +121,7 @@ async def run_open_pricing_optimizer(db, pid: str, days: int = 14, apply: bool =
         matrix.append({"date": d, "base": round(base, 2), "occupancy_pct": round(occ * 100, 1),
                        "demand_factor": demand, "cells": cells})
     return {"ok": True, "applied": apply, "overrides_written": writes,
+            "guardrail_pct": guardrail_pct,
             "segment_factors": SEG_FACTOR, "channel_factors": ch_factor,
             "days": days, "matrix": matrix}
 
@@ -132,6 +137,27 @@ def create_open_pricing_router(db, require_roles):
             raise HTTPException(400, "property_id required")
         return await run_open_pricing_optimizer(
             db, pid, int(body.get("days", 14) or 14), bool(body.get("apply", False)))
+
+    @router.get("/open-pricing/guardrail/{property_id}")
+    async def get_guardrail(property_id: str,
+                            _: dict = Depends(require_roles("admin", "manager"))):
+        st = await db.rms_settings.find_one({"property_id": property_id}, {"_id": 0, "guardrail_pct": 1})
+        return {"property_id": property_id,
+                "guardrail_pct": float((st or {}).get("guardrail_pct") or 15.0)}
+
+    @router.put("/open-pricing/guardrail/{property_id}")
+    async def set_guardrail(property_id: str, body: dict,
+                            user: dict = Depends(require_roles("admin", "manager"))):
+        pct = float(body.get("guardrail_pct") or 0)
+        if not 5 <= pct <= 50:
+            raise HTTPException(400, "guardrail_pct 5-50 arasında olmalı")
+        await db.rms_settings.update_one(
+            {"property_id": property_id},
+            {"$set": {"property_id": property_id, "guardrail_pct": pct,
+                      "updated_by": user.get("name") or user.get("email", ""),
+                      "updated_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True)
+        return {"ok": True, "property_id": property_id, "guardrail_pct": pct}
 
     @router.get("/open-pricing/segments")
     async def segments(_: dict = Depends(require_roles("admin", "manager", "receptionist"))):

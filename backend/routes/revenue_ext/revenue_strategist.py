@@ -405,6 +405,20 @@ def create_revenue_strategist_router(db, require_roles):
                 prompt += ("\n\n## ÖĞRENİLMİŞ DERSLER (geçmiş fiyat kararlarının ölçülmüş gerçek sonuçları — "
                            "önerilerinde MUTLAKA dikkate al)\n"
                            + "\n".join(f"- {l['lesson']}" for l in lessons))
+            mem = await db.revenue_brain_memory.find(
+                {"property_id": pid}, {"_id": 0, "detail": 1, "times_confirmed": 1,
+                                       "first_learned": 1, "status": 1}).sort("times_confirmed", -1).to_list(6)
+            if mem:
+                prompt += ("\n\n## KALICI HAFIZA (bu otelin asla silinmeyen kritik dersleri — "
+                           "önerilerinde bu derslere AÇIKÇA ATIF YAP)\n"
+                           + "\n".join(f"- [{m.get('first_learned','')[:10]} tarihinden beri, "
+                                       f"{m.get('times_confirmed',1)}× doğrulandı, {m.get('status')}] {m['detail']}"
+                                       for m in mem))
+            gmem = await db.revenue_brain_global_memory.find(
+                {"factor": {"$ne": 1.0}}, {"_id": 0, "detail": 1}).sort("samples", -1).to_list(4)
+            if gmem:
+                prompt += ("\n\n## KÜRESEL HAFIZA (tüm otellerin birleşik dersleri — portföy önseli)\n"
+                           + "\n".join(f"- {g['detail']}" for g in gmem))
         except Exception:
             pass
         chat = LlmChat(api_key=os.environ.get("EMERGENT_LLM_KEY", ""),

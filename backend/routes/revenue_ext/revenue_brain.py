@@ -169,6 +169,55 @@ async def generate_lessons(db, pid: str) -> int:
     return len(lessons)
 
 
+async def _timeline_event(db, pid: str, ev_type: str, text: str, bucket_key: str = ""):
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    dup = await db.revenue_brain_timeline.find_one(
+        {"property_id": pid, "type": ev_type, "bucket_key": bucket_key,
+         "at": {"$gte": today}}, {"_id": 0, "id": 1})
+    if dup:
+        return
+    await db.revenue_brain_timeline.insert_one({
+        "id": str(uuid.uuid4()), "property_id": pid, "type": ev_type,
+        "bucket_key": bucket_key, "text": text, "at": _now()})
+
+
+async def consolidate_global_memory(db) -> int:
+    """Küresel Hafıza: TÜM otellerin ölçülmüş sonuçlarını bağlam kovasında birleştirir.
+    Yeni otel/bölge/ülke için soğuk başlangıç önseli (prior) olarak fiyat motoruna beslenir."""
+    pipeline = [
+        {"$match": {"direction": {"$in": ["up", "down"]}}},
+        {"$group": {"_id": "$bucket_key", "n": {"$sum": 1},
+                    "worked": {"$sum": {"$cond": [{"$eq": ["$verdict", "worked"]}, 1, 0]}},
+                    "hurt": {"$sum": {"$cond": [{"$eq": ["$verdict", "hurt"]}, 1, 0]}},
+                    "props": {"$addToSet": "$property_id"}}}]
+    updated = 0
+    now = _now()
+    async for g in db.ai_pricing_outcomes.aggregate(pipeline):
+        if g["n"] < MIN_SAMPLES:
+            continue
+        key = g["_id"]
+        band, dow, direction = key.split("|")
+        worked_rate = round(g["worked"] / g["n"], 2)
+        factor = 1.0
+        if g["hurt"] > g["worked"]:
+            factor = UP_DAMPEN if direction == "up" else DOWN_F
+        elif direction == "up" and worked_rate >= 0.7:
+            factor = UP_BOOST
+        ctx = f"{DOW_TR[dow]} {BAND_TR[band]} {DIR_TR.get(direction, direction)}"
+        detail = (f"{ctx}: {len(g['props'])} otelden {g['n']} ölçülmüş sonuç, başarı %{worked_rate*100:.0f} "
+                  f"— küresel çarpan ×{factor}. Yeni otellerde yerel veri birikene kadar önsel olarak (yarı etkiyle) uygulanır.")
+        await db.revenue_brain_global_memory.update_one(
+            {"bucket_key": key},
+            {"$set": {"bucket_key": key, "factor": factor, "samples": g["n"],
+                      "worked": g["worked"], "hurt": g["hurt"], "worked_rate": worked_rate,
+                      "properties_contributing": len(g["props"]),
+                      "title": ctx, "detail": detail, "last_confirmed": now},
+             "$setOnInsert": {"id": str(uuid.uuid4()), "first_learned": now}},
+            upsert=True)
+        updated += 1
+    return updated
+
+
 async def consolidate_memory(db, pid: str) -> int:
     """Kalıcı Hafıza: önemli öğrenmeleri asla silinmeyen arşive işler.
     Ders/ağırlık her döngüde yeniden üretilse bile, kritik öğrenme burada sonsuza dek saklanır."""
@@ -179,7 +228,7 @@ async def consolidate_memory(db, pid: str) -> int:
         band, dow, direction = w["bucket_key"].split("|")
         ctx = f"{DOW_TR[dow]} {BAND_TR[band]} {DIR_TR.get(direction, direction)}"
         existing = await db.revenue_brain_memory.find_one(
-            {"property_id": pid, "bucket_key": w["bucket_key"]}, {"_id": 0, "id": 1})
+            {"property_id": pid, "bucket_key": w["bucket_key"]}, {"_id": 0, "id": 1, "status": 1})
         if w["factor"] != 1.0:
             importance = "kritik" if w["factor"] < 1.0 else "firsat"
             detail = (f"{ctx}: {w['samples']} denemede başarı %{w['worked_rate']*100:.0f} — "
@@ -194,6 +243,17 @@ async def consolidate_memory(db, pid: str) -> int:
                  "$setOnInsert": {"id": str(uuid.uuid4()), "first_learned": now},
                  "$inc": {"times_confirmed": 1}},
                 upsert=True)
+            if not existing:
+                await _timeline_event(db, pid, "yeni_ders",
+                                      f"Yeni kalıcı ders öğrenildi: {ctx} (çarpan ×{w['factor']})",
+                                      w["bucket_key"])
+            elif existing.get("status") != "aktif":
+                await _timeline_event(db, pid, "ders_aktif",
+                                      f"İzlemedeki ders yeniden aktifleşti: {ctx}", w["bucket_key"])
+            else:
+                await _timeline_event(db, pid, "ders_dogrulandi",
+                                      f"Kalıcı ders yeni verilerle doğrulandı: {ctx} ({w['samples']} örnek)",
+                                      w["bucket_key"])
             saved += 1
         elif existing:
             # Ağırlık nötre dönse bile hafıza SİLİNMEZ — izlemeye alınır
@@ -201,6 +261,9 @@ async def consolidate_memory(db, pid: str) -> int:
                 {"property_id": pid, "bucket_key": w["bucket_key"]},
                 {"$set": {"status": "izlemede", "last_confirmed": now,
                           "samples": w["samples"], "worked_rate": w["worked_rate"]}})
+            if existing.get("status") == "aktif":
+                await _timeline_event(db, pid, "ders_izlemede",
+                                      f"Ders nötre döndü, silinmedi — izlemeye alındı: {ctx}", w["bucket_key"])
     return saved
 
 
@@ -209,6 +272,11 @@ async def run_learning_cycle(db, pid: str) -> dict:
     weights = await learn_weights(db, pid)
     lessons = await generate_lessons(db, pid)
     memory = await consolidate_memory(db, pid)
+    global_mem = await consolidate_global_memory(db)
+    if measured > 0:
+        await _timeline_event(db, pid, "ogrenme_dongusu",
+                              f"Öğrenme döngüsü: {measured} yeni fiyat kararı sonucu ölçüldü, "
+                              f"{weights} çarpan güncellendi.")
     await db.revenue_brain_state.update_one(
         {"property_id": pid},
         {"$set": {"property_id": pid, "last_cycle_at": _now(),
@@ -216,7 +284,7 @@ async def run_learning_cycle(db, pid: str) -> dict:
                   "last_lessons": lessons, "last_memory": memory}}, upsert=True)
     logger.info(f"Revenue Brain cycle {pid}: measured={measured} weights={weights} lessons={lessons} memory={memory}")
     return {"measured": measured, "weights_updated": weights, "lessons": lessons,
-            "memory_consolidated": memory}
+            "memory_consolidated": memory, "global_memory_updated": global_mem}
 
 
 async def build_goal_progress(db, pid: str) -> dict:
@@ -276,9 +344,13 @@ def create_revenue_brain_router(db, require_roles):
             {"property_id": pid}, {"_id": 0}).sort("measured_at", -1).to_list(10)
         memory = await db.revenue_brain_memory.find(
             {"property_id": pid}, {"_id": 0}).sort("first_learned", 1).to_list(50)
+        global_mem = await db.revenue_brain_global_memory.find(
+            {}, {"_id": 0}).sort("samples", -1).to_list(30)
         return {
             "permanent_memory": memory,
             "memory_count": len(memory),
+            "global_memory": global_mem,
+            "global_memory_count": len(global_mem),
             "property_id": pid,
             "outcomes_measured": outcomes,
             "worked": worked, "hurt": hurt,
@@ -290,6 +362,22 @@ def create_revenue_brain_router(db, require_roles):
             "last_cycle_at": (state or {}).get("last_cycle_at"),
             "goal": await build_goal_progress(db, pid),
         }
+
+    @router.get("/global-memory")
+    async def global_memory(_u: dict = Depends(require_roles(*ROLES))):
+        """Küresel hafıza — tüm otellerin birleşik öğrenmeleri (yeni otel/bölge önseli)."""
+        items = await db.revenue_brain_global_memory.find(
+            {}, {"_id": 0}).sort("samples", -1).to_list(100)
+        return {"count": len(items), "items": items,
+                "note": "Tüm otellerin ölçülmüş fiyat sonuçları bağlam kovalarında birleşir; "
+                        "yeni bir otel/bölge/ülke eklendiğinde motor bu dersleri yarı etkiyle önsel olarak uygular."}
+
+    @router.get("/{pid}/timeline")
+    async def timeline(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Öğrenme yolculuğu — tarih sıralı hafıza olayları."""
+        items = await db.revenue_brain_timeline.find(
+            {"property_id": pid}, {"_id": 0}).sort("at", -1).to_list(100)
+        return {"property_id": pid, "count": len(items), "items": items}
 
     @router.get("/{pid}/memory")
     async def permanent_memory(pid: str, _u: dict = Depends(require_roles(*ROLES))):

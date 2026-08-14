@@ -24,6 +24,7 @@ export default function OpenPricingPanel({ propertyId }) {
   const [form, setForm] = useState({ rate: 0 });
   const [lookup, setLookup] = useState(null);
   const [lookupForm, setLookupForm] = useState({});
+  const [guardrail, setGuardrail] = useState(15);
 
   const reload = useCallback(async () => {
     if (!propertyId) return;
@@ -34,6 +35,8 @@ export default function OpenPricingPanel({ propertyId }) {
       setChannels(m.data.channels || []);
       const rt = await axios.get(`${API}/room-types?property_id=${propertyId}`, { withCredentials: true });
       setRoomTypes(rt.data.room_types || rt.data.items || rt.data || []);
+      const g = await axios.get(`${API}/open-pricing/guardrail/${propertyId}`, { withCredentials: true });
+      setGuardrail(g.data.guardrail_pct);
     } catch (e) { toast.error("Yüklenemedi"); }
   }, [propertyId, date]);
 
@@ -80,6 +83,23 @@ export default function OpenPricingPanel({ propertyId }) {
           </p>
         </div>
         <div className="flex gap-2 items-center">
+          <label className="text-[11px] text-stone-500 font-semibold flex items-center gap-1.5">
+            Guardrail
+            <select value={guardrail} data-testid="op-guardrail-select"
+              onChange={async (e) => {
+                const v = parseFloat(e.target.value);
+                setGuardrail(v);
+                try {
+                  await axios.put(`${API}/open-pricing/guardrail/${propertyId}`, { guardrail_pct: v }, { withCredentials: true });
+                  toast.success(`Guardrail ±%${v} olarak kaydedildi — optimizer gece bu bandı aşamaz`);
+                } catch { toast.error("Guardrail kaydedilemedi"); }
+              }}
+              className="px-2 py-1.5 text-sm border border-stone-300 rounded-lg bg-white text-stone-900">
+              <option value={10}>±%10</option>
+              <option value={15}>±%15</option>
+              <option value={20}>±%20</option>
+            </select>
+          </label>
           <button onClick={async () => {
             try {
               const { data: r } = await axios.post(`${API}/open-pricing/optimize`, { property_id: propertyId, days: 14, apply: true }, { withCredentials: true });

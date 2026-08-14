@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 520 tested: Guardrail settings (GET/PUT + optimize reads from rms_settings + 400 validation), Global memory consolidation + GET /global-memory, Timeline events + duplicate suppression, global prior blending code path, and full UI flow for Öğrenen Beyin (permanent memory + global memory + timeline + Şimdi Öğren toast) and Open Pricing guardrail persistence. 11/11 pytest passed, UI verified end-to-end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/tests/test_iteration520_global_memory_timeline.py",
+    "/app/test_reports/pytest/iter520.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "revenue_brain.py _timeline_event does dup-check by (pid, ev_type, bucket_key, at>=today_utc) — good; but at cross-midnight boundary a same bucket could still emit a second event within a UTC-day-transition window. Low priority.",
+    "open_pricing.py PUT clamps to 5-50 with 400 raise; GET falls back to 15 default — clean.",
+    "ai_pricing_engine.py global prior blending confirmed via non-crashing pricing endpoints. Code inspection: g_rows applied as half-strength prior (weight*0.5) only when no local weight — matches spec."
+  ],
+  "updated_files": [
+    "/app/tests/test_iteration520_global_memory_timeline.py"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (all sections rendered, toasts correct, persistence verified)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None; used seeded 'city-gate' demo outcomes. Guardrail reset to 15 for 'default' at end.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file at /app/tests/test_iteration520_global_memory_timeline.py covers: guardrail CRUD + optimize integration, global-memory GET, city-gate status includes global_memory + global_memory_count, timeline GET + duplicate suppression, pricing endpoint smoke, overbooking apply regression. UI verified: sidebar → revenue-brain-btn → brain-property-select=city-gate shows brain-permanent-memory (KRITIK DERS 'hafta içi son 3 gün fiyat indirimleri'), brain-global-memory ('2 otel katkısı · 7 örnek · başarı %0 · ×0.97'), brain-timeline with dated event. 'Şimdi Öğren' toast contains 'kalıcı hafıza'. Open Pricing panel: op-guardrail-select initial=15, change to 20 → toast 'Guardrail ±%20 olarak kaydedildi — optimizer gece bu bandı aşamaz', reload → value persisted as 20 (confirmed across two browser sessions). Reset to 15 at end.",
+  "rca of the issue": "N/A — no bugs found."
+}

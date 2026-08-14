@@ -3658,3 +3658,16 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - Kalıcı Hafıza (kullanıcı isteği: "robot öğrendiğini unutmasın"): revenue_brain.py consolidate_memory() — önemli öğrenmeler (factor≠1.0) revenue_brain_memory koleksiyonuna append-only işlenir; ASLA silinmez, nötre dönerse status='izlemede'. first_learned korunur, times_confirmed artar. GET /revenue-brain/{pid}/memory + status'a permanent_memory/memory_count eklendi. RevenueBrainPanel'e koyu "Kalıcı Hafıza" bölümü (brain-permanent-memory).
 - Test: iteration_519.json — backend 5/5, frontend %100 PASS. Overbooking paneli PRO modda Revenue & Rates → Tools altında (BASIT modda görünmez — bilinçli).
 - Demo veri: city-gate'te seed edilmiş geçmiş fiyat kararları/hurt sonuçları var (hafıza demo'su için).
+
+## Iter 520 (2026-08-14) — Küresel Hafıza + Stratejist Beslemesi + Guardrail Ayarı + Zaman Çizelgesi
+- Küresel Hafıza (kullanıcı sorusu: "öğrendikleri her otel/bölge/ülkedeki yeni müşteri için kullanılabilir mi?" → EVET):
+  revenue_brain.py consolidate_global_memory() — tüm otellerin ai_pricing_outcomes'u bucket_key'de birleşir →
+  revenue_brain_global_memory (append-only). ai_pricing_engine.py: yerel ders yoksa küresel çarpan YARI ETKİYLE
+  önsel (prior) olarak uygulanır → yeni otellerde soğuk başlangıç çözümü. GET /api/revenue-brain/global-memory.
+- Stratejist Beslemesi: revenue_strategist.py prompt'una KALICI HAFIZA (tarih + kaç kez doğrulandı, açık atıf talimatı)
+  ve KÜRESEL HAFIZA bölümleri eklendi.
+- Guardrail Ayarı: rms_settings.guardrail_pct (GET/PUT /api/open-pricing/guardrail/{pid}, 5-50 validasyon);
+  optimizer parametresiz çağrıda ayardan okur (varsayılan 15). OpenPricingPanel'de ±%10/15/20 select (op-guardrail-select).
+- Zaman Çizelgesi: revenue_brain_timeline (olaylar: yeni_ders/ders_dogrulandi/ders_izlemede/ders_aktif/ogrenme_dongusu,
+  günlük dup-suppression). GET /api/revenue-brain/{pid}/timeline. RevenueBrainPanel'e renkli noktalı dikey timeline.
+- Test: iteration_520.json — backend 11/11, frontend %100 PASS. Guardrail 15'e resetlendi.

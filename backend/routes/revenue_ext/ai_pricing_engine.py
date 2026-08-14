@@ -300,6 +300,12 @@ def create_ai_pricing_router(db, require_roles):
             {"property_id": property_id, "factor": {"$ne": 1.0}},
             {"_id": 0, "bucket_key": 1, "factor": 1}).to_list(100)
         learned_map = {w["bucket_key"]: float(w["factor"]) for w in lw_rows}
+        # 🌍 Küresel hafıza önseli: yerel ders yoksa tüm otellerin dersi yarı etkiyle uygulanır
+        g_rows = await db.revenue_brain_global_memory.find(
+            {"factor": {"$ne": 1.0}}, {"_id": 0, "bucket_key": 1, "factor": 1}).to_list(100)
+        for g in g_rows:
+            if g["bucket_key"] not in learned_map:
+                learned_map[g["bucket_key"]] = round(1 + (float(g["factor"]) - 1) * 0.5, 4)
 
         # Parallel occupancy fan-out per date
         async def _occ_for(snap):

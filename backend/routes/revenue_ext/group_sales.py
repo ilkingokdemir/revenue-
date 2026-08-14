@@ -363,6 +363,47 @@ def create_group_sales_router(db, require_roles):
             {"id": rfp_id}, {"$pull": {"rooming_list": {"id": entry_id}}})
         return {"ok": True}
 
+    @router.post("/rfp/{rfp_id}/rooming/bulk")
+    async def bulk_rooming(rfp_id: str, body: Dict,
+                           user: dict = Depends(require_roles("admin", "manager"))):
+        """Excel'den yapıştırılan listeyi toplu ekler. Satır formatı esnek:
+        'Ad Soyad', 'Ad Soyad<TAB>email', 'Ad Soyad;email;2' vb."""
+        rfp = await db.group_rfps.find_one({"id": rfp_id}, {"_id": 0, "status": 1})
+        if not rfp:
+            raise HTTPException(404, "RFP bulunamadı")
+        if rfp.get("status") != "won":
+            raise HTTPException(400, "Rooming list sadece kazanılmış RFP'lere eklenir")
+        text = (body.get("text") or "").strip()
+        if not text:
+            raise HTTPException(400, "text gerekli")
+        now = datetime.now(timezone.utc).isoformat()
+        entries, skipped = [], 0
+        for line in text.splitlines()[:200]:
+            parts = [p.strip() for p in
+                     line.replace("\t", ";").replace(",", ";").split(";") if p.strip()]
+            if not parts:
+                continue
+            name, email, rooms = "", "", 1
+            for p in parts:
+                if "@" in p and not email:
+                    email = p
+                elif p.isdigit():
+                    rooms = max(1, min(int(p), 20))
+                elif not name:
+                    name = p
+            if len(name) < 2:
+                skipped += 1
+                continue
+            entries.append({"id": str(uuid.uuid4()), "guest_name": name,
+                            "guest_email": email, "rooms": rooms,
+                            "added_at": now, "added_by": user.get("email", "")})
+        if not entries:
+            raise HTTPException(400, "Geçerli satır bulunamadı")
+        await db.group_rfps.update_one(
+            {"id": rfp_id}, {"$push": {"rooming_list": {"$each": entries}}})
+        return {"ok": True, "added": len(entries), "skipped": skipped,
+                "total_rooms": sum(e["rooms"] for e in entries)}
+
     @router.get("/rfp/{rfp_id}/pickup")
     async def pickup(rfp_id: str,
                      _: dict = Depends(require_roles("admin", "manager"))):

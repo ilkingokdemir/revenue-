@@ -3616,3 +3616,11 @@ d) GROUP SALES OS LITE: routes/revenue_ext/group_sales.py — group_rfps CRUD, w
 - TEST: 3 isimli oda eklendi (%13.6, on_track), release 5 → blok 22→17 (DB doğrulandı), UI'da 4/17 %23.5 ✓
 - NOT: Hot-reload iki kez takıldı (health timeout) — 'sudo supervisorctl restart backend' çözüyor.
 - Anahtarlar (7. hatırlatma) hâlâ paylaşılmadı.
+
+## Iter 516 (2026-06) — Rooming Toplu Yükleme
+- POST /api/group-sales/rfp/{id}/rooming/bulk {text}: Excel yapıştırması satır satır parse edilir
+  (TAB/;/, ayraçları; @ içeren token=email, rakam=oda sayısı [max 20], ilk metin=ad; ad<2 karakter → skip;
+  max 200 satır). Döner: {added, skipped, total_rooms}.
+- Panel: pickup panelinde çok satırlı textarea (gs-bulk-input-*) + 'Toplu yükle' (gs-bulk-btn-*).
+- TEST: 4 satırlık karışık format → 3 eklendi (6 oda) + 1 skip; UI'dan 2 misafir daha → 12/17 (%70.6) ✓
+- Anahtarlar (8. hatırlatma) hâlâ değer olarak paylaşılmadı.

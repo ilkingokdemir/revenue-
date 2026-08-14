@@ -19,6 +19,19 @@ export default function GroupSalesPanel({ propertyId }) {
   const [emailing, setEmailing] = useState(null);
   const [pickups, setPickups] = useState({});
   const [roomingName, setRoomingName] = useState("");
+  const [bulkText, setBulkText] = useState({});
+
+  const bulkUpload = async (rfp) => {
+    const text = (bulkText[rfp.id] || "").trim();
+    if (!text) return toast.error("Listeyi yapıştırın");
+    try {
+      const { data: r } = await axios.post(`${API}/group-sales/rfp/${rfp.id}/rooming/bulk`, { text });
+      toast.success(`${r.added} misafir (${r.total_rooms} oda) eklendi${r.skipped ? `, ${r.skipped} satır atlandı` : ""}`);
+      setBulkText((p) => ({ ...p, [rfp.id]: "" }));
+      const { data: d } = await axios.get(`${API}/group-sales/rfp/${rfp.id}/pickup`);
+      setPickups((p) => ({ ...p, [rfp.id]: d }));
+    } catch (e) { toast.error(e?.response?.data?.detail || "Yüklenemedi"); }
+  };
 
   const loadPickup = async (rfp) => {
     if (pickups[rfp.id]) { setPickups((p) => ({ ...p, [rfp.id]: null })); return; }
@@ -275,6 +288,14 @@ export default function GroupSalesPanel({ propertyId }) {
                     {(pk.rooming_list || []).slice(-5).map((e) => (
                       <span key={e.id} className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-600">{e.guest_name}</span>
                     ))}
+                  </div>
+                  <div className="flex items-end gap-2 mt-2">
+                    <textarea value={bulkText[r.id] || ""} onChange={(e) => setBulkText((p) => ({ ...p, [r.id]: e.target.value }))}
+                      placeholder={"Excel'den kopyalayıp yapıştırın — her satır bir misafir:\nAhmet Yılmaz\tahmet@x.com\t2\nZeynep Ak"}
+                      rows={2} data-testid={`gs-bulk-input-${r.id}`}
+                      className="flex-1 border border-stone-300 rounded-lg px-2.5 py-1.5 text-[11px] bg-white resize-y" />
+                    <button onClick={() => bulkUpload(r)} data-testid={`gs-bulk-btn-${r.id}`}
+                      className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold whitespace-nowrap">Toplu yükle</button>
                   </div>
                 </div>
               ); })()}

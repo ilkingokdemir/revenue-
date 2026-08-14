@@ -479,6 +479,11 @@ def create_ai_pricing_router(db, require_roles):
                         if not s.get("rationale") and s["date"] in rationales:
                             s["rationale"] = rationales[s["date"]]
 
+        try:
+            from routes.revenue_ext.los_wash_metrics import compute_los_tiers
+            los_tiers = (await compute_los_tiers(db, property_id)).get("suggested_tiers", [])
+        except Exception:
+            los_tiers = []
         return {
             "property_id": property_id,
             "currency": currency,
@@ -486,6 +491,7 @@ def create_ai_pricing_router(db, require_roles):
             "horizon_days": days,
             "config": cfg,
             "suggestions": suggestions,
+            "los_tiers": los_tiers,
             "summary": _summarize(suggestions, cfg),
         }
 

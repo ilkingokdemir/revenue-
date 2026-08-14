@@ -1,0 +1,23 @@
+{
+  "summary": "Iteration 537 — LOS Pricing + Group Wash + Modern Metrics (TRevPOR/RevPAG/GOPPAR) tested end-to-end. Backend: 6/6 pytest passed (los-pricing, group-wash, modern-metrics, ai-pricing los_tiers regression, demand-calendar, orphan-gaps). Frontend: los-wash-metrics-btn opens LosWashMetricsPanel with all required data-testids (mm-trevpor=₺151.13, mm-revpag=₺219.45, mm-goppar=₺252.08, mm-total-rev=₺32.039,09, los-buckets-table with 1-2/3-6/7+ rows, los-tier-3=-5%, los-tier-7=-12%, wash-empty shown because no active blocks). Regression: demand-calendar-btn still opens demand-calendar-panel with heatmap grid.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration537_los_wash_metrics.py",
+    "/app/test_reports/pytest/iteration537.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "los_wash_metrics.py: modern-metrics endpoint uses hardcoded 22% fixed-cost assumption and default cap fallback of 20 rooms when db.rooms is empty — document this and consider surfacing as configurable settings.",
+    "compute_los_tiers uses total_price/nights which includes any taxes/fees baked into total_price — buckets ADR may not match a pure net rate ADR; acceptable but worth a docstring note.",
+    "group-wash historical fallback (25%) is applied whenever measured_blocks == 0; this is documented in the note field — good UX."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration537_los_wash_metrics.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None (used default property with 251 seed bookings)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "To reach the new panel: login as admin -> toggle PRO mode in sidebar -> expand 'Revenue & rates' section -> click los-wash-metrics-btn. The btn is not visible in BASIT mode. Backend endpoints: /api/los-pricing/{pid}, /api/group-wash/{pid}, /api/modern-metrics/{pid}, plus los_tiers now returned in /api/revenue/ai-pricing/{pid}/suggestions.",
+  "rca of the issue": "N/A — all tested flows working."
+}

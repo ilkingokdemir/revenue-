@@ -215,6 +215,7 @@ import {
   ParkingRmsPanel,
   ErrorSentinelPanel,
   DemandCalendarPanel,
+  LosWashMetricsPanel,
   RevenueStrategistPanel,
   ReviewAgentPanel,
   ReviewSentimentPanel,
@@ -817,6 +818,9 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {/* Talep Takvimi (Duetto Advance paritesi) + Yetim Geceler */}
         {activeView === "demand-calendar" && (
           <DemandCalendarPanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "los-wash-metrics" && (
+          <LosWashMetricsPanel activePropertyId={activePropertyId} properties={properties} />
         )}
 
         {/* Setup Wizard */}

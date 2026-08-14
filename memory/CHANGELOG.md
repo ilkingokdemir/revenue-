@@ -3912,3 +3912,17 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - E2E DOĞRULANDI: 31 günlük grid + AI hikâyesi ekranda, rollback doğru cevap, gaps 11 çip.
 - KALAN (sıradaki): 4-LOS Bazlı Fiyatlama, 5-Grup Wash Projeksiyonu, 6-TRevPOR/RevPAG/GOPPAR,
   7-Fonksiyon alanı booking motoru (ROADMAP MVP Eklentisi 5/5b'de kayıtlı).
+
+## Iter 545 (2026-08-14) — LOS Fiyatlama + Grup Wash + Modern Metrikler (TRevPOR/RevPAG/GOPPAR)
+- 1) LOS BAZLI FİYATLAMA: los_wash_metrics.py GET /api/los-pricing/{pid} — son 180 gün rezervasyonları
+  1-2/3-6/7+ gece kovalarına ayırır (gecelik ADR), 3+ gece %5 ve 7+ gece %8-12 kademeli indirim önerir
+  (7+ payı <%10 ise agresif teşvik). compute_los_tiers() modül fonksiyonu ai_pricing_engine
+  _build_suggestions cevabına "los_tiers" alanı olarak enjekte edildi.
+- 2) GRUP WASH PROJEKSİYONU: GET /api/group-wash/{pid} — geçmiş blokların pickup/tahsis oranından
+  tarihsel wash % (yoksa sektör varsayılanı %25), aktif bloklar için beklenen pickup + "şimdi
+  salınabilir" oda sayısı + tavsiye (cutoff beklemeden transient satışa aç).
+- 3) MODERN METRİK PAKETİ: GET /api/modern-metrics/{pid} — TRevPOR (toplam gelir/dolu oda-gece),
+  RevPAG (toplam gelir/misafir), GOPPAR (CPOR + %22 sabit gider varsayımıyla). POS yan geliri dahil.
+- UI: LosWashMetricsPanel (los-wash-metrics-btn, Revenue & rates > AI & Insights, PRO modda görünür).
+  Metrik kartları + LOS kova tablosu + kademe rozetleri + wash tablosu/boş durum.
+- TEST: iteration_537.json — backend 6/6 pytest, frontend %100, regresyon (talep takvimi) temiz.

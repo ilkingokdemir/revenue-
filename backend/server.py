@@ -1740,6 +1740,8 @@ from routes.client_errors import create_client_errors_router
 api_router.include_router(create_client_errors_router(db, require_roles))
 from routes.revenue_ext.demand_calendar import create_demand_calendar_router
 api_router.include_router(create_demand_calendar_router(db, require_roles))
+from routes.revenue_ext.los_wash_metrics import create_los_wash_metrics_router
+api_router.include_router(create_los_wash_metrics_router(db, require_roles))
 
 from routes.integrations_pkg.ota_inbound import create_ota_inbound_router
 api_router.include_router(create_ota_inbound_router(db, require_roles))

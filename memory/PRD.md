@@ -702,3 +702,7 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - E2E DOĞRULANDI: mükerrer giriş 0, Compset > Fiyat Radarı sekmesi grafik + 4 bulgu ile çalışıyor.
 
 ## NOT: Iter 432+ kayıtları /app/memory/CHANGELOG.md dosyasına taşındı (700 satır limiti).
+
+## Güncelleme (2026-08-14, iter 545)
+- LOS Bazlı Fiyatlama, Grup Wash Projeksiyonu ve Modern Metrik Paketi (TRevPOR/RevPAG/GOPPAR) tamamlandı ve test edildi (iteration_537 %100).
+- Sıradaki: Fonksiyon alanı booking motoru (RevPAM / Duetto OpenSpace paritesi), Expo mobil derleme (token bekleniyor), canlı kanal yöneticisi API'leri.

@@ -325,6 +325,11 @@ async def run_learning_cycle(db, pid: str) -> dict:
     memory = await consolidate_memory(db, pid)
     global_mem = await consolidate_global_memory(db)
     regional_mem = await consolidate_regional_memory(db)
+    try:
+        from routes.revenue_ext.rm_expertise import compute_sensitivity
+        await compute_sensitivity(db, pid)
+    except Exception:
+        pass
     if measured > 0:
         await _timeline_event(db, pid, "ogrenme_dongusu",
                               f"Öğrenme döngüsü: {measured} yeni fiyat kararı sonucu ölçüldü, "
@@ -373,6 +378,55 @@ async def build_goal_progress(db, pid: str) -> dict:
         else:
             out["recommendation"] = f"Hedefin üzerindesiniz — ay sonu tahmini {projection:,.0f}. Beyin fiyat tavanlarını gevşetmeyi değerlendiriyor."
     return out
+
+
+async def simulate_lesson_impact(db, pid: str, key: str) -> dict:
+    """Ders Etki Simülatörü: bir ders kapatılırsa 14 günde gelirin nasıl değişeceğini tahmin eder."""
+    mem = await db.revenue_brain_memory.find_one({"property_id": pid, "bucket_key": key}, {"_id": 0})
+    if not mem:
+        mem = await db.revenue_brain_global_memory.find_one({"bucket_key": key}, {"_id": 0})
+    if not mem:
+        raise HTTPException(404, "Ders bulunamadı")
+    factor = float(mem.get("factor") or 1.0)
+    band, dow, direction = key.split("|")
+    from routes.distribution.push_history import resolve_rate
+    total_rooms = await db.rooms.count_documents({"property_id": pid}) or 20
+    today = datetime.now(timezone.utc).date()
+    affected, delta = [], 0.0
+    for i in range(14):
+        ds = (today + timedelta(days=i)).isoformat()
+        if _dow_type(ds) != dow:
+            continue
+        base, _src = await resolve_rate(db, pid, ds)
+        sold = await db.bookings.count_documents({
+            "property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
+            "check_in": {"$lte": ds}, "check_out": {"$gt": ds}})
+        exposure = max(sold, int(total_rooms * 0.3))
+        day_delta = round(base * (factor - 1.0) * exposure, 2)
+        delta += day_delta
+        affected.append({"date": ds, "base_rate": round(base, 2),
+                         "braked_rate": round(base * factor, 2),
+                         "exposure_rooms": exposure, "est_delta": day_delta})
+    hurt_rate = 0.0
+    if mem.get("samples"):
+        hurt_n = mem.get("hurt")
+        if hurt_n is None:
+            w = await db.learned_pricing_weights.find_one(
+                {"property_id": pid, "bucket_key": key}, {"_id": 0, "hurt": 1})
+            hurt_n = (w or {}).get("hurt") or 0
+        hurt_rate = round(hurt_n / mem["samples"] * 100, 1)
+    if factor < 1.0:
+        rec = (f"Bu ders KAPATILIRSA motor frenlemeden agresif değişime döner. Geçmişte bu bağlamdaki kararların "
+               f"%{hurt_rate}'i talebe ZARAR verdi. 14 günde ~{abs(round(delta, 2))} tutarında gelir oynaklığı riski. "
+               f"Robotun önerisi: ders AÇIK kalsın.")
+    elif factor > 1.0:
+        rec = (f"Bu ders KAPATILIRSA motor bu bağlamdaki cesur artışlardan vazgeçer; 14 günde ~{abs(round(delta, 2))} "
+               f"tutarında fırsat kaçabilir. Robotun önerisi: ders AÇIK kalsın.")
+    else:
+        rec = "Ders şu an nötr — kapatmanın ölçülebilir etkisi yok."
+    return {"bucket_key": key, "factor": factor, "affected_days": len(affected),
+            "est_revenue_delta_14d": round(delta, 2), "hurt_rate_pct": hurt_rate,
+            "days": affected, "recommendation": rec}
 
 
 def _build_memory_pdf(hotel_name: str, region: str, memory: list, regional: list,
@@ -567,53 +621,8 @@ def create_revenue_brain_router(db, require_roles):
 
     @router.post("/{pid}/simulate-lesson")
     async def simulate_lesson(pid: str, body: Dict, _u: dict = Depends(require_roles(*ROLES))):
-        """Ders Etki Simülatörü: bir ders kapatılırsa 14 günde gelirin nasıl değişeceğini tahmin eder."""
         key = (body.get("bucket_key") or "").strip()
-        mem = await db.revenue_brain_memory.find_one({"property_id": pid, "bucket_key": key}, {"_id": 0})
-        if not mem:
-            mem = await db.revenue_brain_global_memory.find_one({"bucket_key": key}, {"_id": 0})
-        if not mem:
-            raise HTTPException(404, "Ders bulunamadı")
-        factor = float(mem.get("factor") or 1.0)
-        band, dow, direction = key.split("|")
-        from routes.distribution.push_history import resolve_rate
-        total_rooms = await db.rooms.count_documents({"property_id": pid}) or 20
-        today = datetime.now(timezone.utc).date()
-        affected, delta = [], 0.0
-        for i in range(14):
-            ds = (today + timedelta(days=i)).isoformat()
-            if _dow_type(ds) != dow:
-                continue
-            base, _src = await resolve_rate(db, pid, ds)
-            sold = await db.bookings.count_documents({
-                "property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
-                "check_in": {"$lte": ds}, "check_out": {"$gt": ds}})
-            exposure = max(sold, int(total_rooms * 0.3))
-            day_delta = round(base * (factor - 1.0) * exposure, 2)
-            delta += day_delta
-            affected.append({"date": ds, "base_rate": round(base, 2),
-                             "braked_rate": round(base * factor, 2),
-                             "exposure_rooms": exposure, "est_delta": day_delta})
-        hurt_rate = 0.0
-        if mem.get("samples"):
-            hurt_n = mem.get("hurt")
-            if hurt_n is None:
-                w = await db.learned_pricing_weights.find_one(
-                    {"property_id": pid, "bucket_key": key}, {"_id": 0, "hurt": 1})
-                hurt_n = (w or {}).get("hurt") or 0
-            hurt_rate = round(hurt_n / mem["samples"] * 100, 1)
-        if factor < 1.0:
-            rec = (f"Bu ders KAPATILIRSA motor frenlemeden agresif değişime döner. Geçmişte bu bağlamdaki kararların "
-                   f"%{hurt_rate}'i talebe ZARAR verdi. 14 günde ~{abs(round(delta, 2))} tutarında gelir oynaklığı riski. "
-                   f"Robotun önerisi: ders AÇIK kalsın.")
-        elif factor > 1.0:
-            rec = (f"Bu ders KAPATILIRSA motor bu bağlamdaki cesur artışlardan vazgeçer; 14 günde ~{abs(round(delta, 2))} "
-                   f"tutarında fırsat kaçabilir. Robotun önerisi: ders AÇIK kalsın.")
-        else:
-            rec = "Ders şu an nötr — kapatmanın ölçülebilir etkisi yok."
-        return {"bucket_key": key, "factor": factor, "affected_days": len(affected),
-                "est_revenue_delta_14d": round(delta, 2), "hurt_rate_pct": hurt_rate,
-                "days": affected, "recommendation": rec}
+        return await simulate_lesson_impact(db, pid, key)
 
     @router.get("/{pid}/timeline")
     async def timeline(pid: str, _u: dict = Depends(require_roles(*ROLES))):

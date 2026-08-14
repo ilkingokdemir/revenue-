@@ -1724,6 +1724,9 @@ api_router.include_router(create_price_checker_router(db))
 from routes.revenue_ext.revenue_brain import create_revenue_brain_router
 api_router.include_router(create_revenue_brain_router(db, require_roles))
 
+from routes.revenue_ext.rm_expertise import create_rm_expertise_router
+api_router.include_router(create_rm_expertise_router(db, require_roles))
+
 from routes.integrations_pkg.ota_inbound import create_ota_inbound_router
 api_router.include_router(create_ota_inbound_router(db, require_roles))
 

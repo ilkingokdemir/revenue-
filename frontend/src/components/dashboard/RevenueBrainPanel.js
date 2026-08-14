@@ -1,9 +1,11 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, lazy, Suspense } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-  Brain, Target, TrendUp, Warning, GraduationCap, ArrowsClockwise, Scales, Archive, Globe, ClockCounterClockwise, MapPin, FilePdf, Flask,
+  Brain, Target, TrendUp, Warning, GraduationCap, ArrowsClockwise, Scales, Archive, Globe, ClockCounterClockwise, MapPin, FilePdf, Flask, Medal,
 } from "@phosphor-icons/react";
+
+const RmExpertisePanel = lazy(() => import("./RmExpertisePanel"));
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const BAND_TR = { "0-3": "Son 3 gün", "4-7": "4-7 gün", "8-21": "1-3 hafta", "22+": "3+ hafta" };
@@ -15,6 +17,7 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
   const [busy, setBusy] = useState(false);
   const [simResults, setSimResults] = useState({});
   const [simBusy, setSimBusy] = useState("");
+  const [mainTab, setMainTab] = useState("memory");
 
   const simulate = async (bucketKey) => {
     setSimBusy(bucketKey);
@@ -112,6 +115,24 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
         </div>
       </div>
 
+      <div className="flex gap-1.5 mb-4" data-testid="brain-main-tabs">
+        <button onClick={() => setMainTab("memory")} data-testid="brain-tab-memory"
+          className={`px-3 py-1.5 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 border ${mainTab === "memory" ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"}`}>
+          <Brain size={13} /> Öğrenme & Hafıza
+        </button>
+        <button onClick={() => setMainTab("expertise")} data-testid="brain-tab-expertise"
+          className={`px-3 py-1.5 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 border ${mainTab === "expertise" ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"}`}>
+          <Medal size={13} /> Alan Uzmanlığı & Rakip Pazarı
+        </button>
+      </div>
+
+      {mainTab === "expertise" && (
+        <Suspense fallback={<div className="p-8 text-sm text-stone-400">Yükleniyor…</div>}>
+          <RmExpertisePanel embedded embeddedPropertyId={propertyId} />
+        </Suspense>
+      )}
+
+      {mainTab === "memory" && (<>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <Kpi icon={Scales} color="violet" label="Ölçülen Karar" value={data.outcomes_measured} testId="brain-kpi-outcomes" />
         <Kpi icon={TrendUp} color="emerald" label="Başarı Oranı" value={data.success_rate != null ? `%${data.success_rate}` : "—"} testId="brain-kpi-success" />
@@ -352,6 +373,7 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
           </table>
         )}
       </div>
+      </>)}
     </div>
   );
 }

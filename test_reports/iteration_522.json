@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 522 fully validated. Backend (8/8 pytest passed at /app/tests/test_iteration522_rm_expertise.py): GET /api/rm-expertise/knowledge returns 24 cards with categories {pazar,prensipler,rakipler,stratejiler} and ?category=rakipler filters and includes RoomPriceGenie/IDeaS/Duetto/Atomize; POST /api/rm-expertise/city-gate/analyze-sensitivity returns sample_total>=6 with buckets containing all 7 keys (bucket,dow_type,band,elasticity,samples,label,advice); GET /api/rm-expertise/city-gate/sensitivity returns stored doc; GET /api/rm-expertise/city-gate/expert-brief/latest returns 200 (content may be null); Chat capability: POST /api/revenue/copilot/city-gate/chat 'Optimizer'ı şimdi çalıştır ve fiyatları uygula, onaylıyorum' → action.type=='run_optimizer', apply-action detail contains 'Optimizer' (1 LLM call, within budget); POST /api/revenue-brain/city-gate/learn returns regional_memory_updated and refreshes sensitivity computed_at timestamp; /status regression ok. Frontend (Playwright, city-gate): NO 'RM Uzmanı Robot' sidebar entry (as demanded); brain-main-tabs + brain-tab-memory + brain-tab-expertise all present; Memory tab shows brain-permanent-memory (KRITIK DERS card, aktif), PDF İndir (brain-pdf-btn), Bölgesel Hafıza UK card, Küresel Hafıza, timeline, brain-simulate-0-3|weekday|down button; Expertise tab embeds rm-expertise-panel with all 4 sub-tabs (rmx-tab-brief/sensitivity/principles/market); rmx-generate-brief button visible; Fiyat Duyarlılığı 'Analiz Et' (rmx-analyze-sens) renders rmx-sens-weekday|0-3 row; Rakipler & Pazar tab shows 12 cards including RoomPriceGenie/IDeaS/Duetto/Atomize; Principles shows 12 cards. Note: default property is 'default' (Franziskaner) — city-gate must be selected via property picker to see city-gate-specific data.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/tests/test_iteration522_rm_expertise.py",
+    "/app/test_reports/pytest/iter522.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "RM knowledge is embedded in-code (RM_KNOWLEDGE) — for iterative self-development the robot cannot update this set at runtime; consider persisting knowledge cards in Mongo so 'self-development' can actually mutate/append competitor entries.",
+    "compute_sensitivity uses baseline-0 fallback which artificially inflates sample counts when historical data is sparse (city-gate shows sample_total=6 via demo). Document/label this in UI as 'demo-derived elasticity' to prevent misleading RM decisions on prod tenants.",
+    "Chat action extractor: 'Optimizer'ı ... uygula, onaylıyorum' correctly produces run_optimizer, but the apply-action response detail relies on substring 'Optimizer' — consider returning a structured status field (action_type + status + message) instead of a free-form 'detail' string for stable client parsing.",
+    "brain-permanent-memory / brain-simulate-* / rmx-sens-* rows all appear only when the correct property is selected (city-gate). Default landing property is 'default' which has empty state — UX-wise the empty state text ('Henüz analiz yok — Analiz Et ile başlatın') is clear; not a bug."
+  ],
+  "updated_files": ["/app/tests/test_iteration522_rm_expertise.py"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (all requested testids verified on city-gate)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None; used pre-seeded city-gate demo data. LLM budget used: 1 chat call (run_optimizer). Skipped optional expert-brief LLM call to stay under 2-call budget.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Property picker is a native <select> in Öğrenen Beyin header; options include default/aldgate-flats/camden-suites/city-gate/city-rooms/london-suites. To see city-gate-specific memory/sensitivity/simulate UI, select 'city-gate' before assertions. brain-main-tabs testids: brain-tab-memory, brain-tab-expertise. Expertise sub-tab testids: rmx-tab-brief/sensitivity/principles/market. Sensitivity row testid pattern: rmx-sens-<dow_type>|<band> (e.g. rmx-sens-weekday|0-3). Chat JSON: 'response' + 'action'. Apply-action: POST /api/revenue/copilot/{pid}/apply-action/{action_id}. Login response uses 'access_token'.",
+  "rca of the issue": "N/A — no issues found"
+}

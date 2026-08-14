@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 ACTION_RE = re.compile(r"```action\s*(\{.*?\})\s*```", re.DOTALL)
 
 
+ALL_ACTION_TYPES = ("rate_set", "rate_adjust_pct", "set_guardrail", "apply_overbooking",
+                    "run_optimizer", "learn_now", "analyze_sensitivity", "expert_brief",
+                    "simulate_lesson")
+
+
 def _extract_action(text: str):
     """LLM yanıtındaki ```action {...}``` bloğunu ayıkla ve metinden çıkar."""
     m = ACTION_RE.search(text or "")
@@ -26,7 +31,7 @@ def _extract_action(text: str):
         action = json.loads(m.group(1))
     except Exception:
         return ACTION_RE.sub("", text).strip(), None
-    if action.get("type") not in ("rate_set", "rate_adjust_pct", "set_guardrail", "apply_overbooking"):
+    if action.get("type") not in ALL_ACTION_TYPES:
         return ACTION_RE.sub("", text).strip(), None
     action["id"] = str(uuid.uuid4())[:8]
     action["status"] = "proposed"
@@ -86,6 +91,33 @@ async def _execute_action(db, pid: str, action: dict, user_name: str) -> dict:
             applied += 1
             extra += limit
         return {"ok": True, "detail": f"{applied} günün overbooking limiti uygulandı (+{extra} oda)"}
+    if t == "run_optimizer":
+        from routes.revenue_ext.open_pricing import run_open_pricing_optimizer
+        days = int(action.get("days") or 14)
+        res = await run_open_pricing_optimizer(db, pid, days=days, apply=True)
+        return {"ok": True, "detail": f"Optimizer çalıştı: {res['overrides_written']} hücre fiyatı üretildi "
+                                      f"(guardrail ±%{res['guardrail_pct']}, {res['days']} gün)"}
+    if t == "learn_now":
+        from routes.revenue_ext.revenue_brain import run_learning_cycle
+        res = await run_learning_cycle(db, pid)
+        return {"ok": True, "detail": f"Öğrenme döngüsü bitti: {res['measured']} sonuç ölçüldü, "
+                                      f"{res['weights_updated']} çarpan, {res['memory_consolidated']} kalıcı hafıza, "
+                                      f"{res.get('regional_memory_updated', 0)} bölgesel, {res['global_memory_updated']} küresel ders"}
+    if t == "analyze_sensitivity":
+        from routes.revenue_ext.rm_expertise import compute_sensitivity
+        res = await compute_sensitivity(db, pid)
+        tops = "; ".join(f"{b['dow_type']}/{b['band']}: {b['label']}" for b in res["buckets"][:3])
+        return {"ok": True, "detail": f"Duyarlılık analizi bitti ({res['sample_total']} örnek). {tops or 'Henüz yeterli örnek yok.'}"}
+    if t == "expert_brief":
+        from routes.revenue_ext.rm_expertise import generate_expert_brief
+        doc = await generate_expert_brief(db, pid, user_name)
+        return {"ok": True, "detail": "Uzman strateji brifingi üretildi — Öğrenen Beyin → Alan Uzmanlığı sekmesinde.",
+                "brief_excerpt": (doc.get("content") or "")[:400]}
+    if t == "simulate_lesson":
+        from routes.revenue_ext.revenue_brain import simulate_lesson_impact
+        res = await simulate_lesson_impact(db, pid, (action.get("bucket_key") or "").strip())
+        return {"ok": True, "detail": f"Simülasyon: {res['affected_days']} gün etkilenir, 14 günlük tahmini etki "
+                                      f"{res['est_revenue_delta_14d']}. {res['recommendation']}"}
     raise HTTPException(400, "Bilinmeyen aksiyon tipi")
 
 
@@ -217,9 +249,10 @@ LANGUAGE: ALWAYS respond in the user's language. If the user writes in Turkish, 
 
 Your role:
 1. Chat naturally about revenue, occupancy, empty-night gaps, pricing, channels — answer questions and give advice tied to the live data snapshot.
-2. Recommend specific actions with exact numbers and clear reasoning.
-3. DEFEND YOUR STRATEGY: You are not a yes-man. If the user proposes something that contradicts the data or the robot's measured lessons (KALICI/BÖLGESEL/KÜRESEL HAFIZA), politely push back with evidence and defend your own correct strategy. Only if the user explicitly insists, accept — but state the risk clearly first.
-4. Reference the robot's memory lessons explicitly when relevant ("Hafızamdaki derse göre...").
+2. You are a FULL DOMAIN EXPERT in revenue management: pricing theory, elasticity, displacement, hurdle/LRV, open pricing, forecasting, overbooking, TRevPAR/GOPPAR, the 2026 RMS competitor landscape (IDeaS, Duetto, Atomize, RoomPriceGenie, FLYR, PriceLabs, Lighthouse) and market trends — an RM UZMANLIK TABANI is provided in your context; use and cite it when relevant.
+3. Recommend specific actions with exact numbers and clear reasoning.
+4. DEFEND YOUR STRATEGY: You are not a yes-man. If the user proposes something that contradicts the data or the robot's measured lessons (KALICI/BÖLGESEL/KÜRESEL HAFIZA) or measured price sensitivity, politely push back with evidence and defend your own correct strategy. Only if the user explicitly insists, accept — but state the risk clearly first.
+5. Reference the robot's memory lessons explicitly when relevant ("Hafızamdaki derse göre...").
 
 ACTION PROTOCOL — when you and the user AGREE on a concrete executable decision, end your message with EXACTLY ONE fenced action block so the system can apply it with one click:
 ```action
@@ -230,7 +263,13 @@ Supported types:
 - rate_adjust_pct: percentage change on current rates (fields: start_date, end_date, pct e.g. 10 or -5)
 - set_guardrail: optimizer guardrail band percent (field: value, 5-50)
 - apply_overbooking: apply recommended overbooking limits for next 14 days (no extra fields)
-Rules: max 60-day range; only include the block when a decision is actually agreed; never invent other types; always include a Turkish "summary".
+- run_optimizer: run the open-pricing optimizer now and apply cell rates (optional field: days, default 14)
+- learn_now: run a full learning cycle now (measure outcomes, update weights, consolidate permanent/regional/global memory)
+- analyze_sensitivity: recompute price elasticity/sensitivity from measured outcomes
+- expert_brief: generate a full expert strategy brief (market + competitors + sensitivity + memory)
+- simulate_lesson: simulate 14-day revenue impact of disabling a memory lesson (field: bucket_key e.g. "0-3|weekday|down")
+You are CAPABLE of executing ALL of the above yourself once the user approves — never say you cannot do these.
+Rules: max 60-day range; only include the block when a decision is actually agreed or the user asks you to run an operation; never invent other types; always include a Turkish "summary".
 
 Guidelines:
 - Be specific with numbers; tie every recommendation to data points

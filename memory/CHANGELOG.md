@@ -3690,3 +3690,21 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - HATA/DERS: search_replace ile placeholder değişiminde RevenueAICopilot.js dosya sonunda eski blok kaldı → frontend derleme hatası;
   ayrıca revenue_copilot.py'da satır birleşmesi SyntaxError yarattı. İkisi de düzeltildi. DERS: büyük UI düzenlemelerinden sonra derleme kontrolü.
 - Test: iteration_521.json — backend 13/13, frontend %100 PASS.
+
+## Iter 522 (2026-08-14) — RM Alan Uzmanlığı (mevcut robota entegre) + Chat Tam Yetenek
+- KULLANICI TALEBİ: "robot RM alanında tam uzman olsun, rakipleri/pazarı incelesin" + "yeni robot YAPMA, mevcut robotu geliştir"
+  + "chat ettiğim robot bu işlemlerin HEPSİNİ yapabilmeli".
+- rm_expertise.py (YENİ): RM_KNOWLEDGE 24 kart (prensipler: elasticity/displacement/hurdle-LRV/open pricing/forecasting/
+  overbooking/TRevPAR-GOPPAR/LOS/mix; rakipler 2026: RoomPriceGenie/IDeaS G3/Duetto/Atomize(Mews)/FLYR/PriceLabs/Lighthouse/
+  RevEvolve; pazar: 4,7→12,8 mlr $, %15-20 RevPAR, EU AI Act, PMS-derin entegrasyon; strateji playbook'ları: kârlılık/doluluk/
+  duyarlılık). Web search (2026) ile güncellendi. compute_sensitivity: bağlam bazlı esneklik (baseline-0 fallback: yüzde-puan).
+  generate_expert_brief (LLM gpt-5.2, Türkçe). expertise_context_for_llm → Copilot chat context'ine beslenir.
+- YENİ ROBOT YOK: RmExpertisePanel embedded modda MEVCUT Öğrenen Beyin paneline sekme olarak gömüldü (brain-tab-memory /
+  brain-tab-expertise). Menü/permMap'e ayrı giriş eklenmedi (kullanıcı geri bildirimi üzerine ilk eklenen giriş kaldırıldı).
+- CHAT TAM YETENEK: ALL_ACTION_TYPES 9 tip — rate_set, rate_adjust_pct, set_guardrail, apply_overbooking, run_optimizer,
+  learn_now, analyze_sensitivity, expert_brief, simulate_lesson. _execute_action hepsini uygular. Canlı LLM testi:
+  "Optimizer'ı şimdi çalıştır" → run_optimizer aksiyonu → apply → optimizer koştu. "Öğrenme döngüsünü çalıştır" → learn_now uygulandı.
+- run_learning_cycle artık her döngüde duyarlılığı da tazeler (kendini geliştirme).
+- Refactor: simulate_lesson_impact ve generate_expert_brief modül seviyesine alındı (chat + router ortak kullanır).
+- Test: iteration_522.json — backend 8/8, frontend %100 PASS (yeni menü girişi olmadığı da doğrulandı).
+- BACKLOG (test ajanı önerisi): RM_KNOWLEDGE'ı Mongo'ya taşı ki robot rakip kartlarını çalışma zamanında güncelleyebilsin.

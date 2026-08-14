@@ -1,0 +1,31 @@
+{
+  "summary": "Iteration 536 — 5 new features (Marketing Radar, BI Chat, Strategy Directives, ROI Calculator, Parking RMS) tested end-to-end. Backend: 7/7 pytest passed. Frontend: all 5 features work + regression (rms-comparison-btn, robot-impact-card, exec-report-archive) verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "D) ROI Calculator public landing", "issue": "roi-calculator-section is only rendered inside ReveniqLanding.js which is served at /reveniq route. On the main URL (/), the MyHotelBox landing is shown instead — the ROI section does NOT appear on the main URL. If requirement is that ROI must appear on the MAIN public URL, RoiCalculatorSection should also be integrated into the MyHotelBox landing page. Otherwise (if /reveniq IS the intended public landing), this is fine.", "affected_selectors": ["roi-calculator-section"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration536_new_features.py", "/app/test_reports/pytest/iteration536.xml"],
+  "action_items": [
+    "CLARIFY: Should the ROI calculator (roi-calculator-section) appear on the main public URL (MyHotelBox landing) or is /reveniq the intended location? Currently only on /reveniq."
+  ],
+  "critical_code_review_comments": [
+    "bi_chat.py: `_data_pack` calls `db.list_collection_names()` every request — heavy; consider caching.",
+    "marketing_radar.py: `resolve_rate` imported at request time from distribution.push_history — okay, but circular import risk if module chain grows.",
+    "strategy_directives.py: parsed dict merge uses `{**parsed, **json.loads(...)}` without validating fields (priority enum, aggressiveness range). LLM could return invalid values that persist to DB."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration536_new_features.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None (used default property + existing bookings)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 5 new features (Marketing Radar, BI Chat, Strategy Directives, Parking RMS, ROI Calculator) verified. ROI is on /reveniq path. To reach Strategy Directives: PRO → revenue-btn → rev-tab-learning-robot → brain-tab-strategist. BI Chat LLM ~5-15s. Backend pytest: /app/backend/tests/test_iteration536_new_features.py (needs REACT_APP_BACKEND_URL env when running from CLI).",
+  "rca of the issue": "N/A — all tested flows working."
+}

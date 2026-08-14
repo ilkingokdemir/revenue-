@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Archive, CaretUp, CaretDown, Minus, Camera } from "@phosphor-icons/react";
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from "recharts";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const fmt = (v) => `£${Number(v || 0).toLocaleString("tr-TR", { maximumFractionDigits: 0 })}`;
@@ -48,6 +49,22 @@ export default function ExecReportArchive({ propertyId }) {
         </button>
       </div>
       <p className="text-[11px] text-stone-500 mb-3">Her pazartesi otomatik arşivlenir; istediğiniz an manuel anlık görüntü de alabilirsiniz.</p>
+      {items.length >= 2 && (
+        <div className="h-44 mb-4" data-testid="exec-archive-chart">
+          <div className="text-[10px] font-bold uppercase text-stone-400 mb-1">Haftalık Katkı Trendi</div>
+          <ResponsiveContainer width="100%" height="88%">
+            <LineChart data={[...items].reverse().map((it) => ({ week: it.week, katki: get(it, "impact.est_total_contribution") || 0 }))}
+              margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
+              <XAxis dataKey="week" tick={{ fontSize: 10, fill: "#a8a29e" }} />
+              <YAxis tick={{ fontSize: 10, fill: "#a8a29e" }} tickFormatter={(v) => `£${Number(v).toLocaleString("tr-TR")}`} width={70} />
+              <Tooltip formatter={(v) => [fmt(v), "Robot katkısı"]} labelStyle={{ fontSize: 11 }} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+              <ReferenceLine y={0} stroke="#d6d3d1" />
+              <Line type="monotone" dataKey="katki" stroke="#059669" strokeWidth={2.5} dot={{ r: 3, fill: "#059669" }} activeDot={{ r: 5 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
       {items.length === 0 ? (
         <div className="text-xs text-stone-500 py-4 text-center">Henüz arşivlenmiş rapor yok — ilk kayıt bu pazartesi otomatik oluşacak veya "Bu Haftayı Arşivle" ile hemen başlayın.</div>
       ) : (

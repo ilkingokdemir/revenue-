@@ -286,6 +286,9 @@ export function buildMenuSections(t, user) {
         { id: "pricing-explain", icon: Brain, name: "AI pricing explainer", testId: "pricing-explain-btn" },
         { id: "anomaly", icon: Lightning, name: "Anomaly radar", testId: "anomaly-btn" },
         { id: "ai-predictions", icon: Sparkle, name: "AI predictions", testId: "ai-predictions-btn" },
+        { id: "marketing-radar", icon: Lightning, name: "Pazarlama Fırsat Radarı", testId: "marketing-radar-btn" },
+        { id: "bi-chat", icon: Sparkle, name: "Veriye Sor (BI Chat)", testId: "bi-chat-btn" },
+        { id: "parking-rms", icon: ChartLine, name: "Otopark RMS", testId: "parking-rms-btn" },
 
         { divider: true, label: "Market & Compset" },
         { id: "compset", icon: Target, name: "Compset yönetimi", testId: "compset-btn", core: true },

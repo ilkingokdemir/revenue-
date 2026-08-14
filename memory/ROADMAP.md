@@ -129,3 +129,21 @@ GERÇEK EKSİKLER (bu iterasyonda tamamlandı):
 - [x] c) Katkı Grafiği — impact-summary'ye daily_series (günlük delta + kümülatif) eklendi;
       RobotImpactCard'da SVG sparkline (robot-impact-sparkline)
 KALAN (P2/P3): Oda tipi/rate-code bağımsız forecast zaten var (iter 517); söz konusu denetimde yeni eksik çıkmadı.
+
+## MVP Eklentisi 4 — IDeaS.com + FLYR Site Denetimi (Iter 535, 2026-08-14)
+Tamamlanan iterasyon içi işler: Arşiv Trend Grafiği (recharts, exec-archive-chart) + Demo Sunum Modu
+(RmsComparisonPanel: 9 slaytlık tam ekran deck, ok tuşları+ESC, rmsc-present-btn / rmsc-slide-*).
+SİTE DENETİMİ BULGULARI (ideas.com + flyrhospitality.com canlı tarandı):
+Paritede olanlar (tekrar önerme): saatlik fiyatlama (intraday), explainable AI (pricing-explain),
+forecast versiyonlama+onay+doğruluk karnesi (iter 449 + MAPE), grup displacement+blended rate,
+Meeting&Event RM (RevPAM), bütçe-forecast-actual (iter 452), rate hurdles (hurdle_lrv).
+GERÇEK EKSİKLER (önem sırasıyla):
+- [ ] A) P1: Pazarlama Fırsat Radarı (IDeaS "Marketing Optimization" paritesi) — düşük talepli tarih
+      pencerelerini bulup kampanya önerisi + beklenen ROI üretir, pazarlama görevine dönüştürür.
+- [ ] B) P1: Doğal Dil BI Chat (FLYR "Insights — ask your data anything") — tüm PMS verisi üzerinde
+      NL soru-cevap ("geçen hafta RevPAR'ı ne sürükledi?") + rol bazlı hazır dashboard görünümleri.
+      Not: revenue_copilot var ama yalnız revenue bağlamı; genel BI chat yok.
+- [ ] C) P2: Strateji Direktifleri (FLYR "influence the AI with strategic directions") — serbest metin
+      direktif ("Eylül'de doluluk önceliği") fiyat motoru parametrelerine çevrilir, kural yazmadan.
+- [ ] D) P2: ROI Hesaplayıcı (satış/landing lead aracı — FLYR ana sayfa paritesi; Price Checker'ın yanına).
+- [ ] E) P3: Otopark RMS (IDeaS Car Park RMS) — otopark alanı için doluluk bazlı dinamik fiyat (niş).

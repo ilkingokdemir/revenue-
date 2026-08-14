@@ -210,6 +210,9 @@ import {
   RevenuePanel,
   RevenueProtectionPanel,
   RmsComparisonPanel,
+  MarketingRadarPanel,
+  BIChatPanel,
+  ParkingRmsPanel,
   RevenueStrategistPanel,
   ReviewAgentPanel,
   ReviewSentimentPanel,
@@ -787,6 +790,21 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {/* RMS Rakip Karşılaştırma — satış demosu sayfası */}
         {activeView === "rms-comparison" && (
           <RmsComparisonPanel />
+        )}
+
+        {/* Pazarlama Fırsat Radarı (IDeaS Marketing Optimization paritesi) */}
+        {activeView === "marketing-radar" && (
+          <MarketingRadarPanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+
+        {/* Doğal Dil BI Chat (FLYR Insights paritesi) */}
+        {activeView === "bi-chat" && (
+          <BIChatPanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+
+        {/* Otopark RMS (IDeaS Car Park paritesi) */}
+        {activeView === "parking-rms" && (
+          <ParkingRmsPanel activePropertyId={activePropertyId} properties={properties} />
         )}
 
         {/* Setup Wizard */}

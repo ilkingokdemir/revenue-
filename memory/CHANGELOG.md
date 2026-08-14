@@ -3816,3 +3816,17 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - FIX: phosphor'da ArchiveBox yok → Archive kullanıldı.
 - E2E DOĞRULANDI: snapshot 2026-W33 kaydı oluşturdu, tablo satır + toast OK.
 - NOT: Kullanıcı 2 kez "Mobil derleme" seçti ama Expo Access Token hâlâ YAPIŞTIRILMADI — bloklu.
+
+## Iter 535-536 (2026-08-14) — IDeaS/FLYR Denetim Eksikleri: 5 Özellik TAMAM
+- A) Pazarlama Fırsat Radarı: marketing_radar.py (GET radar + POST activate→promo_campaigns uye_fence
+  + bildirim) + MarketingRadarPanel.js. Menü: marketing-radar-btn.
+- B) Doğal Dil BI Chat: bi_chat.py (EMERGENT_LLM_KEY/gpt-5.2, _data_pack gerçek veri bağlamı, session'lı
+  çok tur, bi_chat_messages koleksiyonu) + BIChatPanel.js. Menü: bi-chat-btn.
+- C) Strateji Direktifleri: strategy_directives.py (LLM parse → priority/aggressiveness/scope; alan
+  doğrulama eklendi) + StrategyDirectivesCard.js (Robot > AI Strateji sekmesinin üstünde).
+  directives_context_for_llm() copilot bağlamına enjekte edildi.
+- D) ROI Hesaplayıcı: RoiCalculatorSection.js — /reveniq landing'inde PriceChecker'ın altında
+  (NOT: ana URL "/" MyHotelBox landing'i; ROI yalnız /reveniq'te — kullanıcıya soruldu).
+- E) Otopark RMS: parking_rms.py (RevPAS, otel doluluğu vekiliyle 14 gün dinamik fiyat) + ParkingRmsPanel.js.
+- Ayrıca: Arşiv Trend Grafiği (recharts) + Rakip Karşılaştırma Sunum Modu (9 slayt, ESC/ok tuşları).
+- TEST: iteration_536.json — backend 7/7 pytest, frontend %100, regresyon temiz.

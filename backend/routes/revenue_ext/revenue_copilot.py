@@ -243,6 +243,8 @@ COMMISSION RATES: Booking.com 15%, Expedia 18%, Airbnb 3%, Direct 0%
             context += "\n" + await expertise_context_for_llm(db, property_id)
             from routes.revenue_ext.ml_pickup import ml_pickup_summary_for_llm
             context += await ml_pickup_summary_for_llm(db, property_id)
+            from routes.revenue_ext.strategy_directives import directives_context_for_llm
+            context += await directives_context_for_llm(db, property_id)
         except Exception:
             pass
         return context

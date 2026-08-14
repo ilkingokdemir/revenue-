@@ -7,6 +7,7 @@ import {
 import RobotImpactCard from "./RobotImpactCard";
 import RevenueRobotTour from "./RevenueRobotTour";
 import ExecReportArchive from "./ExecReportArchive";
+import StrategyDirectivesCard from "./StrategyDirectivesCard";
 
 const RmExpertisePanel = lazy(() => import("./RmExpertisePanel"));
 const RevenueStrategistPanel = lazy(() => import("./RevenueStrategistPanel"));
@@ -165,6 +166,7 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
 
       {mainTab === "strategist" && (
         <Suspense fallback={<div className="p-8 text-sm text-stone-400">Yükleniyor…</div>}>
+          <StrategyDirectivesCard propertyId={propertyId || "default"} />
           <RevenueStrategistPanel propertyId={propertyId || "default"} />
         </Suspense>
       )}

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { DemoForm, FaqItem, fadeUp, goLogin, scrollTo } from "./landing/shared";
 import PriceCheckerSection from "./components/public/PriceCheckerSection";
+import RoiCalculatorSection from "./components/public/RoiCalculatorSection";
 import BrainShowcaseSection from "./components/public/BrainShowcaseSection";
 
 const NAV_LINKS = [
@@ -358,6 +359,9 @@ export default function ReveniqLanding() {
 
       {/* Price Checker (lead-gen) */}
       <PriceCheckerSection onDemo={() => { setDemoProduct("pulse"); scrollTo("#demo"); }} />
+
+      {/* ROI Calculator (lead-gen) */}
+      <RoiCalculatorSection onDemo={() => { setDemoProduct("pulse"); scrollTo("#demo"); }} />
 
       {/* Pricing */}
       <section id="pricing" className="relative max-w-7xl mx-auto px-5 sm:px-8 py-24 overflow-visible">

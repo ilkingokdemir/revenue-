@@ -330,6 +330,77 @@ async def generate_expert_brief(db, pid: str, user_email: str = "robot") -> dict
     return doc
 
 
+async def measure_campaign_impact(db, pid: str) -> dict:
+    """Kampanya Etki Takibi: fence'li gecelerin doluluk değişimini ölç, robota öğret."""
+    from routes.revenue_ext.ml_pickup import _stay_counts
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    cap = await db.rooms.count_documents({"property_id": pid}) or 20
+    async for c in db.promo_campaigns.find(
+            {"property_id": pid, "type": "uye_fence", "date": {"$lt": today},
+             "measured": {"$ne": True}}, {"_id": 0, "date": 1, "otb_at_apply": 1}):
+        final = (await _stay_counts(db, pid, c["date"]))["otb"]
+        base = int(c.get("otb_at_apply") or 0)
+        gain = final - base
+        occ = round(final / cap * 100, 1)
+        verdict = "worked" if (gain >= 1 or occ >= 50) else "neutral"
+        await db.promo_campaigns.update_one(
+            {"property_id": pid, "date": c["date"], "type": "uye_fence"},
+            {"$set": {"measured": True, "final_rooms": final, "pickup_gain": gain,
+                      "final_occ_pct": occ, "verdict": verdict, "measured_at": _now()}})
+    measured = await db.promo_campaigns.find(
+        {"property_id": pid, "type": "uye_fence", "measured": True}, {"_id": 0}).to_list(100)
+    n = len(measured)
+    stats = {"measured": n, "avg_pickup_gain": round(sum(m["pickup_gain"] for m in measured) / n, 2) if n else None,
+             "success_rate": round(sum(1 for m in measured if m["verdict"] == "worked") / n * 100, 1) if n else None}
+    if n >= 3:
+        detail = (f"Fence'li boş-gece kampanyaları: {n} ölçülmüş gecede ortalama +{stats['avg_pickup_gain']} oda pickup, "
+                  f"başarı %{stats['success_rate']}. Bu ders ölçülmeye devam ediyor; başarı düşerse strateji gözden geçirilir.")
+        await db.revenue_brain_memory.update_one(
+            {"property_id": pid, "bucket_key": "fence_kampanya"},
+            {"$set": {"property_id": pid, "bucket_key": "fence_kampanya", "kind": "kampanya_dersi",
+                      "importance": "firsat" if (stats["success_rate"] or 0) >= 50 else "kritik",
+                      "title": "Fence'li Boş Gece Kampanyası", "detail": detail,
+                      "factor": 1.0, "samples": n,
+                      "worked_rate": round((stats["success_rate"] or 0) / 100, 2),
+                      "status": "aktif", "last_confirmed": _now()},
+             "$setOnInsert": {"id": str(uuid.uuid4()), "first_learned": _now()},
+             "$inc": {"times_confirmed": 1}}, upsert=True)
+    return {"property_id": pid, "stats": stats, "campaigns": measured[-20:]}
+
+
+async def exploration_report(db, pid: str) -> dict:
+    """Keşif Sonuç Raporu: explorer denemelerinin ölçülmüş sonuçları ve temiz esneklik tahmini."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    total = await db.ai_pricing_decisions.count_documents({"property_id": pid, "set_by": "explorer"})
+    pending = await db.ai_pricing_decisions.count_documents(
+        {"property_id": pid, "set_by": "explorer", "date": {"$gte": today}})
+    rows, elast = [], []
+    stats = {"worked": 0, "neutral": 0, "hurt": 0}
+    async for dec in db.ai_pricing_decisions.find(
+            {"property_id": pid, "set_by": "explorer", "date": {"$lt": today}},
+            {"_id": 0, "date": 1, "delta_pct": 1, "days_out": 1}).sort("date", -1).limit(60):
+        out = await db.ai_pricing_outcomes.find_one(
+            {"property_id": pid, "stay_date": dec["date"]},
+            {"_id": 0, "verdict": 1, "final_occ": 1, "baseline_occ": 1})
+        if not out:
+            continue
+        v = out.get("verdict", "neutral")
+        stats[v] = stats.get(v, 0) + 1
+        base, delta = float(out.get("baseline_occ") or 0), float(dec.get("delta_pct") or 0)
+        if delta:
+            ch = ((float(out.get("final_occ") or 0) - base) / base * 100) if base > 0 else (float(out.get("final_occ") or 0) - base)
+            elast.append(ch / delta)
+        rows.append({"date": dec["date"], "delta_pct": dec["delta_pct"], "days_out": dec.get("days_out"),
+                     "verdict": v, "final_occ": out.get("final_occ"), "baseline_occ": out.get("baseline_occ")})
+    measured_n = len(rows)
+    clean_e = round(sum(elast) / len(elast), 2) if elast else None
+    return {"property_id": pid, "total_experiments": total, "pending": pending, "measured": measured_n,
+            "verdicts": stats, "clean_elasticity": clean_e,
+            "rows": rows[:30],
+            "note": "Keşif denemeleri rastgele olduğu için buradaki esneklik tahmini endojeniteden arınmış TEMİZ ölçümdür. "
+                    "Denemeler biriktikçe güven artar; kayıp değil, esneklik eğrisinin bedelidir."}
+
+
 def create_rm_expertise_router(db, require_roles):
     router = APIRouter(prefix="/rm-expertise", tags=["rm-expertise"])
     ROLES = ("admin", "manager")
@@ -360,6 +431,14 @@ def create_rm_expertise_router(db, require_roles):
         """Kullanıcının yüklediği eğitilmiş LightGBM modeliyle nihai doluluk tahmini."""
         from routes.revenue_ext.ml_pickup import ml_pickup_forecast
         return await ml_pickup_forecast(db, pid, days)
+
+    @router.get("/{pid}/campaign-impact")
+    async def campaign_impact(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        return await measure_campaign_impact(db, pid)
+
+    @router.get("/{pid}/exploration-report")
+    async def exploration_rep(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        return await exploration_report(db, pid)
 
     @router.get("/{pid}/forecast-scorecard")
     async def forecast_scorecard(pid: str, _u: dict = Depends(require_roles(*ROLES))):

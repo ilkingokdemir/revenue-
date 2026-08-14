@@ -3748,3 +3748,17 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - Haftalık Robot Brifingi: workers.weekly_brief_loop (pazartesi, weekly_brief_state ISO-hafta dedup) → brifing
   copilot sohbetine user_id='robot-brifing' ile düşer (history $in filtresi). Manuel: POST /{pid}/weekly-brief-now.
 - Test: iteration_526.json (iter 527 kapsar) — backend 5/5 pytest, frontend %100, 0 LLM bütçesi harcandı.
+
+## Iter 528 (2026-08-14) — Kampanya Etki Takibi + Keşif Sonuç Raporu + Panel Bildirimleri
+- Kampanya Etki Takibi: kampanya uygulanırken otb_at_apply kaydedilir; measure_campaign_impact() geçen geceleri ölçer
+  (pickup_gain, final_occ, verdict), >=3 ölçümde kalıcı hafızaya 'kampanya_dersi' işler (bucket_key=fence_kampanya).
+  GET /api/rm-expertise/{pid}/campaign-impact. UI: ML Pickup sekmesinde etki şeridi (rmx-camp-impact).
+- Keşif Sonuç Raporu: exploration_report() — explorer kararları × outcomes join; toplam/bekleyen/ölçülen, verdict sayıları,
+  TEMİZ esneklik (endojenitesiz). GET /api/rm-expertise/{pid}/exploration-report. UI: yeni 'Keşif Raporu' sekmesi
+  (rmx-tab-explore, 5 KPI kartı + tablo). Doğrulandı: 55 deneme, 1 ölçüldü, temiz e=7.5.
+- Panel Bildirimleri: öğrenme döngüsünde db.notifications'a günlük dedup'lu uyarılar — 'bos_gece_riski' (ML riskli geceler)
+  ve 'ml_tahmin_sapmasi' (MAPE>25). Zil ikonuna düşüyor (doğrulandı: '🌙 Boş Gece Riski — 10 gece').
+- HATA/DERS (tekrar): search_replace düzenlemeleri RmExpertisePanel.js'de mükerrer kuyruk bölgesine gitti; dosya sonu bozuldu
+  (build hatası) + Promise.all güncellemesi kayboldu. Kuyruk kırpıldı, edit yeniden uygulandı. DERS: bu dosyada edit sonrası
+  grep ile doğrulama şart.
+- Test: kapsamlı self-test (curl E2E: ölçüm seed'leriyle 3 akış + 2 ekran görüntüsü). Testing agent bu turda KULLANILMADI.

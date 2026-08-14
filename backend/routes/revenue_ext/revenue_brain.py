@@ -330,12 +330,41 @@ async def run_learning_cycle(db, pid: str) -> dict:
         await compute_sensitivity(db, pid)
         await internalize_expertise(db, pid)
         from routes.revenue_ext.ml_pickup import log_ml_forecasts, score_forecasts
-        await log_ml_forecasts(db, pid)
+        log_res = await log_ml_forecasts(db, pid)
         card = await score_forecasts(db, pid)
+        today_str = _now()[:10]
         if card.get("alert"):
             await _timeline_event(db, pid, "tahmin_sapmasi",
                                   f"UYARI: ML tahmin karnesi sapıyor — son 35 gün MAPE %{card['overall_mape']} "
                                   f"({card['scored']} skor). Model yeniden eğitim/kalibrasyon gerektirebilir.")
+            dup = await db.notifications.find_one({"property_id": pid, "category": "ml_tahmin_sapmasi",
+                                                   "created_at": {"$gte": today_str}}, {"_id": 0, "id": 1})
+            if not dup:
+                await db.notifications.insert_one({
+                    "id": str(uuid.uuid4()), "type": "warning",
+                    "title": "📉 ML Tahmin Karnesi Sapıyor",
+                    "message": f"Son 35 gün MAPE %{card['overall_mape']} ({card['scored']} skor) — %25 eşiği aşıldı. "
+                               f"Öğrenen Beyin → ML Pickup sekmesinden karneyi inceleyin.",
+                    "category": "ml_tahmin_sapmasi", "property_id": pid,
+                    "target_user": "", "target_role": "", "link_to": "revenue-brain",
+                    "priority": "high", "read": False,
+                    "created_by": "Revenue Robotu", "created_at": _now()})
+        risky = (log_res or {}).get("empty_risk_dates") or []
+        if risky:
+            dup = await db.notifications.find_one({"property_id": pid, "category": "bos_gece_riski",
+                                                   "created_at": {"$gte": today_str}}, {"_id": 0, "id": 1})
+            if not dup:
+                await db.notifications.insert_one({
+                    "id": str(uuid.uuid4()), "type": "warning",
+                    "title": f"🌙 Boş Gece Riski — {len(risky)} gece",
+                    "message": f"ML tahmini <%50 doluluk: {', '.join(risky[:6])}. Öğrenen Beyin → ML Pickup "
+                               f"sekmesinden tek tıkla fence'li kampanya uygulayabilirsiniz.",
+                    "category": "bos_gece_riski", "property_id": pid,
+                    "target_user": "", "target_role": "", "link_to": "revenue-brain",
+                    "priority": "medium", "read": False,
+                    "created_by": "Revenue Robotu", "created_at": _now()})
+        from routes.revenue_ext.rm_expertise import measure_campaign_impact
+        await measure_campaign_impact(db, pid)
     except Exception:
         pass
     if measured > 0:

@@ -23,6 +23,8 @@ export default function RmExpertisePanel({ properties = [], activePropertyId, em
   const [mlp, setMlp] = useState(null);
   const [scard, setScard] = useState(null);
   const [camps, setCamps] = useState([]);
+  const [campImpact, setCampImpact] = useState(null);
+  const [explore, setExplore] = useState(null);
 
   useEffect(() => {
     if (embeddedPropertyId) setPropertyId(embeddedPropertyId);
@@ -46,12 +48,16 @@ export default function RmExpertisePanel({ properties = [], activePropertyId, em
       try {
         const m = await axios.get(`${API}/rm-expertise/${propertyId}/ml-pickup?days=24`, { withCredentials: true });
         setMlp(m.data);
-        const [sc, cm] = await Promise.all([
+        const [sc, cm, ci, ex] = await Promise.all([
           axios.get(`${API}/rm-expertise/${propertyId}/forecast-scorecard`, { withCredentials: true }),
           axios.get(`${API}/rm-expertise/${propertyId}/empty-night-campaigns`, { withCredentials: true }),
+          axios.get(`${API}/rm-expertise/${propertyId}/campaign-impact`, { withCredentials: true }),
+          axios.get(`${API}/rm-expertise/${propertyId}/exploration-report`, { withCredentials: true }),
         ]);
         setScard(sc.data);
         setCamps(cm.data.items || []);
+        setCampImpact(ci.data);
+        setExplore(ex.data);
       } catch { /* */ }
     } catch { toast.error("Uzmanlık verileri yüklenemedi"); }
   }, [propertyId]);
@@ -107,6 +113,7 @@ export default function RmExpertisePanel({ properties = [], activePropertyId, em
     { id: "brief", label: "Uzman Brifingi", icon: Sparkle },
     { id: "rules", label: "Uzman Kuralları", icon: Medal },
     { id: "mlpickup", label: "ML Pickup Tahmini", icon: ChartLineUp },
+    { id: "explore", label: "Keşif Raporu", icon: ChartLineUp },
     { id: "library", label: "Bilgi Kütüphanesi", icon: BookOpen },
     { id: "sensitivity", label: "Fiyat Duyarlılığı", icon: ChartLineUp },
     { id: "principles", label: "RM Prensipleri", icon: BookOpen },
@@ -229,6 +236,11 @@ export default function RmExpertisePanel({ properties = [], activePropertyId, em
               ✓ {camps.length} gecede aktif fence'li kampanya (üye fiyatı %8, min 2 gece): {camps.slice(0, 5).map((c) => c.date).join(", ")}{camps.length > 5 ? "…" : ""}
             </div>
           )}
+          {campImpact?.stats?.measured > 0 && (
+            <div className="text-[11px] text-stone-600 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 mb-2" data-testid="rmx-camp-impact">
+              📈 Kampanya Etki Takibi: {campImpact.stats.measured} gece ölçüldü · ortalama pickup +{campImpact.stats.avg_pickup_gain} oda · başarı %{campImpact.stats.success_rate} — robot bu dersi kalıcı hafızasına işliyor
+            </div>
+          )}
           {mlp?.empty_risk_dates?.length > 0 && (
             <div className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 mb-2" data-testid="rmx-ml-risk">
               Boş gece riski (&lt;%50 tahmini): {mlp.empty_risk_dates.slice(0, 6).join(", ")}
@@ -258,6 +270,45 @@ export default function RmExpertisePanel({ properties = [], activePropertyId, em
                   </tr>
                 ))}
               </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {tab === "explore" && (
+        <div className="bg-white border border-stone-200 rounded-xl p-5" data-testid="rmx-explore">
+          <div className="text-sm font-semibold text-stone-900 mb-1">Keşif Sonuç Raporu
+            <span className="text-[10px] text-stone-400 font-normal ml-2">optimizer'ın kontrollü rastgele denemeleri — kazandırdı mı, kaybettirdi mi?</span>
+          </div>
+          <p className="text-[11px] text-stone-500 mb-3">{explore?.note}</p>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+            {[
+              { l: "Toplam deneme", v: explore?.total_experiments ?? 0, t: "rmx-exp-total" },
+              { l: "Bekleyen (tarih gelmedi)", v: explore?.pending ?? 0, t: "rmx-exp-pending" },
+              { l: "Ölçülen", v: explore?.measured ?? 0, t: "rmx-exp-measured" },
+              { l: "İşe yaradı / Zarar", v: `${explore?.verdicts?.worked ?? 0} / ${explore?.verdicts?.hurt ?? 0}`, t: "rmx-exp-verdicts" },
+              { l: "Temiz esneklik", v: explore?.clean_elasticity ?? "—", t: "rmx-exp-elasticity" },
+            ].map((k) => (
+              <div key={k.t} className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5" data-testid={k.t}>
+                <div className="text-lg font-black text-stone-900">{k.v}</div>
+                <div className="text-[10px] text-stone-500">{k.l}</div>
+              </div>
+            ))}
+          </div>
+          {(!explore?.rows || explore.rows.length === 0) ? (
+            <div className="text-xs text-stone-500 py-4 text-center">Henüz ölçülmüş deneme yok — keşif kararlarının tarihleri geçtikçe sonuçlar burada birikecek.</div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead><tr className="text-left text-stone-400 border-b border-stone-100">
+                <th className="py-1.5">Tarih</th><th>Deneme</th><th>Gün kala</th><th>Baseline doluluk</th><th>Nihai doluluk</th><th>Sonuç</th></tr></thead>
+              <tbody>{explore.rows.map((r, i) => (
+                <tr key={i} className="border-b border-stone-50">
+                  <td className="py-1.5 font-semibold text-stone-700">{r.date}</td>
+                  <td className={r.delta_pct > 0 ? "text-emerald-600 font-bold" : "text-amber-600 font-bold"}>%{r.delta_pct > 0 ? "+" : ""}{r.delta_pct}</td>
+                  <td>T-{r.days_out}</td><td>%{r.baseline_occ}</td><td>%{r.final_occ}</td>
+                  <td>{r.verdict === "worked" ? "✓ işe yaradı" : r.verdict === "hurt" ? "✗ zarar" : "— nötr"}</td>
+                </tr>
+              ))}</tbody>
             </table>
           )}
         </div>

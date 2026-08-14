@@ -85,7 +85,7 @@ async def log_ml_forecasts(db, pid: str) -> int:
     try:
         f = await ml_pickup_forecast(db, pid, days=45)
     except Exception:
-        return 0
+        return {"logged": 0, "empty_risk_dates": []}
     log_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     n = 0
     for r in f["days"]:
@@ -97,7 +97,7 @@ async def log_ml_forecasts(db, pid: str) -> int:
                       "logged_at": datetime.now(timezone.utc).isoformat()}},
             upsert=True)
         n += 1
-    return n
+    return {"logged": n, "empty_risk_dates": f["empty_risk_dates"]}
 
 
 async def score_forecasts(db, pid: str) -> dict:

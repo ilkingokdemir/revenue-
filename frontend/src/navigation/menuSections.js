@@ -292,6 +292,7 @@ export function buildMenuSections(t, user) {
         { id: "parity-heatmap", icon: CalendarBlank, name: "Parity heatmap", testId: "parity-heatmap-btn" },
         { id: "ota-forecast", icon: TrendUp, name: "OTA stop-sell forecast", testId: "ota-forecast-btn" },
         { id: "channel-revenue", icon: Lightning, name: "Kanal yield yönetimi", testId: "channel-revenue-btn" },
+        { id: "rms-comparison", icon: Trophy, name: "Rakip Karşılaştırma (RMS)", testId: "rms-comparison-btn" },
 
         { divider: true, label: "Tools" },
         { id: "group-displacement", icon: Scales, name: "Grup displacement analizi", testId: "group-displacement-btn" },

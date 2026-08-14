@@ -3795,3 +3795,14 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - DERS: Aynı dosyaya AYNI paralel batch'te birden çok search_replace yapma — RevenuePanel.js'te
   ilk edit (PANEL_TOURS tanımı) sessizce kayboldu, "PANEL_TOURS is not defined" runtime hatası verdi. Seri düzelt.
 - E2E DOĞRULANDI: alt-dates tablosu (5 satır + özet), 2 tur (4'er adım, auto+manuel), sparkline dashboard'da.
+
+## Iter 533 (2026-08-14) — Rakip Karşılaştırma Sayfası + Haftalık Yönetici Raporu
+- YENİ frontend: RmsComparisonPanel.js (satış demosu sayfası) — 6 rakip (IDeaS/Duetto/Atomize/FLYR/BEONx/RPG)
+  parite tablosu + 9 benzersiz fark grid'i. Menü: Revenue & rates > Market & Compset > "Rakip Karşılaştırma (RMS)"
+  (rms-comparison-btn). Route: activeView=rms-comparison.
+- YENİ backend: GET /api/revenue-brain/{pid}/executive-report-pdf (2 sayfalık PDF: robot katkısı büyük rakam
+  + hedef ilerlemesi + dersler + kalıcı hafıza öne çıkanları). _build_executive_pdf builder.
+- YENİ worker: weekly_exec_report_loop (workers.py) — her pazartesi tesis başına exec_reports snapshot +
+  notifications bildirimi (link_to: revenue-brain), exec_report_state ile haftada 1 garanti. server.py'ye kayıtlı.
+- UI: RevenueBrainPanel header'a yeşil "Yönetici Raporu" indirme butonu (brain-exec-report-btn).
+- E2E DOĞRULANDI: sayfa 6 satır + 9 kart, PDF %PDF-1.4 2 sayfa 24KB, loop body manuel çalıştırıldı, backend log temiz.

@@ -27,6 +27,7 @@ export const TRCompliancePanel = L(() => import("./components/dashboard/TRCompli
 export const EUCompliancePanel = L(() => import("./components/dashboard/EUCompliancePanel"));
 export const AIPredictionsPanel = L(() => import("./components/dashboard/AIPredictionsPanel"));
 export const ChannelRevenuePanel = L(() => import("./components/dashboard/ChannelRevenuePanel"));
+export const RmsComparisonPanel = L(() => import("./components/dashboard/RmsComparisonPanel"));
 export const KDSPanel = L(() => import("./components/dashboard/KDSPanel"));
 export const LoyaltyV2Panel = L(() => import("./components/dashboard/LoyaltyV2Panel"));
 export const ExternalLoyaltyPanel = L(() => import("./components/dashboard/ExternalLoyaltyPanel"));

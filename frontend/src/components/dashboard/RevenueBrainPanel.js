@@ -122,6 +122,20 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
             className="px-3 py-2 text-xs rounded-md bg-white border border-stone-300 text-stone-700 hover:border-stone-500 inline-flex items-center gap-1.5 font-medium">
             <Play size={13} weight="fill" className="text-violet-600" /> Tanıtım Turu
           </button>
+          <button onClick={async () => {
+            try {
+              const r = await axios.get(`${API}/api/revenue-brain/${propertyId}/executive-report-pdf`,
+                { withCredentials: true, responseType: "blob" });
+              const url = window.URL.createObjectURL(new Blob([r.data], { type: "application/pdf" }));
+              const a = document.createElement("a");
+              a.href = url; a.download = `yonetici-raporu-${propertyId}.pdf`; a.click();
+              window.URL.revokeObjectURL(url);
+              toast.success("Haftalık yönetici raporu indirildi");
+            } catch { toast.error("Rapor oluşturulamadı"); }
+          }} data-testid="brain-exec-report-btn"
+            className="px-3 py-2 text-xs rounded-md bg-emerald-600 text-white hover:bg-emerald-700 inline-flex items-center gap-1.5 font-medium">
+            <FilePdf size={13} weight="fill" /> Yönetici Raporu
+          </button>
           <button onClick={downloadPdf} data-testid="brain-pdf-btn"
             className="px-3 py-2 text-xs rounded-md bg-stone-900 text-white hover:bg-stone-700 inline-flex items-center gap-1.5 font-medium">
             <FilePdf size={13} weight="fill" /> PDF İndir

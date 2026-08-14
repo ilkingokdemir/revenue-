@@ -651,6 +651,119 @@ async def build_impact_summary(db, pid: str) -> dict:
             "note": "Tahmini katkı = doluluk farkı × baz fiyat + fiyat değişimi etkisi + kampanya pickup geliri."}
 
 
+def _build_executive_pdf(hotel_name: str, impact: dict, goal: dict, lessons: list, memory: list) -> bytes:
+    """Haftalık Yönetici Raporu — robot katkısı + hedef ilerlemesi + dersler."""
+    import io
+    import os as _os
+    import textwrap
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.colors import HexColor
+    from reportlab.pdfgen import canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    candidates = {
+        "DVS": ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/freefont/FreeSans.ttf"],
+        "DVSB": ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                 "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"],
+    }
+    for fname, paths in candidates.items():
+        if fname not in pdfmetrics.getRegisteredFontNames():
+            for path in paths:
+                if _os.path.exists(path):
+                    pdfmetrics.registerFont(TTFont(fname, path))
+                    break
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    ink, violet, grey = HexColor("#1c1917"), HexColor("#7c3aed"), HexColor("#6b7280")
+    emerald, amber = HexColor("#059669"), HexColor("#d97706")
+    now = datetime.now(timezone.utc)
+
+    def header():
+        c.setFillColor(ink)
+        c.rect(0, H - 100, W, 100, stroke=0, fill=1)
+        c.setFillColor(HexColor("#ffffff"))
+        c.setFont("DVSB", 18)
+        c.drawString(40, H - 50, hotel_name)
+        c.setFont("DVS", 11)
+        c.drawString(40, H - 72, "HAFTALIK YÖNETİCİ RAPORU — REVENUE ROBOTU")
+        c.setFont("DVS", 9)
+        c.drawRightString(W - 40, H - 72, f"{now.strftime('%d.%m.%Y')} · Hafta {now.strftime('%V')}")
+
+    y = [H - 130]
+
+    def ensure(space):
+        if y[0] < 60 + space:
+            c.showPage()
+            header()
+            y[0] = H - 130
+
+    def section(title):
+        ensure(40)
+        c.setFillColor(violet)
+        c.setFont("DVSB", 12)
+        c.drawString(40, y[0], title)
+        y[0] -= 18
+
+    def para(text, size=9, color=None, indent=40):
+        c.setFont("DVS", size)
+        c.setFillColor(color or HexColor("#111827"))
+        for line in textwrap.wrap(text, width=110):
+            ensure(14)
+            c.drawString(indent, y[0], line)
+            y[0] -= 12
+        y[0] -= 4
+
+    header()
+
+    total = impact.get("est_total_contribution", 0) or 0
+    section(f"Robot Kâr Katkısı ({impact.get('month')})")
+    ensure(30)
+    c.setFont("DVSB", 22)
+    c.setFillColor(emerald if total >= 0 else amber)
+    c.drawString(40, y[0], f"{'+' if total >= 0 else ''}{total:,.0f}")
+    c.setFont("DVS", 9)
+    c.setFillColor(grey)
+    pct = impact.get("contribution_pct_of_mtd")
+    c.drawString(160, y[0] + 2, f"tahmini net katkı{f' · ay içi gelirin %{pct}' if pct is not None else ''}")
+    y[0] -= 28
+    sr = impact.get("success_rate")
+    para(f"Ölçülen karar: {impact.get('outcomes_measured', 0)} · Başarı: %{sr if sr is not None else '—'} · "
+         f"Uygulanan karar: {impact.get('decisions_applied', 0)} · Kampanya pickup: +{impact.get('campaign_rooms_gained', 0)} oda "
+         f"({impact.get('campaign_nights_measured', 0)} gece ölçüldü)")
+    para(impact.get("headline", ""), color=grey)
+
+    section(f"Aylık Hedef İlerlemesi ({goal.get('month')})")
+    target = goal.get("target_revenue")
+    para(f"Ay içi gerçekleşen: {goal.get('mtd_revenue', 0):,.0f} · Ay sonu tahmini: {goal.get('projection', 0):,.0f} · "
+         f"Hedef: {f'{target:,.0f}' if target else 'belirlenmedi'}"
+         + (f" · İlerleme: %{goal.get('progress_pct')} ({'yolda ✓' if goal.get('on_track') else 'geride ⚠'})" if target else ""))
+    if goal.get("recommendation"):
+        para(f"Robot önerisi: {goal['recommendation']}", color=grey)
+
+    section(f"Bu Ayın Dersleri ({len(lessons)})")
+    if not lessons:
+        para("Henüz ders yok — öğrenme döngüleri biriktikçe eklenecek.", color=grey)
+    for l in lessons:
+        para(f"• {l.get('lesson', '')}")
+
+    section(f"Kalıcı Hafıza — Öne Çıkanlar ({len(memory)})")
+    if not memory:
+        para("Henüz kalıcı hafıza kaydı yok.", color=grey)
+    for m in memory:
+        para(f"• [{(m.get('importance') or '').upper()}] {m.get('detail', '')} ({m.get('times_confirmed', 1)}× doğrulandı)")
+
+    ensure(30)
+    c.setFont("DVS", 8)
+    c.setFillColor(grey)
+    c.drawString(40, 40, "Bu rapor Revenue Robotu tarafından her pazartesi otomatik hazırlanır. Katkı tahmini: doluluk farkı × baz fiyat + fiyat etkisi + kampanya pickup geliri.")
+    c.save()
+    return buf.getvalue()
+
+
 def create_revenue_brain_router(db, require_roles):
     router = APIRouter(prefix="/revenue-brain", tags=["revenue-brain"])
     ROLES = ("admin", "manager")
@@ -741,6 +854,21 @@ def create_revenue_brain_router(db, require_roles):
     async def simulate_lesson(pid: str, body: Dict, _u: dict = Depends(require_roles(*ROLES))):
         key = (body.get("bucket_key") or "").strip()
         return await simulate_lesson_impact(db, pid, key)
+
+    @router.get("/{pid}/executive-report-pdf")
+    async def executive_report_pdf(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Haftalık Yönetici Raporu PDF — robot katkısı + hedef + dersler."""
+        from fastapi import Response
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1})
+        impact = await build_impact_summary(db, pid)
+        goal = await build_goal_progress(db, pid)
+        lessons = await db.revenue_brain_lessons.find(
+            {"property_id": pid}, {"_id": 0}).sort("created_at", -1).to_list(10)
+        memory = await db.revenue_brain_memory.find(
+            {"property_id": pid}, {"_id": 0}).sort("times_confirmed", -1).to_list(6)
+        pdf = _build_executive_pdf((prop or {}).get("name") or pid, impact, goal, lessons, memory)
+        return Response(content=pdf, media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="yonetici-raporu-{pid}.pdf"'})
 
     @router.get("/{pid}/impact-summary")
     async def impact_summary(pid: str, _u: dict = Depends(require_roles(*ROLES))):

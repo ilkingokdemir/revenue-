@@ -209,6 +209,7 @@ import {
   RevenueHealthPanel,
   RevenuePanel,
   RevenueProtectionPanel,
+  RmsComparisonPanel,
   RevenueStrategistPanel,
   ReviewAgentPanel,
   ReviewSentimentPanel,
@@ -781,6 +782,11 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {/* Öğrenen Revenue Beyni — artık Revenue management içinde sekme (geriye dönük yönlendirme) */}
         {activeView === "revenue-brain" && (
           <RevenuePanel properties={properties} activePropertyId={activePropertyId} initialTab="learning-robot" />
+        )}
+
+        {/* RMS Rakip Karşılaştırma — satış demosu sayfası */}
+        {activeView === "rms-comparison" && (
+          <RmsComparisonPanel />
         )}
 
         {/* Setup Wizard */}

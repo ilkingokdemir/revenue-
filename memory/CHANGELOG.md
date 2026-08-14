@@ -3651,3 +3651,10 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 3. TAM REGRESYON iteration_518: backend 13/13 PASS, frontend 7/7 panel OK, kritik/minör 0. retest gerekmez.
 - ROADMAP: 'Group Sales kalanları (patterned block, rebate, F&B)' maddesi de TAMAM. Kalan: harici arama/uçuş
   verisi + LTV (API anlaşması ister). Anahtarlar (9. hatırlatma) hâlâ değer olarak paylaşılmadı.
+
+## Iter 519 (2026-08-14) — Guardrail + Overbooking 1-tık + Kalıcı Robot Hafızası
+- Optimizer Guardrail: open_pricing.py — optimizer hücre fiyatı önceki koşunun ±%15 bandına kırpılır (curl doğrulandı: prev=100 → yeni 115.0 clamp PASS).
+- Overbooking Otomasyonu: overbooking_control.py'a POST /{pid}/apply eklendi — önerilen limitler overbooking_limits koleksiyonuna yazılır (sell_limit=cap+limit), channel_push_log kaydı; GET artık applied_limit/applied_at/applied_count döner. Frontend OverbookingControlPanel: "Limitleri Kanallara Uygula (1 tık)" butonu (ob-apply-limits-btn), yeşil uygulandı şeridi + Uygulanan sütunu.
+- Kalıcı Hafıza (kullanıcı isteği: "robot öğrendiğini unutmasın"): revenue_brain.py consolidate_memory() — önemli öğrenmeler (factor≠1.0) revenue_brain_memory koleksiyonuna append-only işlenir; ASLA silinmez, nötre dönerse status='izlemede'. first_learned korunur, times_confirmed artar. GET /revenue-brain/{pid}/memory + status'a permanent_memory/memory_count eklendi. RevenueBrainPanel'e koyu "Kalıcı Hafıza" bölümü (brain-permanent-memory).
+- Test: iteration_519.json — backend 5/5, frontend %100 PASS. Overbooking paneli PRO modda Revenue & Rates → Tools altında (BASIT modda görünmez — bilinçli).
+- Demo veri: city-gate'te seed edilmiş geçmiş fiyat kararları/hurt sonuçları var (hafıza demo'su için).

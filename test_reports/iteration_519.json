@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 519 — Tested (1) Open Pricing Optimizer ±15% guardrail, (2) Overbooking 1-click apply, (3) Revenue Brain permanent memory (append-only), plus smoke regression. Backend: all 5 pytest cases pass. Frontend: Revenue Brain panel + Kalıcı Hafıza dark section renders; property switch to city-gate shows KRITIK DERS card with 7× doğrulandı and İlk öğrenme date; Şimdi Öğren works. Overbooking & wash control panel opens (via PRO → Revenue & Rates → Tools), 'Limitleri Kanallara Uygula (1 tık)' button works, ob-applied-info strip appears with green ✓, Uygulanan column shows green ✓+1 badges.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Sidebar navigation", "issues": ["Overbooking & wash control button is only available in PRO mode (nested under REVENUE & RATES → Tools). It is not discoverable in BASIT mode. Documented in review_request Turkish note; not a functional bug."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/tests/test_iteration519_guardrail_ob_brain.py",
+    "/app/test_reports/pytest/iter519.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend hot-reload watchfiles watches /app/backend/tests/, so writing pytest files there caused backend to reload/hang. Moved tests to /app/tests/ instead. Consider excluding tests/ from uvicorn --reload watch paths."
+  ],
+  "updated_files": [
+    "/app/tests/test_iteration519_guardrail_ob_brain.py"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% (all target testids validated)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "No new seed data. city-gate property already had seeded outcomes; permanent memory 'first_learned' remains 2026-08-14, times_confirmed observed to grow across successive learn calls (verified 6→7 during tests).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Guardrail comparison uses response shape: {matrix:[{date, cells:{'segment|channel': rate}}]}. Overbooking panel requires PRO mode (button:has-text('PRO')) then click sidebar section header 'Revenue & Rates' to expand; then Tools → overbooking-control-btn. Revenue Brain 'city-gate' has meaningful memory; 'default' returns empty which is correct.",
+  "rca of the issue": "Initial backend timeouts were caused by watchfiles reloading backend when I created a test file under /app/backend/tests/. Fix: place test file in /app/tests/ (not watched). One backend restart via supervisorctl was required to recover the hung reload."
+}

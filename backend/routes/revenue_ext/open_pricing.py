@@ -55,12 +55,20 @@ SEG_FACTOR = {"transient": 1.0, "corporate": 0.92, "group": 0.85,
               "package": 0.95, "leisure": 1.02, "government": 0.88}
 
 
-async def run_open_pricing_optimizer(db, pid: str, days: int = 14, apply: bool = False):
-    """Her segment×kanal×tarih hücresi için bağımsız fiyat üretir (cron + endpoint ortak)."""
+async def run_open_pricing_optimizer(db, pid: str, days: int = 14, apply: bool = False,
+                                      guardrail_pct: float = 15.0):
+    """Her segment×kanal×tarih hücresi için bağımsız fiyat üretir (cron + endpoint ortak).
+    GUARDRAIL: yeni hücre fiyatı, önceki optimizer fiyatının ±guardrail_pct bandına kırpılır."""
     from routes.distribution.push_history import resolve_rate
     from routes.integrations_pkg.ota_commission import _get_rate
     from datetime import timedelta
     days = max(3, min(days, 30))
+    guardrail_pct = max(5.0, min(guardrail_pct, 50.0))
+    prev = {}
+    async for o in db.open_pricing_overrides.find(
+            {"property_id": pid, "reason": "optimizer"},
+            {"_id": 0, "segment": 1, "channel": 1, "date": 1, "rate": 1}):
+        prev[(o["segment"], o["channel"], o["date"])] = float(o.get("rate") or 0)
     cap = 0
     async for rt in db.room_types.find({"property_id": pid}, {"_id": 0, "total_rooms": 1, "count": 1}):
         cap += int(rt.get("total_rooms") or rt.get("count") or 0)
@@ -87,9 +95,16 @@ async def run_open_pricing_optimizer(db, pid: str, days: int = 14, apply: bool =
         occ = min(sold / cap, 1.0)
         demand = round(0.92 + occ * 0.33, 4)
         cells = {}
+        clamped_day = 0
         for seg, sf in SEG_FACTOR.items():
             for ch, cf in ch_factor.items():
                 rate = round(base * sf * cf * demand, 2)
+                p = prev.get((seg, ch, d), 0)
+                if p > 0:
+                    lo, hi = round(p * (1 - guardrail_pct / 100), 2), round(p * (1 + guardrail_pct / 100), 2)
+                    if rate < lo or rate > hi:
+                        rate = lo if rate < lo else hi
+                        clamped_day += 1
                 cells[f"{seg}|{ch}"] = rate
                 if apply:
                     await db.open_pricing_overrides.insert_one({

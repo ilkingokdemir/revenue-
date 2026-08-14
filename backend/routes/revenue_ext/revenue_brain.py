@@ -169,17 +169,54 @@ async def generate_lessons(db, pid: str) -> int:
     return len(lessons)
 
 
+async def consolidate_memory(db, pid: str) -> int:
+    """Kalıcı Hafıza: önemli öğrenmeleri asla silinmeyen arşive işler.
+    Ders/ağırlık her döngüde yeniden üretilse bile, kritik öğrenme burada sonsuza dek saklanır."""
+    now = _now()
+    saved = 0
+    weights = await db.learned_pricing_weights.find({"property_id": pid}, {"_id": 0}).to_list(200)
+    for w in weights:
+        band, dow, direction = w["bucket_key"].split("|")
+        ctx = f"{DOW_TR[dow]} {BAND_TR[band]} {DIR_TR.get(direction, direction)}"
+        existing = await db.revenue_brain_memory.find_one(
+            {"property_id": pid, "bucket_key": w["bucket_key"]}, {"_id": 0, "id": 1})
+        if w["factor"] != 1.0:
+            importance = "kritik" if w["factor"] < 1.0 else "firsat"
+            detail = (f"{ctx}: {w['samples']} denemede başarı %{w['worked_rate']*100:.0f} — "
+                      f"kalıcı çarpan ×{w['factor']}. Bu ders unutulmaz; motor her fiyat kararında uygular.")
+            await db.revenue_brain_memory.update_one(
+                {"property_id": pid, "bucket_key": w["bucket_key"]},
+                {"$set": {"property_id": pid, "bucket_key": w["bucket_key"],
+                          "kind": "fiyat_dersi", "importance": importance,
+                          "title": ctx, "detail": detail, "factor": w["factor"],
+                          "samples": w["samples"], "worked_rate": w["worked_rate"],
+                          "status": "aktif", "last_confirmed": now},
+                 "$setOnInsert": {"id": str(uuid.uuid4()), "first_learned": now},
+                 "$inc": {"times_confirmed": 1}},
+                upsert=True)
+            saved += 1
+        elif existing:
+            # Ağırlık nötre dönse bile hafıza SİLİNMEZ — izlemeye alınır
+            await db.revenue_brain_memory.update_one(
+                {"property_id": pid, "bucket_key": w["bucket_key"]},
+                {"$set": {"status": "izlemede", "last_confirmed": now,
+                          "samples": w["samples"], "worked_rate": w["worked_rate"]}})
+    return saved
+
+
 async def run_learning_cycle(db, pid: str) -> dict:
     measured = await measure_outcomes(db, pid)
     weights = await learn_weights(db, pid)
     lessons = await generate_lessons(db, pid)
+    memory = await consolidate_memory(db, pid)
     await db.revenue_brain_state.update_one(
         {"property_id": pid},
         {"$set": {"property_id": pid, "last_cycle_at": _now(),
                   "last_measured": measured, "last_weights": weights,
-                  "last_lessons": lessons}}, upsert=True)
-    logger.info(f"Revenue Brain cycle {pid}: measured={measured} weights={weights} lessons={lessons}")
-    return {"measured": measured, "weights_updated": weights, "lessons": lessons}
+                  "last_lessons": lessons, "last_memory": memory}}, upsert=True)
+    logger.info(f"Revenue Brain cycle {pid}: measured={measured} weights={weights} lessons={lessons} memory={memory}")
+    return {"measured": measured, "weights_updated": weights, "lessons": lessons,
+            "memory_consolidated": memory}
 
 
 async def build_goal_progress(db, pid: str) -> dict:
@@ -237,7 +274,11 @@ def create_revenue_brain_router(db, require_roles):
         state = await db.revenue_brain_state.find_one({"property_id": pid}, {"_id": 0})
         recent = await db.ai_pricing_outcomes.find(
             {"property_id": pid}, {"_id": 0}).sort("measured_at", -1).to_list(10)
+        memory = await db.revenue_brain_memory.find(
+            {"property_id": pid}, {"_id": 0}).sort("first_learned", 1).to_list(50)
         return {
+            "permanent_memory": memory,
+            "memory_count": len(memory),
             "property_id": pid,
             "outcomes_measured": outcomes,
             "worked": worked, "hurt": hurt,
@@ -249,6 +290,14 @@ def create_revenue_brain_router(db, require_roles):
             "last_cycle_at": (state or {}).get("last_cycle_at"),
             "goal": await build_goal_progress(db, pid),
         }
+
+    @router.get("/{pid}/memory")
+    async def permanent_memory(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Kalıcı hafıza — asla silinmeyen önemli revenue öğrenmeleri."""
+        items = await db.revenue_brain_memory.find(
+            {"property_id": pid}, {"_id": 0}).sort("first_learned", 1).to_list(200)
+        return {"property_id": pid, "count": len(items), "items": items,
+                "note": "Bu hafıza kalıcıdır; öğrenmeler nötre dönse bile silinmez, izlemeye alınır."}
 
     @router.put("/{pid}/goal")
     async def set_goal(pid: str, data: Dict,

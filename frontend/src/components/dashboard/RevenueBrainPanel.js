@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-  Brain, Target, TrendUp, Warning, GraduationCap, ArrowsClockwise, Scales,
+  Brain, Target, TrendUp, Warning, GraduationCap, ArrowsClockwise, Scales, Archive,
 } from "@phosphor-icons/react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -34,7 +34,7 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
     setBusy(true);
     try {
       const r = await axios.post(`${API}/api/revenue-brain/${propertyId}/learn`, {}, { withCredentials: true });
-      toast.success(`Öğrenme döngüsü bitti: ${r.data.measured} sonuç ölçüldü, ${r.data.weights_updated} ağırlık, ${r.data.lessons} ders`);
+      toast.success(`Öğrenme döngüsü bitti: ${r.data.measured} sonuç ölçüldü, ${r.data.weights_updated} ağırlık, ${r.data.lessons} ders, ${r.data.memory_consolidated || 0} kalıcı hafıza kaydı`);
       load();
     } catch (e) { toast.error("Öğrenme başarısız"); } finally { setBusy(false); }
   };
@@ -167,6 +167,38 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
             </table>
           )}
         </div>
+      </div>
+
+      {/* Kalıcı Hafıza — asla unutulmaz */}
+      <div className="bg-stone-900 rounded-xl p-4 mt-4 text-stone-100" data-testid="brain-permanent-memory">
+        <div className="text-sm font-semibold mb-1 flex items-center gap-2">
+          <Archive size={16} weight="fill" className="text-amber-400" /> Kalıcı Hafıza
+          <span className="text-[10px] text-stone-400 font-normal">— önemli öğrenmeler asla silinmez ({data.memory_count || 0} kayıt)</span>
+        </div>
+        <p className="text-[11px] text-stone-400 mb-3">Robot burada biriktirdiği kritik revenue derslerini sonsuza dek saklar. Ders nötre dönse bile silinmez, "izlemede" olarak kalır.</p>
+        {(!data.permanent_memory || data.permanent_memory.length === 0) ? (
+          <div className="text-xs text-stone-500 py-4 text-center">Henüz kalıcı hafızaya işlenmiş ders yok — öğrenme döngüleri biriktikçe burada belirecek.</div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-2">
+            {data.permanent_memory.map((m) => (
+              <div key={m.id} className="bg-stone-800/80 border border-stone-700 rounded-lg px-3 py-2.5" data-testid={`brain-memory-${m.bucket_key}`}>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded ${m.importance === "kritik" ? "bg-rose-500/20 text-rose-300" : "bg-emerald-500/20 text-emerald-300"}`}>
+                    {m.importance === "kritik" ? "Kritik ders" : "Fırsat"}
+                  </span>
+                  <span className={`text-[10px] font-bold ${m.status === "aktif" ? "text-emerald-400" : "text-amber-400"}`}>
+                    {m.status === "aktif" ? "● aktif" : "◐ izlemede"}
+                  </span>
+                </div>
+                <div className="text-xs font-semibold text-stone-100">{m.title}</div>
+                <div className="text-[11px] text-stone-400 mt-0.5">{m.detail}</div>
+                <div className="text-[10px] text-stone-500 mt-1.5">
+                  İlk öğrenme: {m.first_learned?.slice(0, 10)} · {m.times_confirmed || 1}× doğrulandı · çarpan ×{m.factor}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Son ölçümler */}

@@ -404,6 +404,7 @@ const AIPricingEnginePanel = ({ propertyId }) => {
                 <th className="px-3 py-2.5">Pazar Ort</th>
                 <th className="px-3 py-2.5">Mevcut</th>
                 <th className="px-3 py-2.5">Öneri</th>
+                <th className="px-3 py-2.5">NET Kâr</th>
                 <th className="px-3 py-2.5">Δ%</th>
                 <th className="px-3 py-2.5">Gerekçe</th>
                 <th className="px-3 py-2.5">Durum</th>
@@ -412,13 +413,13 @@ const AIPricingEnginePanel = ({ propertyId }) => {
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={11} className="px-3 py-10 text-center text-stone-400">
+                <tr><td colSpan={12} className="px-3 py-10 text-center text-stone-400">
                   <RefreshCw className="w-5 h-5 animate-spin inline-block mr-2" />
                   Hesaplanıyor…
                 </td></tr>
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={11} className="px-3 py-10 text-center text-stone-400">
+                <tr><td colSpan={12} className="px-3 py-10 text-center text-stone-400">
                   <Brain className="w-6 h-6 inline-block mb-2 opacity-50" /><br />
                   Bu filtreye uygun öneri yok. Önce Neighborhood scan'i çalıştırın.
                 </td></tr>
@@ -452,6 +453,17 @@ const AIPricingEnginePanel = ({ propertyId }) => {
                     <td className="px-3 py-2 text-xs text-violet-700 font-bold font-mono">
                       {cur(s.suggested_rate)}
                       {s.clamped && <span className="ml-1 text-[9px] text-stone-400">clamped</span>}
+                    </td>
+                    <td className="px-3 py-2 text-xs font-mono" data-testid={`ai-pricing-net-${i}`}>
+                      {s.net_new_rate != null ? (
+                        <span title={s.net_note || "Komisyon + CPOR düşülmüş net oda kârı"}>
+                          <span className="text-stone-400">{cur(s.net_current_rate)}→</span>
+                          <span className={`font-bold ${(s.net_delta_pct || 0) >= 0 ? "text-emerald-700" : "text-rose-700"}`}>{cur(s.net_new_rate)}</span>
+                          <span className={`ml-1 text-[9px] ${(s.net_delta_pct || 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                            {(s.net_delta_pct || 0) > 0 ? "+" : ""}{s.net_delta_pct}%
+                          </span>
+                        </span>
+                      ) : <span className="text-stone-300">—</span>}
                     </td>
                     <td className="px-3 py-2">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono font-bold ${dltColor}`}>{dlt}</span>

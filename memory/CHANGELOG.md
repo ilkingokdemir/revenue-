@@ -3855,3 +3855,14 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   çakılıyordu (delta -100%). Motor: base_rate_avg'e "or 130" fallback; veri: Standard 125/Deluxe 185 set.
 - TEST: net alanlar curl'de doğru (£98.37→£171.99, kesinti %7+CPOR £18), freeze run-auto-apply'ı blokladı,
   unfreeze çalıştı, RGI kartı 10 hafta çubuğuyla ekranda. Banner UI backend'i doğrulandı (curl).
+
+## Iter 539 (2026-08-14) — NET Kâr Sütunu + Partner Başvuru Taslağı
+- AI Pricing tablosuna "NET Kâr" sütunu (ai-pricing-net-{i}): net mevcut→net yeni + Δ% renkli,
+  tooltip'te kesinti açıklaması. colSpan 11→12 düzeltildi. UI'da doğrulandı (CHF 98→172 +74.8%).
+- Anomali Modu select + freeze banner + Dondurmayı Kaldır UI'da görüldü (Franziskaner/default şubesi).
+  Test freeze'i unfreeze ile temizlendi.
+- /app/memory/PARTNER_BASVURU_KANAL_YONETICISI.md: SiteMinder (EN) + HotelRunner (TR) başvuru
+  metinleri + teknik ek (mimari, veri ihtiyaçları, güvenlik, 8 haftalık sertifikasyon planı, SSS).
+- NOT: Kullanıcı 4. kez mobil derleme seçti, Expo token HÂLÂ YOK.
+- UI ipucu: Şube değiştirmek için shadcn Select: [data-testid='branch-selector-container'] button →
+  [role='option'] tıkla (düz text tıklaması çalışmıyor).

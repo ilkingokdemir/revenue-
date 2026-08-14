@@ -181,6 +181,56 @@ async def _timeline_event(db, pid: str, ev_type: str, text: str, bucket_key: str
         "bucket_key": bucket_key, "text": text, "at": _now()})
 
 
+async def _region_map(db) -> dict:
+    m = {}
+    async for p in db.properties.find({}, {"_id": 0, "id": 1, "country": 1, "city": 1}):
+        m[p["id"]] = (p.get("country") or p.get("city") or "diger").strip() or "diger"
+    return m
+
+
+async def consolidate_regional_memory(db) -> int:
+    """Bölgesel Hafıza: dersler ülke/şehir bazında birleşir — yeni otel önce
+    kendi bölgesinin derslerini devralır (yerel > bölgesel > küresel önceliği)."""
+    regions = await _region_map(db)
+    agg = {}
+    async for o in db.ai_pricing_outcomes.find(
+            {"direction": {"$in": ["up", "down"]}},
+            {"_id": 0, "property_id": 1, "bucket_key": 1, "verdict": 1}):
+        reg = regions.get(o["property_id"], "diger")
+        s = agg.setdefault((reg, o["bucket_key"]), {"n": 0, "worked": 0, "hurt": 0, "props": set()})
+        s["n"] += 1
+        s["props"].add(o["property_id"])
+        if o["verdict"] == "worked":
+            s["worked"] += 1
+        elif o["verdict"] == "hurt":
+            s["hurt"] += 1
+    updated, now = 0, _now()
+    for (reg, key), s in agg.items():
+        if s["n"] < MIN_SAMPLES:
+            continue
+        band, dow, direction = key.split("|")
+        worked_rate = round(s["worked"] / s["n"], 2)
+        factor = 1.0
+        if s["hurt"] > s["worked"]:
+            factor = UP_DAMPEN if direction == "up" else DOWN_F
+        elif direction == "up" and worked_rate >= 0.7:
+            factor = UP_BOOST
+        ctx = f"{DOW_TR[dow]} {BAND_TR[band]} {DIR_TR.get(direction, direction)}"
+        detail = (f"{reg} bölgesi — {ctx}: {len(s['props'])} otelden {s['n']} sonuç, başarı %{worked_rate*100:.0f} "
+                  f"— bölgesel çarpan ×{factor}. Bu bölgeye eklenen yeni oteller önce bu dersi devralır.")
+        await db.revenue_brain_regional_memory.update_one(
+            {"region": reg, "bucket_key": key},
+            {"$set": {"region": reg, "bucket_key": key, "factor": factor,
+                      "samples": s["n"], "worked": s["worked"], "hurt": s["hurt"],
+                      "worked_rate": worked_rate, "properties_contributing": len(s["props"]),
+                      "title": ctx, "detail": detail, "last_confirmed": now},
+             "$setOnInsert": {"id": str(uuid.uuid4()), "first_learned": now}},
+            upsert=True)
+        updated += 1
+    return updated
+
+
+
 async def consolidate_global_memory(db) -> int:
     """Küresel Hafıza: TÜM otellerin ölçülmüş sonuçlarını bağlam kovasında birleştirir.
     Yeni otel/bölge/ülke için soğuk başlangıç önseli (prior) olarak fiyat motoruna beslenir."""
@@ -239,6 +289,7 @@ async def consolidate_memory(db, pid: str) -> int:
                           "kind": "fiyat_dersi", "importance": importance,
                           "title": ctx, "detail": detail, "factor": w["factor"],
                           "samples": w["samples"], "worked_rate": w["worked_rate"],
+                          "worked": w["worked"], "hurt": w["hurt"],
                           "status": "aktif", "last_confirmed": now},
                  "$setOnInsert": {"id": str(uuid.uuid4()), "first_learned": now},
                  "$inc": {"times_confirmed": 1}},
@@ -273,6 +324,7 @@ async def run_learning_cycle(db, pid: str) -> dict:
     lessons = await generate_lessons(db, pid)
     memory = await consolidate_memory(db, pid)
     global_mem = await consolidate_global_memory(db)
+    regional_mem = await consolidate_regional_memory(db)
     if measured > 0:
         await _timeline_event(db, pid, "ogrenme_dongusu",
                               f"Öğrenme döngüsü: {measured} yeni fiyat kararı sonucu ölçüldü, "
@@ -284,7 +336,8 @@ async def run_learning_cycle(db, pid: str) -> dict:
                   "last_lessons": lessons, "last_memory": memory}}, upsert=True)
     logger.info(f"Revenue Brain cycle {pid}: measured={measured} weights={weights} lessons={lessons} memory={memory}")
     return {"measured": measured, "weights_updated": weights, "lessons": lessons,
-            "memory_consolidated": memory, "global_memory_updated": global_mem}
+            "memory_consolidated": memory, "global_memory_updated": global_mem,
+            "regional_memory_updated": regional_mem}
 
 
 async def build_goal_progress(db, pid: str) -> dict:
@@ -322,6 +375,110 @@ async def build_goal_progress(db, pid: str) -> dict:
     return out
 
 
+def _build_memory_pdf(hotel_name: str, region: str, memory: list, regional: list,
+                      global_mem: list, timeline: list, stats: dict) -> bytes:
+    """Robot öğrenme raporu — sahip/yatırımcı sunumu için tek tık PDF."""
+    import io
+    import os as _os
+    import textwrap
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.colors import HexColor
+    from reportlab.pdfgen import canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    candidates = {
+        "DVS": ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/freefont/FreeSans.ttf"],
+        "DVSB": ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                 "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"],
+    }
+    for fname, paths in candidates.items():
+        if fname not in pdfmetrics.getRegisteredFontNames():
+            for path in paths:
+                if _os.path.exists(path):
+                    pdfmetrics.registerFont(TTFont(fname, path))
+                    break
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    ink, violet, grey = HexColor("#1c1917"), HexColor("#7c3aed"), HexColor("#6b7280")
+
+    def header():
+        c.setFillColor(ink)
+        c.rect(0, H - 100, W, 100, stroke=0, fill=1)
+        c.setFillColor(HexColor("#ffffff"))
+        c.setFont("DVSB", 18)
+        c.drawString(40, H - 50, hotel_name)
+        c.setFont("DVS", 11)
+        c.drawString(40, H - 72, "REVENUE ROBOTU — ÖĞRENME VE HAFIZA RAPORU")
+        c.setFont("DVS", 9)
+        c.drawRightString(W - 40, H - 72, datetime.now(timezone.utc).strftime("%d.%m.%Y"))
+
+    y = [H - 130]
+
+    def ensure(space):
+        if y[0] < 60 + space:
+            c.showPage()
+            header()
+            y[0] = H - 130
+
+    def section(title):
+        ensure(40)
+        c.setFillColor(violet)
+        c.setFont("DVSB", 12)
+        c.drawString(40, y[0], title)
+        y[0] -= 18
+
+    def para(text, size=9, color=None, indent=40):
+        c.setFont("DVS", size)
+        c.setFillColor(color or HexColor("#111827"))
+        for line in textwrap.wrap(text, width=110):
+            ensure(14)
+            c.drawString(indent, y[0], line)
+            y[0] -= 12
+        y[0] -= 4
+
+    header()
+    section("Özet")
+    para(f"Ölçülen fiyat kararı: {stats.get('outcomes', 0)} · Başarı oranı: "
+         f"%{stats.get('success_rate') if stats.get('success_rate') is not None else '—'} · "
+         f"Kalıcı ders: {len(memory)} · Bölgesel ders ({region}): {len(regional)} · Küresel ders: {len(global_mem)}")
+
+    section(f"Kalıcı Hafıza — Otel Dersleri ({len(memory)})")
+    if not memory:
+        para("Henüz kalıcı ders yok — öğrenme döngüleri biriktikçe eklenecek.", color=grey)
+    for m in memory:
+        para(f"• [{m.get('importance', '').upper()} · {m.get('status')}] {m.get('detail', '')} "
+             f"(İlk öğrenme: {str(m.get('first_learned', ''))[:10]}, {m.get('times_confirmed', 1)}× doğrulandı)")
+
+    section(f"Bölgesel Hafıza — {region} ({len(regional)})")
+    if not regional:
+        para("Bu bölge için henüz birleşik ders yok.", color=grey)
+    for m in regional:
+        para(f"• {m.get('detail', '')}")
+
+    section(f"Küresel Hafıza — Tüm Portföy ({len(global_mem)})")
+    if not global_mem:
+        para("Henüz küresel ders yok.", color=grey)
+    for m in global_mem:
+        para(f"• {m.get('detail', '')}")
+
+    section("Öğrenme Yolculuğu (son olaylar)")
+    if not timeline:
+        para("Henüz olay kaydı yok.", color=grey)
+    for ev in timeline[:12]:
+        para(f"{str(ev.get('at', ''))[:16].replace('T', ' ')} — {ev.get('text', '')}", size=8, color=grey)
+
+    ensure(30)
+    c.setFont("DVS", 8)
+    c.setFillColor(grey)
+    c.drawString(40, 40, "Bu rapor Revenue Robotu'nun kalıcı hafızasından otomatik üretilmiştir. Dersler asla silinmez; nötre dönen dersler 'izlemede' olarak saklanır.")
+    c.save()
+    return buf.getvalue()
+
+
 def create_revenue_brain_router(db, require_roles):
     router = APIRouter(prefix="/revenue-brain", tags=["revenue-brain"])
     ROLES = ("admin", "manager")
@@ -346,11 +503,18 @@ def create_revenue_brain_router(db, require_roles):
             {"property_id": pid}, {"_id": 0}).sort("first_learned", 1).to_list(50)
         global_mem = await db.revenue_brain_global_memory.find(
             {}, {"_id": 0}).sort("samples", -1).to_list(30)
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "country": 1, "city": 1})
+        region = ((prop or {}).get("country") or (prop or {}).get("city") or "diger").strip() or "diger"
+        regional_mem = await db.revenue_brain_regional_memory.find(
+            {"region": region}, {"_id": 0}).sort("samples", -1).to_list(30)
         return {
             "permanent_memory": memory,
             "memory_count": len(memory),
             "global_memory": global_mem,
             "global_memory_count": len(global_mem),
+            "region": region,
+            "regional_memory": regional_mem,
+            "regional_memory_count": len(regional_mem),
             "property_id": pid,
             "outcomes_measured": outcomes,
             "worked": worked, "hurt": hurt,
@@ -371,6 +535,85 @@ def create_revenue_brain_router(db, require_roles):
         return {"count": len(items), "items": items,
                 "note": "Tüm otellerin ölçülmüş fiyat sonuçları bağlam kovalarında birleşir; "
                         "yeni bir otel/bölge/ülke eklendiğinde motor bu dersleri yarı etkiyle önsel olarak uygular."}
+
+    @router.get("/regional-memory")
+    async def regional_memory(region: str = "", _u: dict = Depends(require_roles(*ROLES))):
+        """Bölgesel hafıza — ülke/şehir bazında birleşik dersler."""
+        q = {"region": region} if region else {}
+        items = await db.revenue_brain_regional_memory.find(
+            q, {"_id": 0}).sort("samples", -1).to_list(200)
+        regions = await db.revenue_brain_regional_memory.distinct("region")
+        return {"count": len(items), "items": items, "regions": regions,
+                "note": "Öncelik sırası: yerel ders (tam etki) > bölgesel ders (×0.7 etki) > küresel ders (×0.5 etki)."}
+
+    @router.get("/{pid}/memory-pdf")
+    async def memory_pdf(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Robotun tüm derslerini tek tıkla PDF rapor olarak indir."""
+        from fastapi import Response
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1, "country": 1, "city": 1})
+        region = ((prop or {}).get("country") or (prop or {}).get("city") or "diger").strip() or "diger"
+        memory = await db.revenue_brain_memory.find({"property_id": pid}, {"_id": 0}).sort("first_learned", 1).to_list(100)
+        regional = await db.revenue_brain_regional_memory.find({"region": region}, {"_id": 0}).sort("samples", -1).to_list(50)
+        global_mem = await db.revenue_brain_global_memory.find({}, {"_id": 0}).sort("samples", -1).to_list(50)
+        timeline_ev = await db.revenue_brain_timeline.find({"property_id": pid}, {"_id": 0}).sort("at", -1).to_list(12)
+        outcomes = await db.ai_pricing_outcomes.count_documents({"property_id": pid})
+        worked = await db.ai_pricing_outcomes.count_documents({"property_id": pid, "verdict": "worked"})
+        stats = {"outcomes": outcomes,
+                 "success_rate": round(worked / outcomes * 100, 1) if outcomes else None}
+        pdf = _build_memory_pdf((prop or {}).get("name") or pid, region, memory, regional,
+                                global_mem, timeline_ev, stats)
+        return Response(content=pdf, media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="robot-hafiza-{pid}.pdf"'})
+
+    @router.post("/{pid}/simulate-lesson")
+    async def simulate_lesson(pid: str, body: Dict, _u: dict = Depends(require_roles(*ROLES))):
+        """Ders Etki Simülatörü: bir ders kapatılırsa 14 günde gelirin nasıl değişeceğini tahmin eder."""
+        key = (body.get("bucket_key") or "").strip()
+        mem = await db.revenue_brain_memory.find_one({"property_id": pid, "bucket_key": key}, {"_id": 0})
+        if not mem:
+            mem = await db.revenue_brain_global_memory.find_one({"bucket_key": key}, {"_id": 0})
+        if not mem:
+            raise HTTPException(404, "Ders bulunamadı")
+        factor = float(mem.get("factor") or 1.0)
+        band, dow, direction = key.split("|")
+        from routes.distribution.push_history import resolve_rate
+        total_rooms = await db.rooms.count_documents({"property_id": pid}) or 20
+        today = datetime.now(timezone.utc).date()
+        affected, delta = [], 0.0
+        for i in range(14):
+            ds = (today + timedelta(days=i)).isoformat()
+            if _dow_type(ds) != dow:
+                continue
+            base, _src = await resolve_rate(db, pid, ds)
+            sold = await db.bookings.count_documents({
+                "property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
+                "check_in": {"$lte": ds}, "check_out": {"$gt": ds}})
+            exposure = max(sold, int(total_rooms * 0.3))
+            day_delta = round(base * (factor - 1.0) * exposure, 2)
+            delta += day_delta
+            affected.append({"date": ds, "base_rate": round(base, 2),
+                             "braked_rate": round(base * factor, 2),
+                             "exposure_rooms": exposure, "est_delta": day_delta})
+        hurt_rate = 0.0
+        if mem.get("samples"):
+            hurt_n = mem.get("hurt")
+            if hurt_n is None:
+                w = await db.learned_pricing_weights.find_one(
+                    {"property_id": pid, "bucket_key": key}, {"_id": 0, "hurt": 1})
+                hurt_n = (w or {}).get("hurt") or 0
+            hurt_rate = round(hurt_n / mem["samples"] * 100, 1)
+        if factor < 1.0:
+            rec = (f"Bu ders KAPATILIRSA motor frenlemeden agresif değişime döner. Geçmişte bu bağlamdaki kararların "
+                   f"%{hurt_rate}'i talebe ZARAR verdi. 14 günde ~{abs(round(delta, 2))} tutarında gelir oynaklığı riski. "
+                   f"Robotun önerisi: ders AÇIK kalsın.")
+        elif factor > 1.0:
+            rec = (f"Bu ders KAPATILIRSA motor bu bağlamdaki cesur artışlardan vazgeçer; 14 günde ~{abs(round(delta, 2))} "
+                   f"tutarında fırsat kaçabilir. Robotun önerisi: ders AÇIK kalsın.")
+        else:
+            rec = "Ders şu an nötr — kapatmanın ölçülebilir etkisi yok."
+        return {"bucket_key": key, "factor": factor, "affected_days": len(affected),
+                "est_revenue_delta_14d": round(delta, 2), "hurt_rate_pct": hurt_rate,
+                "days": affected, "recommendation": rec}
 
     @router.get("/{pid}/timeline")
     async def timeline(pid: str, _u: dict = Depends(require_roles(*ROLES))):

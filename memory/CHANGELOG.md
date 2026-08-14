@@ -3671,3 +3671,22 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - Zaman Çizelgesi: revenue_brain_timeline (olaylar: yeni_ders/ders_dogrulandi/ders_izlemede/ders_aktif/ogrenme_dongusu,
   günlük dup-suppression). GET /api/revenue-brain/{pid}/timeline. RevenueBrainPanel'e renkli noktalı dikey timeline.
 - Test: iteration_520.json — backend 11/11, frontend %100 PASS. Guardrail 15'e resetlendi.
+
+## Iter 521 (2026-08-14) — Robot Chat (savunmalı + aksiyon uygulayan) + Bölgesel Hafıza + Hafıza PDF + Ders Simülatörü
+- ROBOT CHAT (revenue_copilot.py büyük yükseltme): Türkçe yanıt, hafıza beslemesi (kalıcı+bölgesel+küresel context'e eklenir),
+  SAVUNMA kişiliği (veriye aykırı talebe kanıtla karşı çıkar, ısrar edilirse riski belirtip uygular — canlı LLM testinde doğrulandı),
+  AKSİYON PROTOKOLÜ: anlaşılan karar ```action {json}``` bloğu olarak gelir → _extract_action ayıklar, mesaj dokümanına eklenir,
+  POST /api/revenue/copilot/{pid}/apply-action/{action_id} 1 tıkla uygular (_execute_action: rate_set / rate_adjust_pct →
+  rate_overrides source=copilot_chat; set_guardrail → rms_settings; apply_overbooking → overbooking_limits).
+  Frontend RevenueAICopilot.js: Türkçeleştirildi, aksiyon kartı + "Robota Uygulat" butonu (rev-copilot-apply-*), ses tr-TR.
+  E2E doğrulama: robot %5 indirimi hafıza dersine atıfla REDDETTİ; ısrar sonrası tek güne daralttı, aksiyon b11b3818 uygulandı.
+- BÖLGESEL HAFIZA: consolidate_regional_memory (ülke/şehir bazında, revenue_brain_regional_memory).
+  Motor öncelik: yerel (tam) > bölgesel (×0.7) > küresel (×0.5) — ai_pricing_engine'de blend. GET /api/revenue-brain/regional-memory.
+  Panelde "Bölgesel Hafıza — UK" bölümü (brain-regional-memory).
+- HAFIZA PDF: GET /api/revenue-brain/{pid}/memory-pdf — reportlab (DejaVu/FreeSans TR karakter), özet+kalıcı+bölgesel+küresel+timeline.
+  Panelde "PDF İndir" (brain-pdf-btn).
+- DERS ETKİ SİMÜLATÖRÜ: POST /api/revenue-brain/{pid}/simulate-lesson {bucket_key} — 14 günlük tahmini gelir etkisi + hurt oranı +
+  Türkçe öneri. Panel kartlarında "Kapatılırsa Ne Olur? (Simüle Et)" (brain-simulate-*, sonuç brain-sim-result-*).
+- HATA/DERS: search_replace ile placeholder değişiminde RevenueAICopilot.js dosya sonunda eski blok kaldı → frontend derleme hatası;
+  ayrıca revenue_copilot.py'da satır birleşmesi SyntaxError yarattı. İkisi de düzeltildi. DERS: büyük UI düzenlemelerinden sonra derleme kontrolü.
+- Test: iteration_521.json — backend 13/13, frontend %100 PASS.

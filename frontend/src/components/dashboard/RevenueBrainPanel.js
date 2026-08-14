@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-  Brain, Target, TrendUp, Warning, GraduationCap, ArrowsClockwise, Scales, Archive, Globe, ClockCounterClockwise,
+  Brain, Target, TrendUp, Warning, GraduationCap, ArrowsClockwise, Scales, Archive, Globe, ClockCounterClockwise, MapPin, FilePdf, Flask,
 } from "@phosphor-icons/react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -13,6 +13,29 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
   const [data, setData] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [simResults, setSimResults] = useState({});
+  const [simBusy, setSimBusy] = useState("");
+
+  const simulate = async (bucketKey) => {
+    setSimBusy(bucketKey);
+    try {
+      const r = await axios.post(`${API}/api/revenue-brain/${propertyId}/simulate-lesson`,
+        { bucket_key: bucketKey }, { withCredentials: true });
+      setSimResults((prev) => ({ ...prev, [bucketKey]: r.data }));
+    } catch { toast.error("Simülasyon başarısız"); } finally { setSimBusy(""); }
+  };
+
+  const downloadPdf = async () => {
+    try {
+      const r = await axios.get(`${API}/api/revenue-brain/${propertyId}/memory-pdf`,
+        { withCredentials: true, responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([r.data], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = `robot-hafiza-${propertyId}.pdf`; a.click();
+      window.URL.revokeObjectURL(url);
+      toast.success("Hafıza raporu PDF olarak indirildi");
+    } catch { toast.error("PDF oluşturulamadı"); }
+  };
   const [goalInput, setGoalInput] = useState("");
 
   useEffect(() => {
@@ -78,6 +101,10 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
               {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           )}
+          <button onClick={downloadPdf} data-testid="brain-pdf-btn"
+            className="px-3 py-2 text-xs rounded-md bg-stone-900 text-white hover:bg-stone-700 inline-flex items-center gap-1.5 font-medium">
+            <FilePdf size={13} weight="fill" /> PDF İndir
+          </button>
           <button onClick={learnNow} disabled={busy} data-testid="brain-learn-now"
             className="px-3 py-2 text-xs rounded-md bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 inline-flex items-center gap-1.5 font-medium">
             <ArrowsClockwise size={13} className={busy ? "animate-spin" : ""} /> {busy ? "Öğreniyor…" : "Şimdi Öğren"}
@@ -200,6 +227,47 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
                 <div className="text-[10px] text-stone-500 mt-1.5">
                   İlk öğrenme: {m.first_learned?.slice(0, 10)} · {m.times_confirmed || 1}× doğrulandı · çarpan ×{m.factor}
                 </div>
+                <button onClick={() => simulate(m.bucket_key)} disabled={simBusy === m.bucket_key}
+                  data-testid={`brain-simulate-${m.bucket_key}`}
+                  className="mt-2 px-2.5 py-1 text-[10px] font-bold rounded-md bg-stone-700 text-stone-100 hover:bg-stone-600 disabled:opacity-50 inline-flex items-center gap-1">
+                  <Flask size={11} weight="fill" className="text-amber-400" />
+                  {simBusy === m.bucket_key ? "Simüle ediliyor…" : "Kapatılırsa Ne Olur? (Simüle Et)"}
+                </button>
+                {simResults[m.bucket_key] && (
+                  <div className="mt-2 bg-stone-900 border border-amber-500/30 rounded-md px-2.5 py-2 text-[10px]" data-testid={`brain-sim-result-${m.bucket_key}`}>
+                    <div className="text-amber-300 font-bold mb-0.5">
+                      Etkilenen gün: {simResults[m.bucket_key].affected_days} · 14 günlük tahmini etki: {simResults[m.bucket_key].est_revenue_delta_14d}
+                    </div>
+                    <div className="text-stone-300">{simResults[m.bucket_key].recommendation}</div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Bölgesel Hafıza */}
+      <div className="bg-white border border-stone-200 rounded-xl p-4 mt-4" data-testid="brain-regional-memory">
+        <div className="text-sm font-semibold text-stone-900 mb-1 flex items-center gap-2">
+          <MapPin size={16} weight="fill" className="text-emerald-500" /> Bölgesel Hafıza — {data.region || "—"}
+          <span className="text-[10px] text-stone-400 font-normal">({data.regional_memory_count || 0} kayıt)</span>
+        </div>
+        <p className="text-[11px] text-stone-500 mb-3">
+          Dersler ülke/şehir bazında birleşir. Bu bölgeye eklenen yeni bir otel, <b>önce kendi bölgesinin derslerini (×0.7 etki)</b> devralır;
+          bölgesel ders yoksa küresel derse (×0.5) düşer. Öncelik: yerel &gt; bölgesel &gt; küresel.
+        </p>
+        {(!data.regional_memory || data.regional_memory.length === 0) ? (
+          <div className="text-xs text-stone-500 py-3 text-center">Bu bölge için henüz birleşik ders yok.</div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-2">
+            {data.regional_memory.map((g) => (
+              <div key={g.bucket_key} className="bg-emerald-50/60 border border-emerald-100 rounded-lg px-3 py-2.5" data-testid={`brain-regional-${g.bucket_key}`}>
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <span className="text-xs font-semibold text-stone-800">{g.title}</span>
+                  <span className={`text-[10px] font-bold ${g.factor < 1 ? "text-amber-600" : g.factor > 1 ? "text-emerald-600" : "text-stone-400"}`}>×{g.factor}</span>
+                </div>
+                <div className="text-[11px] text-stone-600">{g.detail}</div>
               </div>
             ))}
           </div>

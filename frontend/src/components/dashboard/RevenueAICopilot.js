@@ -7,10 +7,10 @@ import { Bot, Send, Trash2, Sparkles, TrendingUp, Target, Zap, ArrowRight, User,
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const QUICK_PROMPTS = [
-  { icon: TrendingUp, label: "How is today's performance?", prompt: "Give me a quick summary of today's performance — occupancy, ADR, RevPAR — and any concerns." },
-  { icon: Target, label: "What should I do this week?", prompt: "What are the top 3 revenue actions I should take this week based on current booking data and upcoming demand?" },
-  { icon: Zap, label: "Rate recommendations", prompt: "Based on current occupancy patterns and demand, what specific rate changes do you recommend for the next 7 days? Give me exact numbers." },
-  { icon: Sparkles, label: "Revenue opportunities", prompt: "Analyze my hotel data and identify the biggest revenue opportunities I'm missing right now. Be specific with potential revenue impact." },
+  { icon: TrendingUp, label: "Bugünkü performans nasıl?", prompt: "Bugünkü performansın hızlı bir özetini ver — doluluk, ADR, RevPAR — ve endişe verici noktalar varsa belirt." },
+  { icon: Target, label: "Bu hafta ne yapmalıyım?", prompt: "Mevcut rezervasyon verisi ve yaklaşan talebe göre bu hafta yapmam gereken en önemli 3 gelir aksiyonu nedir?" },
+  { icon: Zap, label: "Fiyat önerileri", prompt: "Mevcut doluluk desenleri ve talebe göre önümüzdeki 7 gün için hangi fiyat değişikliklerini önerirsin? Kesin rakamlar ver." },
+  { icon: Sparkles, label: "Boş geceleri doldur", prompt: "Önümüzdeki 14 günde doluluğu düşük (boş) geceleri tespit et ve bunları doldurmak için somut bir plan öner. Anlaşırsak uygulayalım." },
 ];
 
 export const RevenueAICopilot = ({ propertyId }) => {
@@ -40,7 +40,7 @@ export const RevenueAICopilot = ({ propertyId }) => {
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.lang = "en-GB";
+    recognition.lang = "tr-TR";
     recognition.onresult = (event) => {
       const transcript = Array.from(event.results).map(r => r[0].transcript).join("");
       setInput(transcript);
@@ -68,14 +68,23 @@ export const RevenueAICopilot = ({ propertyId }) => {
 
     try {
       const { data } = await axios.post(`${API}/revenue/copilot/${propertyId}/chat`, { message: msg });
-      const assistantMsg = { id: data.message_id, role: "assistant", content: data.response, created_at: new Date().toISOString() };
+      const assistantMsg = { id: data.message_id, role: "assistant", content: data.response, action: data.action || null, created_at: new Date().toISOString() };
       setMessages(prev => [...prev, assistantMsg]);
     } catch {
-      toast.error("Failed to get response");
-      setMessages(prev => [...prev, { id: "err", role: "assistant", content: "Sorry, I couldn't process that request. Please try again.", created_at: new Date().toISOString() }]);
+      toast.error("Yanıt alınamadı");
+      setMessages(prev => [...prev, { id: "err", role: "assistant", content: "Üzgünüm, bu isteği işleyemedim. Lütfen tekrar deneyin.", created_at: new Date().toISOString() }]);
     }
     setLoading(false);
     inputRef.current?.focus();
+  };
+
+  const applyAction = async (actionId) => {
+    try {
+      const { data } = await axios.post(`${API}/revenue/copilot/${propertyId}/apply-action/${actionId}`);
+      toast.success(data.detail || "Karar uygulandı");
+      setMessages(prev => prev.map(m => m.action?.id === actionId
+        ? { ...m, action: { ...m.action, status: "applied", result: data.detail } } : m));
+    } catch (e) { toast.error(e?.response?.data?.detail || "Uygulanamadı"); }
   };
 
   const clear = async () => {
@@ -116,7 +125,7 @@ export const RevenueAICopilot = ({ propertyId }) => {
           </div>
         </div>
         <button onClick={clear} className="flex items-center gap-1.5 text-stone-400 hover:text-red-500 text-xs px-3 py-1.5 border border-stone-200 rounded-lg hover:border-red-200 transition-all" data-testid="rev-copilot-clear">
-          <Trash2 className="w-3.5 h-3.5" />Clear Chat
+          <Trash2 className="w-3.5 h-3.5" />Sohbeti Temizle
         </button>
       </div>
 
@@ -127,8 +136,8 @@ export const RevenueAICopilot = ({ propertyId }) => {
             <div className="w-16 h-16 bg-gradient-to-br from-violet-500 to-indigo-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-violet-200">
               <Sparkles className="w-8 h-8 text-white" />
             </div>
-            <h3 className="text-lg font-bold text-stone-800 mb-1">Revenue Intelligence at Your Fingertips</h3>
-            <p className="text-sm text-stone-400 mb-6 text-center max-w-md">Ask me anything about your hotel's revenue performance. I analyze your live data and provide actionable insights.</p>
+            <h3 className="text-lg font-bold text-stone-800 mb-1">Revenue Robotu ile Sohbet Edin</h3>
+            <p className="text-sm text-stone-400 mb-6 text-center max-w-md">Gelir, doluluk, boş geceler, fiyatlama hakkında soru sorun, tavsiye alın. Birlikte karar alın — robot tek tıkla uygular. Robot veriye aykırı taleplere kanıtlarla karşı çıkar.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-lg">
               {QUICK_PROMPTS.map(q => (
                 <button key={q.label} onClick={() => send(q.prompt)}
@@ -175,7 +184,7 @@ export const RevenueAICopilot = ({ propertyId }) => {
                   <span className="w-2 h-2 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
                   <span className="w-2 h-2 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                 </div>
-                <span>Analyzing your hotel data...</span>
+                <span>Verileriniz ve robot hafızası analiz ediliyor...</span>
               </div>
             </div>
           </div>
@@ -200,7 +209,7 @@ export const RevenueAICopilot = ({ propertyId }) => {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
-            placeholder={isRecording ? "Listening..." : "Ask about your revenue, pricing, occupancy, competitors..."}
+            placeholder={isRecording ? "Dinliyorum..." : "Gelir, fiyat, doluluk, boş geceler hakkında sorun... Anlaştığımız kararı robota uygulatın"}
             className={`w-full bg-white border rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 transition-all ${isRecording ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-stone-200 focus:border-violet-400 focus:ring-violet-100"}`}
             disabled={loading}
             data-testid="rev-copilot-input"
@@ -215,7 +224,7 @@ export const RevenueAICopilot = ({ propertyId }) => {
           </button>
         </div>
       </div>
-      <p className="text-[10px] text-stone-300 text-center mt-2">AI Copilot analyzes your live hotel data. Recommendations should be reviewed before implementation.</p>
+      <p className="text-[10px] text-stone-300 text-center mt-2">Robot canlı otel verinizi ve kalıcı hafızasındaki dersleri kullanır. Kararlar "Robota Uygulat" ile tek tıkla devreye alınır.</p>
     </div>
   );
 };

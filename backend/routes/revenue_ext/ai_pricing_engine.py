@@ -300,7 +300,16 @@ def create_ai_pricing_router(db, require_roles):
             {"property_id": property_id, "factor": {"$ne": 1.0}},
             {"_id": 0, "bucket_key": 1, "factor": 1}).to_list(100)
         learned_map = {w["bucket_key"]: float(w["factor"]) for w in lw_rows}
-        # 🌍 Küresel hafıza önseli: yerel ders yoksa tüm otellerin dersi yarı etkiyle uygulanır
+        # 🗺️ Bölgesel hafıza önseli (×0.7 etki) — yerel ders yoksa bölge dersi devralınır
+        _p = await db.properties.find_one({"id": property_id}, {"_id": 0, "country": 1, "city": 1})
+        _region = ((_p or {}).get("country") or (_p or {}).get("city") or "diger").strip() or "diger"
+        r_rows = await db.revenue_brain_regional_memory.find(
+            {"region": _region, "factor": {"$ne": 1.0}},
+            {"_id": 0, "bucket_key": 1, "factor": 1}).to_list(100)
+        for r in r_rows:
+            if r["bucket_key"] not in learned_map:
+                learned_map[r["bucket_key"]] = round(1 + (float(r["factor"]) - 1) * 0.7, 4)
+        # 🌍 Küresel hafıza önseli: yerel/bölgesel ders yoksa tüm otellerin dersi yarı etkiyle uygulanır
         g_rows = await db.revenue_brain_global_memory.find(
             {"factor": {"$ne": 1.0}}, {"_id": 0, "bucket_key": 1, "factor": 1}).to_list(100)
         for g in g_rows:

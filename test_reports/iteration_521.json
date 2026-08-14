@@ -1,0 +1,23 @@
+{
+  "summary": "Iteration 521 validated: regional memory (learn -> regional_memory_updated>=1, /regional-memory returns UK region with expected fields, city-gate/status includes region='UK' + regional_memory + regional_memory_count); memory PDF endpoint returns application/pdf, %PDF header, size > 5KB and downloads as robot-hafiza-city-gate.pdf; simulate-lesson (bucket '0-3|weekday|down') returns affected_days>0, negative 14d delta, hurt_rate_pct~66.7, recommendation 'AÇIK kalsın'; unknown bucket returns 404; chat defense LLM call returns Turkish pushback citing memory lessons with action=null (as expected); apply-action b11b3818 -> already_applied=true; unknown action id -> 404; regression: guardrail default=15, overbooking apply ok, timeline ok. 13/13 backend tests passed. Frontend UI verified: AI Copilot tab renders Turkish header 'AI Revenue Copilot', Sohbeti Temizle button, Turkish input placeholder ('Gelir, fiyat, doluluk, boş geceler hakkında sorun... Anlaştığımız kararı robota uygulatın'), rev-copilot-input/send/clear/msg-user/msg-assistant testids all present. Öğrenen Beyin panel (city-gate): PDF İndir triggers download (robot-hafiza-city-gate.pdf) with no error toast, Bölgesel Hafıza — UK card visible with lesson, simulate button 'brain-simulate-0-3|weekday|down' shows result 'Etkilenen gün: 10 · 14 günlük tahmini etki: -180' with recommendation 'ders AÇIK kalsın'. Regression: brain-permanent-memory (KRITIK DERS) and brain-timeline present.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/tests/test_iteration521_regional_pdf_simulate.py",
+    "/app/test_reports/pytest/iter521.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "simulate-lesson response includes est_revenue_delta_14d as float only when affected_days>0 — for property with no bucket outcomes this is 404 (correct). Consider surfacing a friendlier 200-with-empty for UI, but not blocking.",
+    "'Bugünkü performans nasıl?' / 'Boş geceleri doldur' quick prompts are only rendered when history is empty; test note — not a bug. Verified header + placeholder + Sohbeti Temizle + testids instead.",
+    "PDF endpoint uses reportlab; ensure font supports Turkish diacritics — PDF downloaded cleanly (5KB+); visual TR chars inside PDF not opened in this run."
+  ],
+  "updated_files": ["/app/tests/test_iteration521_regional_pdf_simulate.py"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (AI Copilot tab + Öğrenen Beyin all sections)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None; used seeded city-gate demo lesson data. LLM chat call: 1 (within budget).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file at /app/tests/test_iteration521_regional_pdf_simulate.py covers regional memory, PDF, simulate-lesson (down bucket + unknown 404), chat defense smoke (1 LLM call), apply-action already_applied + 404, and regression smoke. Reply field in chat is 'response' (not 'reply'). Sim result testid pattern: brain-sim-result-<bucket_key>. PDF filename: robot-hafiza-<pid>.pdf. AI Copilot: it's a TAB inside Revenue panel; quick prompts hide once history exists. Regional memory items include region/bucket_key/factor/samples/properties_contributing/title/detail. Do not send more than 2 LLM chats.",
+  "rca of the issue": "N/A"
+}

@@ -2,15 +2,91 @@
 AI Revenue Copilot — GPT-5.2 powered chat assistant for revenue management
 Analyzes hotel data and provides natural language insights and recommendations.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone, timedelta
 from typing import Dict
+import json
+import re
 import uuid
 import os
 import calendar
 import logging
 
 logger = logging.getLogger(__name__)
+
+ACTION_RE = re.compile(r"```action\s*(\{.*?\})\s*```", re.DOTALL)
+
+
+def _extract_action(text: str):
+    """LLM yanıtındaki ```action {...}``` bloğunu ayıkla ve metinden çıkar."""
+    m = ACTION_RE.search(text or "")
+    if not m:
+        return text, None
+    try:
+        action = json.loads(m.group(1))
+    except Exception:
+        return ACTION_RE.sub("", text).strip(), None
+    if action.get("type") not in ("rate_set", "rate_adjust_pct", "set_guardrail", "apply_overbooking"):
+        return ACTION_RE.sub("", text).strip(), None
+    action["id"] = str(uuid.uuid4())[:8]
+    action["status"] = "proposed"
+    return ACTION_RE.sub("", text).strip(), action
+
+
+async def _execute_action(db, pid: str, action: dict, user_name: str) -> dict:
+    t = action.get("type")
+    now = datetime.now(timezone.utc).isoformat()
+    if t in ("rate_set", "rate_adjust_pct"):
+        from routes.distribution.push_history import resolve_rate
+        sd = datetime.strptime(action["start_date"], "%Y-%m-%d").date()
+        ed = datetime.strptime(action["end_date"], "%Y-%m-%d").date()
+        if (ed - sd).days > 60 or ed < sd:
+            raise HTTPException(400, "Tarih aralığı geçersiz (maks 60 gün)")
+        n = 0
+        d = sd
+        while d <= ed:
+            ds = d.isoformat()
+            if t == "rate_set":
+                rate = round(float(action["rate"]), 2)
+            else:
+                base, _src = await resolve_rate(db, pid, ds)
+                rate = round(base * (1 + float(action["pct"]) / 100), 2)
+            await db.rate_overrides.update_one(
+                {"property_id": pid, "date": ds},
+                {"$set": {"property_id": pid, "date": ds, "custom_rate": rate,
+                          "source": "copilot_chat", "set_by": user_name, "set_at": now,
+                          "context": {"copilot_action": action.get("summary", "")}}},
+                upsert=True)
+            n += 1
+            d += timedelta(days=1)
+        return {"ok": True, "dates_updated": n,
+                "detail": f"{n} günün fiyatı güncellendi"}
+    if t == "set_guardrail":
+        pct = float(action.get("value") or 0)
+        if not 5 <= pct <= 50:
+            raise HTTPException(400, "Guardrail 5-50 arası olmalı")
+        await db.rms_settings.update_one(
+            {"property_id": pid},
+            {"$set": {"property_id": pid, "guardrail_pct": pct,
+                      "updated_by": user_name, "updated_at": now}}, upsert=True)
+        return {"ok": True, "detail": f"Guardrail ±%{pct} olarak ayarlandı"}
+    if t == "apply_overbooking":
+        from routes.revenue_ext.overbooking_control import _compute_analysis
+        data = await _compute_analysis(db, pid, 14)
+        applied, extra = 0, 0
+        for r in data["days"]:
+            limit = r["recommended_overbooking_limit"]
+            await db.overbooking_limits.update_one(
+                {"property_id": pid, "date": r["date"]},
+                {"$set": {"property_id": pid, "date": r["date"], "limit": limit,
+                          "capacity": data["capacity"], "sell_limit": data["capacity"] + limit,
+                          "is_active": True, "source": "copilot_chat",
+                          "applied_at": now, "applied_by": user_name},
+                 "$setOnInsert": {"id": str(uuid.uuid4())}}, upsert=True)
+            applied += 1
+            extra += limit
+        return {"ok": True, "detail": f"{applied} günün overbooking limiti uygulandı (+{extra} oda)"}
+    raise HTTPException(400, "Bilinmeyen aksiyon tipi")
 
 
 def create_revenue_copilot_router(db, require_roles):
@@ -111,26 +187,57 @@ PRICING STRATEGY:
 
 COMMISSION RATES: Booking.com 15%, Expedia 18%, Airbnb 3%, Direct 0%
 """
+        # 🧠 Robot hafızası (kalıcı + bölgesel + küresel) — chat'e beslenir
+        try:
+            mem = await db.revenue_brain_memory.find(
+                {"property_id": property_id}, {"_id": 0, "detail": 1, "status": 1,
+                 "times_confirmed": 1, "first_learned": 1}).sort("times_confirmed", -1).to_list(6)
+            if mem:
+                context += ("\nKALICI HAFIZA (bu otelin asla silinmeyen dersleri — tavsiyelerinde ATIF YAP):\n"
+                            + "\n".join(f"- [{str(m.get('first_learned',''))[:10]}'den beri, "
+                                        f"{m.get('times_confirmed',1)}x doğrulandı, {m.get('status')}] {m['detail']}"
+                                        for m in mem))
+            prop_doc = await db.properties.find_one({"id": property_id}, {"_id": 0, "country": 1, "city": 1})
+            region = ((prop_doc or {}).get("country") or (prop_doc or {}).get("city") or "diger").strip() or "diger"
+            rmem = await db.revenue_brain_regional_memory.find(
+                {"region": region}, {"_id": 0, "detail": 1}).sort("samples", -1).to_list(4)
+            if rmem:
+                context += (f"\n\nBÖLGESEL HAFIZA ({region}):\n" + "\n".join(f"- {m['detail']}" for m in rmem))
+            gmem = await db.revenue_brain_global_memory.find(
+                {}, {"_id": 0, "detail": 1}).sort("samples", -1).to_list(4)
+            if gmem:
+                context += ("\n\nKÜRESEL HAFIZA (tüm portföy):\n" + "\n".join(f"- {m['detail']}" for m in gmem))
+        except Exception:
+            pass
         return context
 
-    SYSTEM_PROMPT = """You are the AI Revenue Copilot for My Hotel Box, the most advanced hotel revenue management system in the market. You are an expert hotel revenue manager with deep knowledge of dynamic pricing, demand forecasting, competitive analysis, and profit optimization.
+    SYSTEM_PROMPT = """You are the AI Revenue Copilot for My Hotel Box — an expert, opinionated hotel revenue manager. Deep knowledge of dynamic pricing, demand forecasting, occupancy/gap management, competitive analysis and profit optimization.
+
+LANGUAGE: ALWAYS respond in the user's language. If the user writes in Turkish, respond in Turkish.
 
 Your role:
-1. Analyze the hotel's live data and provide actionable insights
-2. Recommend specific pricing actions with clear reasoning
-3. Identify revenue opportunities and risks
-4. Answer revenue management questions in plain, concise language
-5. Suggest what-if scenarios and their expected impact
+1. Chat naturally about revenue, occupancy, empty-night gaps, pricing, channels — answer questions and give advice tied to the live data snapshot.
+2. Recommend specific actions with exact numbers and clear reasoning.
+3. DEFEND YOUR STRATEGY: You are not a yes-man. If the user proposes something that contradicts the data or the robot's measured lessons (KALICI/BÖLGESEL/KÜRESEL HAFIZA), politely push back with evidence and defend your own correct strategy. Only if the user explicitly insists, accept — but state the risk clearly first.
+4. Reference the robot's memory lessons explicitly when relevant ("Hafızamdaki derse göre...").
+
+ACTION PROTOCOL — when you and the user AGREE on a concrete executable decision, end your message with EXACTLY ONE fenced action block so the system can apply it with one click:
+```action
+{"type": "rate_set", "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "rate": 120, "summary": "kısa Türkçe özet"}
+```
+Supported types:
+- rate_set: fixed nightly rate for a date range (fields: start_date, end_date, rate)
+- rate_adjust_pct: percentage change on current rates (fields: start_date, end_date, pct e.g. 10 or -5)
+- set_guardrail: optimizer guardrail band percent (field: value, 5-50)
+- apply_overbooking: apply recommended overbooking limits for next 14 days (no extra fields)
+Rules: max 60-day range; only include the block when a decision is actually agreed; never invent other types; always include a Turkish "summary".
 
 Guidelines:
-- Be specific with numbers — don't say "consider raising rates", say "increase Friday rates by £12 (15%) based on 90%+ occupancy trend"
-- Always tie recommendations to data points
-- Use GBP (£) currency
-- Consider channel costs when recommending (Direct bookings save 15-18% vs OTAs)
-- Flag both opportunities AND risks
-- Keep responses concise but data-rich
-- When suggesting actions, reference specific tabs: "Go to Pricing Strategy → Day-of-Week to adjust Friday rates"
-- Think about TRevPAR (total revenue per available room), not just occupancy"""
+- Be specific with numbers; tie every recommendation to data points
+- Use GBP (£)
+- Consider channel costs (Direct saves 15-18% vs OTAs)
+- Flag opportunities AND risks; think TRevPAR, not just occupancy
+- Keep responses concise but data-rich"""
 
     @router.get("/revenue/copilot/{property_id}/history")
     async def get_copilot_history(property_id: str,
@@ -194,6 +301,7 @@ Guidelines:
 
             user_message = UserMessage(text=user_text)
             response = await chat.send_message(user_message)
+            display_text, action = _extract_action(response)
 
             # Save assistant message
             assistant_msg = {
@@ -201,13 +309,15 @@ Guidelines:
                 "property_id": property_id,
                 "user_id": user_id,
                 "role": "assistant",
-                "content": response,
+                "content": display_text,
+                "action": action,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
             await db.revenue_copilot_messages.insert_one(assistant_msg)
 
             return {
-                "response": response,
+                "response": display_text,
+                "action": action,
                 "message_id": assistant_msg["id"],
             }
         except Exception as e:
@@ -222,6 +332,27 @@ Guidelines:
             }
             await db.revenue_copilot_messages.insert_one(error_msg)
             return {"response": error_msg["content"], "message_id": error_msg["id"]}
+
+    @router.post("/revenue/copilot/{property_id}/apply-action/{action_id}")
+    async def apply_copilot_action(property_id: str, action_id: str,
+                                   current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Chat'te birlikte alınan kararı robota uygulat (1 tık)."""
+        msg = await db.revenue_copilot_messages.find_one(
+            {"property_id": property_id, "action.id": action_id}, {"_id": 0})
+        if not msg or not msg.get("action"):
+            raise HTTPException(404, "Aksiyon bulunamadı")
+        action = msg["action"]
+        if action.get("status") == "applied":
+            return {"ok": True, "already_applied": True, "detail": "Bu karar zaten uygulanmış"}
+        user_name = current_user.get("name") or current_user.get("email", "")
+        result = await _execute_action(db, property_id, action, user_name)
+        await db.revenue_copilot_messages.update_one(
+            {"property_id": property_id, "action.id": action_id},
+            {"$set": {"action.status": "applied",
+                      "action.applied_at": datetime.now(timezone.utc).isoformat(),
+                      "action.applied_by": user_name,
+                      "action.result": result.get("detail", "")}})
+        return {**result, "action_id": action_id, "status": "applied"}
 
     @router.delete("/revenue/copilot/{property_id}/clear")
     async def clear_copilot_history(property_id: str,

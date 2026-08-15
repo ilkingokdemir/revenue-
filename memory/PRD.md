@@ -706,3 +706,7 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 ## Güncelleme (2026-08-14, iter 545)
 - LOS Bazlı Fiyatlama, Grup Wash Projeksiyonu ve Modern Metrik Paketi (TRevPOR/RevPAG/GOPPAR) tamamlandı ve test edildi (iteration_537 %100).
 - Sıradaki: Fonksiyon alanı booking motoru (RevPAM / Duetto OpenSpace paritesi), Expo mobil derleme (token bekleniyor), canlı kanal yöneticisi API'leri.
+
+## Güncelleme (2026-08-15, iter 546)
+- Fonksiyon Alanı Motoru (teklif→rezervasyon + RevPAM), LOS tek tık uygulama (booking widget fence), Wash Uyarı Robotu (14 gün cutoff bildirimi) ve TRevPOR/GOPPAR trend grafiği tamamlandı (iteration_538 %100).
+- Sıradaki: Expo mobil derleme (token bekleniyor), canlı kanal yöneticisi API'leri (SiteMinder/HotelRunner).

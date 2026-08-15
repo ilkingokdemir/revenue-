@@ -166,5 +166,5 @@ happyhotel, Smartpricing, Profitroom, roomMaster). Revolution Plus/Otamiser = hi
 YENİ eksikler (PriceLabs/Beyond/Wheelhouse'dan): 
 - [x] 3) P1 Orphan Gap Doldurma (TAMAM iter 544) (yetim 1-2 gece boşluklarına oto indirim + min-stay gevşetme)
 - [x] 4) P2 LOS Bazlı Fiyatlama (TAMAM iter 545) (3+/7+ gece kademeli fiyat önerisi)
-Nihai sıra: 1-TalepTakvimi, 2-TopluGeriAlma, 3-OrphanGap, 4-LOS, 5-GrupWash, 6-TRevPOR/GOPPAR, 7-FonksiyonBooking.
+Nihai sıra: 1-TalepTakvimi, 2-TopluGeriAlma, 3-OrphanGap, 4-LOS, 5-GrupWash, 6-TRevPOR/GOPPAR, 7-FonksiyonBooking (TAMAM iter 546).
 *Lighthouse rate-shop gerçek verisi API anahtarı bekliyor (BLOKLU).

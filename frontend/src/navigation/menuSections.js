@@ -309,6 +309,7 @@ export function buildMenuSections(t, user) {
         { id: "room-type-forecast", icon: ChartLineUp, name: "Oda tipi forecast", testId: "room-type-forecast-btn" },
         { id: "abs-selling", icon: Bed, name: "Özellik bazlı satış (ABS)", testId: "abs-selling-btn" },
         { id: "revpam", icon: Briefcase, name: "Toplantı salonu RevPAM", testId: "revpam-btn" },
+        { id: "function-space", icon: Briefcase, name: "Fonksiyon Alanı Motoru (Teklif & RevPAM)", testId: "function-space-btn" },
         { id: "rev-protection", icon: ShieldCheck, name: "Revenue protection", testId: "rev-protection-btn" },
         { id: "hurdle-lrv", icon: ShieldCheck, name: "Hurdle rate & LRV", testId: "hurdle-lrv-btn" },
         { id: "rm-lab", icon: ChartLine, name: "RM Lab", testId: "rm-lab-btn" },

@@ -826,6 +826,54 @@ async def weekly_brief_loop(db, interval_seconds: int = 3600):
         await asyncio.sleep(interval_seconds)
 
 
+async def run_group_wash_check(db) -> dict:
+    """Cutoff'a 14 günden az kalan ve erimeye giden grup blokları için bildirim üretir."""
+    from routes.revenue_ext.los_wash_metrics import compute_group_wash
+    now = datetime.now(timezone.utc)
+    week_key = now.strftime("%G-W%V")
+    horizon = (now + timedelta(days=14)).date().isoformat()
+    today = now.date().isoformat()
+    alerts = 0
+    props = await db.properties.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1}).to_list(50)
+    if not props:
+        props = [{"id": "default"}]
+    for p in props:
+        pid = p["id"]
+        try:
+            wash = await compute_group_wash(db, pid)
+        except Exception:
+            continue
+        for b in wash["active_blocks"]:
+            cutoff = b.get("cutoff_date") or ""
+            if not cutoff or cutoff > horizon or cutoff < today or b.get("releasable_now", 0) < 1:
+                continue
+            key = {"property_id": pid, "block_code": b.get("code") or b.get("name"), "week": week_key}
+            if await db.wash_alert_state.find_one(key):
+                continue
+            await db.wash_alert_state.insert_one({**key, "created_at": now.isoformat()})
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()), "type": "warning",
+                "title": "Grup bloğu erimeye gidiyor",
+                "message": (f"{b.get('name')} ({b.get('code')}) — cutoff {cutoff}: "
+                            f"{b['releasable_now']:.0f} oda wash projeksiyonunda. Cutoff beklemeden transient satışa açın."),
+                "category": "revenue", "target_user": "", "target_role": "manager",
+                "link_to": "los-wash-metrics", "priority": "high", "read": False,
+                "created_by": "Wash Uyarı Robotu", "created_at": now.isoformat()})
+            alerts += 1
+    return {"alerts": alerts}
+
+
+async def group_wash_alert_loop(db, interval_seconds: int = 21600):
+    while True:
+        try:
+            r = await run_group_wash_check(db)
+            if r["alerts"]:
+                logger.info(f"group_wash_alert_loop: {r['alerts']} uyarı")
+        except Exception as e:
+            logger.warning(f"group_wash_alert_loop error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def marketing_radar_loop(db, interval_seconds: int = 3600):
     """Fırsat Radarı otomasyonu — haftada bir tesis başına tarar, pencere bulursa bildirim düşer."""
     import logging

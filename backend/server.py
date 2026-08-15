@@ -1742,6 +1742,8 @@ from routes.revenue_ext.demand_calendar import create_demand_calendar_router
 api_router.include_router(create_demand_calendar_router(db, require_roles))
 from routes.revenue_ext.los_wash_metrics import create_los_wash_metrics_router
 api_router.include_router(create_los_wash_metrics_router(db, require_roles))
+from routes.revenue_ext.function_space import create_function_space_router
+api_router.include_router(create_function_space_router(db, require_roles))
 
 from routes.integrations_pkg.ota_inbound import create_ota_inbound_router
 api_router.include_router(create_ota_inbound_router(db, require_roles))
@@ -2092,6 +2094,8 @@ async def startup_event():
     asyncio.create_task(weekly_brief_loop(db))
     asyncio.create_task(weekly_exec_report_loop(db))
     asyncio.create_task(marketing_radar_loop(db))
+    from workers import group_wash_alert_loop
+    asyncio.create_task(group_wash_alert_loop(db))
     asyncio.create_task(profit_autopilot_loop(db))
     asyncio.create_task(data_quality_sentinel_loop(db))
     asyncio.create_task(open_pricing_optimizer_loop(db))

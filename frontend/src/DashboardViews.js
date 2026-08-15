@@ -216,6 +216,7 @@ import {
   ErrorSentinelPanel,
   DemandCalendarPanel,
   LosWashMetricsPanel,
+  FunctionSpacePanel,
   RevenueStrategistPanel,
   ReviewAgentPanel,
   ReviewSentimentPanel,
@@ -821,6 +822,9 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         )}
         {activeView === "los-wash-metrics" && (
           <LosWashMetricsPanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "function-space" && (
+          <FunctionSpacePanel activePropertyId={activePropertyId} properties={properties} />
         )}
 
         {/* Setup Wizard */}

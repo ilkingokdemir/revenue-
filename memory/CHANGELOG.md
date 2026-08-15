@@ -3926,3 +3926,22 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - UI: LosWashMetricsPanel (los-wash-metrics-btn, Revenue & rates > AI & Insights, PRO modda görünür).
   Metrik kartları + LOS kova tablosu + kademe rozetleri + wash tablosu/boş durum.
 - TEST: iteration_537.json — backend 6/6 pytest, frontend %100, regresyon (talep takvimi) temiz.
+
+## Iter 546 (2026-08-15) — Fonksiyon Alanı Motoru + LOS Otomatik Uygulama + Wash Robotu + Metrik Trend
+- 1) FONKSİYON ALANI MOTORU (Duetto OpenSpace paritesi): function_space.py —
+  POST /api/function-space/{pid}/quote (salon kirası + F&B paketi kahve/öğle/banket + AV, dinamik
+  RevPAM fiyat override'ı ile), POST /proposals (14 gün geçerli teklif), accept → space_bookings'e
+  otomatik rezervasyon, reject, GET /revpam (gelir/m²/gün, m² yoksa kapasite×1.5).
+  UI: FunctionSpacePanel (function-space-btn) — RevPAM kartları, teklif formu, teklif tablosu.
+- 2) LOS OTOMATİK UYGULAMA: POST /api/los-pricing/{pid}/apply → db.los_fences (tek tık) + bildirim;
+  /fences, /deactivate. booking_widget check-availability artık aktif fence'i uygular:
+  nights>=min_nights → total_rate indirimli, total_before_los + los_discount alanları.
+  UI: LosWashMetricsPanel'de fence durum kutusu + "Tek Tıkla Uygula"/"Kapat" (los-apply-btn).
+- 3) WASH UYARI ROBOTU: workers.py run_group_wash_check + group_wash_alert_loop (6 saatte bir) —
+  cutoff'a ≤14 gün kalan ve releasable≥1 bloklar için manager bildirimi, haftalık dedupe
+  (db.wash_alert_state). server.py startup'a kayıtlı. Demo: WASH-DEMO bloğu ile 1 bildirim doğrulandı.
+- 4) METRİK TREND GRAFİĞİ: GET /api/modern-metrics/{pid}/trend?months=6 — aylık TRevPOR/RevPAG/GOPPAR
+  + hedefler (db.metric_targets yoksa ortalama×1.1). UI: recharts LineChart + hedef ReferenceLine
+  + hedefe uzaklık rozetleri (yeşil/amber/kırmızı).
+- TEST: iteration_538.json — backend 6/6 pytest, frontend %100, regresyon temiz. Kapasite aşımı
+  guard'ı FE'ye eklendi (teklif göndermeden engeller).

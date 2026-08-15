@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Coins, MoonStars, UsersThree, TrendUp } from "@phosphor-icons/react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, Legend } from "recharts";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -18,19 +19,42 @@ export default function LosWashMetricsPanel({ activePropertyId, properties = [] 
   const [los, setLos] = useState(null);
   const [wash, setWash] = useState(null);
   const [mm, setMm] = useState(null);
+  const [trend, setTrend] = useState(null);
+  const [fence, setFence] = useState(null);
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [l, w, m] = await Promise.all([
+      const [l, w, m, t, f] = await Promise.all([
         axios.get(`${API}/api/los-pricing/${pid}`, { withCredentials: true }),
         axios.get(`${API}/api/group-wash/${pid}`, { withCredentials: true }),
         axios.get(`${API}/api/modern-metrics/${pid}`, { withCredentials: true }),
+        axios.get(`${API}/api/modern-metrics/${pid}/trend?months=6`, { withCredentials: true }),
+        axios.get(`${API}/api/los-pricing/${pid}/fences`, { withCredentials: true }),
       ]);
-      setLos(l.data); setWash(w.data); setMm(m.data);
+      setLos(l.data); setWash(w.data); setMm(m.data); setTrend(t.data); setFence(f.data);
     } catch { toast.error("Veriler yüklenemedi"); }
   }, [pid]);
 
   useEffect(() => { load(); }, [load]);
+
+  const applyLos = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/los-pricing/${pid}/apply`, { tiers: los?.suggested_tiers }, { withCredentials: true });
+      setFence({ ...r.data, property_id: pid });
+      toast.success("LOS indirimleri booking widget'ta aktifleşti");
+    } catch { toast.error("Uygulanamadı"); } finally { setBusy(false); }
+  };
+
+  const deactivateLos = async () => {
+    setBusy(true);
+    try {
+      await axios.post(`${API}/api/los-pricing/${pid}/deactivate`, {}, { withCredentials: true });
+      setFence((f) => ({ ...f, active: false }));
+      toast.success("LOS indirimleri kapatıldı");
+    } catch { toast.error("Kapatılamadı"); } finally { setBusy(false); }
+  };
 
   return (
     <div className="p-5 max-w-[1200px] mx-auto space-y-6" data-testid="los-wash-metrics-panel">
@@ -54,6 +78,37 @@ export default function LosWashMetricsPanel({ activePropertyId, properties = [] 
             <MetricCard testId="mm-guests" label="Misafir" value={mm.guests} sub="Bu ay ağırlanan yetişkin" />
           </div>
           <p className="text-[11px] text-stone-400 mt-2">{mm.note}</p>
+          {trend && trend.months?.length > 0 && (
+            <div className="bg-white border border-stone-200 rounded-xl p-4 mt-3" data-testid="mm-trend-chart">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <h3 className="text-sm font-bold text-stone-700">Aylık Trend — TRevPOR & GOPPAR (6 ay)</h3>
+                <div className="flex gap-2">
+                  {(() => {
+                    const last = trend.months[trend.months.length - 1];
+                    const badge = (val, tgt, label) => {
+                      const ratio = tgt ? val / tgt : 0;
+                      const cls = ratio >= 1 ? "bg-emerald-100 text-emerald-700" : ratio >= 0.9 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700";
+                      const gap = tgt ? ((val - tgt) / tgt * 100).toFixed(0) : 0;
+                      return <span key={label} className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${cls}`} data-testid={`mm-target-${label}`}>{label}: {gap >= 0 ? "+" : ""}{gap}% hedefe göre</span>;
+                    };
+                    return [badge(last.trevpor, trend.target_trevpor, "TRevPOR"), badge(last.goppar, trend.target_goppar, "GOPPAR")];
+                  })()}
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={trend.months} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(v) => `₺${v}`} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <ReferenceLine y={trend.target_trevpor} stroke="#7c3aed" strokeDasharray="4 4" label={{ value: "TRevPOR hedef", fontSize: 10, fill: "#7c3aed" }} />
+                  <ReferenceLine y={trend.target_goppar} stroke="#059669" strokeDasharray="4 4" label={{ value: "GOPPAR hedef", fontSize: 10, fill: "#059669" }} />
+                  <Line type="monotone" dataKey="trevpor" name="TRevPOR" stroke="#7c3aed" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="goppar" name="GOPPAR" stroke="#059669" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </section>
       )}
 
@@ -77,6 +132,16 @@ export default function LosWashMetricsPanel({ activePropertyId, properties = [] 
               </table>
             </div>
             <div className="space-y-2" data-testid="los-tiers">
+              <div className={`rounded-xl p-3 border flex items-center justify-between ${fence?.active ? "bg-emerald-50 border-emerald-200" : "bg-stone-50 border-stone-200"}`} data-testid="los-fence-status">
+                <span className={`text-sm font-bold ${fence?.active ? "text-emerald-800" : "text-stone-600"}`}>
+                  {fence?.active ? "✅ LOS indirimleri booking widget'ta AKTİF" : "LOS indirimleri henüz uygulanmadı"}
+                </span>
+                {fence?.active ? (
+                  <button onClick={deactivateLos} disabled={busy} data-testid="los-deactivate-btn" className="px-3 py-1.5 rounded-lg bg-stone-200 text-stone-700 text-[12px] font-bold disabled:opacity-50">Kapat</button>
+                ) : (
+                  <button onClick={applyLos} disabled={busy || !los} data-testid="los-apply-btn" className="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-[12px] font-bold disabled:opacity-50">Tek Tıkla Uygula</button>
+                )}
+              </div>
               {los.suggested_tiers.map((t) => (
                 <div key={t.min_nights} className="bg-violet-50 border border-violet-200 rounded-xl p-3">
                   <div className="flex items-center justify-between">

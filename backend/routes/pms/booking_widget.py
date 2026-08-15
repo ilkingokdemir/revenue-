@@ -177,7 +177,24 @@ def create_booking_widget_router(db, require_roles):
                     "note": "Widget araması — müsait oda bulunamadı"}, source="widget_auto")
             except Exception as ex:
                 logger.warning("Lost demand auto-log failed: %s", ex)
-        return {"available_rooms": available, "check_in": check_in, "check_out": check_out}
+        # LOS fence: aktifse ve konaklama süresi kademeyi karşılıyorsa indirim uygula
+        los_applied = None
+        if available:
+            fence = await db.los_fences.find_one({"property_id": property_id, "active": True}, {"_id": 0})
+            if fence:
+                nights_calc = available[0].get("nights", 1)
+                elig = [t for t in fence.get("tiers", []) if nights_calc >= int(t.get("min_nights", 0))]
+                if elig:
+                    best = max(elig, key=lambda t: float(t.get("discount_pct", 0)))
+                    pct = float(best["discount_pct"])
+                    for r in available:
+                        r["total_before_los"] = r["total_rate"]
+                        r["total_rate"] = round(r["total_rate"] * (1 - pct / 100), 2)
+                        r["los_discount_pct"] = pct
+                    los_applied = {"min_nights": int(best["min_nights"]), "discount_pct": pct,
+                                   "message": f"{best['min_nights']}+ gece konaklama indirimi: −%{pct:g}"}
+        return {"available_rooms": available, "check_in": check_in, "check_out": check_out,
+                "los_discount": los_applied}
 
     # ==================== PUBLIC: CREATE BOOKING ====================
 

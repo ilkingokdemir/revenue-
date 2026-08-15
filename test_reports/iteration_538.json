@@ -1,0 +1,31 @@
+{
+  "summary": "Iteration 538 — Function Space Engine + LOS Auto-Apply + Wash Alert Robot + Modern Metric Trend Chart end-to-end tested. Backend: 6/6 pytest passed (los apply, los fences active, booking-widget LOS discount, modern-metrics trend with target keys, function-space revpam, function-space quote→proposal→accept full flow). Frontend: los-wash-metrics-btn opens LosWashMetricsPanel — mm-trend-chart shows 6 months (2026-03..2026-08) with dashed target lines; mm-target-TRevPOR ('-26% hedefe göre', rose/red badge) and mm-target-GOPPAR ('-51% hedefe göre', rose/red badge) both correctly colored red for below-target; los-fence-status shows 'AKTİF' with los-deactivate-btn ('Kapat'); wash-table has 1 row (TechConf 2026 Grubu / WASH-DEMO, 2026-09-04→09-07, 3 rooms releasable, red advice text). function-space-btn opens FunctionSpacePanel — fs-revpam-section shows both spaces (Executive Toplantı Odası ₺5.38/m²/gün with 3 reservations & Board Room ₺0), fs-quote-form + fs-quote-btn produce fs-quote-total=₺595 (Rental ₺440 + Coffee ₺80 + AV ₺75); fs-send-proposal-btn adds a 'Gönderildi' row to fs-proposals-table; fs-accept-{id} button flips status to 'Kabul' (verified via pytest full flow, booking id + status='confirmed'). Regression: demand-calendar-btn still opens demand-calendar-panel with heatmap grid + orphan-gaps chips. LOS fence intentionally left ACTIVE.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "fs-accept from UI on same date twice", "issue": "409 'Salon artık dolu — teklif tarihi çakışıyor' is displayed correctly as a toast, but the underlying proposal row keeps 'Gönderildi' status with no visual retry hint — could offer a 'Change date' shortcut. Not blocking.", "affected_selectors": ["fs-accept-*"]}
+    ],
+    "design_issues": [
+      {"screen": "FunctionSpacePanel Teklif Özeti", "issues": ["When capacity is exceeded, warning '⚠ Kapasite aşımı!' is shown but the Teklif Oluştur button remains enabled — consider disabling or requiring confirmation."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration538_function_space_los.py",
+    "/app/test_reports/pytest/iteration538.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "FunctionSpacePanel: React hydration warning in console — '<span> cannot be a child of <option>' — likely a currency-badge span nested inside a <select><option> in space-picker. Cosmetic but should be fixed to remove console noise.",
+    "los_wash_metrics.py trend: uses fixed 22% GOP assumption for GOPPAR — surface as configurable in property settings.",
+    "function_space.py: /proposals/{id}/accept response returns {ok, booking} with no explicit 'status' at root — FE has to reach into booking.status. Consider adding top-level status:'accepted' for cleaner FE contract."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration538_function_space_los.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Created 2 TEST_Iter538 proposals (2026-04-15 and unique 2026-05-XX) via pytest; both accepted → 2 confirmed space_bookings in db.space_bookings. LOS fence for property 'default' remains active (tiers: 3+ nights -5%, 7+ nights -12%). No user-visible seed data created via UI.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Function Space test data accumulates on each pytest run. If re-running, the accept step in test_function_space_quote_and_proposal uses a random 2026-05-XX date to avoid slot conflict. LOS fence for 'default' is active. Navigation: login → click PRO in sidebar → click 'Revenue & rates' section header → 'los-wash-metrics-btn' (under AI & Insights) or 'function-space-btn' (near Toplantı salonu RevPAM).",
+  "rca of the issue": "N/A — all core flows verified working."
+}

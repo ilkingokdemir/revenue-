@@ -812,5 +812,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Doğrudan Rezervasyon Teşviki: GET /api/pms-connect/direct-booking-tips/{pid} — 6 aylık OTA komisyon kaybı (₺2.052, yıllık ~₺4.103), doğrudan pay (%8.9 vs %30 hedef), 5 akıllı öneri. UI: 💡 yeşil ipucu kartı.
 - Doğrulama: curl (override matematiği, tips, PDF %PDF) + ekran görüntüsü (komisyon paneli tüm OTA kaynaklarıyla, teşvik kartı, PDF butonu).
 - BEKLEYEN: Apaleo kimliği hâlâ girilmedi (4. istek — kullanıcıya tekrar hatırlatıldı).
+
+## Güncelleme (2026-08-15, iter 562 — TAM REGRESYON GEÇTİ)
+- iteration_552: PMS Bağlantı Merkezi'nin son 3 oturumdaki TÜM özellikleri toplu uçtan uca doğrulandı — backend 30/30 pytest, frontend %100, sıfır hata/regresyon.
+- Kapsam: providers, push+cert+404, Mews CANLI zinciri (push→verify drift 0→import ~200 idempotent), keşif (Mews canlı / Apaleo 400), rate mapping, gece push toggle+run, health (7 kanal + active_alerts), uyarı akışı (insert→resolve→morning report 'Dağıtım' anomalisi), gelir kırılımı (grup/net/komisyon override), haftalık rapor, teşvik, yönetici PDF, forecast isabet, partner kiti + platform regresyonları (ai-pricing, elasticity, simulator, hotelrunner, cloudbeds).
+- Kanonik regresyon paketi: /app/backend/tests/test_iteration552_full_regression.py (Mews canlı çağrılar 3x retry + 8s bekleme ile).
+- BEKLEYEN: Apaleo kimliği (5. hatırlatma) — kullanıcı Client ID/Secret girince canlı doğrulama yapılacak.
 - BEKLEYEN: Apaleo canlı testi kullanıcının client_id/client_secret girmesini bekliyor (rehber panelde).
 - Kalan: lisanslı rate-shopping feed (P2), Expo EAS build (P3), tüm PMS'lerde CANLI mod (partner kimlikleri bekleniyor: Mews demo token, Cloudbeds API key, SiteMinder pmsXchange, eviivo NDA, Elektraweb entegrasyon ekibi).

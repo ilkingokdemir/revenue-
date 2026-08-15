@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 552 — FULL REGRESSION of PMS Connect Hub + platform. Backend: 30/30 pytest passed (~25s) — providers list, siteminder push+cert+404, Mews LIVE chain (push→verify ok:true drift 0→import ~200), discover (Mews live rates+categories; Apaleo→400), rate mapping GET+save+restore, night push toggle+run, health with 7 channels + active_alerts + auto_night_push, alerts insert→get→resolve→404, morning-report 'Dağıtım'/drift anomaly, revenue-by-channel with groups/net_revenue/total_net_revenue, commission-settings save/reset, weekly Turkish email, direct-booking-tips (5 tips + commission_loss_6m>0), executive PDF (%PDF), forecast-accuracy (14 mews_impact rows + total>=1), siteminder partner-kit >500 chars, and platform regressions (ai-pricing, elasticity+history, simulator run/bid-price/pitch-pdf/pitch-archive, hotelrunner status+certify, cloudbeds status+certify). Frontend: login → PRO mode → Revenue&rates accordion → PMS Connect Hub rendered health board with 7 channels (Mews CANLI · SERTİFİKALİ - CANLI), pms-forecast-btn→section (14-row Mews impact table visible), pms-revenue-btn→pie+trend+view-toggle+commission inputs, pms-tips-btn→5 tips section, pms-comm-btn→section, pms-weekly-btn→Turkish email body + Kopyala, pms-card-mews with all 5 sub testids (discover, mapping, verify, kit, import-otb), pms-card-apaleo with pms-apaleo-guide, pms-card-siteminder OK, CloudbedsPanel cb-cert-section OK, SimulatorPanel pitch-archive-refresh-btn OK.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration552_full_regression.py",
+    "/app/test_reports/pytest/iteration_552.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All 30 backend endpoints validated end-to-end including live Mews chain (push→verify→import) with drift 0. No functional regressions found across iterations 548-551 features.",
+    "PMS Connect Hub is only accessible via PRO nav mode + expanding 'Revenue & rates' accordion; that is expected per problem statement (PRO mode required). Section-toggle testid pattern is `nav-section-<label>` (e.g. `nav-section-Revenue & rates`).",
+    "Prior iteration 551 documented React duplicate-key warning on per-roomtype push results; not re-verified this run but no user-visible impact."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration552_full_regression.py",
+    "/app/test_reports/iteration_552.json"
+  ],
+  "success_rate": {"backend": "100% (30/30)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Inserted+cleaned pms_alerts docs (test552-a1, test552-mr). Executed real Mews push-from-rms (per_room_type 2/2), verify-push (ok true), import-to-otb (idempotent upsert). Commission overrides saved with {Booking.com:12} then reset to {}. Night push toggled on/run/off. No leftover state.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iteration552_full_regression.py is the canonical PMS Connect Hub regression suite. Uses pymongo for alert insert/cleanup. Mews calls are LIVE against api.mews-demo.com (10-90s latency); verify-push has 3x retry with 8s sleeps to absorb transient drift right after push. Apaleo has no creds so discover-rates returns 400 (asserted). Frontend flow: login → click [data-testid=nav-mode-pro] → click [data-testid='nav-section-Revenue & rates'] → click [data-testid=pms-connect-btn]. Do NOT search for `PMS Bağlantı` text before opening the section — the button lives inside the collapsed accordion.",
+  "rca of the issue": "N/A — no bugs found."
+}

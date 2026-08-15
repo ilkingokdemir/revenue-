@@ -774,4 +774,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Etkinlik Mesafe Otomasyonu: POST /api/public-events/estimate-distance — Nominatim (OpenStreetMap) geocode + haversine (Hallenstadion→4.2km doğrulandı). PublicEventsPanel'de 'Mesafeyi Tahmin Et' butonu.
 - Sunum Kütüphanesi: pitch PDF'ler db.pitch_archive'a base64 arşivlenir; liste + indirme endpoint'leri + SimulatorPanel'de kütüphane listesi.
 - iteration_549: backend 14/14, frontend %100 geçti. pms_connect.py helper'ları modül seviyesine refactor edildi (night_audit import edebilsin diye).
+
+## Güncelleme (2026-08-15, iter 557 — Push Fark Kontrolü, OTB İçe Aktarım, Haftalık Rapor, Apaleo Rehberi)
+- Push Fark Kontrolü: POST /api/pms-connect/{provider}/verify-push/{pid} — _verify_channel(): Mews'te GERÇEK geri okuma (rates/getPricing, TZ eşleştirmeli), diğerlerinde mock; sapma >%0.5 → db.pms_alerts uyarısı. Gece push'a entegre (results: verify_ok + max_drift_pct). Canlı doğrulama: %0 sapma, birebir eşleşme.
+- Rezervasyon İçe Aktarımı: POST /api/pms-connect/mews/import-to-otb/{pid} — Mews demo'dan CollidingUtc (60 gün) ile 200 GERÇEK rezervasyon bookings'e upsert (source pms:mews, idempotent, fiyatlar RMS rate'lerinden tahmini). OTB/tahmin/AI fiyatlama artık canlı veri görüyor. NOT: ilk denemede eski TimeFilter/StartUtc parametreleri tarihi veri döndürdü — 2023-06-06 sürümünde interval filtresi CollidingUtc objesi olmalı.
+- Haftalık Partner Raporu: GET /api/pms-connect/weekly-report/{pid} — 7 günlük kanal performansı + Türkçe e-posta taslağı + kopyala butonu (sağlık panosunda).
+- Apaleo Sandbox Rehberi: PmsConnectHub'da apaleo seçilince 4 adımlı kurulum kutusu (apaleo.dev hesabını KULLANICI açmalı — ajan harici hesap açamaz; kimlik girilince Mews akışıyla aynı canlı sertifikasyon+push hazır).
+- iteration_550: backend 11/11, frontend %100 geçti.
+- BEKLEYEN: Apaleo canlı testi kullanıcının client_id/client_secret girmesini bekliyor.
 - Kalan: lisanslı rate-shopping feed (P2), Expo EAS build (P3), tüm PMS'lerde CANLI mod (partner kimlikleri bekleniyor: Mews demo token, Cloudbeds API key, SiteMinder pmsXchange, eviivo NDA, Elektraweb entegrasyon ekibi).

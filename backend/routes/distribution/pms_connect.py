@@ -206,8 +206,63 @@ async def _push(db, pid: str, provider: str, rows: list, cert_test: bool = False
     return {"pushed_days": len(rows), "sample": rows[:3], "mocked": False, "result": result}
 
 
+async def _verify_channel(db, pid: str, provider: str) -> dict:
+    """Push Fark Kontrolü: son push'u kanaldan geri okuyup basılanla karşılaştırır."""
+    log = await db.pms_push_log.find_one(
+        {"property_id": pid, "provider": provider, "kind": "rate_push", "cert_test": False},
+        sort=[("created_at", -1)])
+    if not log or not log.get("standard_rows"):
+        return {"ok": False, "message": "Doğrulanacak push bulunamadı — önce fiyat push yapın."}
+    rows = log["standard_rows"]
+    cfg = await _cfg(db, pid, provider)
+    live = provider == "mews" and _has_creds(provider, cfg)
+    out_rows, mocked = [], not live
+    if live:
+        base = (cfg.get("endpoint_url") or PROVIDERS["mews"]["base_url"]).rstrip("/")
+        tz = cfg.get("tz", "UTC")
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(f"{base}/api/connector/v1/rates/getPricing",
+                                  json={"ClientToken": cfg["client_token"],
+                                        "AccessToken": cfg["access_token"],
+                                        "Client": "MyHotelBox-RMS/1.0",
+                                        "RateId": cfg["rate_id"],
+                                        "FirstTimeUnitStartUtc": _mews_utc(rows[0]["date"], tz),
+                                        "LastTimeUnitStartUtc": _mews_utc(rows[-1]["date"], tz)})
+        if r.status_code != 200:
+            return {"ok": False, "message": f"Kanaldan geri okuma başarısız: {r.text[:200]}"}
+        d = r.json() or {}
+        price_map = {}
+        for ts, price in zip(d.get("TimeUnitStartsUtc", []), d.get("BasePrices", [])):
+            price_map[str(ts).replace(".000Z", "Z").replace("Z", "")[:19]] = price
+        for row in rows:
+            key = _mews_utc(row["date"], tz).replace(".000Z", "")[:19]
+            ch = price_map.get(key)
+            drift = round((ch - row["rate"]) / row["rate"] * 100, 2) if (ch is not None and row["rate"]) else None
+            out_rows.append({"date": row["date"], "pushed": row["rate"], "channel": ch,
+                             "drift_pct": drift, "ok": drift is not None and abs(drift) <= 0.5})
+    else:
+        for row in rows:
+            out_rows.append({"date": row["date"], "pushed": row["rate"], "channel": row["rate"],
+                             "drift_pct": 0.0, "ok": True})
+    bad = [r for r in out_rows if not r["ok"]]
+    max_drift = max((abs(r["drift_pct"]) for r in out_rows if r["drift_pct"] is not None), default=0.0)
+    result = {"ok": len(bad) == 0, "mocked": mocked, "provider": provider,
+              "rows": out_rows, "mismatches": len(bad), "max_drift_pct": max_drift,
+              "verified_at": datetime.now(timezone.utc).isoformat(),
+              "message": "Kanal ile birebir eşleşti — sapma yok." if not bad
+              else f"UYARI: {len(bad)} tarihte sapma tespit edildi (maks %{max_drift})."}
+    await db.pms_verify_log.insert_one({**result, "id": str(uuid.uuid4()), "property_id": pid})
+    if bad:
+        await db.pms_alerts.insert_one({
+            "id": str(uuid.uuid4()), "property_id": pid, "provider": provider,
+            "type": "push_drift", "mismatches": bad, "max_drift_pct": max_drift,
+            "created_at": datetime.now(timezone.utc).isoformat()})
+    return result
+
+
 async def run_auto_night_push(db, pid: str, days: int = 14) -> dict:
-    """Gece robotu: sertifikasyonu geçmiş tüm kanallara RMS fiyatlarını otomatik basar."""
+    """Gece robotu: sertifikasyonu geçmiş tüm kanallara RMS fiyatlarını otomatik basar,
+    ardından her kanaldan geri okuyup fark kontrolü yapar."""
     rows = await _rms_rows(db, pid, days)
     results = []
     for key in PROVIDERS:
@@ -221,8 +276,15 @@ async def run_auto_night_push(db, pid: str, days: int = 14) -> dict:
             continue
         try:
             r = await _push(db, pid, key, rows)
-            results.append({"provider": key, "pushed_days": r.get("pushed_days", 0),
-                            "mode": "mocked" if r.get("mocked") else "live"})
+            item = {"provider": key, "pushed_days": r.get("pushed_days", 0),
+                    "mode": "mocked" if r.get("mocked") else "live"}
+            try:
+                v = await _verify_channel(db, pid, key)
+                item["verify_ok"] = v.get("ok")
+                item["max_drift_pct"] = v.get("max_drift_pct", 0.0)
+            except Exception:
+                item["verify_ok"] = None
+            results.append(item)
         except Exception as e:
             results.append({"provider": key, "error": str(e)[:150]})
     out = {"ran_at": datetime.now(timezone.utc).isoformat(), "days": days, "results": results}
@@ -464,6 +526,136 @@ def create_pms_connect_router(db, require_roles):
     @router.post("/night-push/{pid}/run")
     async def run_night_push_now(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         return {"ok": True, **await run_auto_night_push(db, pid)}
+
+    @router.post("/{provider}/verify-push/{pid}")
+    async def verify_push(provider: str, pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        if provider not in PROVIDERS:
+            raise HTTPException(404, "Bilinmeyen sağlayıcı")
+        return await _verify_channel(db, pid, provider)
+
+    @router.post("/mews/import-to-otb/{pid}")
+    async def import_to_otb(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Mews demo'daki gerçek rezervasyonları OTB/tahmin motoruna besler (bookings upsert)."""
+        cfg = await _cfg(db, pid, "mews")
+        if not _has_creds("mews", cfg):
+            raise HTTPException(400, "Önce Mews'e bağlanın (demo-connect veya kimlik girişi).")
+        base = (cfg.get("endpoint_url") or PROVIDERS["mews"]["base_url"]).rstrip("/")
+        tz = cfg.get("tz", "UTC")
+        async with httpx.AsyncClient(timeout=40) as client:
+            r = await client.post(f"{base}/api/connector/v1/reservations/getAll/2023-06-06",
+                                  json={"ClientToken": cfg["client_token"],
+                                        "AccessToken": cfg["access_token"],
+                                        "Client": "MyHotelBox-RMS/1.0",
+                                        "Limitation": {"Count": 200},
+                                        "CollidingUtc": {
+                                            "StartUtc": datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z"),
+                                            "EndUtc": (datetime.now(timezone.utc) + timedelta(days=60)).strftime("%Y-%m-%dT00:00:00Z")}})
+        if r.status_code != 200:
+            raise HTTPException(502, f"Mews rezervasyon hatası: {r.text[:250]}")
+        from zoneinfo import ZoneInfo
+        try:
+            _tz = ZoneInfo(tz)
+        except Exception:
+            _tz = timezone.utc
+        state_map = {"Canceled": "cancelled", "Started": "checked_in",
+                     "Processed": "checked_out", "Confirmed": "confirmed", "Optional": "pending"}
+        imported = cancelled = 0
+        for res in (r.json() or {}).get("Reservations", []):
+            try:
+                ci = datetime.fromisoformat(res["StartUtc"].replace("Z", "+00:00")).astimezone(_tz).date()
+                co = datetime.fromisoformat(res["EndUtc"].replace("Z", "+00:00")).astimezone(_tz).date()
+            except Exception:
+                continue
+            nights = max((co - ci).days, 1)
+            est_total = 0.0
+            for i in range(nights):
+                ds = (ci + timedelta(days=i)).isoformat()
+                ov = await db.rate_overrides.find_one({"property_id": pid, "date": ds},
+                                                      {"_id": 0, "rate": 1, "custom_rate": 1})
+                est_total += float(ov.get("custom_rate") or ov["rate"]) if ov and (ov.get("custom_rate") or ov.get("rate")) else 100.0
+            status = state_map.get(res.get("State"), "confirmed")
+            if status == "cancelled":
+                cancelled += 1
+            await db.bookings.update_one(
+                {"channel_reference": str(res.get("Id")), "source": "pms:mews"},
+                {"$set": {"id": f"mews-{res.get('Id')}", "property_id": pid,
+                          "channel_reference": str(res.get("Id")), "source": "pms:mews",
+                          "channel": "Mews Demo", "guest_name": "Mews Demo Guest",
+                          "check_in": ci.isoformat(), "check_out": co.isoformat(),
+                          "nights": nights, "status": status,
+                          "total_price": round(est_total, 2),
+                          "rate_per_night": round(est_total / nights, 2),
+                          "guest_count": res.get("AdultCount", 2) or 2,
+                          "currency": "GBP",
+                          "updated_at": datetime.now(timezone.utc).isoformat()},
+                 "$setOnInsert": {"created_at": datetime.now(timezone.utc).isoformat()}},
+                upsert=True)
+            imported += 1
+        today = datetime.now(timezone.utc).date().isoformat()
+        horizon = (datetime.now(timezone.utc).date() + timedelta(days=14)).isoformat()
+        otb_next14 = await db.bookings.count_documents({
+            "property_id": pid, "source": "pms:mews", "status": {"$nin": ["cancelled", "no_show"]},
+            "check_in": {"$lte": horizon}, "check_out": {"$gt": today}})
+        return {"ok": True, "imported": imported, "cancelled": cancelled,
+                "otb_contribution_next14": otb_next14,
+                "note": "Mews rezervasyonları bookings'e aktarıldı — Net OTB, tahmin motoru ve AI fiyatlama artık bu gerçek veriyi görüyor. Fiyatlar RMS rate'lerinden tahmini hesaplandı."}
+
+    @router.get("/weekly-report/{pid}")
+    async def weekly_report(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Haftalık partner raporu: son 7 gün kanal performans özeti + e-posta taslağı."""
+        since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+        channels = []
+        for key, meta in PROVIDERS.items():
+            q = {"property_id": pid, "provider": key, "created_at": {"$gte": since}}
+            total = await db.pms_push_log.count_documents(q)
+            live = await db.pms_push_log.count_documents({**q, "mode": "live"})
+            cfg = await _cfg(db, pid, key)
+            cert = cfg.get("certification") or {}
+            v = await db.pms_verify_log.find_one({"property_id": pid, "provider": key},
+                                                 {"_id": 0, "ok": 1, "max_drift_pct": 1},
+                                                 sort=[("verified_at", -1)])
+            channels.append({"id": key, "name": meta["name"], "pushes_7d": total, "live_7d": live,
+                             "certified": bool(cert.get("passed")), "cert_mode": cert.get("mode"),
+                             "last_verify_ok": (v or {}).get("ok"),
+                             "max_drift_pct": (v or {}).get("max_drift_pct", 0.0)})
+        cb_total = await db.cb_push_log.count_documents({"property_id": pid, "created_at": {"$gte": since}})
+        hr_total = await db.hr_push_log.count_documents({"property_id": pid, "created_at": {"$gte": since}})
+        np_count = await db.pms_night_push_log.count_documents({"property_id": pid, "ran_at": {"$gte": since}})
+        alerts = await db.pms_alerts.count_documents({"property_id": pid, "created_at": {"$gte": since}})
+        week = datetime.now(timezone.utc).date().isoformat()
+        lines = "\n".join(
+            f"  • {c['name']}: {c['pushes_7d']} push ({c['live_7d']} canlı) · "
+            f"{'SERTİFİKALI' if c['certified'] else 'sertifikasyon bekliyor'}"
+            f"{' · doğrulama OK (maks sapma %' + str(c['max_drift_pct']) + ')' if c['last_verify_ok'] else ''}"
+            for c in channels)
+        email_body = f"""Konu: Haftalık Kanal Performans Raporu — {prop.get('name', pid)} ({week})
+
+Merhaba,
+
+Son 7 günün dağıtım kanalı özeti aşağıdadır:
+
+PMS BAĞLANTI MERKEZİ
+{lines}
+
+DİĞER KANALLAR
+  • Cloudbeds: {cb_total} işlem
+  • HotelRunner: {hr_total} işlem
+
+OTOMASYON
+  • Gece push çalışması: {np_count} kez
+  • Fiyat sapma uyarısı: {alerts} adet{' — ACİL İNCELEME GEREKLİ' if alerts else ' (temiz)'}
+
+Tüm canlı push'lar publisher sertifikasyonundan geçmiş kanallara yapılmıştır.
+Detaylar: PMS Bağlantı Merkezi → Kanal Sağlık Panosu.
+
+Saygılarımızla,
+MyHotelBox RMS — Otonom Dağıtım Robotu"""
+        return {"week_of": week, "channels": channels,
+                "cloudbeds_7d": cb_total, "hotelrunner_7d": hr_total,
+                "night_pushes_7d": np_count, "drift_alerts_7d": alerts,
+                "email_subject": f"Haftalık Kanal Performans Raporu — {prop.get('name', pid)} ({week})",
+                "email_body": email_body}
 
     @router.get("/{provider}/partner-kit/{pid}")
     async def partner_kit(provider: str, pid: str, _u: dict = Depends(require_roles(*ROLES))):

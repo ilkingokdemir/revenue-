@@ -21,6 +21,8 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
   const [log, setLog] = useState([]);
   const [lastPush, setLastPush] = useState(null);
   const [kit, setKit] = useState(null);
+  const [verify, setVerify] = useState(null);
+  const [weekly, setWeekly] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const loadHealth = useCallback(async () => {
@@ -58,6 +60,33 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
       toast.success(`Gece push çalıştı — ${done} kanala basıldı, ${r.data.results.length - done} atlandı`);
       loadHealth(); load();
     } catch (e) { toast.error(e.response?.data?.detail || "Gece push çalıştırılamadı"); } finally { setBusy(false); }
+  };
+
+  const runVerify = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/pms-connect/${sel.id}/verify-push/${pid}`, {}, { withCredentials: true });
+      setVerify(r.data);
+      if (r.data.ok) toast.success(r.data.message);
+      else toast.error(r.data.message);
+    } catch (e) { toast.error(e.response?.data?.detail || "Doğrulama çalıştırılamadı"); } finally { setBusy(false); }
+  };
+
+  const importOtb = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/pms-connect/mews/import-to-otb/${pid}`, {}, { withCredentials: true });
+      toast.success(`${r.data.imported} rezervasyon OTB'ye aktarıldı (${r.data.cancelled} iptal) — önümüzdeki 14 günde ${r.data.otb_contribution_next14} aktif konaklama`);
+    } catch (e) { toast.error(e.response?.data?.detail || "İçe aktarım başarısız"); } finally { setBusy(false); }
+  };
+
+  const loadWeekly = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.get(`${API}/api/pms-connect/weekly-report/${pid}`, { withCredentials: true });
+      setWeekly(r.data);
+      toast.success("Haftalık rapor hazırlandı");
+    } catch { toast.error("Rapor üretilemedi"); } finally { setBusy(false); }
   };
 
   const loadKit = async () => {
@@ -159,6 +188,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
                 🌙 Otomatik Gece Push: {health.auto_night_push ? "AÇIK" : "KAPALI"}
               </button>
               <button onClick={runNightPushNow} disabled={busy} data-testid="pms-nightpush-run-btn" className="px-3 py-1.5 rounded-lg bg-stone-900 text-white text-[12px] font-bold disabled:opacity-50">Şimdi Çalıştır</button>
+              <button onClick={loadWeekly} disabled={busy} data-testid="pms-weekly-btn" className="px-3 py-1.5 rounded-lg border border-indigo-300 text-indigo-700 text-[12px] font-bold disabled:opacity-50">📧 Haftalık Rapor</button>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -182,6 +212,15 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
           </div>
           {health.last_night_push && (
             <p className="text-[11px] text-stone-400 mt-2" data-testid="pms-last-nightpush">Son gece push: {String(health.last_night_push.ran_at).slice(0, 16).replace("T", " ")} — {health.last_night_push.results.filter((x) => !x.skipped && !x.error).length} kanala basıldı</p>
+          )}
+          {weekly && (
+            <div className="mt-3 border-t border-stone-100 pt-3" data-testid="pms-weekly-section">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <p className="text-[12px] font-bold text-stone-700">{weekly.email_subject}</p>
+                <button onClick={() => { navigator.clipboard.writeText(weekly.email_body); toast.success("Rapor panoya kopyalandı"); }} data-testid="pms-weekly-copy-btn" className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-bold">Kopyala</button>
+              </div>
+              <pre className="text-[11px] bg-stone-50 border border-stone-200 rounded-lg p-3 max-h-56 overflow-auto whitespace-pre-wrap" data-testid="pms-weekly-body">{weekly.email_body}</pre>
+            </div>
           )}
         </section>
       )}
@@ -210,8 +249,47 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
 
           <div className="flex flex-wrap gap-2">
             <button onClick={loadKit} disabled={busy} data-testid="pms-kit-btn" className="px-3 py-2 rounded-lg border border-indigo-300 text-indigo-700 text-sm font-bold disabled:opacity-50">📨 Partner Başvuru Kiti</button>
+            <button onClick={runVerify} disabled={busy} data-testid="pms-verify-btn" className="px-3 py-2 rounded-lg border border-emerald-300 text-emerald-700 text-sm font-bold disabled:opacity-50">🔍 Push Doğrula (Geri Okuma)</button>
             {sel.id === "mews" && <button onClick={mewsDemoConnect} disabled={busy} data-testid="pms-mews-demo-btn" className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold disabled:opacity-50">⚡ Mews Demo'ya Bağlan (Canlı Test)</button>}
+            {sel.id === "mews" && sel.mode === "live" && <button onClick={importOtb} disabled={busy} data-testid="pms-import-otb-btn" className="px-3 py-2 rounded-lg bg-stone-900 text-white text-sm font-bold disabled:opacity-50">📥 Rezervasyonları OTB'ye Aktar</button>}
           </div>
+
+          {sel.id === "apaleo" && sel.mode === "mocked" && (
+            <div className="bg-sky-50 border border-sky-200 rounded-xl p-3 text-[12px] text-sky-900 space-y-1" data-testid="pms-apaleo-guide">
+              <p className="font-bold">⚡ Apaleo Sandbox Hızlı Kurulum (5 dk, ücretsiz):</p>
+              <p>1. <b>apaleo.dev</b> → "Get started" ile geliştirici hesabı açın (e-posta doğrulaması gerekir — bu adımı sizin yapmanız gerekiyor).</p>
+              <p>2. Apaleo panelinde: Apps → "Create OAuth simple client" → scope: <code>rateplans.manage, rates.manage, reservations.read</code></p>
+              <p>3. Client ID + Client Secret'ı yukarıdaki forma girin, Property ID ve Rate Plan ID'yi (Settings → Rate plans) ekleyin.</p>
+              <p>4. Kaydet → Bağlantıyı Test Et → Sertifikasyonu Çalıştır → canlı push otomatik açılır (Mews ile aynı akış).</p>
+            </div>
+          )}
+
+          {verify && (
+            <section className={`border rounded-xl p-4 ${verify.ok ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200"}`} data-testid="pms-verify-section">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <p className="text-sm font-bold text-stone-800">{verify.ok ? "✅" : "🚨"} {verify.message}</p>
+                {verify.mocked && <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black">MOCK GERİ OKUMA</span>}
+              </div>
+              {verify.rows && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]" data-testid="pms-verify-table">
+                    <thead><tr className="text-left text-[10px] text-stone-400"><th className="p-1.5">Tarih</th><th className="p-1.5">Basılan</th><th className="p-1.5">Kanaldaki</th><th className="p-1.5">Sapma</th><th className="p-1.5">Durum</th></tr></thead>
+                    <tbody>
+                      {verify.rows.map((r) => (
+                        <tr key={r.date} className="border-t border-stone-200/60">
+                          <td className="p-1.5 font-bold">{r.date}</td>
+                          <td className="p-1.5">₺{r.pushed}</td>
+                          <td className="p-1.5">{r.channel != null ? `₺${r.channel}` : "—"}</td>
+                          <td className="p-1.5">{r.drift_pct != null ? `%${r.drift_pct}` : "—"}</td>
+                          <td className="p-1.5">{r.ok ? "✅" : "❌ SAPMA"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
 
           {kit && (
             <section className="bg-white border border-indigo-200 rounded-xl p-4 space-y-2" data-testid="pms-kit-section">

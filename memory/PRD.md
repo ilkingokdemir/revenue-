@@ -790,5 +790,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Verify mapping-aware yapıldı: push loglarına rate_code eklendi; son push batch'i kod bazında gruplanıp her kodun kendi getPricing'i ile karşılaştırılıyor — mapped push sonrası %0 sapma doğrulandı (161.0 = 115×1.4 birebir). Gece push'ta canlı verify öncesi 6sn bekleme (Mews asenkron işleme yanlış pozitifini önler).
 - iteration_551: backend 13/14 (tek fark verify tasarım konusuydu, düzeltildi), frontend %100. React duplicate-key uyarısı giderildi.
 - ÖĞRENİM: Mews updatePrice asenkron — push'tan hemen sonra getPricing eski değeri dönebilir; verify'ı geciktir.
+
+## Güncelleme (2026-08-15, iter 559 — Mews Oda/Rate Keşfi + Kanal Gelir Katkısı)
+- Mews Oda/Rate Keşfi: GET /api/pms-connect/mews/discover-rates/{pid} — CANLI: services/getAll + rates/getAll (200 gerçek rate) + resourceCategories/getAll (100 gerçek oda kategorisi). UI: "🔎 Mews Oda/Rate Keşfi" butonu boş eşleştirme kodlarını root rate'lerle otomatik doldurur; input altında ✓ rate adı doğrulaması + datalist önerileri.
+- Kanal Gelir Katkısı: GET /api/pms-connect/revenue-by-channel/{pid}?months=6 — rezervasyon kaynağına göre aylık gelir aggregate (pct, bookings, totals). UI: recharts PieChart (donut) + ay seçici + legend; varsayılan ay = içinde bulunulan ay. 6 aylık toplam ₺131K, en güçlü kanal gösterimi.
+- BUG FIX: loadRev/discoverRates handler tanımları ilk edit'te dosyaya işlenmemişti → "loadRev is not defined" çökme; yeniden eklendi, ekran görüntüsüyle doğrulandı.
+- Ekran doğrulaması: sağlık panosu 7 kanal (Mews CANLI+SERTİFİKALİ·CANLI, tümü sertifikalı), gelir pastası, eşleştirme tablosu keşif sonrası ✓ etiketli.
+- BEKLEYEN: Apaleo kimliği hâlâ girilmedi (panelde rehber hazır — kullanıcı girince canlı sertifikasyon+push).
 - BEKLEYEN: Apaleo canlı testi kullanıcının client_id/client_secret girmesini bekliyor (rehber panelde).
 - Kalan: lisanslı rate-shopping feed (P2), Expo EAS build (P3), tüm PMS'lerde CANLI mod (partner kimlikleri bekleniyor: Mews demo token, Cloudbeds API key, SiteMinder pmsXchange, eviivo NDA, Elektraweb entegrasyon ekibi).

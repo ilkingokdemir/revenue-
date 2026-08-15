@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { PlugsConnected, PaperPlaneTilt, DownloadSimple, ShieldCheck } from "@phosphor-icons/react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -10,6 +11,7 @@ const API_BADGE = {
   semi: { label: "YARI AÇIK", cls: "bg-amber-100 text-amber-700" },
   closed: { label: "KAPALI API", cls: "bg-rose-100 text-rose-700" },
 };
+const PIE_COLORS = ["#4f46e5", "#059669", "#d97706", "#dc2626", "#0891b2", "#7c3aed", "#65a30d", "#db2777", "#78716c", "#0d9488"];
 
 export default function PmsConnectHub({ activePropertyId, properties = [] }) {
   const pid = activePropertyId && activePropertyId !== "all" ? activePropertyId : properties[0]?.id || "default";
@@ -27,6 +29,9 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
   const [showAlerts, setShowAlerts] = useState(false);
   const [fa, setFa] = useState(null);
   const [mapping, setMapping] = useState(null);
+  const [rateOptions, setRateOptions] = useState([]);
+  const [rev, setRev] = useState(null);
+  const [revMonth, setRevMonth] = useState("");
   const [busy, setBusy] = useState(false);
 
   const loadHealth = useCallback(async () => {
@@ -75,6 +80,28 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
       toast.success("Uyarı çözüldü olarak işaretlendi");
       loadHealth();
     } catch { toast.error("İşaretlenemedi"); }
+  };
+
+  const discoverRates = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.get(`${API}/api/pms-connect/mews/discover-rates/${pid}`, { withCredentials: true });
+      const roots = r.data.rates.filter((x) => x.is_root && x.is_active);
+      setRateOptions(r.data.rates.filter((x) => x.is_active));
+      setMapping((arr) => (arr || []).map((m, i) =>
+        m.channel_rate_code ? m : { ...m, channel_rate_code: (roots[i % Math.max(roots.length, 1)] || roots[0] || {}).id || "" }));
+      toast.success(`Mews keşfi: ${r.data.rates.length} rate, ${r.data.resource_categories.length} oda kategorisi bulundu — boş eşleştirmeler otomatik dolduruldu`);
+    } catch (e) { toast.error(e.response?.data?.detail || "Keşif başarısız"); } finally { setBusy(false); }
+  };
+
+  const loadRev = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.get(`${API}/api/pms-connect/revenue-by-channel/${pid}?months=6`, { withCredentials: true });
+      setRev(r.data);
+      const cur = new Date().toISOString().slice(0, 7);
+      setRevMonth(r.data.months.includes(cur) ? cur : (r.data.months[r.data.months.length - 1] || ""));
+    } catch { toast.error("Gelir dağılımı yüklenemedi"); } finally { setBusy(false); }
   };
 
   const loadFa = async () => {
@@ -233,6 +260,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
             </h2>
             <div className="flex items-center gap-2">
               <button onClick={loadFa} disabled={busy} data-testid="pms-forecast-btn" className="px-3 py-1.5 rounded-lg border border-purple-300 text-purple-700 text-[12px] font-bold disabled:opacity-50">🎯 Forecast Doğruluk</button>
+              <button onClick={loadRev} disabled={busy} data-testid="pms-revenue-btn" className="px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 text-[12px] font-bold disabled:opacity-50">💰 Kanal Gelir Katkısı</button>
               <button onClick={toggleNightPush} disabled={busy} data-testid="pms-nightpush-toggle"
                 className={`px-3 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-50 ${health.auto_night_push ? "bg-emerald-600 text-white" : "border border-stone-300 text-stone-600"}`}>
                 🌙 Otomatik Gece Push: {health.auto_night_push ? "AÇIK" : "KAPALI"}
@@ -295,6 +323,43 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
               </div>
             </div>
           )}
+          {rev && (() => {
+            const rows = (rev.by_month[revMonth] || []).slice(0, 10);
+            return (
+              <div className="mt-3 border-t border-stone-100 pt-3" data-testid="pms-revenue-section">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <p className="text-[12px] font-bold text-stone-700">💰 Kanal Gelir Katkısı — rezervasyon kaynağına göre</p>
+                  <select value={revMonth} onChange={(e) => setRevMonth(e.target.value)} data-testid="pms-revenue-month-select" className="border border-stone-300 rounded-lg px-2 py-1 text-[12px] font-bold">
+                    {rev.months.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+                <div className="grid md:grid-cols-2 gap-3 items-center">
+                  <div className="h-56" data-testid="pms-revenue-pie">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={rows} dataKey="revenue" nameKey="source" cx="50%" cy="50%" outerRadius={85} innerRadius={40} paddingAngle={2}>
+                          {rows.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip formatter={(v, n) => [`₺${Number(v).toLocaleString("tr-TR")}`, n]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="space-y-1" data-testid="pms-revenue-legend">
+                    {rows.map((r, i) => (
+                      <div key={r.source} className="flex items-center justify-between gap-2 text-[12px]">
+                        <span className="flex items-center gap-1.5 font-bold text-stone-700">
+                          <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />{r.source}
+                        </span>
+                        <span className="text-stone-500">₺{r.revenue.toLocaleString("tr-TR")} · %{r.pct} · {r.bookings} rez.</span>
+                      </div>
+                    ))}
+                    {rows.length === 0 && <p className="text-[12px] text-stone-400">Bu ayda gelirli rezervasyon yok.</p>}
+                  </div>
+                </div>
+                <p className="text-[11px] text-stone-400 mt-2">6 aylık toplam: ₺{rev.total_revenue.toLocaleString("tr-TR")} · en güçlü kanal: {rev.totals[0]?.source || "—"} (%{rev.totals[0]?.pct || 0})</p>
+              </div>
+            );
+          })()}
           {weekly && (
             <div className="mt-3 border-t border-stone-100 pt-3" data-testid="pms-weekly-section">
               <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -353,7 +418,12 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
                   <h2 className="text-base font-bold text-stone-800">🗂 Rate Plan Eşleştirme</h2>
                   <p className="text-[12px] text-stone-500">Oda tipi ↔ {sel.name} rate kodu + fiyat çarpanı. Eşleştirme kaydedilince push oda tipi bazında ayrı ayrı basılır.</p>
                 </div>
-                <button onClick={saveMapping} disabled={busy} data-testid="pms-mapping-save-btn" className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[12px] font-bold disabled:opacity-50">Eşleştirmeyi Kaydet</button>
+                <div className="flex items-center gap-2">
+                  {sel.id === "mews" && sel.mode === "live" && (
+                    <button onClick={discoverRates} disabled={busy} data-testid="pms-discover-btn" className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[12px] font-bold disabled:opacity-50">🔎 Mews Oda/Rate Keşfi</button>
+                  )}
+                  <button onClick={saveMapping} disabled={busy} data-testid="pms-mapping-save-btn" className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[12px] font-bold disabled:opacity-50">Eşleştirmeyi Kaydet</button>
+                </div>
               </div>
               <table className="w-full text-[12px]" data-testid="pms-mapping-table">
                 <thead><tr className="text-left text-[10px] text-stone-400"><th className="p-1.5">Oda Tipi</th><th className="p-1.5">{sel.name} Rate Kodu / ID</th><th className="p-1.5 w-24">Çarpan</th></tr></thead>
@@ -361,12 +431,20 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
                   {mapping.map((m, i) => (
                     <tr key={m.room_type_id} className="border-t border-stone-100">
                       <td className="p-1.5 font-bold">{m.room_type_name}</td>
-                      <td className="p-1.5"><input value={m.channel_rate_code} data-testid={`pms-mapping-code-${i}`} onChange={(e) => setMapping((arr) => arr.map((x, j) => j === i ? { ...x, channel_rate_code: e.target.value } : x))} className="w-full border border-stone-300 rounded px-2 py-1 text-[12px]" placeholder="boş = bu oda tipi push edilmez" /></td>
+                      <td className="p-1.5">
+                        <input value={m.channel_rate_code} list="pms-rate-options" data-testid={`pms-mapping-code-${i}`} onChange={(e) => setMapping((arr) => arr.map((x, j) => j === i ? { ...x, channel_rate_code: e.target.value } : x))} className="w-full border border-stone-300 rounded px-2 py-1 text-[12px]" placeholder="boş = bu oda tipi push edilmez" />
+                        {rateOptions.length > 0 && (() => { const opt = rateOptions.find((o) => o.id === m.channel_rate_code); return opt ? <span className="text-[10px] text-emerald-600 font-bold">✓ {opt.name}{opt.is_root ? " (root)" : ""}</span> : null; })()}
+                      </td>
                       <td className="p-1.5"><input type="number" step="0.05" value={m.multiplier} data-testid={`pms-mapping-mult-${i}`} onChange={(e) => setMapping((arr) => arr.map((x, j) => j === i ? { ...x, multiplier: parseFloat(e.target.value) || 1 } : x))} className="w-20 border border-stone-300 rounded px-2 py-1 text-[12px]" /></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {rateOptions.length > 0 && (
+                <datalist id="pms-rate-options">
+                  {rateOptions.map((o) => <option key={o.id} value={o.id}>{o.name}{o.is_root ? " (root)" : ""}</option>)}
+                </datalist>
+              )}
             </section>
           )}
 

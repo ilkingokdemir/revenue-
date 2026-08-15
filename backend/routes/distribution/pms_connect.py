@@ -596,6 +596,79 @@ def create_pms_connect_router(db, require_roles):
         ).sort("created_at", -1).to_list(min(limit, 100))
         return {"log": rows}
 
+    @router.get("/mews/discover-rates/{pid}")
+    async def discover_rates(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Mews'teki gerçek rate/oda kategorilerini keşfeder — eşleştirme tablosu otomatik dolar."""
+        cfg = await _cfg(db, pid, "mews")
+        if not _has_creds("mews", cfg):
+            raise HTTPException(400, "Önce Mews'e bağlanın (demo-connect veya kimlik girişi).")
+        base = (cfg.get("endpoint_url") or PROVIDERS["mews"]["base_url"]).rstrip("/")
+        auth = {"ClientToken": cfg["client_token"], "AccessToken": cfg["access_token"],
+                "Client": "MyHotelBox-RMS/1.0"}
+        async with httpx.AsyncClient(timeout=30) as client:
+            svc = await client.post(f"{base}/api/connector/v1/services/getAll",
+                                    json={**auth, "Limitation": {"Count": 20}})
+            services = (svc.json() or {}).get("Services", []) if svc.status_code == 200 else []
+            bookable = next((s for s in services if s.get("Type") == "Reservable" or s.get("IsActive")), None)
+            rates, categories = [], []
+            if bookable:
+                rts = await client.post(f"{base}/api/connector/v1/rates/getAll",
+                                        json={**auth, "ServiceIds": [bookable["Id"]],
+                                              "Limitation": {"Count": 200}})
+                if rts.status_code == 200:
+                    rates = [{"id": rt["Id"], "name": rt.get("Name", ""),
+                              "is_root": rt.get("BaseRateId") is None,
+                              "is_active": bool(rt.get("IsActive"))}
+                             for rt in (rts.json() or {}).get("Rates", [])]
+                cats = await client.post(f"{base}/api/connector/v1/resourceCategories/getAll",
+                                         json={**auth, "ServiceIds": [bookable["Id"]],
+                                               "Limitation": {"Count": 100}})
+                if cats.status_code == 200:
+                    categories = [{"id": c["Id"],
+                                   "name": (c.get("Names") or {}).get("en-US") or (list((c.get("Names") or {}).values()) or [""])[0],
+                                   "capacity": c.get("Capacity")}
+                                  for c in (cats.json() or {}).get("ResourceCategories", []) if c.get("IsActive", True)]
+        return {"service": (bookable or {}).get("Name", ""),
+                "rates": rates, "resource_categories": categories,
+                "note": "Root + aktif rate'ler eşleştirme için önerilir. Kategoriler Mews'teki gerçek oda tipleridir."}
+
+    @router.get("/revenue-by-channel/{pid}")
+    async def revenue_by_channel(pid: str, months: int = 6,
+                                 _u: dict = Depends(require_roles(*ROLES))):
+        """Kanal gelir katkısı: rezervasyon kaynağına göre aylık gelir dağılımı."""
+        months = max(1, min(24, months))
+        start = (datetime.now(timezone.utc).date().replace(day=1) - timedelta(days=31 * (months - 1)))
+        start = start.replace(day=1).isoformat()
+        pipe = [
+            {"$match": {"property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
+                        "check_in": {"$gte": start}, "total_price": {"$gt": 0}}},
+            {"$group": {"_id": {"month": {"$substr": ["$check_in", 0, 7]},
+                                "source": {"$ifNull": ["$source", "bilinmiyor"]}},
+                        "revenue": {"$sum": "$total_price"}, "bookings": {"$sum": 1}}},
+            {"$sort": {"_id.month": 1, "revenue": -1}}]
+        agg = await db.bookings.aggregate(pipe).to_list(2000)
+        by_month = {}
+        for a in agg:
+            m, src = a["_id"]["month"], a["_id"]["source"]
+            by_month.setdefault(m, []).append(
+                {"source": src, "revenue": round(a["revenue"], 2), "bookings": a["bookings"]})
+        for m, rows in by_month.items():
+            tot = sum(r["revenue"] for r in rows) or 1
+            for r in rows:
+                r["pct"] = round(r["revenue"] / tot * 100, 1)
+        totals = {}
+        for rows in by_month.values():
+            for r in rows:
+                t = totals.setdefault(r["source"], {"source": r["source"], "revenue": 0.0, "bookings": 0})
+                t["revenue"] = round(t["revenue"] + r["revenue"], 2)
+                t["bookings"] += r["bookings"]
+        tot_all = sum(t["revenue"] for t in totals.values()) or 1
+        totals_list = sorted(totals.values(), key=lambda x: -x["revenue"])
+        for t in totals_list:
+            t["pct"] = round(t["revenue"] / tot_all * 100, 1)
+        return {"months": sorted(by_month.keys()), "by_month": by_month,
+                "totals": totals_list, "total_revenue": round(tot_all, 2)}
+
     @router.get("/health/{pid}")
     async def health(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         """Kanal Sağlık Panosu — tüm adaptörlerin son push, sertifika ve hata durumu."""

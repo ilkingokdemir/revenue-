@@ -13,7 +13,17 @@ export default function SimulatorPanel({ activePropertyId, properties = [] }) {
   const [sim, setSim] = useState(null);
   const [rp, setRp] = useState(null);
   const [rpDate, setRpDate] = useState("");
+  const [bp, setBp] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  const loadBid = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.get(`${API}/api/simulator/${pid}/bid-price?days=14`, { withCredentials: true });
+      setBp(r.data);
+      toast.success("Bid-price ağı hesaplandı");
+    } catch (e) { toast.error(e.response?.data?.detail || "Bid-price hesaplanamadı"); } finally { setBusy(false); }
+  };
 
   const runSim = async () => {
     setBusy(true);
@@ -49,6 +59,7 @@ export default function SimulatorPanel({ activePropertyId, properties = [] }) {
           <label className="text-[11px] text-stone-500 font-bold">Baz fiyat<input type="number" min={20} value={form.base_rate} onChange={(e) => setForm((f) => ({ ...f, base_rate: +e.target.value }))} data-testid="sim-rate" className="block border border-stone-300 rounded-lg px-2 py-1.5 text-sm w-24 mt-0.5" /></label>
           <label className="text-[11px] text-stone-500 font-bold">Dün+% artış<input type="number" min={0} max={10} step={0.5} value={form.daily_drift_pct} onChange={(e) => setForm((f) => ({ ...f, daily_drift_pct: +e.target.value }))} data-testid="sim-drift" className="block border border-stone-300 rounded-lg px-2 py-1.5 text-sm w-24 mt-0.5" /></label>
           <button onClick={runSim} disabled={busy} data-testid="sim-run-btn" className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold disabled:opacity-50">🏁 Yarıştır</button>
+          <a href={`${API}/api/simulator/${pid}/report-pdf?days=${form.days}&base_rate=${form.base_rate}`} target="_blank" rel="noreferrer" data-testid="sim-pdf-btn" className="px-4 py-2 rounded-lg border border-emerald-300 text-emerald-700 text-sm font-bold">📄 PDF Rapor</a>
         </div>
         {sim && (
           <div className="grid md:grid-cols-3 gap-3" data-testid="sim-results">
@@ -71,6 +82,38 @@ export default function SimulatorPanel({ activePropertyId, properties = [] }) {
                 </BarChart>
               </ResponsiveContainer>
               <p className="text-[10px] text-stone-400">{sim.note}</p>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section data-testid="bidprice-section">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h2 className="text-base font-bold text-stone-800">🕸 Bid-Price Ağı — displacement + MinLOS/CTA/CTD tek çerçevede</h2>
+          <button onClick={loadBid} disabled={busy} data-testid="bidprice-btn" className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold disabled:opacity-50">Ağı Hesapla</button>
+        </div>
+        {bp && (
+          <div data-testid="bidprice-results">
+            <p className="text-[12px] text-stone-500 mb-2">Referans ADR: ₺{bp.ref_adr} · {bp.note}</p>
+            <div className="bg-white border border-stone-200 rounded-xl overflow-x-auto">
+              <table className="w-full text-sm" data-testid="bidprice-table">
+                <thead><tr className="text-left text-[11px] text-stone-400 border-b border-stone-100">
+                  <th className="p-2">Tarih</th><th className="p-2">Net Doluluk</th><th className="p-2">Bid Price</th><th className="p-2">MinLOS</th><th className="p-2">CTA</th><th className="p-2">CTD</th><th className="p-2">Gerekçe</th>
+                </tr></thead>
+                <tbody>
+                  {bp.rows.map((r) => (
+                    <tr key={r.date} className={`border-t border-stone-100 ${r.cta || r.ctd ? "bg-indigo-50" : ""}`} data-testid={`bidprice-row-${r.date}`}>
+                      <td className="p-2 font-bold">{r.date}</td>
+                      <td className="p-2">%{r.net_occupancy_pct}</td>
+                      <td className="p-2 font-black text-indigo-700">₺{r.bid_price}</td>
+                      <td className="p-2">{r.min_los}</td>
+                      <td className="p-2">{r.cta ? <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-black">KAPALI</span> : "—"}</td>
+                      <td className="p-2">{r.ctd ? <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black">KAPALI</span> : "—"}</td>
+                      <td className="p-2 text-[11px] text-stone-500 max-w-[300px]">{r.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

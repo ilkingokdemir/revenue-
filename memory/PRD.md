@@ -741,3 +741,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 ## Güncelleme (2026-08-15, iter 552)
 - K10 faktör şelalesi (₺ etkili çipler), K9 replay backtest (point-in-time), G7 talep simülatörü (robot optimizör +%13.2 uplift ile kazanıyor) ve Pilot Otel Kiti (PILOT_OTEL_KITI.md) tamamlandı. iteration_545 %100.
 - Kalan: K11 bid-price ağı, K12 esneklik güç analizi, K13 publisher sertifikasyonu, K14 Cloudbeds, K15 teknik sözleşme dokümanları.
+
+## Güncelleme (2026-08-15, iter 553 — K11/K13/K15 + Simülatör PDF)
+- K11 Bid-Price Ağı: displacement + MinLOS/CTA/CTD tek çerçevede. AI pricing önerilerine bid_price/bid_floor_applied/restrictions alanları eklendi (öneri bid tabanının altına inemez, şelaleye "Bid-price tabanı" adımı düşer). Simülatör panelinde "Ağı Hesapla" tablosu (GET /api/simulator/{pid}/bid-price).
+- K13 Publisher Sertifikasyonu: POST /api/hotelrunner/certify/{pid} — test push + geri okuma doğrulaması. CANLI modda sertifikasyon geçilmeden push_daily HTTP 428 ile BLOKLANIR (MOCK etkilenmez). HotelRunnerPanel'e sertifikasyon bölümü (rozet + kontrol listesi) eklendi.
+- K15 Teknik Sözleşme Dokümanları: TEKNIK_SOZLESMELER_K15.md (confidence-semantics, price-domain-contract, rate-provenance) tamamlandı.
+- Simülatör PDF: GET /api/simulator/{pid}/report-pdf (reportlab) + panelde "PDF Rapor" butonu.
+- iteration_546 %100 (backend 7/7, frontend 3/3). MOCK modda kimlik kontrolü ⚠️ olarak gösteriliyor (UX düzeltmesi).
+- Kalan: K12 esneklik güç analizi, K14 Cloudbeds adaptörü, Event Signal v2 mekan-mesafe ağırlığı, lisanslı rate-shopping feed (P2), Expo EAS build (P3, kullanıcı anahtarı bekleniyor).

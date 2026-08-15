@@ -86,7 +86,17 @@ export default function HotelRunnerPanel({ activePropertyId, properties = [] }) 
     } catch { toast.error("Ayar kaydedilemedi"); } finally { setBusy(false); }
   };
 
+  const runCertify = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/hotelrunner/certify/${pid}`, {}, { withCredentials: true });
+      setStatus((s) => ({ ...s, certification: r.data }));
+      toast.success(r.data.passed ? `Sertifikasyon GEÇTİ (${r.data.mode === "live" ? "CANLI" : "MOCK"})` : "Sertifikasyon BAŞARISIZ — kontrolleri inceleyin");
+    } catch (e) { toast.error(e.response?.data?.detail || "Sertifikasyon çalıştırılamadı"); } finally { setBusy(false); }
+  };
+
   const live = status?.mode === "live";
+  const cert = status?.certification;
 
   return (
     <div className="p-5 max-w-[1100px] mx-auto space-y-6" data-testid="hotelrunner-panel">
@@ -138,6 +148,37 @@ export default function HotelRunnerPanel({ activePropertyId, properties = [] }) 
             </div>
           )}
         </div>
+      </section>
+
+      <section className="bg-white border border-stone-200 rounded-xl p-4" data-testid="hr-cert-section">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold text-stone-800">🛡 Publisher Sertifikasyonu</h2>
+            <p className="text-[12px] text-stone-500 mt-0.5">Kanala yazma öncesi otomatik test push + geri okuma doğrulaması. CANLI modda sertifikasyon geçilmeden ARI push bloklanır.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {cert && (
+              <span className={`px-2.5 py-1 rounded-full text-[11px] font-black ${cert.passed ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`} data-testid="hr-cert-badge">
+                {cert.passed ? "SERTİFİKALI" : "BAŞARISIZ"} · {cert.mode === "live" ? "CANLI" : "MOCK"}
+              </span>
+            )}
+            <button onClick={runCertify} disabled={busy} data-testid="hr-certify-btn" className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[12px] font-bold disabled:opacity-50">Sertifikasyonu Çalıştır</button>
+          </div>
+        </div>
+        {cert?.checks && (
+          <div className="mt-3 grid sm:grid-cols-2 gap-2" data-testid="hr-cert-checks">
+            {cert.checks.map((c) => {
+              const warn = !c.passed && cert.mode === "mocked" && c.name === "Kimlik yapılandırması";
+              return (
+                <div key={c.name} className={`flex items-start gap-2 rounded-lg border p-2 text-[12px] ${c.passed ? "bg-emerald-50 border-emerald-200" : warn ? "bg-amber-50 border-amber-200" : "bg-rose-50 border-rose-200"}`}>
+                  <span>{c.passed ? "✅" : warn ? "⚠️" : "❌"}</span>
+                  <span><b>{c.name}</b> — {c.detail}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {cert?.at && <p className="text-[11px] text-stone-400 mt-2">Son sertifikasyon: {String(cert.at).slice(0, 16).replace("T", " ")}</p>}
       </section>
 
       {drift && (

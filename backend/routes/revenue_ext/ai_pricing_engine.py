@@ -407,6 +407,14 @@ def create_ai_pricing_router(db, require_roles):
 
             days_out = (datetime.strptime(date, "%Y-%m-%d").date() - today.date()).days
 
+            # K11: Bid-price ağı — displacement + MinLOS/CTA/CTD tek çerçevede (tarih seviyesi)
+            _occ_frac = min(max(occ_pct, 0) / 100.0, 1.0)
+            bid_restrictions = {"min_los": 1, "cta": False, "ctd": False}
+            if _occ_frac >= 0.85:
+                bid_restrictions = {"min_los": 2, "cta": True, "ctd": False}
+            elif _occ_frac >= 0.7:
+                bid_restrictions["min_los"] = 2
+
             str_snap = str_map.get(date)
             ref_for_str = market_avg if market_avg > 0 else base_rate_avg
             str_mult = _str_pressure_multiplier(
@@ -457,6 +465,16 @@ def create_ai_pricing_router(db, require_roles):
                     if current_rate:
                         calc["delta_vs_current_pct"] = round((_boosted - current_rate) / current_rate * 100.0, 2)
 
+                # K11: bid-price tabanı — öneri, geceyi satmanın fırsat maliyetinin altına inemez
+                bid_price = round(base * (0.45 + 0.9 * _occ_frac), 2)
+                bid_floor_applied = False
+                if float(calc["suggested_rate"]) < bid_price:
+                    calc["suggested_rate"] = round(min(bid_price, calc["ceil_rate"]), 2)
+                    bid_floor_applied = True
+                    if current_rate:
+                        calc["delta_vs_current_pct"] = round(
+                            (calc["suggested_rate"] - current_rate) / current_rate * 100.0, 2)
+
                 # K5: güven zarfı — skor + dayanak kanıt listesi
                 evidence, _conf = [], 0.4
                 if _cstats and _cstats.get("sample", 0) >= 100:
@@ -480,6 +498,8 @@ def create_ai_pricing_router(db, require_roles):
                     evidence.append("Öğrenilmiş çarpan devrede (geçmiş kararlardan)")
                 if ev_boost > 0:
                     evidence.append(f"Etkinlik sinyali: kapasite ağırlıklı +%{ev_boost*100:.0f} boost")
+                if bid_floor_applied:
+                    evidence.append(f"Bid-price tabanı devrede: öneri fırsat maliyeti tabanına (₺{bid_price}) çekildi")
                 if data_trust["level"] == "low":
                     _conf -= 0.2
                     evidence.append("⚠ Veri-güven kapısı: " + "; ".join(data_trust["reasons"]))
@@ -498,7 +518,8 @@ def create_ai_pricing_router(db, require_roles):
                         _wf_run = _new
                 _final = float(calc["suggested_rate"])
                 if abs(_final - _wf_run) > 0.01:
-                    _lbl = "Etkinlik boost" if ev_boost > 0 else "STR/limit düzeltmesi"
+                    _lbl = ("Bid-price tabanı" if bid_floor_applied
+                            else "Etkinlik boost" if ev_boost > 0 else "STR/limit düzeltmesi")
                     waterfall.append({"label": _lbl, "delta": round(_final - _wf_run, 2), "running": round(_final, 2)})
 
                 item = {
@@ -526,6 +547,9 @@ def create_ai_pricing_router(db, require_roles):
                     "confidence": confidence,
                     "evidence": evidence,
                     "waterfall": waterfall,
+                    "bid_price": bid_price,
+                    "bid_floor_applied": bid_floor_applied,
+                    "restrictions": bid_restrictions,
                     "event_boost_pct": round(ev_boost * 100, 1) if ev_boost else 0,
                     "status": status,
                     "decision_reason": prev_decision.get("reason"),

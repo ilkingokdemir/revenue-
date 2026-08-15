@@ -27,8 +27,13 @@ async def log_push(db, pid: str, kind: str, mode: str, payload: dict, result: di
 async def push_daily(db, pid: str, inv_code: str, channel_codes: list, dates: list) -> dict:
     if len(dates) > 90:
         raise HTTPException(400, "HotelRunner en fazla 90 tarih kabul eder — parçalara bölün.")
-    hr_id, token, _ = await get_creds(db, pid)
+    hr_id, token, cfg = await get_creds(db, pid)
     body = {"rooms": [{"inv_code": inv_code, "channel_codes": channel_codes, "dates": dates}]}
+    if hr_id and token and inv_code != "CERT-TEST":
+        cert = cfg.get("certification") or {}
+        if not (cert.get("passed") and cert.get("mode") == "live"):
+            raise HTTPException(428, "Publisher sertifikasyonu geçilmedi — canlı push bloklandı. "
+                                     "Önce 'Sertifikasyonu Çalıştır' ile test push + geri okuma doğrulamasını CANLI modda geçin.")
     if not (hr_id and token):
         result = {"mocked": True, "would_send": len(dates),
                   "message": "MOCK — kimlik girilmediği için gerçek push yapılmadı."}
@@ -114,6 +119,7 @@ def create_hotelrunner_router(db, require_roles):
                 "token_set": bool(token), "total_pushes": pushes,
                 "auto_repush": bool(cfg.get("auto_repush")),
                 "last_test": cfg.get("last_test"),
+                "certification": cfg.get("certification"),
                 "note": "Canlı mod için HotelRunner partner panelinden HR_ID ve API TOKEN alın (My Property → HotelRunner Apps). Kimlik girilmeden tüm push'lar MOCK olarak simüle edilir."}
 
     @router.post("/config/{pid}")
@@ -216,6 +222,45 @@ def create_hotelrunner_router(db, require_roles):
         return await repush_drifted(db, pid,
                                     days=int((data or {}).get("days", 14)),
                                     threshold=float((data or {}).get("threshold", 5.0)))
+
+    @router.post("/certify/{pid}")
+    async def certify(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """K13: kanala yazma öncesi otomatik sertifikasyon — test push + geri okuma doğrulaması."""
+        checks = []
+        hr_id, token, _ = await get_creds(db, pid)
+        live = bool(hr_id and token)
+        checks.append({"name": "Kimlik yapılandırması", "passed": live,
+                       "detail": "HR_ID + TOKEN mevcut" if live else "Kimlik yok — MOCK sertifikasyon"})
+        test_date = (datetime.now(timezone.utc).date() + timedelta(days=60)).isoformat()
+        try:
+            res = await push_daily(db, pid, "CERT-TEST", [],
+                                   [{"date": test_date, "availability": 1, "price": 99.0}])
+            checks.append({"name": "Test push", "passed": True,
+                           "detail": f"1 tarih gönderildi ({'CANLI' if not res.get('mocked') else 'MOCK'})"})
+        except Exception as e:
+            checks.append({"name": "Test push", "passed": False, "detail": str(e)[:150]})
+        log = await db.hr_push_log.find_one(
+            {"property_id": pid, "kind": "ari_push", "payload.rooms.inv_code": "CERT-TEST"},
+            sort=[("created_at", -1)])
+        readback = bool(log and any(d.get("date") == test_date and d.get("price") == 99.0
+                                    for r in log["payload"]["rooms"] for d in r.get("dates", [])))
+        checks.append({"name": "Geri okuma doğrulaması", "passed": readback,
+                       "detail": "Push logu geri okundu, tarih+fiyat birebir eşleşti" if readback else "Log eşleşmedi"})
+        if live:
+            try:
+                async with httpx.AsyncClient(timeout=20) as client:
+                    r = await client.get(f"{HR_URL}/rooms", params={"hr_id": hr_id, "token": token})
+                checks.append({"name": "Canlı API erişimi", "passed": r.status_code == 200,
+                               "detail": f"HTTP {r.status_code}"})
+            except Exception as e:
+                checks.append({"name": "Canlı API erişimi", "passed": False, "detail": str(e)[:120]})
+        passed = all(c["passed"] for c in checks if c["name"] != "Kimlik yapılandırması")
+        now = datetime.now(timezone.utc).isoformat()
+        cert = {"passed": passed, "mode": "live" if live else "mocked", "checks": checks, "at": now}
+        await db.hotelrunner_config.update_one(
+            {"property_id": pid}, {"$set": {"certification": cert}}, upsert=True)
+        return {"ok": True, **cert,
+                "note": "Sertifikasyon geçmeden canlı otomatik push açılmamalı. Kimlik girilince CANLI modda tekrarlayın."}
 
     @router.get("/log/{pid}")
     async def get_push_log(pid: str, limit: int = 20, _u: dict = Depends(require_roles(*ROLES))):

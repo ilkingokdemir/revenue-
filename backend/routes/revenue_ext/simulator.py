@@ -117,4 +117,101 @@ def create_simulator_router(db, require_roles):
                 "verdict": verdict,
                 "note": "Point-in-time: yalnızca snapshot tarihine kadar OLUŞMUŞ rezervasyonlar kullanılır (bilgi sızıntısı yok)."}
 
+    @router.get("/{pid}/bid-price")
+    async def bid_price(pid: str, days: int = 14, _u: dict = Depends(require_roles(*ROLES))):
+        """K11: displacement + MinLOS/CTA/CTD tek bid-price çerçevesinde."""
+        days = max(1, min(60, days))
+        rooms = await db.rooms.count_documents({"property_id": pid}) or 20
+        try:
+            from routes.revenue_ext.net_otb import get_cancel_stats, expected_net_for_date
+            stats = await get_cancel_stats(db, pid)
+        except Exception:
+            stats = None
+        today = datetime.now(timezone.utc).date()
+        agg = await db.bookings.aggregate([
+            {"$match": {"property_id": pid, "status": {"$nin": ["cancelled", "no_show"]}}},
+            {"$group": {"_id": None, "rev": {"$sum": "$total_price"}, "n": {"$sum": 1}}}]).to_list(1)
+        ref_adr = round((agg[0]["rev"] / max(agg[0]["n"], 1)) if agg else 100.0, 2)
+        rows = []
+        for i in range(days):
+            d = (today + timedelta(days=i)).isoformat()
+            if stats:
+                n = await expected_net_for_date(db, pid, d, stats, rooms)
+                occ = n["net_occupancy_pct"] / 100
+            else:
+                occ = 0.5
+            bid = round(ref_adr * (0.45 + 0.9 * occ), 2)
+            min_los, cta, ctd, why = 1, False, False, []
+            if occ >= 0.85:
+                min_los, cta = 2, True
+                why.append("Yüksek net doluluk: 1 gecelik satış displacement yaratır → MinLOS 2 + CTA")
+            elif occ >= 0.7:
+                min_los = 2
+                why.append("Orta-yüksek doluluk: kısa konaklamayı sınırlayıp uzun kalışa yer aç")
+            else:
+                why.append("Düşük doluluk: kısıt yok — her talebi kabul et (bid price düşük)")
+            nxt = (today + timedelta(days=i + 1)).isoformat()
+            if stats and i < days - 1:
+                n2 = await expected_net_for_date(db, pid, nxt, stats, rooms)
+                if occ >= 0.85 and n2["net_occupancy_pct"] / 100 < 0.5:
+                    ctd = True
+                    why.append("Ertesi gün boş: bu gece çıkışı kapat (CTD) — kalışı uzat")
+            rows.append({"date": d, "net_occupancy_pct": round(occ * 100, 1),
+                         "bid_price": bid, "min_los": min_los, "cta": cta, "ctd": ctd,
+                         "reason": " · ".join(why)})
+        return {"property_id": pid, "ref_adr": ref_adr, "rows": rows,
+                "note": "Bid price = o geceyi satmanın fırsat maliyeti (ref ADR × doluluk baskısı). Bid'in altındaki talep reddedilir; kısıtlar (MinLOS/CTA/CTD) displacement'ı tek çerçevede yönetir."}
+
+    @router.get("/{pid}/report-pdf")
+    async def sim_pdf(pid: str, days: int = 14, base_rate: float = 100,
+                      _u: dict = Depends(require_roles(*ROLES))):
+        sim = await run_sim(pid, {"days": days, "base_rate": base_rate}, _u)
+        from io import BytesIO
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas as pc
+        from reportlab.lib.units import mm
+        _t = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+        buf = BytesIO()
+        c = pc.Canvas(buf, pagesize=A4)
+        w, h = A4
+        c.setFillColorRGB(0.02, 0.37, 0.31)
+        c.rect(0, h - 35 * mm, w, 35 * mm, fill=1, stroke=0)
+        c.setFillColorRGB(1, 1, 1)
+        c.setFont("Helvetica-Bold", 18)
+        c.drawString(20 * mm, h - 20 * mm, "RM Robot - Talep Simulasyonu Raporu")
+        c.setFont("Helvetica", 10)
+        c.drawString(20 * mm, h - 28 * mm, f"{days} gun · baz fiyat {base_rate} · sentetik pazar (tekrarlanabilir)")
+        y = h - 50 * mm
+        c.setFillColorRGB(0.1, 0.1, 0.1)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(20 * mm, y, f"KAZANAN: {sim['winner'].upper()}  ·  Robot vs Sabit: {sim['robot_uplift_vs_fixed_pct']:+.1f}%".translate(_t))
+        y -= 12 * mm
+        c.setFont("Helvetica-Bold", 10)
+        for x, t in ((20, "Politika"), (75, "Gelir"), (110, "Doluluk"), (140, "ADR"), (165, "RevPAR")):
+            c.drawString(x * mm, y, t)
+        y -= 2 * mm
+        c.line(20 * mm, y, w - 20 * mm, y)
+        y -= 7 * mm
+        c.setFont("Helvetica", 10)
+        names = {"robot": "Robot (optimizor)", "fixed": "Sabit fiyat", "yesterday_plus": "Dun+%X"}
+        for k, p in sim["policies"].items():
+            c.drawString(20 * mm, y, names[k].translate(_t))
+            c.drawString(75 * mm, y, f"{p['total_revenue']:,.0f}")
+            c.drawString(110 * mm, y, f"%{p['occupancy_pct']}")
+            c.drawString(140 * mm, y, f"{p['adr']}")
+            c.drawString(165 * mm, y, f"{p['revpar']}")
+            y -= 7 * mm
+        y -= 6 * mm
+        c.setFont("Helvetica-Oblique", 8)
+        c.setFillColorRGB(0.4, 0.4, 0.4)
+        for line in (sim["note"][:110], sim["note"][110:220]):
+            if line:
+                c.drawString(20 * mm, y, line.translate(_t))
+                y -= 5 * mm
+        c.save()
+        buf.seek(0)
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(buf, media_type="application/pdf",
+                                 headers={"Content-Disposition": 'inline; filename="simulasyon-raporu.pdf"'})
+
     return router

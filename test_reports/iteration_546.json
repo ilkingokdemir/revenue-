@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 546 testing complete. Verified Bid-Price Network (simulator + AI pricing bid fields), Publisher Certification (checks + status + MOCK-mode 428 gate bypass), and Simulator PDF export end-to-end. 7/7 pytest tests passed and 3/3 UI flows verified via Playwright.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration546_bidprice_cert_pdf.py",
+    "/app/test_reports/pytest/iteration_546.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Certification 'Kimlik yapılandırması' check displays a ❌ (fail) in MOCK mode ('Kimlik yok — MOCK sertifikasyon') but overall passed=true. UX-wise, showing a red X while the badge reads SERTİFİKALI can confuse users. Consider rendering this row as ⚠️/neutral (or ✅ with note) in MOCK to match the aggregate passed state."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration546_bidprice_cert_pdf.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "PRO mode (data-testid=nav-mode-pro) must be activated after login to see Revenue & rates + Channels & distribution sidebar sections. rm-simulator-btn is under Revenue & rates section; hotelrunner-live-btn is under Channels & distribution. All data-testids in review request are correct and present. Backend tests: pytest /app/backend/tests/test_iteration546_bidprice_cert_pdf.py.",
+  "verified_flows": {
+    "backend": [
+      "POST /api/auth/login (admin) -> 200 + access_token",
+      "GET /api/simulator/default/bid-price?days=14 -> ref_adr + 14 rows with date/net_occupancy_pct/bid_price/min_los/cta/ctd/reason",
+      "GET /api/revenue/ai-pricing/default/suggestions?days=5&use_llm=false -> bid_price/bid_floor_applied/restrictions{min_los,cta,ctd} present; regression fields confidence/evidence/waterfall/net_new_rate intact; suggested_rate >= bid_price when floor applied",
+      "POST /api/hotelrunner/certify/default -> checks[3] (Kimlik/Test push/Geri okuma), passed=true",
+      "GET /api/hotelrunner/status/default -> includes certification field",
+      "POST /api/hotelrunner/push-from-rms/default {days:3} -> mocked:true (cert gate does not block MOCK)",
+      "GET /api/simulator/default/report-pdf?days=7&base_rate=100 -> 200 application/pdf, %PDF magic bytes ok"
+    ],
+    "frontend": [
+      "Login via landing 'Sign In' with admin creds -> dashboard",
+      "Switch to PRO mode; expand 'Revenue & rates' -> rm-simulator-btn navigates to Simulator panel",
+      "Simulator: 'Ağı Hesapla' (bidprice-btn) -> bidprice-table renders 14 rows with date, bid price, MinLOS, CTA/CTD chips",
+      "Simulator: 'Yarıştır' (sim-run-btn) -> sim-results visible; sim-pdf-btn href -> /api/simulator/default/report-pdf?days=14&base_rate=100",
+      "Channels & distribution -> hotelrunner-live-btn -> hr-cert-section visible; hr-certify-btn click -> hr-cert-badge 'SERTİFİKALI · MOCK' + hr-cert-checks lists 3 items"
+    ]
+  }
+}

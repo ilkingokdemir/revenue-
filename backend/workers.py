@@ -970,6 +970,26 @@ async def drift_autopush_loop(db, interval_seconds: int = 21600):
         await asyncio.sleep(interval_seconds)
 
 
+async def shadow_mode_loop(db, interval_seconds: int = 3600):
+    """Shadow mode aktif tesislerde günde 1 kez robot önerisi snapshot'ı alır (push YOK)."""
+    from routes.revenue_ext.trust_center import run_shadow_snapshot
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            if 5 <= now.hour <= 10:
+                today = now.date().isoformat()
+                cfgs = await db.shadow_mode.find({"active": True}, {"_id": 0, "property_id": 1}).to_list(50)
+                for cfg in cfgs:
+                    pid = cfg["property_id"]
+                    if await db.shadow_log.find_one({"property_id": pid, "snapshot_date": today}):
+                        continue
+                    r = await run_shadow_snapshot(db, pid)
+                    logger.info(f"shadow_mode: {pid} snapshot {r['recorded']} satır")
+        except Exception as e:
+            logger.warning(f"shadow_mode_loop error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def marketing_radar_loop(db, interval_seconds: int = 3600):
     """Fırsat Radarı otomasyonu — haftada bir tesis başına tarar, pencere bulursa bildirim düşer."""
     import logging

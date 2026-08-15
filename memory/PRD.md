@@ -722,3 +722,7 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Kullanıcının yüklediği rm_robot_mvp_roadmap.md (25 madde) kod tabanıyla karşılaştırıldı: 12 kalem ZATEN TAMAM (Net RevPAR, guardrail çekirdeği, açıklanabilirlik, onay akışı, kanal adaptörü, RGI ölçümü, hava/tatil sinyalleri...).
 - 10 gerçek eksik ROADMAP.md'ye P0-P3 önceliğiyle eklendi (G1-G10). D1 uyum ilkeleri anayasası yazıldı: /app/memory/UYUM_ILKELERI_D1.md.
 - P0 sıradaki işler: G1 guardrail sertleştirme (±%15 adım limiti + günlük push limiti), G2 öneri kabul oranı metriği + red nedeni etiketleme.
+
+## Güncelleme (2026-08-15, iter 549 — Robot Güven Merkezi)
+- RM MVP gap listesinden G1 (guardrail ±%15 + günlük limit + ihlal logu), G2 (kabul oranı raporu), G4 (Net OTB / p_cancel katmanı — motor artık net dolulukla fiyatlıyor) ve G6 (Shadow Mode) tamamlandı, iteration_542 %100.
+- Kalan gap'ler: G3 compset source etiketi, G5 isotonic kalibrasyon, G7 talep simülatörü, G8 lisanslı rate shopping, G9 esneklik, G10 havuz veri.

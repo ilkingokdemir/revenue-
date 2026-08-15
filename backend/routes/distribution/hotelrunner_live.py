@@ -59,8 +59,8 @@ async def compute_drift(db, pid: str, days: int = 14, threshold: float = 5.0) ->
     rows = []
     for i in range(days):
         ds = (today + timedelta(days=i)).isoformat()
-        ov = await db.rate_overrides.find_one({"property_id": pid, "date": ds}, {"_id": 0, "rate": 1})
-        rms = round(float(ov["rate"]), 2) if ov and ov.get("rate") else None
+        ov = await db.rate_overrides.find_one({"property_id": pid, "date": ds}, {"_id": 0, "rate": 1, "custom_rate": 1})
+        rms = round(float(ov.get("custom_rate") or ov["rate"]), 2) if ov and (ov.get("custom_rate") or ov.get("rate")) else None
         ch = pushed.get(ds)
         drift = None
         if rms is not None and ch:
@@ -170,13 +170,13 @@ def create_hotelrunner_router(db, require_roles):
         dates = []
         for i in range(days):
             d = (today + timedelta(days=i)).isoformat()
-            ov = await db.rate_overrides.find_one({"property_id": pid, "date": d}, {"_id": 0, "rate": 1})
+            ov = await db.rate_overrides.find_one({"property_id": pid, "date": d}, {"_id": 0, "rate": 1, "custom_rate": 1})
             booked = await db.bookings.count_documents({
                 "property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
                 "check_in": {"$lte": d}, "check_out": {"$gt": d}})
             entry = {"date": d, "availability": max(total_rooms - booked, 0)}
-            if ov and ov.get("rate"):
-                entry["price"] = round(float(ov["rate"]), 2)
+            if ov and (ov.get("custom_rate") or ov.get("rate")):
+                entry["price"] = round(float(ov.get("custom_rate") or ov["rate"]), 2)
             dates.append(entry)
         res = await push_daily(db, pid, inv_code, (data or {}).get("channel_codes") or [], dates)
         return {"pushed_days": len(dates), "sample": dates[:3], **res}

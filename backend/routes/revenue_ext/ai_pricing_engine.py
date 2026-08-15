@@ -171,7 +171,14 @@ def create_ai_pricing_router(db, require_roles):
             cfg.setdefault(k, v)
         return cfg
 
-    async def _occupancy_for_date(property_id: str, target_date: str, total_rooms: int) -> dict:
+    async def _occupancy_for_date(property_id: str, target_date: str, total_rooms: int,
+                                  cancel_stats: dict = None) -> dict:
+        if cancel_stats:
+            from routes.revenue_ext.net_otb import expected_net_for_date
+            n = await expected_net_for_date(db, property_id, target_date, cancel_stats, total_rooms)
+            return {"bookings": n["gross_otb"], "occupancy_pct": n["net_occupancy_pct"],
+                    "gross_occupancy_pct": n["gross_occupancy_pct"],
+                    "expected_cancels": n["expected_cancels"], "total_rooms": total_rooms}
         booked = await db.bookings.count_documents({
             "property_id": property_id,
             "check_in": {"$lte": target_date},
@@ -337,9 +344,15 @@ def create_ai_pricing_router(db, require_roles):
             _ded_pct = (await _comm_rate(db, "booking", property_id)) + _ps["payment_fee_pct"] / 100
         _cpor = float(_ps["cpor"])
 
-        # Parallel occupancy fan-out per date
+        # Parallel occupancy fan-out per date — NET OTB (beklenen iptal düşülmüş) doluluk kullanılır
+        try:
+            from routes.revenue_ext.net_otb import get_cancel_stats
+            _cstats = await get_cancel_stats(db, property_id)
+        except Exception:
+            _cstats = None
+
         async def _occ_for(snap):
-            return snap.get("date"), await _occupancy_for_date(property_id, snap.get("date", ""), total_rooms)
+            return snap.get("date"), await _occupancy_for_date(property_id, snap.get("date", ""), total_rooms, _cstats)
         occ_results = await asyncio.gather(*[_occ_for(s) for s in snaps]) if snaps else []
         occ_map = {d: data for d, data in occ_results}
 
@@ -356,6 +369,8 @@ def create_ai_pricing_router(db, require_roles):
             unavail = float(snap.get("unavailable_pct") or 0)
             occ_data = occ_map.get(date, {"occupancy_pct": 0, "bookings": 0, "total_rooms": total_rooms})
             occ_pct = float(occ_data.get("occupancy_pct") or 0)
+            gross_occ_pct = float(occ_data.get("gross_occupancy_pct") or occ_pct)
+            expected_cancels = float(occ_data.get("expected_cancels") or 0)
 
             days_out = (datetime.strptime(date, "%Y-%m-%d").date() - today.date()).days
 
@@ -418,6 +433,8 @@ def create_ai_pricing_router(db, require_roles):
                     "learned_mult": round(learned_mult, 3),
                     "learned_bucket": learned_bucket if learned_mult != 1.0 else None,
                     "occupancy_pct": occ_pct,
+                    "gross_occupancy_pct": gross_occ_pct,
+                    "expected_cancels": expected_cancels,
                     "bookings": occ_data.get("bookings", 0),
                     "total_rooms": occ_data.get("total_rooms", total_rooms),
                     **calc,
@@ -516,9 +533,38 @@ def create_ai_pricing_router(db, require_roles):
             "auto_applied": sum(1 for s in suggestions if s["status"] == "auto-applied"),
         }
 
-    async def _apply_one(property_id: str, item: dict, source: str, rationale: Optional[str] = None) -> None:
-        """Write a single suggestion to rate_overrides and log decision."""
+    async def _apply_one(property_id: str, item: dict, source: str, rationale: Optional[str] = None) -> bool:
+        """Write a single suggestion to rate_overrides and log decision.
+        Guardrail'ler: günlük push limiti (blok) + ±max_step_pct adım limiti (kırpma)."""
         now_iso = datetime.now(timezone.utc).isoformat()
+        g = await db.guardrail_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        max_step = float(g.get("max_step_pct", 15))
+        daily_cap = int(g.get("daily_push_limit", 50))
+        today_start = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00")
+        pushed_today = await db.ai_pricing_decisions.count_documents({
+            "property_id": property_id, "decided_at": {"$gte": today_start},
+            "status": {"$in": ["accepted", "auto-applied"]}})
+        if pushed_today >= daily_cap:
+            await db.guardrail_violations.insert_one({
+                "property_id": property_id, "type": "daily_limit", "blocked": True,
+                "date": item.get("date"), "detail": f"Günlük push limiti ({daily_cap}) doldu — uygulama engellendi",
+                "source": source, "created_at": now_iso})
+            return False
+        prev = float(item.get("current_rate") or 0)
+        new_rate = float(item["suggested_rate"])
+        if prev > 0:
+            step_pct = (new_rate - prev) / prev * 100
+            if abs(step_pct) > max_step:
+                clamped_rate = round(prev * (1 + (max_step if step_pct > 0 else -max_step) / 100), 2)
+                await db.guardrail_violations.insert_one({
+                    "property_id": property_id, "type": "step_limit", "blocked": False,
+                    "date": item.get("date"), "original_rate": new_rate, "clamped_rate": clamped_rate,
+                    "step_pct": round(step_pct, 1), "max_step_pct": max_step,
+                    "detail": f"Tek adımda %{abs(step_pct):.1f} değişim > ±%{max_step:g} limiti — {clamped_rate} değerine kırpıldı",
+                    "source": source, "created_at": now_iso})
+                item["suggested_rate"] = clamped_rate
+                rationale = ((rationale or item.get("rationale") or "")
+                             + f" · Guardrail: ±%{max_step:g} adım limiti, {clamped_rate} değerine kırpıldı")
         await db.rate_overrides.update_one(
             {"property_id": property_id, "date": item["date"], "room_type_id": item.get("room_type_id", "")},
             {"$set": {
@@ -567,6 +613,7 @@ def create_ai_pricing_router(db, require_roles):
             }},
             upsert=True,
         )
+        return True
 
     async def _detect_anomaly(property_id: str, suggestions: list):
         """Anomali tespiti: rakip verisi saçmalaması veya OTB ani sıçraması."""
@@ -755,8 +802,8 @@ def create_ai_pricing_router(db, require_roles):
                 it["suggested_rate"] = res["rate"]
                 it["rationale"] = (it.get("rationale") or "") + f" · Fiyat koruması ({res['reason']}): £{res['rate']} sınırına ayarlandı"
                 min_clamped += 1
-            await _apply_one(property_id, it, source="ai-pricing-manual", rationale=it.get("rationale"))
-            applied += 1
+            if await _apply_one(property_id, it, source="ai-pricing-manual", rationale=it.get("rationale")):
+                applied += 1
         return {"accepted": applied, "lrv_clamped": lrv_clamped, "min_rate_clamped": min_clamped}
 
     @router.post("/revenue/ai-pricing/{property_id}/reject")
@@ -840,8 +887,8 @@ def create_ai_pricing_router(db, require_roles):
                 s["suggested_rate"] = floor
                 s["rationale"] = (s.get("rationale") or "") + f" · LRV guardrail: fiyat £{floor} tabanına yükseltildi"
                 lrv_clamped += 1
-            await _apply_one(property_id, s, source="ai-pricing-auto", rationale=s.get("rationale"))
-            applied += 1
+            if await _apply_one(property_id, s, source="ai-pricing-auto", rationale=s.get("rationale")):
+                applied += 1
 
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.ai_pricing_config.update_one(
@@ -892,8 +939,8 @@ def create_ai_pricing_router(db, require_roles):
             if floor and float(s["suggested_rate"]) < floor:
                 s["suggested_rate"] = floor
                 s["rationale"] = (s.get("rationale") or "") + f" · LRV guardrail: fiyat £{floor} tabanına yükseltildi"
-            await _apply_one(property_id, s, source="ai-pricing-auto", rationale=s.get("rationale"))
-            applied += 1
+            if await _apply_one(property_id, s, source="ai-pricing-auto", rationale=s.get("rationale")):
+                applied += 1
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.ai_pricing_config.update_one(
             {"property_id": property_id},
@@ -910,4 +957,7 @@ def create_ai_pricing_router(db, require_roles):
         return {"applied": applied, "summary": payload["summary"], "run_at": now_iso}
 
     router.run_auto_apply_internal = _internal_auto_apply
+    router.build_suggestions_internal = _build_suggestions
+    import sys as _sys
+    _sys.modules[__name__].BUILD_SUGGESTIONS = _build_suggestions
     return router

@@ -191,18 +191,18 @@ Nihai sıra: 1-TalepTakvimi, 2-TopluGeriAlma, 3-OrphanGap, 4-LOS, 5-GrupWash, 6-
 - D2 KVKK/GDPR modülleri → gdpr, eu_compliance, audit_trail ✅
 
 ## GERÇEK EKSİKLER — MVP'YE EKLENDİ (öncelik sırasıyla)
-- [ ] P0-G1 (B5 tamamlama) GUARDRAIL SERTLEŞTİRME: tek adımda ±%15 üstü fiyat değişim bloğu +
+- [x] P0-G1 (TAMAM iter 549) (B5 tamamlama) GUARDRAIL SERTLEŞTİRME: tek adımda ±%15 üstü fiyat değişim bloğu +
       günlük push limiti (N/gün) + guardrail ihlal logu. (Mevcut min/max + freeze'in üstüne.)
-- [ ] P0-G2 (C6 tamamlama) ÖNERİ KABUL ORANI METRİĞİ: kabul/red oranı raporu + red nedenleri
+- [x] P0-G2 (TAMAM iter 549) (C6 tamamlama) ÖNERİ KABUL ORANI METRİĞİ: kabul/red oranı raporu + red nedenleri
       etiketli veri olarak loglanır (modelin kör nokta haritası). Hedef: kabul ≥%70.
 - [ ] P0-G3 (D1) UYUM İLKELERİ ANAYASASI: /app/memory/UYUM_ILKELERI_D1.md YAZILDI ✅ (2026-08-15).
       Kod tarafı: compset girdilerine source etiketi zorunluluğu eklenecek.
-- [ ] P1-G4 (B1) BEKLENEN NET OTB: transient p_cancel skoru (rezervasyon başına iptal olasılığı,
+- [x] P1-G4 (TAMAM iter 549) (B1) BEKLENEN NET OTB: transient p_cancel skoru (rezervasyon başına iptal olasılığı,
       lead time + kanal + fiyat + LOS özellikleriyle) → brüt OTB'den düşülür. Grup wash'ın
       transient karşılığı. Fiyatlama motoru net OTB ile çalışır.
 - [ ] P1-G5 (B6) İPTAL MODELİ KALİBRASYONU: isotonic regression + aylık yeniden kalibrasyon +
       kalibrasyon testi (AUC değil olasılık doğruluğu).
-- [ ] P1-G6 SHADOW MODE: 4 hafta robot önerir ama push edilmez; robot önerisi vs otelin gerçek
+- [x] P1-G6 (TAMAM iter 549) SHADOW MODE: 4 hafta robot önerir ama push edilmez; robot önerisi vs otelin gerçek
       fiyat kararı karşılaştırma raporu (pilot güven inşası).
 - [ ] P2-G7 (B2) TALEP SİMÜLATÖRÜ / BACKTEST: MNL seçim modeli + iptal modeli + basit rakip
       kuralı = sentetik pazar; politika backtesti (sabit fiyat vs dün+%X vs robot).

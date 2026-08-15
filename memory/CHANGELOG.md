@@ -3977,3 +3977,23 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - Kozmetik: FunctionSpacePanel select option'ı template string'e çevrildi (span-in-option uyarısı).
 - TEST: iteration_540.json — frontend %100 (backend curl ile main agent doğruladı: reminder dedupe,
   drift_count=2 senaryosu 2026-08-17/+18.2%, 2026-08-19/+16.7%).
+
+## Iter 549 (2026-08-15) — ROBOT GÜVEN MERKEZİ: G1+G2+G4+G6 (RM MVP gap kapatma)
+- G1 GUARDRAIL SERTLEŞTİRME: ai_pricing_engine._apply_one artık merkezi guardrail uygular —
+  ±max_step_pct (vars. %15) adım limiti aşımı KIRPILIR + günlük push limiti (vars. 50) dolunca
+  uygulama BLOKLANIR; her ihlal db.guardrail_violations'a loglanır. Config: db.guardrail_config,
+  GET/PUT /api/guardrails/{pid}/config, GET /violations. Test: 100→500 talebi 115'e kırpıldı.
+- G2 KABUL ORANI: GET /api/rms-acceptance/{pid}/report — ai_pricing_decisions'tan haftalık
+  kabul/oto-uygulama/red + red nedenleri (etiketli veri) + genel oran vs %70 hedef.
+- G4 NET OTB: net_otb.py — p_cancel (365g lead-time kovalı iptal oranları, Laplace, check-in
+  yaklaştıkça düşen olasılık) → beklenen iptal brüt OTB'den düşülür. _occupancy_for_date net
+  doluluk döner; motor NET ile fiyatlar; öneri satırlarında gross_occupancy_pct + expected_cancels.
+  GET /api/net-otb/{pid}.
+- G6 SHADOW MODE: trust_center.py — start/stop/snapshot/report + workers.shadow_mode_loop (günlük,
+  05-10 UTC). Robot önerir, PUSH YOK; robot vs insan fiyat farkı raporu (uyum=|fark|≤%5).
+  BUILD_SUGGESTIONS modül hook'u ai_pricing_engine'e eklendi.
+- BUGFIX: hotelrunner_live artık rate_overrides.custom_rate alanını okuyor (motor custom_rate
+  yazıyor, push/drift 'rate' okuyordu — alan uyumsuzluğu giderildi).
+- UI: TrustCenterPanel (trust-center-btn) — 4 bölüm: guardrail config+ihlal logu, kabul oranı
+  stacked chart+red nedenleri, brüt vs net doluluk çizgi grafiği, shadow rapor kartları.
+- TEST: iteration_542.json — backend 8/8 pytest, frontend %100. Shadow AKTİF bırakıldı, config 15/50.

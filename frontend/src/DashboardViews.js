@@ -219,6 +219,7 @@ import {
   FunctionSpacePanel,
   HotelRunnerPanel,
   MorningReportPanel,
+  TrustCenterPanel,
   RevenueStrategistPanel,
   ReviewAgentPanel,
   ReviewSentimentPanel,
@@ -833,6 +834,9 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         )}
         {activeView === "morning-report" && (
           <MorningReportPanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "trust-center" && (
+          <TrustCenterPanel activePropertyId={activePropertyId} properties={properties} />
         )}
 
         {/* Setup Wizard */}

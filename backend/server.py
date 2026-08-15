@@ -1766,6 +1766,10 @@ from routes.distribution.hotelrunner_live import create_hotelrunner_router
 api_router.include_router(create_hotelrunner_router(db, require_roles))
 from routes.revenue_ext.night_audit import create_night_audit_router
 api_router.include_router(create_night_audit_router(db, require_roles))
+from routes.revenue_ext.net_otb import create_net_otb_router
+api_router.include_router(create_net_otb_router(db, require_roles))
+from routes.revenue_ext.trust_center import create_trust_center_router
+api_router.include_router(create_trust_center_router(db, require_roles))
 
 # ===== Booking.com Premier prototype (Iter 290 - XML push, pre-cert ready) =====
 from routes.distribution.booking_com import create_booking_com_router
@@ -2105,6 +2109,8 @@ async def startup_event():
     from workers import night_audit_loop, drift_autopush_loop
     asyncio.create_task(night_audit_loop(db))
     asyncio.create_task(drift_autopush_loop(db))
+    from workers import shadow_mode_loop
+    asyncio.create_task(shadow_mode_loop(db))
     asyncio.create_task(profit_autopilot_loop(db))
     asyncio.create_task(data_quality_sentinel_loop(db))
     asyncio.create_task(open_pricing_optimizer_loop(db))

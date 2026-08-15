@@ -35,6 +35,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
   const [revView, setRevView] = useState("group");
   const [comm, setComm] = useState(null);
   const [tips, setTips] = useState(null);
+  const [invite, setInvite] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const loadHealth = useCallback(async () => {
@@ -121,6 +122,23 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
       const r = await axios.get(`${API}/api/pms-connect/direct-booking-tips/${pid}`, { withCredentials: true });
       setTips(r.data);
     } catch { toast.error("İpuçları yüklenemedi"); } finally { setBusy(false); }
+  };
+
+  const toggleTip = async (index, done) => {
+    setTips((t) => ({ ...t, tips: t.tips.map((x) => x.index === index ? { ...x, done } : x), done_count: t.tips.filter((x) => (x.index === index ? done : x.done)).length }));
+    try {
+      await axios.post(`${API}/api/pms-connect/direct-booking-tips/${pid}/toggle`, { index, done }, { withCredentials: true });
+      toast.success(done ? "Öneri yapıldı olarak işaretlendi" : "İşaret kaldırıldı");
+    } catch { toast.error("İşaretlenemedi"); }
+  };
+
+  const loadInvite = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.get(`${API}/api/pms-connect/pilot-invite/${pid}`, { withCredentials: true });
+      setInvite(r.data);
+      toast.success("Pilot davet e-postası hazırlandı");
+    } catch { toast.error("Davet üretilemedi"); } finally { setBusy(false); }
   };
 
   const loadRev = async () => {
@@ -291,6 +309,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
               <button onClick={loadFa} disabled={busy} data-testid="pms-forecast-btn" className="px-3 py-1.5 rounded-lg border border-purple-300 text-purple-700 text-[12px] font-bold disabled:opacity-50">🎯 Forecast Doğruluk</button>
               <button onClick={loadRev} disabled={busy} data-testid="pms-revenue-btn" className="px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 text-[12px] font-bold disabled:opacity-50">💰 Kanal Gelir Katkısı</button>
               <a href={`${API}/api/pms-connect/executive-pdf/${pid}`} target="_blank" rel="noreferrer" data-testid="pms-exec-pdf-btn" className="px-3 py-1.5 rounded-lg bg-stone-900 text-white text-[12px] font-bold">📄 Yönetici Özeti PDF</a>
+              <button onClick={loadInvite} disabled={busy} data-testid="pms-invite-btn" className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[12px] font-bold disabled:opacity-50">✉ Pilot Davet</button>
               <button onClick={toggleNightPush} disabled={busy} data-testid="pms-nightpush-toggle"
                 className={`px-3 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-50 ${health.auto_night_push ? "bg-emerald-600 text-white" : "border border-stone-300 text-stone-600"}`}>
                 🌙 Otomatik Gece Push: {health.auto_night_push ? "AÇIK" : "KAPALI"}
@@ -419,8 +438,19 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
                   <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3" data-testid="pms-tips-section">
                     <p className="text-[12px] font-black text-emerald-800 mb-1">💡 Doğrudan Rezervasyon Teşviki — OTA komisyon kaybı: 6 ayda ₺{Math.round(tips.commission_loss_6m).toLocaleString("tr-TR")} (yıllık tahmini ₺{Math.round(tips.commission_loss_annual_est).toLocaleString("tr-TR")}) · doğrudan pay %{tips.direct_pct}</p>
                     <ul className="space-y-1">
-                      {tips.tips.map((t, i) => <li key={i} className="text-[11px] text-emerald-900 flex gap-1.5"><span>▸</span><span>{t}</span></li>)}
+                      {tips.tips.map((t) => (
+                        <li key={t.index} className="text-[11px] text-emerald-900 flex items-start gap-2">
+                          <input type="checkbox" checked={t.done} data-testid={`pms-tip-check-${t.index}`}
+                            onChange={(e) => toggleTip(t.index, e.target.checked)} className="mt-0.5 accent-emerald-600" />
+                          <span className={t.done ? "line-through opacity-60" : ""}>{t.text}</span>
+                        </li>
+                      ))}
                     </ul>
+                    {tips.direct_trend && (
+                      <p className="text-[11px] font-bold text-emerald-800 mt-2" data-testid="pms-direct-trend">
+                        📈 Doğrudan pay (aylık): {tips.direct_trend.map((d) => `${d.month.slice(5)}: %${d.direct_pct}`).join(" → ")}
+                      </p>
+                    )}
                   </div>
                 )}
                 <div className="grid md:grid-cols-2 gap-3 items-center">
@@ -466,6 +496,21 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
               </div>
             );
           })()}
+          {invite && (
+            <div className="mt-3 border-t border-stone-100 pt-3" data-testid="pms-invite-section">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                <p className="text-[12px] font-bold text-stone-700">✉ {invite.email_subject}</p>
+                <button onClick={() => { navigator.clipboard.writeText(`${invite.email_subject}\n\n${invite.email_body}`); toast.success("Davet panoya kopyalandı"); }} data-testid="pms-invite-copy-btn" className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold">Kopyala</button>
+              </div>
+              <div className="flex flex-wrap gap-2 mb-1.5 text-[11px]">
+                <span className={`px-2 py-0.5 rounded-full font-black ${invite.proof.cert_passed_live ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>Mews sertifikasyon: {invite.proof.cert_passed_live ? "CANLI GEÇTİ" : "MOCK"}</span>
+                <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-bold">{invite.proof.live_pushes} canlı push</span>
+                <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-bold">Son doğrulama sapması: %{invite.proof.last_verify_drift_pct ?? "—"}</span>
+              </div>
+              <pre className="text-[11px] bg-stone-50 border border-stone-200 rounded-lg p-3 max-h-56 overflow-auto whitespace-pre-wrap" data-testid="pms-invite-body">{invite.email_body}</pre>
+              <p className="text-[10px] text-emerald-700 font-bold mt-1">{invite.attachment_hint}</p>
+            </div>
+          )}
           {weekly && (
             <div className="mt-3 border-t border-stone-100 pt-3" data-testid="pms-weekly-section">
               <div className="flex items-center justify-between gap-2 mb-1.5">

@@ -818,5 +818,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Kapsam: providers, push+cert+404, Mews CANLI zinciri (push→verify drift 0→import ~200 idempotent), keşif (Mews canlı / Apaleo 400), rate mapping, gece push toggle+run, health (7 kanal + active_alerts), uyarı akışı (insert→resolve→morning report 'Dağıtım' anomalisi), gelir kırılımı (grup/net/komisyon override), haftalık rapor, teşvik, yönetici PDF, forecast isabet, partner kiti + platform regresyonları (ai-pricing, elasticity, simulator, hotelrunner, cloudbeds).
 - Kanonik regresyon paketi: /app/backend/tests/test_iteration552_full_regression.py (Mews canlı çağrılar 3x retry + 8s bekleme ile).
 - BEKLEYEN: Apaleo kimliği (5. hatırlatma) — kullanıcı Client ID/Secret girince canlı doğrulama yapılacak.
+
+## Güncelleme (2026-08-15, iter 563 — Pilot Davet + Teşvik Takibi)
+- Pilot Otel Daveti: GET /api/pms-connect/pilot-invite/{pid} — Türkçe davet e-postası, GERÇEK kanıtlarla dolu (CANLI sertifikasyon tarihi, 24+ canlı push, %0 sapma doğrulaması, ~200 rezervasyon aktarımı) + son pilot sunum PDF arşiv referansı. UI: "✉ Pilot Davet" butonu + kanıt rozetleri + kopyala.
+- Teşvik Takibi: tips artık {index, text, done} objeleri; POST /direct-booking-tips/{pid}/toggle ile yapıldı/yapılmadı işaretleme (db.tip_status); direct_trend ile doğrudan payın aylık değişimi (%22→...). UI: checkbox'lar (optimistic update, üstü çizili tamamlanan), done_count sayacı, aylık pay satırı.
+- BUG FIX: eski tips render'ı obje listesini string basınca React çöktü ("Objects are not valid as a React child") — checkbox'lı render ile değiştirildi, ekran doğrulandı.
+- SiteMinder partner formu: harici site, ajan dolduramaz — başvuru kiti (kopyala butonlu) kullanıcı için hazır.
+- BEKLEYEN: Apaleo kimliği (6. hatırlatma).
 - BEKLEYEN: Apaleo canlı testi kullanıcının client_id/client_secret girmesini bekliyor (rehber panelde).
 - Kalan: lisanslı rate-shopping feed (P2), Expo EAS build (P3), tüm PMS'lerde CANLI mod (partner kimlikleri bekleniyor: Mews demo token, Cloudbeds API key, SiteMinder pmsXchange, eviivo NDA, Elektraweb entegrasyon ekibi).

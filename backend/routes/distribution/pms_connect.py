@@ -775,7 +775,7 @@ def create_pms_connect_router(db, require_roles):
 
     @router.get("/direct-booking-tips/{pid}")
     async def direct_booking_tips(pid: str, _u: dict = Depends(require_roles(*ROLES))):
-        """Doğrudan rezervasyon teşviki: OTA komisyon kaybı + akıllı yönlendirme önerileri."""
+        """Doğrudan rezervasyon teşviki: OTA komisyon kaybı + akıllı yönlendirme önerileri + takip."""
         d = await _rev_data(pid, 6)
         groups = {g["group"]: g for g in d["groups"]}
         ota = groups.get("OTA", {"revenue": 0, "net_revenue": 0, "pct": 0})
@@ -783,16 +783,83 @@ def create_pms_connect_router(db, require_roles):
         loss_6m = round(ota.get("commission_paid", ota["revenue"] - ota["net_revenue"]), 2)
         loss_annual = round(loss_6m * 2, 2)
         direct_pct = direct.get("pct", 0)
-        tips = [
+        texts = [
             f"Son 6 ayda OTA komisyonlarına ₺{loss_6m:,.0f} ödediniz (yıllık tahmini ₺{loss_annual:,.0f}). Bu tutarın %20'si doğrudan kanala kaysa yıllık ₺{loss_annual*0.2:,.0f} cebinizde kalır.",
             f"Doğrudan kanal payınız %{direct_pct} — sektör hedefi %30+. Web sitenizde 'En İyi Fiyat Garantisi' rozetiyle OTA'dan gelen misafiri kendi sitenize çekin.",
             "OTA'dan gelen misafire check-in'de e-posta izni alın; bir sonraki konaklama için doğrudan rezervasyona özel %5-8 indirim kuponu gönderin (komisyondan hâlâ kârlı).",
             "Bid-price tabanının üzerindeyken doğrudan kanalda ücretsiz erken check-in / geç check-out gibi ücretsiz avantajlar sunun — fiyat paritesini bozmadan doğrudan satışı büyütür.",
             "Sadakat listesi: geçmiş misafirlere sezon açılışında doğrudan-özel ön satış e-postası gönderin (Resend anahtarı girilince otomatikleştirilebilir).",
         ]
+        st = await db.tip_status.find_one({"property_id": pid}, {"_id": 0}) or {}
+        done_map = st.get("done", {})
+        tips = [{"index": i, "text": t, "done": bool(done_map.get(str(i)))} for i, t in enumerate(texts)]
+        direct_trend = []
+        for m in d["months"]:
+            rows = d["by_month"].get(m, [])
+            tot = sum(r["revenue"] for r in rows) or 1
+            dp = sum(r["revenue"] for r in rows if r["group"] == "Doğrudan")
+            direct_trend.append({"month": m, "direct_pct": round(dp / tot * 100, 1)})
         return {"ota_revenue_6m": ota["revenue"], "ota_pct": ota["pct"],
                 "commission_loss_6m": loss_6m, "commission_loss_annual_est": loss_annual,
-                "direct_pct": direct_pct, "tips": tips}
+                "direct_pct": direct_pct, "tips": tips,
+                "done_count": sum(1 for t in tips if t["done"]),
+                "direct_trend": direct_trend}
+
+    @router.post("/direct-booking-tips/{pid}/toggle")
+    async def toggle_tip(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        idx = int(data.get("index", -1))
+        if idx < 0 or idx > 20:
+            raise HTTPException(400, "Geçersiz index")
+        await db.tip_status.update_one(
+            {"property_id": pid},
+            {"$set": {f"done.{idx}": bool(data.get("done")),
+                      "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        return {"ok": True}
+
+    @router.get("/pilot-invite/{pid}")
+    async def pilot_invite(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Pilot otel daveti: Mews canlı kanıtı + sunum PDF'i referanslı Türkçe davet e-postası."""
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+        mews = await _cfg(db, pid, "mews")
+        cert = mews.get("certification") or {}
+        live_pushes = await db.pms_push_log.count_documents(
+            {"property_id": pid, "provider": "mews", "mode": "live", "kind": "rate_push"})
+        v = await db.pms_verify_log.find_one({"property_id": pid, "provider": "mews", "ok": True},
+                                             {"_id": 0, "max_drift_pct": 1, "verified_at": 1},
+                                             sort=[("verified_at", -1)])
+        arc = await db.pitch_archive.find_one({"property_id": pid}, {"_id": 0, "id": 1, "created_at": 1},
+                                              sort=[("created_at", -1)])
+        subject = "Pilot Daveti — AI Gelir Robotu: Mews üzerinde CANLI kanıtlanmış, otelinize 30 günlük ücretsiz pilot"
+        body = f"""Sayın Otel Yöneticisi,
+
+MyHotelBox olarak yapay zekâ destekli Gelir Yönetim Sistemimiz (RMS) için sınırlı sayıda pilot otel arıyoruz — ve kanıtlarımızla geliyoruz:
+
+CANLI TEKNİK KANIT (Mews demo ortamı, bağımsız doğrulanabilir)
+  • Publisher sertifikasyonu: {'GEÇTİ (CANLI mod, ' + str(cert.get('at', ''))[:10] + ')' if cert.get('passed') and cert.get('mode') == 'live' else 'MOCK modda hazır'}
+  • Gerçek fiyat push'u: {live_pushes} canlı işlem — oda tipi bazında ayrı rate plan'lara
+  • Geri okuma doğrulaması: kanaldaki fiyat, bastığımızla birebir eşleşti (maks sapma %{(v or {}).get('max_drift_pct', 0)})
+  • ~200 gerçek rezervasyon PMS'ten çekilip talep tahmin motorumuza bağlandı
+
+PİLOTTA NE ALACAKSINIZ (30 gün, ücretsiz, riskisiz)
+  • AI fiyat önerileri önce GÖLGE MODDA çalışır — siz onaylamadan tek kuruş değişmez
+  • Bid-price tabanı, ±%15 emniyet limitleri, global kill-switch ve tam denetim kaydı
+  • Her sabah otomatik rapor + fiyat sapması bekçisi + haftalık kanal performans özeti
+  • Ekli pilot sunum PDF'inde: robot vs sabit fiyat gelir simülasyonu, rakip fiyat kıyası ve esneklik analizi
+
+Sisteminiz Mews, Cloudbeds, HotelRunner{', Apaleo' if False else ''} veya başka bir PMS/kanal yöneticisi olabilir — adaptör katmanımız hazır.
+
+15 dakikalık bir tanıtım görüşmesi için bu e-postaya dönmeniz yeterli. Simülasyonu kendi otelinizin verileriyle canlı gösterelim.
+
+Saygılarımızla,
+MyHotelBox RMS Ekibi
+{prop.get('name', '')} pilot programı"""
+        return {"email_subject": subject, "email_body": body,
+                "attachment_hint": (f"Ek olarak kullanın: Pilot Sunum PDF (arşiv id: {arc['id']}, "
+                                    f"{str(arc['created_at'])[:10]}) — Simülatör panelinden indirilebilir.") if arc
+                else "Önce Simülatör panelinden bir Pilot Sunum PDF üretin — davete ek olarak kullanılır.",
+                "proof": {"cert_passed_live": bool(cert.get("passed") and cert.get("mode") == "live"),
+                          "live_pushes": live_pushes,
+                          "last_verify_drift_pct": (v or {}).get("max_drift_pct")}}
 
     @router.get("/executive-pdf/{pid}")
     async def executive_pdf(pid: str, _u: dict = Depends(require_roles(*ROLES))):

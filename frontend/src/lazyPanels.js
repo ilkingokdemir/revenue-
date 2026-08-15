@@ -38,6 +38,7 @@ export const FunctionSpacePanel = L(() => import("./components/dashboard/Functio
 export const HotelRunnerPanel = L(() => import("./components/dashboard/HotelRunnerPanel"));
 export const MorningReportPanel = L(() => import("./components/dashboard/MorningReportPanel"));
 export const TrustCenterPanel = L(() => import("./components/dashboard/TrustCenterPanel"));
+export const SimulatorPanel = L(() => import("./components/dashboard/SimulatorPanel"));
 export const KDSPanel = L(() => import("./components/dashboard/KDSPanel"));
 export const LoyaltyV2Panel = L(() => import("./components/dashboard/LoyaltyV2Panel"));
 export const ExternalLoyaltyPanel = L(() => import("./components/dashboard/ExternalLoyaltyPanel"));

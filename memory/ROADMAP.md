@@ -249,9 +249,9 @@ Nihai sıra: 1-TalepTakvimi, 2-TopluGeriAlma, 3-OrphanGap, 4-LOS, 5-GrupWash, 6-
       (rakipte Ticketmaster/PredictHQ venue-weighted; bizde public_events zayıf)
 
 ## P2 — Simülasyon ve fiyat bilimi
-- [ ] K9 POINT-IN-TIME REPLAY BACKTEST: geçmiş bir günün verisiyle "o gün robot ne derdi"
+- [x] K9 (TAMAM iter 552) POINT-IN-TIME REPLAY BACKTEST: geçmiş bir günün verisiyle "o gün robot ne derdi"
       tekrarı + politika taraması + sold-out nedensel kazanç analizi (G7 kapsam genişletme)
-- [ ] K10 FİYAT FAKTÖR ŞELALESİ: öneri açıklamasını yapılandırılmış waterfall görseline çevir
+- [x] K10 (TAMAM iter 552) FİYAT FAKTÖR ŞELALESİ: öneri açıklamasını yapılandırılmış waterfall görseline çevir
       (baz → lead → occ → STR → öğrenilmiş → guardrail kırpma, ₺ katkılarıyla)
 - [ ] K11 BID-PRICE DISPLACEMENT AĞI: displacement + MinLOS/CTA/CTD kısıtlarını tek
       bid-price çerçevesinde birleştir (mevcut hurdle_lrv + restriction_advisor üstüne)

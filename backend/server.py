@@ -1772,6 +1772,8 @@ from routes.revenue_ext.trust_center import create_trust_center_router
 api_router.include_router(create_trust_center_router(db, require_roles))
 from routes.revenue_ext.live_scraper import create_live_scraper_router
 api_router.include_router(create_live_scraper_router(db, require_roles))
+from routes.revenue_ext.simulator import create_simulator_router
+api_router.include_router(create_simulator_router(db, require_roles))
 
 # ===== Booking.com Premier prototype (Iter 290 - XML push, pre-cert ready) =====
 from routes.distribution.booking_com import create_booking_com_router

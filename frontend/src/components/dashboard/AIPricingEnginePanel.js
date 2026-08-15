@@ -496,6 +496,15 @@ const AIPricingEnginePanel = ({ propertyId }) => {
                           {`ref ${cur(s.ref_price)} × lead ${s.lead_time_mult} × occ ${s.occupancy_mult}${s.str_mult > 1 ? ` × STR ${s.str_mult}` : ""}`}
                         </span>
                       )}
+                      {Array.isArray(s.waterfall) && s.waterfall.length > 1 && (
+                        <div className="flex flex-wrap gap-0.5 mt-1" data-testid={`ai-pricing-waterfall-${i}`}>
+                          {s.waterfall.map((w, wi) => (
+                            <span key={wi} className={`text-[9px] px-1 py-0.5 rounded border font-bold ${wi === 0 ? "bg-stone-100 text-stone-600 border-stone-200" : w.delta >= 0 ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-rose-50 text-rose-600 border-rose-200"}`} title={`${w.label} — ara toplam: ${w.running}`}>
+                              {wi === 0 ? `${w.label} ${w.delta}` : `${w.label} ${w.delta >= 0 ? "+" : ""}${w.delta}`}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2"><StatusBadge status={s.status} /></td>
                     <td className="px-3 py-2 whitespace-nowrap">

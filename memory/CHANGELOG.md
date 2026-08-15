@@ -4030,3 +4030,18 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - BUGFIX: kronik '<span> in <option>' uyarısının kaynağı AIPricingV2Panel:103 bulunup düzeltildi.
 - TEST: iteration_544.json — frontend %100 (60 satır rozetli, 4 event rozeti, tooltip kanıtları,
   Trust Center regresyon temiz). Backend curl: Brier/kalibrasyon/gate/boost doğrulandı.
+
+## Iter 552 (2026-08-15) — K10 Faktör Şelalesi + K9 Replay + G7 Simülatör + Pilot Kiti
+- K10 FAKTÖR ŞELALESİ: her öneri satırında waterfall dizisi (Baz→Lead-time→Doluluk(net)→
+  Öğrenilmiş→Etkinlik/limit) ₺ delta + ara toplam ile. UI: gerekçe hücresinde renkli çipler
+  (ai-pricing-waterfall-*, ilk gri, + yeşil, − kırmızı).
+- K9 REPLAY BACKTEST: GET /api/simulator/{pid}/replay?date= — point-in-time (snapshot'a kadar
+  OLUŞMUŞ rezervasyonlar, bilgi sızıntısı yok): o günkü OTB → robot ne derdi vs gerçekleşen
+  doluluk/ADR + hüküm cümlesi.
+- G7 TALEP SİMÜLATÖRÜ: POST /api/simulator/{pid}/run — sentetik pazar (MNL-benzeri elastikiyet 1.6,
+  hafta sonu +%25, sabit tohum). 3 politika: Robot (aday fiyat taramalı gelir optimizörü) vs Sabit
+  vs Dün+%X. Sonuç: robot +%13.2 uplift ile kazandı (8490 vs 7500 vs 7249).
+- PİLOT OTEL KİTİ: /app/memory/PILOT_OTEL_KITI.md — 8 maddeli sözleşme taslağı (shadow+canlı yapı,
+  A5 havuz veri izni, KVKK DPA, vaka çalışması hakkı, RGI ölçüm protokolü, fesih).
+- UI: SimulatorPanel (rm-simulator-btn) — yarış kartları + günlük gelir grafiği + replay kartları.
+- TEST: iteration_545.json — frontend %100 (60 şelale çipi + 60 güven rozeti + simülatör + replay).

@@ -220,6 +220,7 @@ import {
   HotelRunnerPanel,
   MorningReportPanel,
   TrustCenterPanel,
+  SimulatorPanel,
   RevenueStrategistPanel,
   ReviewAgentPanel,
   ReviewSentimentPanel,
@@ -837,6 +838,9 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         )}
         {activeView === "trust-center" && (
           <TrustCenterPanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "rm-simulator" && (
+          <SimulatorPanel activePropertyId={activePropertyId} properties={properties} />
         )}
 
         {/* Setup Wizard */}

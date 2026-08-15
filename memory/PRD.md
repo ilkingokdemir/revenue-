@@ -737,3 +737,7 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 ## Güncelleme (2026-08-15, iter 551 — Rakip gap P1)
 - K4 iptal modeli v2 (kanal+iade+Brier+temporal+isotonic, aylık oto kalibrasyon), K5 güven zarfı (skor+kanıt+gri satır), K6 veri-güven kapısı (bayat veri→auto-apply gated), K8 event sinyali v2 (kapasite ağırlıklı boost) tamamlandı. iteration_544 %100. G5 de kapandı.
 - Kalan: K9 replay backtest, K10 faktör şelalesi, K11 bid-price ağı, K12 güç analizi, K13-K15, G7 simülatör, pilot kiti.
+
+## Güncelleme (2026-08-15, iter 552)
+- K10 faktör şelalesi (₺ etkili çipler), K9 replay backtest (point-in-time), G7 talep simülatörü (robot optimizör +%13.2 uplift ile kazanıyor) ve Pilot Otel Kiti (PILOT_OTEL_KITI.md) tamamlandı. iteration_545 %100.
+- Kalan: K11 bid-price ağı, K12 esneklik güç analizi, K13 publisher sertifikasyonu, K14 Cloudbeds, K15 teknik sözleşme dokümanları.

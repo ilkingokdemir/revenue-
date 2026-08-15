@@ -485,6 +485,22 @@ def create_ai_pricing_router(db, require_roles):
                     evidence.append("⚠ Veri-güven kapısı: " + "; ".join(data_trust["reasons"]))
                 confidence = round(max(0.05, min(_conf, 0.95)), 2)
 
+                # K10: fiyat faktör şelalesi (₺ etkileriyle)
+                _wf_run = float(calc.get("ref_price") or 0)
+                waterfall = [{"label": "Baz fiyat", "delta": round(_wf_run, 2), "running": round(_wf_run, 2)}]
+                for _lbl, _m in (("Lead-time", calc.get("lead_time_mult", 1)),
+                                 ("Doluluk (net)", calc.get("occupancy_mult", 1)),
+                                 ("Öğrenilmiş çarpan", learned_mult)):
+                    _mv = float(_m or 1)
+                    if abs(_mv - 1.0) > 0.001:
+                        _new = _wf_run * _mv
+                        waterfall.append({"label": _lbl, "delta": round(_new - _wf_run, 2), "running": round(_new, 2)})
+                        _wf_run = _new
+                _final = float(calc["suggested_rate"])
+                if abs(_final - _wf_run) > 0.01:
+                    _lbl = "Etkinlik boost" if ev_boost > 0 else "STR/limit düzeltmesi"
+                    waterfall.append({"label": _lbl, "delta": round(_final - _wf_run, 2), "running": round(_final, 2)})
+
                 item = {
                     "id": f"{property_id}:{date}:{rt_id or 'default'}",
                     "property_id": property_id,
@@ -509,6 +525,7 @@ def create_ai_pricing_router(db, require_roles):
                     **calc,
                     "confidence": confidence,
                     "evidence": evidence,
+                    "waterfall": waterfall,
                     "event_boost_pct": round(ev_boost * 100, 1) if ev_boost else 0,
                     "status": status,
                     "decision_reason": prev_decision.get("reason"),

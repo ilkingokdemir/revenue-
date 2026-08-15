@@ -351,18 +351,33 @@ def create_ai_pricing_router(db, require_roles):
         except Exception:
             _cstats = None
 
-        # K8: kapasite ağırlıklı etkinlik çarpanı haritası
+        # K8 v2: kapasite × mesafe ağırlıklı etkinlik çarpanı haritası
         event_map = {}
         try:
             _t0 = datetime.now(timezone.utc).date()
             _evs = await db.public_events.find(
                 {"date": {"$gte": _t0.isoformat(), "$lte": (_t0 + timedelta(days=days)).isoformat()}},
-                {"_id": 0, "date": 1, "capacity": 1, "title": 1}).to_list(500)
+                {"_id": 0, "date": 1, "capacity": 1, "title": 1, "distance_km": 1}).to_list(500)
             for _e in _evs:
-                _w = min(int(_e.get("capacity") or 0) / 2000.0, 1.0) * 0.15
+                _capw = min(int(_e.get("capacity") or 0) / 2000.0, 1.0) * 0.15
+                _dist = _e.get("distance_km")
+                _decay = max(0.25, 1 - float(_dist) / 10.0) if _dist is not None else 1.0
+                _w = _capw * _decay
                 event_map[_e["date"]] = min(event_map.get(_e["date"], 0.0) + _w, 0.25)
         except Exception:
             pass
+
+        # K12: esneklik güç analizi — agresiflik faktörü (7 gün taze ise geçerli)
+        agg_factor = 1.0
+        _el = await db.property_elasticity.find_one({"property_id": property_id}, {"_id": 0})
+        if _el:
+            try:
+                _el_age = (datetime.now(timezone.utc)
+                           - datetime.fromisoformat(str(_el["computed_at"]).replace("Z", "+00:00"))).days
+                if _el_age <= 7:
+                    agg_factor = float(_el.get("aggressiveness", 1.0))
+            except Exception:
+                pass
 
         # K6: veri-güven kapısı (tesis seviyesi)
         trust_reasons = []
@@ -465,6 +480,16 @@ def create_ai_pricing_router(db, require_roles):
                     if current_rate:
                         calc["delta_vs_current_pct"] = round((_boosted - current_rate) / current_rate * 100.0, 2)
 
+                # K12: esneklik agresifliği — delta otele göre ölçeklenir
+                elast_applied = False
+                if agg_factor != 1.0 and current_rate and calc["suggested_rate"] != current_rate:
+                    _scaled = round(max(calc["floor_rate"], min(calc["ceil_rate"],
+                                    current_rate + (calc["suggested_rate"] - current_rate) * agg_factor)), 2)
+                    if _scaled != calc["suggested_rate"]:
+                        calc["suggested_rate"] = _scaled
+                        calc["delta_vs_current_pct"] = round((_scaled - current_rate) / current_rate * 100.0, 2)
+                        elast_applied = True
+
                 # K11: bid-price tabanı — öneri, geceyi satmanın fırsat maliyetinin altına inemez
                 bid_price = round(base * (0.45 + 0.9 * _occ_frac), 2)
                 bid_floor_applied = False
@@ -500,6 +525,8 @@ def create_ai_pricing_router(db, require_roles):
                     evidence.append(f"Etkinlik sinyali: kapasite ağırlıklı +%{ev_boost*100:.0f} boost")
                 if bid_floor_applied:
                     evidence.append(f"Bid-price tabanı devrede: öneri fırsat maliyeti tabanına (₺{bid_price}) çekildi")
+                if elast_applied:
+                    evidence.append(f"Esneklik ayarı: tesise özgü agresiflik ×{agg_factor:g} uygulandı")
                 if data_trust["level"] == "low":
                     _conf -= 0.2
                     evidence.append("⚠ Veri-güven kapısı: " + "; ".join(data_trust["reasons"]))
@@ -550,6 +577,7 @@ def create_ai_pricing_router(db, require_roles):
                     "bid_price": bid_price,
                     "bid_floor_applied": bid_floor_applied,
                     "restrictions": bid_restrictions,
+                    "elasticity_aggressiveness": agg_factor,
                     "event_boost_pct": round(ev_boost * 100, 1) if ev_boost else 0,
                     "status": status,
                     "decision_reason": prev_decision.get("reason"),

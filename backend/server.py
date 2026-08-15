@@ -1764,6 +1764,10 @@ from routes.distribution.siteminder_adapter import create_siteminder_router
 api_router.include_router(create_siteminder_router(db, require_roles))
 from routes.distribution.hotelrunner_live import create_hotelrunner_router
 api_router.include_router(create_hotelrunner_router(db, require_roles))
+from routes.distribution.cloudbeds_adapter import create_cloudbeds_router
+api_router.include_router(create_cloudbeds_router(db, require_roles))
+from routes.revenue_ext.elasticity import create_elasticity_router
+api_router.include_router(create_elasticity_router(db, require_roles))
 from routes.revenue_ext.night_audit import create_night_audit_router
 api_router.include_router(create_night_audit_router(db, require_roles))
 from routes.revenue_ext.net_otb import create_net_otb_router

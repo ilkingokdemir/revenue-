@@ -36,6 +36,7 @@ export const DemandCalendarPanel = L(() => import("./components/dashboard/Demand
 export const LosWashMetricsPanel = L(() => import("./components/dashboard/LosWashMetricsPanel"));
 export const FunctionSpacePanel = L(() => import("./components/dashboard/FunctionSpacePanel"));
 export const HotelRunnerPanel = L(() => import("./components/dashboard/HotelRunnerPanel"));
+export const CloudbedsPanel = L(() => import("./components/dashboard/CloudbedsPanel"));
 export const MorningReportPanel = L(() => import("./components/dashboard/MorningReportPanel"));
 export const TrustCenterPanel = L(() => import("./components/dashboard/TrustCenterPanel"));
 export const SimulatorPanel = L(() => import("./components/dashboard/SimulatorPanel"));

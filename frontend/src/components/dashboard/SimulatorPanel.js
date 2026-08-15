@@ -14,7 +14,26 @@ export default function SimulatorPanel({ activePropertyId, properties = [] }) {
   const [rp, setRp] = useState(null);
   const [rpDate, setRpDate] = useState("");
   const [bp, setBp] = useState(null);
+  const [el, setEl] = useState(null);
+  const [logoUrl, setLogoUrl] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const measureElasticity = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.get(`${API}/api/elasticity/${pid}`, { withCredentials: true });
+      setEl(r.data);
+      toast.success("Esneklik ölçüldü");
+    } catch (e) { toast.error(e.response?.data?.detail || "Esneklik ölçülemedi"); } finally { setBusy(false); }
+  };
+
+  const saveLogo = async () => {
+    setBusy(true);
+    try {
+      await axios.post(`${API}/api/simulator/${pid}/branding`, { logo_url: logoUrl }, { withCredentials: true });
+      toast.success("Logo kaydedildi — pilot sunum PDF'inde kullanılacak");
+    } catch { toast.error("Logo kaydedilemedi"); } finally { setBusy(false); }
+  };
 
   const loadBid = async () => {
     setBusy(true);
@@ -60,6 +79,7 @@ export default function SimulatorPanel({ activePropertyId, properties = [] }) {
           <label className="text-[11px] text-stone-500 font-bold">Dün+% artış<input type="number" min={0} max={10} step={0.5} value={form.daily_drift_pct} onChange={(e) => setForm((f) => ({ ...f, daily_drift_pct: +e.target.value }))} data-testid="sim-drift" className="block border border-stone-300 rounded-lg px-2 py-1.5 text-sm w-24 mt-0.5" /></label>
           <button onClick={runSim} disabled={busy} data-testid="sim-run-btn" className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold disabled:opacity-50">🏁 Yarıştır</button>
           <a href={`${API}/api/simulator/${pid}/report-pdf?days=${form.days}&base_rate=${form.base_rate}`} target="_blank" rel="noreferrer" data-testid="sim-pdf-btn" className="px-4 py-2 rounded-lg border border-emerald-300 text-emerald-700 text-sm font-bold">📄 PDF Rapor</a>
+          <a href={`${API}/api/simulator/${pid}/pitch-pdf?days=${form.days}&base_rate=${form.base_rate}`} target="_blank" rel="noreferrer" data-testid="sim-pitch-pdf-btn" className="px-4 py-2 rounded-lg bg-stone-900 text-white text-sm font-bold">🎯 Pilot Sunum PDF</a>
         </div>
         {sim && (
           <div className="grid md:grid-cols-3 gap-3" data-testid="sim-results">
@@ -85,6 +105,39 @@ export default function SimulatorPanel({ activePropertyId, properties = [] }) {
             </div>
           </div>
         )}
+      </section>
+
+      <section className="grid md:grid-cols-2 gap-4">
+        <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="elasticity-section">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-bold text-stone-800">📐 Esneklik Güç Analizi</h2>
+              <p className="text-[12px] text-stone-500 mt-0.5">Tesisin fiyat esnekliği ölçülür; AI öneri agresifliği otele göre otomatik ölçeklenir (7 gün geçerli).</p>
+            </div>
+            <button onClick={measureElasticity} disabled={busy} data-testid="elasticity-btn" className="px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-bold disabled:opacity-50 shrink-0">Ölç</button>
+          </div>
+          {el && (
+            <div className="mt-3 space-y-2" data-testid="elasticity-results">
+              <div className="flex flex-wrap gap-2">
+                <span className="px-2.5 py-1 rounded-full bg-purple-100 text-purple-700 text-[11px] font-black" data-testid="elasticity-value">e = {el.elasticity ?? "—"}</span>
+                <span className="px-2.5 py-1 rounded-full bg-stone-100 text-stone-600 text-[11px] font-bold">r² {el.r2}</span>
+                <span className="px-2.5 py-1 rounded-full bg-stone-100 text-stone-600 text-[11px] font-bold">{el.sample_days} gün örneklem</span>
+                <span className={`px-2.5 py-1 rounded-full text-[11px] font-black ${el.aggressiveness > 1 ? "bg-emerald-100 text-emerald-700" : el.aggressiveness < 1 ? "bg-amber-100 text-amber-700" : "bg-stone-100 text-stone-600"}`} data-testid="elasticity-agg">Agresiflik ×{el.aggressiveness}</span>
+              </div>
+              <p className="text-[12px] font-bold text-stone-700">{el.verdict}</p>
+              <p className="text-[10px] text-stone-400">{el.note}</p>
+            </div>
+          )}
+        </div>
+        <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="branding-section">
+          <h2 className="text-base font-bold text-stone-800">🎯 Pilot Sunum Modu</h2>
+          <p className="text-[12px] text-stone-500 mt-0.5 mb-2">Otelin logosunu ekleyin — "Pilot Sunum PDF" logolu, rakip kıyaslı tek dosya üretir.</p>
+          <div className="flex gap-2">
+            <input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} data-testid="branding-logo-input" className="flex-1 border border-stone-300 rounded-lg px-2.5 py-2 text-sm" placeholder="Logo URL (https://...png)" />
+            <button onClick={saveLogo} disabled={busy} data-testid="branding-save-btn" className="px-3 py-2 rounded-lg bg-stone-900 text-white text-sm font-bold disabled:opacity-50">Kaydet</button>
+          </div>
+          <p className="text-[11px] text-stone-400 mt-2">PDF içeriği: logo + robot vs sabit gelir özeti + önümüzdeki 7 gün rakip fiyat kıyası (fiyat endeksi) + esneklik bulgusu.</p>
+        </div>
       </section>
 
       <section data-testid="bidprice-section">

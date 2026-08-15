@@ -218,6 +218,7 @@ import {
   LosWashMetricsPanel,
   FunctionSpacePanel,
   HotelRunnerPanel,
+  CloudbedsPanel,
   MorningReportPanel,
   TrustCenterPanel,
   SimulatorPanel,
@@ -832,6 +833,9 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         )}
         {activeView === "hotelrunner-live" && (
           <HotelRunnerPanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "cloudbeds-live" && (
+          <CloudbedsPanel activePropertyId={activePropertyId} properties={properties} />
         )}
         {activeView === "morning-report" && (
           <MorningReportPanel activePropertyId={activePropertyId} properties={properties} />

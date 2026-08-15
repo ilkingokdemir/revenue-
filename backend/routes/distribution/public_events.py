@@ -131,6 +131,8 @@ def create_public_events_router(db, require_roles):
             "description": body.get("description", ""),
             "hero_image": body.get("hero_image", ""),
             "capacity": int(body.get("capacity", 50)),
+            "venue_name": body.get("venue_name", ""),
+            "distance_km": float(body["distance_km"]) if body.get("distance_km") is not None else None,
             "ticket_url": body.get("ticket_url", ""),
             "price_from": float(body.get("price_from", 0)),
             "currency": body.get("currency", "TRY"),
@@ -216,7 +218,7 @@ def create_public_events_router(db, require_roles):
                           _: dict = Depends(require_roles("admin", "manager"))):
         allowed = {"title", "description", "hero_image", "capacity", "ticket_url",
                    "price_from", "currency", "tags", "experience_types",
-                   "date", "start_time", "end_time"}
+                   "date", "start_time", "end_time", "venue_name", "distance_km"}
         update = {k: v for k, v in body.items() if k in allowed}
         if not update:
             raise HTTPException(400, "Nothing to update")

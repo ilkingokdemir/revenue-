@@ -214,4 +214,128 @@ def create_simulator_router(db, require_roles):
         return StreamingResponse(buf, media_type="application/pdf",
                                  headers={"Content-Disposition": 'inline; filename="simulasyon-raporu.pdf"'})
 
+    @router.post("/{pid}/branding")
+    async def save_branding(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        logo_url = (data.get("logo_url") or "").strip()
+        await db.property_branding.update_one(
+            {"property_id": pid},
+            {"$set": {"property_id": pid, "logo_url": logo_url,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        return {"ok": True, "logo_url": logo_url}
+
+    @router.get("/{pid}/branding")
+    async def get_branding(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        b = await db.property_branding.find_one({"property_id": pid}, {"_id": 0}) or {}
+        return {"logo_url": b.get("logo_url", "")}
+
+    @router.get("/{pid}/pitch-pdf")
+    async def pitch_pdf(pid: str, days: int = 14, base_rate: float = 100,
+                        _u: dict = Depends(require_roles(*ROLES))):
+        """Pilot sunum modu: logo + simülasyon özeti + rakip kıyası tek PDF'te."""
+        sim = await run_sim(pid, {"days": days, "base_rate": base_rate}, _u)
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1, "city": 1}) or {}
+        brand = await db.property_branding.find_one({"property_id": pid}, {"_id": 0}) or {}
+        today = datetime.now(timezone.utc).date()
+        comp_rows = []
+        snaps = await db.market_supply.aggregate([
+            {"$match": {"property_id": pid, "scan_type": "geo",
+                        "date": {"$gte": today.isoformat(), "$lte": (today + timedelta(days=7)).isoformat()}}},
+            {"$sort": {"scanned_at": -1}},
+            {"$group": {"_id": "$date", "doc": {"$first": "$$ROOT"}}},
+            {"$replaceRoot": {"newRoot": "$doc"}}, {"$sort": {"date": 1}},
+            {"$project": {"_id": 0, "date": 1, "avg_price": 1, "min_price": 1}}]).to_list(10)
+        for s in snaps[:7]:
+            ov = await db.rate_overrides.find_one({"property_id": pid, "date": s["date"]},
+                                                  {"_id": 0, "rate": 1, "custom_rate": 1})
+            ours = round(float(ov.get("custom_rate") or ov["rate"]), 2) if ov and (ov.get("custom_rate") or ov.get("rate")) else None
+            avg = float(s.get("avg_price") or 0)
+            comp_rows.append({"date": s["date"], "ours": ours, "avg": avg,
+                              "min": float(s.get("min_price") or 0),
+                              "idx": round(ours / avg * 100, 0) if ours and avg else None})
+        from io import BytesIO
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas as pc
+        from reportlab.lib.units import mm
+        _t = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+        buf = BytesIO()
+        c = pc.Canvas(buf, pagesize=A4)
+        w, h = A4
+        c.setFillColorRGB(0.05, 0.09, 0.16)
+        c.rect(0, h - 42 * mm, w, 42 * mm, fill=1, stroke=0)
+        if brand.get("logo_url"):
+            try:
+                import httpx
+                from reportlab.lib.utils import ImageReader
+                async with httpx.AsyncClient(timeout=10) as client:
+                    lr = await client.get(brand["logo_url"])
+                if lr.status_code == 200:
+                    img = ImageReader(BytesIO(lr.content))
+                    c.drawImage(img, w - 45 * mm, h - 32 * mm, width=28 * mm, height=22 * mm,
+                                preserveAspectRatio=True, mask="auto")
+            except Exception:
+                pass
+        c.setFillColorRGB(1, 1, 1)
+        c.setFont("Helvetica-Bold", 19)
+        c.drawString(18 * mm, h - 18 * mm, (prop.get("name") or pid).translate(_t))
+        c.setFont("Helvetica", 11)
+        c.drawString(18 * mm, h - 26 * mm, "Pilot Sunumu - RM Robot Gelir Simulasyonu & Rakip Kiyasi")
+        c.setFont("Helvetica", 9)
+        c.drawString(18 * mm, h - 34 * mm, f"{today.isoformat()} · {days} gun senaryo · baz {base_rate}")
+        y = h - 56 * mm
+        c.setFillColorRGB(0.02, 0.45, 0.35)
+        c.setFont("Helvetica-Bold", 14)
+        rob, fix = sim["policies"]["robot"], sim["policies"]["fixed"]
+        c.drawString(18 * mm, y, f"Robot geliri: {rob['total_revenue']:,.0f}  ·  Sabit fiyata karsi {sim['robot_uplift_vs_fixed_pct']:+.1f}%")
+        y -= 8 * mm
+        c.setFillColorRGB(0.25, 0.25, 0.25)
+        c.setFont("Helvetica", 10)
+        c.drawString(18 * mm, y, f"Doluluk %{rob['occupancy_pct']} vs %{fix['occupancy_pct']}  ·  RevPAR {rob['revpar']} vs {fix['revpar']}  ·  ADR {rob['adr']} vs {fix['adr']}")
+        y -= 14 * mm
+        c.setFillColorRGB(0.1, 0.1, 0.1)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(18 * mm, y, "Rakip Kiyasi (onumuzdeki 7 gun)")
+        y -= 8 * mm
+        c.setFont("Helvetica-Bold", 9)
+        for x, t in ((18, "Tarih"), (55, "Bizim Fiyat"), (90, "Pazar Ort."), (125, "Pazar Min."), (160, "Fiyat Endeksi")):
+            c.drawString(x * mm, y, t)
+        y -= 2 * mm
+        c.line(18 * mm, y, w - 18 * mm, y)
+        y -= 6 * mm
+        c.setFont("Helvetica", 9)
+        if not comp_rows:
+            c.setFillColorRGB(0.5, 0.5, 0.5)
+            c.drawString(18 * mm, y, "Pazar taramasi verisi yok - once compset/geo taramasi calistirin.")
+            y -= 6 * mm
+        for r in comp_rows:
+            c.setFillColorRGB(0.15, 0.15, 0.15)
+            c.drawString(18 * mm, y, r["date"])
+            c.drawString(55 * mm, y, f"{r['ours']:.0f}" if r["ours"] else "-")
+            c.drawString(90 * mm, y, f"{r['avg']:.0f}" if r["avg"] else "-")
+            c.drawString(125 * mm, y, f"{r['min']:.0f}" if r["min"] else "-")
+            if r["idx"]:
+                c.setFillColorRGB(*(0.75, 0.2, 0.2) if r["idx"] > 110 else (0.02, 0.45, 0.35) if r["idx"] < 95 else (0.6, 0.45, 0.05))
+                c.drawString(160 * mm, y, f"{r['idx']:.0f}")
+            else:
+                c.drawString(160 * mm, y, "-")
+            y -= 6 * mm
+        y -= 8 * mm
+        el = await db.property_elasticity.find_one({"property_id": pid}, {"_id": 0})
+        if el and el.get("elasticity") is not None:
+            c.setFillColorRGB(0.1, 0.1, 0.1)
+            c.setFont("Helvetica-Bold", 11)
+            c.drawString(18 * mm, y, f"Fiyat Esnekligi: {el['elasticity']} (r2 {el.get('r2', 0)}, {el.get('sample_days', 0)} gun)")
+            y -= 6 * mm
+            c.setFont("Helvetica", 9)
+            c.setFillColorRGB(0.35, 0.35, 0.35)
+            c.drawString(18 * mm, y, str(el.get("verdict", ""))[:110].translate(_t))
+            y -= 10 * mm
+        c.setFont("Helvetica-Oblique", 8)
+        c.setFillColorRGB(0.45, 0.45, 0.45)
+        c.drawString(18 * mm, y, "Fiyat endeksi 100 = pazar ortalamasi. Simulasyon sentetik pazarda tekrarlanabilir tohumla kosulur.")
+        c.save()
+        buf.seek(0)
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(buf, media_type="application/pdf",
+                                 headers={"Content-Disposition": 'inline; filename="pilot-sunum.pdf"'})
+
     return router

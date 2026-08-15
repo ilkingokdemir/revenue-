@@ -749,3 +749,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Simülatör PDF: GET /api/simulator/{pid}/report-pdf (reportlab) + panelde "PDF Rapor" butonu.
 - iteration_546 %100 (backend 7/7, frontend 3/3). MOCK modda kimlik kontrolü ⚠️ olarak gösteriliyor (UX düzeltmesi).
 - Kalan: K12 esneklik güç analizi, K14 Cloudbeds adaptörü, Event Signal v2 mekan-mesafe ağırlığı, lisanslı rate-shopping feed (P2), Expo EAS build (P3, kullanıcı anahtarı bekleniyor).
+
+## Güncelleme (2026-08-15, iter 554 — K12/K14 + Event v2 + Pilot Sunum)
+- K12 Esneklik Güç Analizi: GET /api/elasticity/{pid} — log-log OLS ile tesis esnekliği (e, r², örneklem) + agresiflik faktörü (×0.75–×1.2). AI pricing motoru 7 gün taze faktörü delta ölçeklemesine uygular (evidence: "Esneklik ayarı", alan: elasticity_aggressiveness). Simülatör panelinde "Esneklik Güç Analizi" kartı.
+- K14 Cloudbeds PMS Adaptörü: /api/cloudbeds/* (status, config, test-connection, push-from-rms → putRate ≤30 aralık, pull-reservations → getReservations, log). API key yoksa MOCK. Yeni CloudbedsPanel ("cloudbeds-live" görünümü, Market & Compset menüsünde).
+- Event Signal v2: public_events artık venue_name + distance_km alır; motor ağırlığı = kapasite × mesafe sönümü (max(0.25, 1−km/10)).
+- Pilot Sunum Modu: POST/GET /api/simulator/{pid}/branding (logo_url) + GET /api/simulator/{pid}/pitch-pdf — logo + robot-vs-sabit özeti + 7 günlük rakip fiyat kıyası (fiyat endeksi) + esneklik bulgusu tek PDF. Panelde "Pilot Sunum PDF" butonu + logo girişi.
+- iteration_547: backend 16/16 %100; frontend'de SimulatorPanel state/handler eksiği (testing agent revert'i) bulunup düzeltildi, UI ekran görüntüsüyle doğrulandı. Ayrıca ai_pricing_engine.py sonundaki başıboş "router" satırı (import'u kıran NameError) temizlendi.
+- Kalan: lisanslı rate-shopping feed (P2), Expo EAS build (P3, kullanıcı anahtarı bekleniyor), Cloudbeds/HotelRunner CANLI mod (kullanıcı kimlikleri bekleniyor).

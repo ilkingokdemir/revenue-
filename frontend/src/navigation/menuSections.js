@@ -289,6 +289,7 @@ export function buildMenuSections(t, user) {
         { id: "marketing-radar", icon: Lightning, name: "Pazarlama Fırsat Radarı", testId: "marketing-radar-btn" },
         { id: "demand-calendar", icon: Sparkle, name: "Talep Takvimi", testId: "demand-calendar-btn" },
         { id: "los-wash-metrics", icon: Coins, name: "LOS & Grup Wash & Modern Metrikler", testId: "los-wash-metrics-btn" },
+        { id: "morning-report", icon: Sparkle, name: "Gece Denetim Robotu (Gün Sonu Raporu)", testId: "morning-report-btn" },
         { id: "bi-chat", icon: Sparkle, name: "Veriye Sor (BI Chat)", testId: "bi-chat-btn" },
         { id: "parking-rms", icon: ChartLine, name: "Otopark RMS", testId: "parking-rms-btn" },
 

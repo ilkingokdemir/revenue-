@@ -112,12 +112,51 @@ def create_function_space_router(db, require_roles):
         return {"ok": True, "booking": booking}
 
     @router.post("/function-space/{pid}/proposals/{prop_id}/reject")
-    async def reject(pid: str, prop_id: str, _u: dict = Depends(require_roles(*ROLES))):
+    async def reject(pid: str, prop_id: str, data: dict = None,
+                     _u: dict = Depends(require_roles(*ROLES))):
+        reason = ((data or {}).get("reason") or "belirtilmedi").strip()
         r = await db.function_proposals.update_one(
-            {"id": prop_id, "property_id": pid}, {"$set": {"status": "rejected"}})
+            {"id": prop_id, "property_id": pid},
+            {"$set": {"status": "rejected", "reject_reason": reason,
+                      "rejected_at": datetime.now(timezone.utc).isoformat()}})
         if not r.matched_count:
             raise HTTPException(404, "Teklif bulunamadı")
-        return {"ok": True}
+        return {"ok": True, "reject_reason": reason}
+
+    @router.get("/function-space/{pid}/win-analysis")
+    async def win_analysis(pid: str, months: int = 6, _u: dict = Depends(require_roles(*ROLES))):
+        months = max(3, min(12, months))
+        since = (datetime.now(timezone.utc) - timedelta(days=months * 31)).isoformat()
+        rows = await db.function_proposals.find(
+            {"property_id": pid, "created_at": {"$gte": since}},
+            {"_id": 0, "created_at": 1, "status": 1, "total": 1, "reject_reason": 1}).to_list(2000)
+        monthly, reasons = {}, {}
+        for r in rows:
+            mk = r["created_at"][:7]
+            m = monthly.setdefault(mk, {"month": mk, "sent": 0, "accepted": 0, "rejected": 0, "pending": 0, "accepted_value": 0.0})
+            m["sent"] += 1
+            if r["status"] == "accepted":
+                m["accepted"] += 1
+                m["accepted_value"] += float(r.get("total") or 0)
+            elif r["status"] == "rejected":
+                m["rejected"] += 1
+                reason = r.get("reject_reason") or "belirtilmedi"
+                reasons[reason] = reasons.get(reason, 0) + 1
+            else:
+                m["pending"] += 1
+        out = sorted(monthly.values(), key=lambda x: x["month"])
+        for m in out:
+            decided = m["accepted"] + m["rejected"]
+            m["win_rate_pct"] = round(m["accepted"] / decided * 100, 1) if decided else None
+            m["accepted_value"] = round(m["accepted_value"], 2)
+        tot_acc = sum(m["accepted"] for m in out)
+        tot_rej = sum(m["rejected"] for m in out)
+        return {"property_id": pid, "months": out,
+                "reasons": sorted([{"reason": k, "count": v} for k, v in reasons.items()],
+                                  key=lambda x: -x["count"]),
+                "total_win_rate_pct": round(tot_acc / (tot_acc + tot_rej) * 100, 1) if (tot_acc + tot_rej) else None,
+                "total_accepted_value": round(sum(m["accepted_value"] for m in out), 2),
+                "note": "Kazanma oranı = kabul / (kabul + red). Bekleyen teklifler orana dahil değildir."}
 
     @router.get("/function-space/{pid}/revpam")
     async def revpam(pid: str, days: int = 30, _u: dict = Depends(require_roles(*ROLES))):

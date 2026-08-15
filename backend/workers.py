@@ -922,6 +922,54 @@ async def proposal_reminder_loop(db, interval_seconds: int = 21600):
         await asyncio.sleep(interval_seconds)
 
 
+async def night_audit_loop(db, interval_seconds: int = 3600):
+    """Her sabah (04:00-09:00 UTC) önceki gecenin denetim raporunu üretir, anomali varsa bildirir."""
+    from routes.revenue_ext.night_audit import run_night_audit
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            if 4 <= now.hour <= 9:
+                yesterday = (now.date() - timedelta(days=1)).isoformat()
+                props = await db.properties.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1}).to_list(50)
+                if not props:
+                    props = [{"id": "default"}]
+                for p in props:
+                    pid = p["id"]
+                    if await db.morning_reports.find_one({"property_id": pid, "date": yesterday}):
+                        continue
+                    audit = await run_night_audit(db, pid, yesterday)
+                    an = audit["anomalies"]
+                    await db.notifications.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "type": "warning" if an else "info",
+                        "title": f"Gece Denetimi — {yesterday}",
+                        "message": (f"Doluluk %{audit['occupancy_pct']:g} · Gelir ₺{audit['room_revenue']:g} · "
+                                    f"ADR ₺{audit['adr']:g} · {audit['arrivals']} giriş / {audit['departures']} çıkış. "
+                                    + (f"⚠ {len(an)} anomali: " + " | ".join(an) if an else "Anomali yok — her şey yolunda.")),
+                        "category": "operations", "target_user": "", "target_role": "manager",
+                        "link_to": "morning-report", "priority": "high" if an else "normal", "read": False,
+                        "created_by": "Gece Denetim Robotu", "created_at": now.isoformat()})
+                    logger.info(f"night_audit: {pid} {yesterday} anomalies={len(an)}")
+        except Exception as e:
+            logger.warning(f"night_audit_loop error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
+async def drift_autopush_loop(db, interval_seconds: int = 21600):
+    """auto_repush açık tesislerde fiyat sapması bulursa kanala otomatik düzeltme gönderir."""
+    from routes.distribution.hotelrunner_live import repush_drifted
+    while True:
+        try:
+            cfgs = await db.hotelrunner_config.find({"auto_repush": True}, {"_id": 0, "property_id": 1}).to_list(50)
+            for cfg in cfgs:
+                r = await repush_drifted(db, cfg["property_id"], triggered_by="auto")
+                if r["repushed"]:
+                    logger.info(f"drift_autopush: {cfg['property_id']} repushed={r['repushed']}")
+        except Exception as e:
+            logger.warning(f"drift_autopush_loop error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def marketing_radar_loop(db, interval_seconds: int = 3600):
     """Fırsat Radarı otomasyonu — haftada bir tesis başına tarar, pencere bulursa bildirim düşer."""
     import logging

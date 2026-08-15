@@ -717,3 +717,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 
 ## Güncelleme (2026-08-15, iter 548)
 - Teklif takip hatırlatma robotu (3 gün yanıtsız → otomatik e-posta kuyruğu + bildirim) ve kanal fiyat sapma tablosu (kırmızı vurgulu, ±%5 eşik) tamamlandı (iteration_540 %100).
+
+## Güncelleme (2026-08-15, RM Robot MVP Gap Analizi)
+- Kullanıcının yüklediği rm_robot_mvp_roadmap.md (25 madde) kod tabanıyla karşılaştırıldı: 12 kalem ZATEN TAMAM (Net RevPAR, guardrail çekirdeği, açıklanabilirlik, onay akışı, kanal adaptörü, RGI ölçümü, hava/tatil sinyalleri...).
+- 10 gerçek eksik ROADMAP.md'ye P0-P3 önceliğiyle eklendi (G1-G10). D1 uyum ilkeleri anayasası yazıldı: /app/memory/UYUM_ILKELERI_D1.md.
+- P0 sıradaki işler: G1 guardrail sertleştirme (±%15 adım limiti + günlük push limiti), G2 öneri kabul oranı metriği + red nedeni etiketleme.

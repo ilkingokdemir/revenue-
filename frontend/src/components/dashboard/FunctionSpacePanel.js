@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Buildings, FileText, ChartBar } from "@phosphor-icons/react";
+import { Buildings, FileText, ChartBar, Trophy } from "@phosphor-icons/react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const STATUS = { sent: "bg-sky-100 text-sky-700", accepted: "bg-emerald-100 text-emerald-700", rejected: "bg-stone-200 text-stone-500" };
@@ -17,19 +18,23 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
   const [busy, setBusy] = useState(false);
   const [cal, setCal] = useState(null);
   const [weekStart, setWeekStart] = useState("");
+  const [winData, setWinData] = useState(null);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [rejectReason, setRejectReason] = useState("fiyat");
 
   const load = useCallback(async () => {
     try {
-      const [s, r, p, c] = await Promise.all([
+      const [s, r, p, c, w] = await Promise.all([
         axios.get(`${API}/api/spaces/${pid}`, { withCredentials: true }),
         axios.get(`${API}/api/function-space/${pid}/revpam`, { withCredentials: true }),
         axios.get(`${API}/api/function-space/${pid}/proposals`, { withCredentials: true }),
         axios.get(`${API}/api/function-space/${pid}/calendar${weekStart ? `?week_start=${weekStart}` : ""}`, { withCredentials: true }),
+        axios.get(`${API}/api/function-space/${pid}/win-analysis?months=6`, { withCredentials: true }),
       ]);
       const meets = (s.data.spaces || s.data || []).filter((x) => x.kind === "meeting_room");
       setSpaces(meets);
       if (meets.length && !form.space_id) setForm((f) => ({ ...f, space_id: meets[0].id }));
-      setRevpam(r.data); setProps(p.data.proposals || []); setCal(c.data);
+      setRevpam(r.data); setProps(p.data.proposals || []); setCal(c.data); setWinData(w.data);
     } catch { toast.error("Fonksiyon alanı verileri yüklenemedi"); }
   }, [pid, weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -62,6 +67,14 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
       await axios.post(`${API}/api/function-space/${pid}/proposals/${id}/${action}`, {}, { withCredentials: true });
       toast.success(action === "accept" ? "Teklif kabul edildi — salon rezerve edildi" : "Teklif reddedildi");
       load();
+    } catch (e) { toast.error(e.response?.data?.detail || "İşlem başarısız"); }
+  };
+
+  const confirmReject = async (id) => {
+    try {
+      await axios.post(`${API}/api/function-space/${pid}/proposals/${id}/reject`, { reason: rejectReason }, { withCredentials: true });
+      toast.success("Teklif reddedildi — neden kaydedildi");
+      setRejectingId(null); load();
     } catch (e) { toast.error(e.response?.data?.detail || "İşlem başarısız"); }
   };
 
@@ -126,7 +139,7 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
       <section className="grid md:grid-cols-2 gap-4">
         <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-3" data-testid="fs-quote-form">
           <h2 className="text-base font-bold text-stone-800">Hızlı Teklif</h2>
-          <select value={form.space_id} onChange={(e) => F("space_id", e.target.value)} data-testid="fs-space-select" className="w-full border border-stone-300 rounded-lg px-2.5 py-2 text-sm">
+          <select value={form.space_id} onChange={(e) => { const sp = spaces.find((s) => s.id === e.target.value); setForm((f) => ({ ...f, space_id: e.target.value, attendees: sp?.capacity ? Math.min(f.attendees, sp.capacity) : f.attendees })); }} data-testid="fs-space-select" className="w-full border border-stone-300 rounded-lg px-2.5 py-2 text-sm">
             {spaces.map((s) => <option key={s.id} value={s.id}>{`${s.name} (${s.capacity} kişi)`}</option>)}
           </select>
           <div className="grid grid-cols-3 gap-2">
@@ -203,6 +216,51 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
         </section>
       )}
 
+      {winData && (
+        <section data-testid="fs-win-section">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2"><Trophy size={16} className="text-amber-500" /><h2 className="text-base font-bold text-stone-800">Teklif Kazanma Analizi (6 ay)</h2></div>
+            <div className="flex gap-2">
+              {winData.total_win_rate_pct != null && (
+                <span className={`px-2.5 py-1 rounded-full text-[11px] font-black ${winData.total_win_rate_pct >= 50 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`} data-testid="fs-win-rate-badge">Kazanma oranı: %{winData.total_win_rate_pct}</span>
+              )}
+              <span className="px-2.5 py-1 rounded-full bg-stone-100 text-stone-600 text-[11px] font-black" data-testid="fs-win-value">Kazanılan ciro: ₺{winData.total_accepted_value.toLocaleString("tr-TR")}</span>
+            </div>
+          </div>
+          <div className="grid md:grid-cols-3 gap-3">
+            <div className="md:col-span-2 bg-white border border-stone-200 rounded-xl p-3" data-testid="fs-win-chart">
+              {winData.months.length === 0 ? <p className="text-sm text-stone-500 p-3">Henüz teklif verisi yok.</p> : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={winData.months} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="accepted" name="Kabul" fill="#059669" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="rejected" name="Red" fill="#e11d48" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="pending" name="Bekleyen" fill="#a8a29e" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <div className="bg-white border border-stone-200 rounded-xl p-3" data-testid="fs-loss-reasons">
+              <div className="text-xs font-bold text-stone-500 mb-2">KAYBEDİLME NEDENLERİ</div>
+              {winData.reasons.length === 0 ? <p className="text-[12px] text-stone-400">Henüz red nedeni kaydedilmedi — Red butonunda neden seçin.</p> : (
+                <div className="space-y-1.5">
+                  {winData.reasons.map((r) => (
+                    <div key={r.reason} className="flex items-center justify-between text-sm" data-testid={`fs-reason-${r.reason}`}>
+                      <span className="capitalize text-stone-700">{r.reason}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[11px] font-black">{r.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] text-stone-400 mt-2">{winData.note}</p>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section data-testid="fs-proposals-section">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <div className="flex items-center gap-2"><FileText size={16} className="text-stone-600" /><h2 className="text-base font-bold text-stone-800">Teklifler ({props.length})</h2></div>
@@ -226,11 +284,25 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
                       {p.reminder_sent_at && <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold" data-testid={`fs-reminded-${p.id}`}>⏰ Hatırlatıldı</span>}
                     </td>
                     <td className="p-2.5">
-                      <div className="flex gap-1.5 flex-wrap">
-                        {p.status === "sent" && (
+                      <div className="flex gap-1.5 flex-wrap items-center">
+                        {p.status === "sent" && rejectingId !== p.id && (
                           <>
                             <button onClick={() => act(p.id, "accept")} data-testid={`fs-accept-${p.id}`} className="px-2 py-1 rounded-md bg-emerald-600 text-white text-[11px] font-bold">Kabul + Rezerve</button>
-                            <button onClick={() => act(p.id, "reject")} data-testid={`fs-reject-${p.id}`} className="px-2 py-1 rounded-md bg-stone-200 text-stone-600 text-[11px] font-bold">Red</button>
+                            <button onClick={() => { setRejectingId(p.id); setRejectReason("fiyat"); }} data-testid={`fs-reject-${p.id}`} className="px-2 py-1 rounded-md bg-stone-200 text-stone-600 text-[11px] font-bold">Red</button>
+                          </>
+                        )}
+                        {p.status === "sent" && rejectingId === p.id && (
+                          <>
+                            <select value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} data-testid={`fs-reject-reason-${p.id}`} className="border border-stone-300 rounded-md px-1.5 py-1 text-[11px]">
+                              <option value="fiyat">Fiyat yüksek</option>
+                              <option value="tarih">Tarih uymadı</option>
+                              <option value="mekan">Mekan beğenilmedi</option>
+                              <option value="rakip">Rakibe gitti</option>
+                              <option value="iptal">Etkinlik iptal</option>
+                              <option value="diğer">Diğer</option>
+                            </select>
+                            <button onClick={() => confirmReject(p.id)} data-testid={`fs-reject-confirm-${p.id}`} className="px-2 py-1 rounded-md bg-rose-600 text-white text-[11px] font-bold">Onayla</button>
+                            <button onClick={() => setRejectingId(null)} className="px-2 py-1 rounded-md bg-stone-100 text-stone-500 text-[11px] font-bold">Vazgeç</button>
                           </>
                         )}
                         <a href={`${API}/api/function-space/${pid}/proposals/${p.id}/pdf`} target="_blank" rel="noreferrer" data-testid={`fs-pdf-${p.id}`} className="px-2 py-1 rounded-md bg-indigo-100 text-indigo-700 text-[11px] font-bold">PDF</a>

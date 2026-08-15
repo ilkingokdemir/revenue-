@@ -218,6 +218,7 @@ import {
   LosWashMetricsPanel,
   FunctionSpacePanel,
   HotelRunnerPanel,
+  MorningReportPanel,
   RevenueStrategistPanel,
   ReviewAgentPanel,
   ReviewSentimentPanel,
@@ -829,6 +830,9 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         )}
         {activeView === "hotelrunner-live" && (
           <HotelRunnerPanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "morning-report" && (
+          <MorningReportPanel activePropertyId={activePropertyId} properties={properties} />
         )}
 
         {/* Setup Wizard */}

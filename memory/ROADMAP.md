@@ -170,3 +170,52 @@ Nihai sıra: 1-TalepTakvimi, 2-TopluGeriAlma, 3-OrphanGap, 4-LOS, 5-GrupWash, 6-
 *Lighthouse rate-shop gerçek verisi API anahtarı bekliyor (BLOKLU).
 
 - [x] Canlı Kanal: HotelRunner ARI push altyapısı (iter 547) — GERÇEK moda geçiş için kullanıcıdan HR_ID+TOKEN bekleniyor
+
+# ============================================================
+# RM ROBOT MVP GAP ANALİZİ (2026-08-15, kullanıcı dokümanı: rm_robot_mvp_roadmap.md)
+# 25 maddelik eksik listesi bizim kod tabanıyla karşılaştırıldı.
+# ============================================================
+
+## ZATEN BİZDE VAR (doküman istiyor, biz tamamlamışız) ✅
+- B4 Net RevPAR hedef fonksiyonu → ai_pricing_engine (net contribution + CPOR + komisyon) ✅
+- B5 Guardrail (kısmi) → min_rate_floors + LRV clamp + anomaly freeze + 1-click rollback ✅
+- B7 Açıklanabilirlik → her öneri "neden" dökümü + AI context + freeze_reason ✅
+- C6 İnsan onay akışı → öneri + onay/red UI + applied logu ✅
+- B8 Model izleme → MAPE takibi + Error Sentinel + haftalık Exec Report PDF ✅
+- B9 Servis mimarisi → FastAPI + supervisor + background loops ✅
+- B3 Fiyat karar motoru → kural tablosu + occupancy/lead-time çarpanları ✅
+- C2 Kanal yazma adaptörü → HotelRunner ARI push (canlı-hazır, kimlik bekliyor) + SiteMinder inbound + partner başvuru şablonu ✅
+- C5/A6 Ölçüm protokolü → RGI Market Index Proof Panel (pazar-düzeltmeli kıyas) ✅
+- A4 Dış talep sinyalleri → hava durumu + tatil takvimi (forecast_v2, historical_pricing) ✅
+- Grup wash + LOS + parity monitor + orphan gap ✅
+- D2 KVKK/GDPR modülleri → gdpr, eu_compliance, audit_trail ✅
+
+## GERÇEK EKSİKLER — MVP'YE EKLENDİ (öncelik sırasıyla)
+- [ ] P0-G1 (B5 tamamlama) GUARDRAIL SERTLEŞTİRME: tek adımda ±%15 üstü fiyat değişim bloğu +
+      günlük push limiti (N/gün) + guardrail ihlal logu. (Mevcut min/max + freeze'in üstüne.)
+- [ ] P0-G2 (C6 tamamlama) ÖNERİ KABUL ORANI METRİĞİ: kabul/red oranı raporu + red nedenleri
+      etiketli veri olarak loglanır (modelin kör nokta haritası). Hedef: kabul ≥%70.
+- [ ] P0-G3 (D1) UYUM İLKELERİ ANAYASASI: /app/memory/UYUM_ILKELERI_D1.md YAZILDI ✅ (2026-08-15).
+      Kod tarafı: compset girdilerine source etiketi zorunluluğu eklenecek.
+- [ ] P1-G4 (B1) BEKLENEN NET OTB: transient p_cancel skoru (rezervasyon başına iptal olasılığı,
+      lead time + kanal + fiyat + LOS özellikleriyle) → brüt OTB'den düşülür. Grup wash'ın
+      transient karşılığı. Fiyatlama motoru net OTB ile çalışır.
+- [ ] P1-G5 (B6) İPTAL MODELİ KALİBRASYONU: isotonic regression + aylık yeniden kalibrasyon +
+      kalibrasyon testi (AUC değil olasılık doğruluğu).
+- [ ] P1-G6 SHADOW MODE: 4 hafta robot önerir ama push edilmez; robot önerisi vs otelin gerçek
+      fiyat kararı karşılaştırma raporu (pilot güven inşası).
+- [ ] P2-G7 (B2) TALEP SİMÜLATÖRÜ / BACKTEST: MNL seçim modeli + iptal modeli + basit rakip
+      kuralı = sentetik pazar; politika backtesti (sabit fiyat vs dün+%X vs robot).
+- [ ] P2-G8 (A2/D4) LİSANSLI RATE SHOPPING: mock compset verisi canlıda lisanslı kaynak/resmi
+      API ile değiştirilecek. Scraping yasak (D4).
+- [ ] P3-G9 (A3) ESNEKLİK ÖĞRENİMİ: canlıda %5-10 kontrollü fiyat randomizasyonu (yeterli hacim
+      + otel onayı şartıyla) — bilinçli erteleme.
+- [ ] P3-G10 (A5) HAVUZ VERİ HENDEĞİ: pilot sözleşmesine anonim veri kullanım izni + 3. otelden
+      itibaren transfer learning ile soğuk başlangıç çözümü.
+
+## TİCARİ KRİTİK YOL (kod değil — kullanıcı aksiyonu)
+- C2 kanal yöneticisi partner BAŞVURUSUNU ŞİMDİ gönder (şablon hazır: PARTNER_BASVURU_KANAL_YONETICISI.md).
+  En uzun süreç bu; HotelRunner adaptörümüz kimlik gelir gelmez canlıya geçer.
+- C1 pilot otel: 1-3 otel görüşmesi; ücretsiz/indirimli pilot ↔ veri izni + vaka çalışması hakkı.
+- C3 niş kararı: Türkiye 50-200 oda butik/orta segment + yerel kanal yöneticileri (mevcut analiz dosyalarıyla uyumlu).
+- C4 birim ekonomi: oda başına aylık fiyat + rate shopper maliyeti hesabı.

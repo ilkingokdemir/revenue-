@@ -68,6 +68,24 @@ export default function HotelRunnerPanel({ activePropertyId, properties = [] }) 
     } catch (e) { toast.error(e.response?.data?.detail || "Çekme başarısız"); } finally { setBusy(false); }
   };
 
+  const repushDrift = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/hotelrunner/re-push-drift/${pid}`, {}, { withCredentials: true });
+      toast.success(r.data.repushed > 0 ? `${r.data.repushed} tarihteki sapma düzeltilip kanala gönderildi (${r.data.mocked ? "MOCK" : "CANLI"})` : "Sapma yok — push gerekmedi");
+      load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Yeniden push başarısız"); } finally { setBusy(false); }
+  };
+
+  const toggleAutoRepush = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/hotelrunner/config/${pid}`, { auto_repush: !status?.auto_repush }, { withCredentials: true });
+      setStatus((s) => ({ ...s, auto_repush: r.data.auto_repush }));
+      toast.success(r.data.auto_repush ? "Otomatik yeniden push AÇIK — sapmalar 6 saatte bir kendiliğinden düzeltilir" : "Otomatik yeniden push kapatıldı");
+    } catch { toast.error("Ayar kaydedilemedi"); } finally { setBusy(false); }
+  };
+
   const live = status?.mode === "live";
 
   return (
@@ -129,6 +147,13 @@ export default function HotelRunnerPanel({ activePropertyId, properties = [] }) 
             <span className={`px-2.5 py-1 rounded-full text-[11px] font-black ${drift.drift_count > 0 ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`} data-testid="hr-drift-badge">
               {drift.drift_count > 0 ? `${drift.drift_count} tarihte sapma` : "Uyumlu"}
             </span>
+            {drift.drift_count > 0 && (
+              <button onClick={repushDrift} disabled={busy} data-testid="hr-repush-btn" className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-[12px] font-bold disabled:opacity-50">⚡ Sapmaları Yeniden Push'la</button>
+            )}
+            <label className="flex items-center gap-1.5 text-[12px] font-bold text-stone-600 cursor-pointer">
+              <input type="checkbox" checked={!!status?.auto_repush} onChange={toggleAutoRepush} disabled={busy} data-testid="hr-auto-repush-toggle" />
+              Otomatik düzelt (6 saatte bir)
+            </label>
           </div>
           <p className="text-[12px] text-stone-500 mb-2">{drift.note}{drift.last_push_at ? ` · Son push: ${String(drift.last_push_at).slice(0, 16).replace("T", " ")} (${drift.last_push_mode === "live" ? "CANLI" : "MOCK"})` : " · Henüz push yapılmadı — önce ARI Push çalıştırın."}</p>
           <div className="bg-white border border-stone-200 rounded-xl overflow-x-auto">

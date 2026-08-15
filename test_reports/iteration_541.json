@@ -1,0 +1,46 @@
+{
+  "summary": "Frontend testing for Auto Re-Push, Night Audit Robot (Gece Denetim Robotu / morning-report), and Proposal Win Analysis. Most flows PASSED after applying null-safety fix in MorningReportPanel (see updated_files). One backend data-contract bug discovered: GET /api/morning-report/{pid} returns MIXED records — the new morning_audits (correct schema with room_revenue/adr/occupancy_pct at top-level) PLUS legacy ops night-audit checklist docs (audit_date/checks/occupancy.occupancy_pct nested) — this caused the panel to crash (`Cannot read properties of undefined (reading 'toLocaleString')` at MorningReportPanel line 95 map). Verified: HotelRunner drift = 'Uyumlu' (green), hr-repush-btn hidden, hr-auto-repush-toggle checked=true, off-toast 'Otomatik yeniden push kapatıldı' and on-toast 'Otomatik yeniden push AÇIK — sapmalar 6 saatte bir kendiliğinden düzeltilir'. Morning report: last section shows occ 116.7% / rev ₺731.77 / adr ₺104.54 / moves 5/2 / anomalies green, history table renders 3 rows (but 2 legacy rows show %0/₺0 due to mixed data). fs-win-section renders: badge 'Kazanma oranı: %75' → after reject flipped to %60, value ₺2.475, chart with Bekleyen/Kabul/Red bars for 2026-08, loss reasons fiyat:1 → after reject fiyat:1 + rakip:1. Reject-with-reason: 6 options [fiyat,tarih,mekan,rakip,iptal,diğer], toast 'Teklif reddedildi — neden kaydedildi', status flipped to Red. Regressions: hr-push-btn MOCK toast fires ('MOCK push simüle edildi (14 gün)'), los-wash-metrics-btn present. Auto-repush toggle LEFT ON at end.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/morning-report/{pid}",
+        "issue": "Returns mixed audit records — new morning_audits (Gece Denetim Robotu schema with top-level room_revenue/adr/occupancy_pct) AND legacy ops night-audit checklist docs (audit_date/checks/occupancy.occupancy_pct nested, no top-level room_revenue). This crashed MorningReportPanel because .toLocaleString was called on undefined room_revenue. Problem statement explicitly states this endpoint must be 'distinct from existing ops night-audit checklist'. Fix: filter query to only return docs with schema key `date` (or add `source: 'morning_robot'` marker) and exclude legacy `audit_date` docs. History table currently shows ghost rows with %0 ₺0 for legacy records.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "MorningReportPanel",
+        "issue": "React warning: 'Each child in a list should have a unique key prop' during history table render — <tr key={a.date}> conflicts when legacy audits share the same date or missing date. Not blocking but should be fixed after backend cleanup.",
+        "selector": "[data-testid=\"mr-history-table\"] tbody tr",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "BACKEND: Fix /api/morning-report/{pid} to only return NEW morning_audits collection/schema — exclude ops night-audit checklist docs (they belong to a separate collection consumed by night-audit-btn ops panel).",
+    "FRONTEND: Once backend fix lands, the null-safety fallbacks I added still work; consider reverting to strict typing OR leave defensive rendering as-is.",
+    "Confirm morning-report entry point placement matches spec: request says sidebar right after 'LOS & Grup Wash' under AI & Insights — verify sidebar section (in my test session, expanding REVENUE & RATES exposed the button)."
+  ],
+  "critical_code_review_comments": [
+    "MorningReportPanel.js line 95 (original) called `a.room_revenue.toLocaleString(...)` and line 61 `last.room_revenue.toLocaleString(...)` without null-safety — any missing field from backend crashes entire panel via ErrorBoundary. Fixed with `??` fallbacks.",
+    "Backend /api/morning-report should filter by discriminator field to avoid leaking legacy ops-checklist audit records.",
+    "FunctionSpacePanel proposal creation defaults attendees to a value that exceeds Executive Toplantı Odası capacity (8) — creating a proposal from a fresh form without lowering attendees yields 'Kapasite aşımı' error. Consider defaulting attendees to space.capacity or showing capacity hint next to input."
+  ],
+  "updated_files": [
+    "/app/frontend/src/components/dashboard/MorningReportPanel.js (added null-safety `?? 0` guards around room_revenue, adr, occupancy_pct, anomalies.length in Card + history table + runNow toast)"
+  ],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "~95% (all UI flows verified; 1 backend data leak surfaced through UI)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Created 1 new proposal 'QA Red Test 3' (space=Executive, attendees=4, date=2026-08-15) and rejected it with reason 'rakip'. Also triggered morning-report /run once creating 1 audit for 2026-08-14. Auto-repush toggle toggled off→on twice (final state = ON).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sidebar nav: morning-report-btn located under a collapsible section (found by expanding sections). function-space-btn is under REVENUE & RATES section (NOT under Food & Events — that section contains 'Meeting & Events sales' which is a different panel, the MICE Sales pipeline). Login shows harmless 401 on stale token; URL may stay /login while dashboard renders. To create a fresh proposal for reject-flow, set fs-attendees to <=8 first (default space Executive cap=8). After reject, win-rate recomputes to 60% because we now have 3 accepted / 2 rejected.",
+  "rca of the issue": "MorningReportPanel crash RCA: backend endpoint /api/morning-report/{pid} queries a MongoDB collection that contains BOTH the new Gece Denetim Robotu audits (schema: {date, room_revenue, adr, occupancy_pct, anomalies[], ...}) AND legacy ops night-audit checklist audits (schema: {audit_date, overall_status, checks{}, occupancy{occupancy_pct,adr}, revenue{room_revenue}}). Frontend iterates `audits.map(a => a.room_revenue.toLocaleString(...))` — legacy docs have no top-level `room_revenue`, causing TypeError and ErrorBoundary fallback ('Bir şeyler ters gitti'). Mitigation applied at frontend: null-safety `(a.room_revenue ?? 0).toLocaleString(...)`. Real fix belongs in backend night_audit.py: query only new schema (e.g., filter `date` exists, or use dedicated collection like morning_audits, or add a discriminator field like source='morning_robot')."
+}

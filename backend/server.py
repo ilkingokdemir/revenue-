@@ -1764,6 +1764,8 @@ from routes.distribution.siteminder_adapter import create_siteminder_router
 api_router.include_router(create_siteminder_router(db, require_roles))
 from routes.distribution.hotelrunner_live import create_hotelrunner_router
 api_router.include_router(create_hotelrunner_router(db, require_roles))
+from routes.revenue_ext.night_audit import create_night_audit_router
+api_router.include_router(create_night_audit_router(db, require_roles))
 
 # ===== Booking.com Premier prototype (Iter 290 - XML push, pre-cert ready) =====
 from routes.distribution.booking_com import create_booking_com_router
@@ -2100,6 +2102,9 @@ async def startup_event():
     asyncio.create_task(group_wash_alert_loop(db))
     from workers import proposal_reminder_loop
     asyncio.create_task(proposal_reminder_loop(db))
+    from workers import night_audit_loop, drift_autopush_loop
+    asyncio.create_task(night_audit_loop(db))
+    asyncio.create_task(drift_autopush_loop(db))
     asyncio.create_task(profit_autopilot_loop(db))
     asyncio.create_task(data_quality_sentinel_loop(db))
     asyncio.create_task(open_pricing_optimizer_loop(db))

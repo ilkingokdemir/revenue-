@@ -236,16 +236,16 @@ Nihai sıra: 1-TalepTakvimi, 2-TopluGeriAlma, 3-OrphanGap, 4-LOS, 5-GrupWash, 6-
       (anomali dondurmanın üstünde, tesis+global seviye)
 
 ## P1 — Model olgunluğu
-- [ ] K4 İPTAL MODELİ v2: p_cancel'e kanal + iade edilebilirlik (refundable/non-ref) +
+- [x] K4 İPTAL MODELİ v2 (TAMAM iter 551): p_cancel'e kanal + iade edilebilirlik (refundable/non-ref) +
       no-show özellikleri; Brier skoru + temporal validation + data-trust kapısı
       (G5 isotonic ile birleşik iş)
-- [ ] K5 GÜVEN SEMANTİĞİ + KANIT ZARFI: her öneriye confidence skoru + dayanak kanıt
+- [x] K5 GÜVEN SEMANTİĞİ + KANIT ZARFI (TAMAM iter 551): her öneriye confidence skoru + dayanak kanıt
       listesi (veri tazeliği, örneklem, sinyal uyumu); düşük güven → öneri "gri" gösterilir
-- [ ] K6 VERİ-GÜVEN KAPISI: girdi verisi bayat/eksik/sapan ise model o tarihi fiyatlamaz
+- [x] K6 VERİ-GÜVEN KAPISI (TAMAM iter 551): girdi verisi bayat/eksik/sapan ise model o tarihi fiyatlamaz
       (data_quality modülüyle motor arasına kapı)
 - [x] K7 (TAMAM iter 550) SHADOW ÇIKIŞ KRİTERLERİ: yazılı exit-criteria (ör. 4 hafta + uyum ≥%X + MAE ≤Y)
       dokümanı + panelde "canlıya geçmeye hazır" rozeti
-- [ ] K8 EVENT SİNYALİ v2: etkinlik sinyaline mekan kapasitesi ağırlığı + otele uzaklık
+- [x] K8 EVENT SİNYALİ v2 (TAMAM iter 551): etkinlik sinyaline mekan kapasitesi ağırlığı + otele uzaklık
       (rakipte Ticketmaster/PredictHQ venue-weighted; bizde public_events zayıf)
 
 ## P2 — Simülasyon ve fiyat bilimi

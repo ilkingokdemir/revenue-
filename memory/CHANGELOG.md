@@ -4012,3 +4012,21 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   logu. db.compset_live kaynak etiketli (scraped_live/mock_fallback/mock). UI: mod pilleri + Şimdi Tara.
 - UI düzeltme: ihlal tablosunda kill_switch tipi ayrı '🛑 KILL SWITCH' etiketi.
 - TEST: iteration_543.json — frontend %100 (a-e hepsi), backend curl doğrulaması main agent.
+
+## Iter 551 (2026-08-15) — Rakip Gap P1: K4+K5+K6+K8
+- K5 GÜVEN ZARFI: her öneride confidence (0.05-0.95) + evidence dizisi (iptal örneklemi, OTB sinyali,
+  tarih yakınlığı, STR, öğrenilmiş çarpan, etkinlik, veri-güven uyarısı). UI (AIPricingEnginePanel —
+  MarketRobot > ai-pricing alt sekmesi): G%XX rozeti (yeşil/amber/gri) + <0.5 → satır soluk/gri +
+  tooltip kanıt listesi. auto_apply_eligible artık confidence≥0.5 şartlı.
+- K4 İPTAL MODELİ v2: net_otb — lead×kanal(ota/direct)×iade(ref/nonref) combo oranları (hiyerarşik
+  smoothing) + compute_calibration: temporal split (%70/%30), Brier=0.3599, 5-bin isotonic haritası
+  db.cancel_calibration → p_cancel'e otomatik uygulanır. GET/POST /api/net-otb/{pid}/calibration|calibrate
+  + workers.calibration_loop (her ayın 1'i).
+- K6 VERİ-GÜVEN KAPISI: _build_suggestions tesis seviyesi kontrol (son rezervasyon >14g bayat,
+  örneklem <20, envanter yok) → payload.data_trust; low ise HER İKİ auto-apply yolu gated döner,
+  confidence -0.2 ve kanıta ⚠ eklenir.
+- K8 EVENT SİNYALİ v2: public_events kapasite ağırlıklı çarpan (cap/2000×%15, tarih başı max %25)
+  suggested_rate'e uygulanır (ceil_rate sınırlı) + 🎫+%X rozeti. Demo: 4000 kişilik konser → +%15.
+- BUGFIX: kronik '<span> in <option>' uyarısının kaynağı AIPricingV2Panel:103 bulunup düzeltildi.
+- TEST: iteration_544.json — frontend %100 (60 satır rozetli, 4 event rozeti, tooltip kanıtları,
+  Trust Center regresyon temiz). Backend curl: Brier/kalibrasyon/gate/boost doğrulandı.

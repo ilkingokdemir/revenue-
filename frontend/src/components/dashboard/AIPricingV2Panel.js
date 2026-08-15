@@ -100,7 +100,7 @@ export default function AIPricingV2Panel({ propertyId, hotelName = "" }) {
             className="bg-stone-900 border border-stone-800 text-stone-100 text-xs rounded-lg px-2 py-1.5"
             data-testid="ai-v2-room-type">
             {roomTypes.length === 0 && <option>No room types</option>}
-            {roomTypes.map(rt => <option key={rt.id} value={rt.id}>{rt.name} · £{rt.base_rate}</option>)}
+            {roomTypes.map(rt => <option key={rt.id} value={rt.id}>{`${rt.name} · £${rt.base_rate}`}</option>)}
           </select>
           <div className="flex items-center gap-1 bg-stone-900 border border-stone-800 rounded-xl p-0.5">
             {[7, 14, 21, 30].map(d => (

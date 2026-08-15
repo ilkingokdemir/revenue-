@@ -351,6 +351,39 @@ def create_ai_pricing_router(db, require_roles):
         except Exception:
             _cstats = None
 
+        # K8: kapasite ağırlıklı etkinlik çarpanı haritası
+        event_map = {}
+        try:
+            _t0 = datetime.now(timezone.utc).date()
+            _evs = await db.public_events.find(
+                {"date": {"$gte": _t0.isoformat(), "$lte": (_t0 + timedelta(days=days)).isoformat()}},
+                {"_id": 0, "date": 1, "capacity": 1, "title": 1}).to_list(500)
+            for _e in _evs:
+                _w = min(int(_e.get("capacity") or 0) / 2000.0, 1.0) * 0.15
+                event_map[_e["date"]] = min(event_map.get(_e["date"], 0.0) + _w, 0.25)
+        except Exception:
+            pass
+
+        # K6: veri-güven kapısı (tesis seviyesi)
+        trust_reasons = []
+        _last_bk = await db.bookings.find_one({"property_id": property_id},
+                                              {"_id": 0, "created_at": 1}, sort=[("created_at", -1)])
+        if not _last_bk:
+            trust_reasons.append("Hiç rezervasyon verisi yok — model körlemesine fiyatlayamaz")
+        else:
+            try:
+                _age = (datetime.now(timezone.utc)
+                        - datetime.fromisoformat(str(_last_bk["created_at"]).replace("Z", "+00:00"))).days
+                if _age > 14:
+                    trust_reasons.append(f"Son rezervasyon {_age} gün önce — veri bayat")
+            except Exception:
+                pass
+        if _cstats and _cstats.get("sample", 0) < 20:
+            trust_reasons.append(f"İptal modeli örneklemi yetersiz ({_cstats.get('sample', 0)} < 20)")
+        if not total_rooms:
+            trust_reasons.append("Oda envanteri tanımsız")
+        data_trust = {"level": "low" if trust_reasons else "ok", "reasons": trust_reasons}
+
         async def _occ_for(snap):
             return snap.get("date"), await _occupancy_for_date(property_id, snap.get("date", ""), total_rooms, _cstats)
         occ_results = await asyncio.gather(*[_occ_for(s) for s in snaps]) if snaps else []
@@ -416,6 +449,42 @@ def create_ai_pricing_router(db, require_roles):
                 prev_decision = dec_map.get((date, rt_id), {})
                 status = prev_decision.get("status", "pending")
 
+                # K8: etkinlik boost'u
+                ev_boost = event_map.get(date, 0.0)
+                if ev_boost > 0:
+                    _boosted = round(min(calc["ceil_rate"], calc["suggested_rate"] * (1 + ev_boost)), 2)
+                    calc["suggested_rate"] = _boosted
+                    if current_rate:
+                        calc["delta_vs_current_pct"] = round((_boosted - current_rate) / current_rate * 100.0, 2)
+
+                # K5: güven zarfı — skor + dayanak kanıt listesi
+                evidence, _conf = [], 0.4
+                if _cstats and _cstats.get("sample", 0) >= 100:
+                    _conf += 0.15
+                    evidence.append(f"İptal modeli örneklemi güçlü ({_cstats['sample']} rezervasyon)")
+                elif _cstats:
+                    evidence.append(f"İptal örneklemi sınırlı ({_cstats.get('sample', 0)} rezervasyon)")
+                if occ_data.get("bookings", 0) > 0:
+                    _conf += 0.15
+                    evidence.append(f"Tarihte {occ_data['bookings']} aktif rezervasyon (OTB sinyali)")
+                if days_out <= 30:
+                    _conf += 0.15
+                    evidence.append(f"Yakın tarih ({days_out}g) — pickup verisi taze")
+                else:
+                    evidence.append(f"Uzak tarih ({days_out}g) — belirsizlik yüksek")
+                if str_snap:
+                    _conf += 0.1
+                    evidence.append("Canlı STR pazar sinyali mevcut")
+                if learned_mult != 1.0:
+                    _conf += 0.05
+                    evidence.append("Öğrenilmiş çarpan devrede (geçmiş kararlardan)")
+                if ev_boost > 0:
+                    evidence.append(f"Etkinlik sinyali: kapasite ağırlıklı +%{ev_boost*100:.0f} boost")
+                if data_trust["level"] == "low":
+                    _conf -= 0.2
+                    evidence.append("⚠ Veri-güven kapısı: " + "; ".join(data_trust["reasons"]))
+                confidence = round(max(0.05, min(_conf, 0.95)), 2)
+
                 item = {
                     "id": f"{property_id}:{date}:{rt_id or 'default'}",
                     "property_id": property_id,
@@ -438,9 +507,13 @@ def create_ai_pricing_router(db, require_roles):
                     "bookings": occ_data.get("bookings", 0),
                     "total_rooms": occ_data.get("total_rooms", total_rooms),
                     **calc,
+                    "confidence": confidence,
+                    "evidence": evidence,
+                    "event_boost_pct": round(ev_boost * 100, 1) if ev_boost else 0,
                     "status": status,
                     "decision_reason": prev_decision.get("reason"),
-                    "auto_apply_eligible": abs(calc["delta_vs_current_pct"]) <= float(cfg.get("auto_apply_threshold_pct", 5.0)),
+                    "auto_apply_eligible": (abs(calc["delta_vs_current_pct"]) <= float(cfg.get("auto_apply_threshold_pct", 5.0))
+                                            and confidence >= 0.5 and data_trust["level"] == "ok"),
                     "rationale": prev_decision.get("rationale"),
                 }
                 if current_rate > 0 and float(calc.get("suggested_rate") or 0) > 0:
@@ -509,6 +582,7 @@ def create_ai_pricing_router(db, require_roles):
             "config": cfg,
             "suggestions": suggestions,
             "los_tiers": los_tiers,
+            "data_trust": data_trust,
             "summary": _summarize(suggestions, cfg),
         }
 
@@ -798,6 +872,10 @@ def create_ai_pricing_router(db, require_roles):
         cfg = await _get_cfg(property_id)
         if not items:
             payload = await _build_suggestions(property_id, int(cfg.get("days_horizon", 30)), use_llm=False)
+            if payload.get("data_trust", {}).get("level") == "low":
+                return {"applied": 0, "gated": True,
+                        "gate_reasons": payload["data_trust"]["reasons"],
+                        "message": "Veri-güven kapısı: veri bayat/yetersiz — otomatik uygulama durduruldu"}
             items = [s for s in payload["suggestions"] if s["auto_apply_eligible"] and s["status"] == "pending"]
 
         from routes.revenue_ext.hurdle_lrv import compute_lrv_floor
@@ -863,6 +941,10 @@ def create_ai_pricing_router(db, require_roles):
 
         days = int(cfg.get("days_horizon", 30))
         payload = await _build_suggestions(property_id, days, use_llm=False)
+        if payload.get("data_trust", {}).get("level") == "low":
+            return {"applied": 0, "gated": True,
+                    "gate_reasons": payload["data_trust"]["reasons"],
+                    "summary": payload["summary"]}
         frozen, freeze_reason = await _handle_anomaly(property_id, cfg, payload["suggestions"])
         if frozen:
             await db.ai_pricing_run_log.insert_one({
@@ -938,6 +1020,8 @@ def create_ai_pricing_router(db, require_roles):
             return {"applied": 0, "skipped_reason": "auto_apply disabled"}
         days = int(cfg.get("days_horizon", 30))
         payload = await _build_suggestions(property_id, days, use_llm=False)
+        if payload.get("data_trust", {}).get("level") == "low":
+            return {"applied": 0, "gated": True, "gate_reasons": payload["data_trust"]["reasons"]}
         frozen, freeze_reason = await _handle_anomaly(property_id, cfg, payload["suggestions"])
         if frozen:
             return {"applied": 0, "frozen": True, "freeze_reason": freeze_reason}

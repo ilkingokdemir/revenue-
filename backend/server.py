@@ -2115,6 +2115,8 @@ async def startup_event():
     asyncio.create_task(shadow_mode_loop(db))
     from workers import outcome_ledger_loop
     asyncio.create_task(outcome_ledger_loop(db))
+    from workers import calibration_loop
+    asyncio.create_task(calibration_loop(db))
     asyncio.create_task(profit_autopilot_loop(db))
     asyncio.create_task(data_quality_sentinel_loop(db))
     asyncio.create_task(open_pricing_optimizer_loop(db))

@@ -733,3 +733,7 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 ## Güncelleme (2026-08-15, iter 550 — Rakip gap P0)
 - K1 asimetrik adım tavanı + cold-start, K2 karar sonuç zinciri (outcome ledger + günlük worker), K3 kill switch (acil fren), K7 shadow çıkış kriterleri tamamlandı. Kullanıcı kararıyla CANLI SCRAPER opsiyonu eklendi (D1 ilkesi rev.2: yasal kamuya açık toplama; bot koruması→mock_fallback). iteration_543 %100.
 - Kalan rakip gap'leri: K4 iptal modeli v2 (Brier+temporal), K5 güven zarfı, K6 veri-güven kapısı, K8 event v2, K9-K12 (P2), K13-K15 (P3).
+
+## Güncelleme (2026-08-15, iter 551 — Rakip gap P1)
+- K4 iptal modeli v2 (kanal+iade+Brier+temporal+isotonic, aylık oto kalibrasyon), K5 güven zarfı (skor+kanıt+gri satır), K6 veri-güven kapısı (bayat veri→auto-apply gated), K8 event sinyali v2 (kapasite ağırlıklı boost) tamamlandı. iteration_544 %100. G5 de kapandı.
+- Kalan: K9 replay backtest, K10 faktör şelalesi, K11 bid-price ağı, K12 güç analizi, K13-K15, G7 simülatör, pilot kiti.

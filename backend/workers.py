@@ -970,6 +970,30 @@ async def drift_autopush_loop(db, interval_seconds: int = 21600):
         await asyncio.sleep(interval_seconds)
 
 
+async def calibration_loop(db, interval_seconds: int = 21600):
+    """K4: her ayın 1'inde iptal modelini otomatik yeniden kalibre eder."""
+    from routes.revenue_ext.net_otb import compute_calibration
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            if now.day == 1 and 3 <= now.hour <= 9:
+                month_key = now.strftime("%Y-%m")
+                props = await db.properties.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1}).to_list(50)
+                if not props:
+                    props = [{"id": "default"}]
+                for p in props:
+                    existing = await db.cancel_calibration.find_one(
+                        {"property_id": p["id"], "calibrated_at": {"$regex": f"^{month_key}"}})
+                    if existing:
+                        continue
+                    r = await compute_calibration(db, p["id"])
+                    if r.get("ok"):
+                        logger.info(f"calibration: {p['id']} brier={r['brier_score']}")
+        except Exception as e:
+            logger.warning(f"calibration_loop error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def outcome_ledger_loop(db, interval_seconds: int = 3600):
     """K2: tarihi geçmiş fiyat kararlarının gerçekleşen sonucunu günlük değerlendirir."""
     from routes.revenue_ext.trust_center import run_outcome_evaluation

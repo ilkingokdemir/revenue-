@@ -1,0 +1,26 @@
+{
+  "summary": "Frontend-only verification of K5 Confidence Envelope + K8 Event signal v2 + K4 Cancellation model v2 evidence tooltips inside Market Robot → AI Pricing sub-tab. All requested items PASS. Nav: landing → Sign In → login (admin@hotelbox.com) → PRO pill → branch selector (had to switch from 'All Branches' to 'Franziskaner by Centra' — the AI Pricing panel refuses to render suggestions on the 'all' branch, showing 'AI Pricing motoru için lütfen bir otel seçin'; expected/by design in AIPricingEnginePanel line 60/72) → sidebar 'Revenue management' → tab data-testid='rev-tab-market-robot' → sub-tab data-testid='market-robot-ai-pricing' (renders AIPricingEnginePanel).\n\nRESULTS (Franziskaner by Centra / Zurich):\n- 60 suggestion rows rendered without crash, all with data-testid ai-pricing-row-{i}.\n- ai-pricing-conf-{i} present on ALL 60 rows: 60 emerald (>=70%), 0 amber, 0 stone. Sample values G%70, G%85, G%90 — matches backend K5 spec.\n- ai-pricing-event-{i} present on 4 rows. Row 6 & 7 = 2026-08-18 both show violet '🎫+%15' with title \"Etkinlik boost'u: +%15\" — confirms K8 capacity-weighted stadium concert boost. Row 34 (2026-09-01) shows '🎫+%0.8' (smaller event). Suggested rate for 2026-08-18 = CHF 214 (backend-reported 213.93 rounded) ✓.\n- Row hover evidence tooltip: 60/60 rows contain 'İptal modeli örneklemi güçlü (317 rezervasyon)' in title attribute (K4 evidence). Sample: 'İptal modeli örneklemi güçlü (317 rezervasyon) · Tarihte 6 aktif rezervasyon (OTB sinyali) · Yakın tarih (3g) — pickup verisi taze · Etkinlik sinyali: kapasite ağırlıklı +%15 boost'.\n- Faded rows (opacity-45 grayscale, confidence<0.5): 0 — as expected per problem statement (no low-confidence rows in current data). Code path exists at line 451.\n- REGRESSION passing: existing columns render (LEAD, TALEP, DOLULUK, PAZAR ORT, MEVCUT, ÖNERİ, NET KÂR, Δ%, GEREKÇE, DURUM). 60 ai-pricing-net-{i} cells rendered. 63 accept/apply buttons ('Kabul') still visible. Filter tabs 'Tümü (60) / Auto Uygun (2) / İnceleme (58) / Bekliyor (59) / Uygulanan (1)' render. Header KPIs: Toplam Öneri 60, Auto Uygun 2, Manuel İnceleme 58, Ort Δ +41.53%, Tahmini Uplift CHF 2,824.\n- Trust Center regression: sidebar 'Robot Güven Merkezi' opens; tc-netotb-chart=1, tc-acceptance-section=1, tc-up-input=1, tc-viol-table=1 — all render OK. Net OTB chart renders 14-day Brüt/Net dual-line (net_otb v2 API change did not break UI). Guardrail inputs still show max_up=15, max_down=10, daily=50 (from iter 543). Violation ledger shows KILL SWITCH + ADIM LİMİTİ rows.\n- Per instruction: did NOT click Kabul/Uygula on any suggestion (guardrail daily limit protected). Did NOT run scan.\n- Console: only pre-login 401s (unrelated). One React hydration warning in AIPricingV2Panel (different panel, not the tested one) about <span> inside <option> — NOT introduced by this iteration but flagged below.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AIPricingV2Panel (different panel under AI & INSIGHTS > 'AI pricing')", "issues": ["React hydration warning: <span> cannot be a child of <option> at AIPricingV2Panel line 103 (roomTypes select). Not on the tested MarketRobot AIPricingEnginePanel path — flagging for cleanup."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_544.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AIPricingEnginePanel refuses to render when propertyId === 'all' (line 60, 72 return early). Tester must know to switch branch; consider showing a friendlier prompt or auto-picking first property to reduce onboarding friction.",
+    "The row-level tooltip (title attribute on <tr>) contains the same evidence string as the confidence badge title — potential UX enhancement: show 'Düşük güven' prefix on badge tooltip only when confidence < 0.5 (already done for row), keep badge tooltip cleaner.",
+    "Unrelated: AIPricingV2Panel line 103 emits React hydration error for <span> inside <option>. Should be plain text child in <option>."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% — all 4 sub-tasks PASS"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None — no accept/apply clicked, no scan run. Only branch selector changed to Franziskaner by Centra for testing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "AIPricingEnginePanel is at Revenue management → tab 'rev-tab-market-robot' → sub-tab 'market-robot-ai-pricing'. Requires a specific property branch (not All Branches). Franziskaner by Centra has rich data (317 cancel samples, 60 suggestions for 14d window, event 2026-08-18 boost +15%). K5 confidence badges/K8 event badges/K4 evidence tooltips all wired and functional. Row-fade path (opacity-45 grayscale) exists but no current row has confidence<0.5.",
+  "rca of the issue": "n/a — feature works exactly per spec."
+}

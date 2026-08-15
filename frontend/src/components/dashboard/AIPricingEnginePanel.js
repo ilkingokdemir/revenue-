@@ -448,7 +448,7 @@ const AIPricingEnginePanel = ({ propertyId }) => {
                       ? "text-amber-700 bg-amber-50 border-amber-200"
                       : "text-rose-700 bg-rose-50 border-rose-200";
                 return (
-                  <tr key={s.id} data-testid={`ai-pricing-row-${i}`} className="border-b border-stone-100 hover:bg-stone-50/50">
+                  <tr key={s.id} data-testid={`ai-pricing-row-${i}`} className={`border-b border-stone-100 hover:bg-stone-50/50 ${(s.confidence ?? 1) < 0.5 ? "opacity-45 grayscale" : ""}`} title={(s.confidence ?? 1) < 0.5 ? `Düşük güven (%${Math.round((s.confidence || 0) * 100)}) — ${(s.evidence || []).join(" · ")}` : (s.evidence || []).join(" · ")}>
                     <td className="px-3 py-2 font-mono text-xs text-stone-800">{s.date}</td>
                     <td className="px-3 py-2 text-xs text-stone-600">
                       <span className="font-mono">{s.days_out}g</span>
@@ -466,6 +466,14 @@ const AIPricingEnginePanel = ({ propertyId }) => {
                     <td className="px-3 py-2 text-xs text-stone-700 font-mono">{cur(s.current_rate)}</td>
                     <td className="px-3 py-2 text-xs text-violet-700 font-bold font-mono">
                       {cur(s.suggested_rate)}
+                      {s.confidence != null && (
+                        <span className={`ml-1 text-[9px] px-1 py-0.5 rounded border font-bold ${s.confidence >= 0.7 ? "bg-emerald-50 text-emerald-600 border-emerald-200" : s.confidence >= 0.5 ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-stone-100 text-stone-500 border-stone-200"}`} data-testid={`ai-pricing-conf-${i}`} title={(s.evidence || []).join(" · ")}>
+                          G%{Math.round(s.confidence * 100)}
+                        </span>
+                      )}
+                      {s.event_boost_pct > 0 && (
+                        <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-violet-50 text-violet-600 border border-violet-200 font-bold" data-testid={`ai-pricing-event-${i}`} title={`Etkinlik boost'u: +%${s.event_boost_pct}`}>🎫+%{s.event_boost_pct}</span>
+                      )}
                       {s.clamped && <span className="ml-1 text-[9px] text-stone-400">clamped</span>}
                     </td>
                     <td className="px-3 py-2 text-xs font-mono" data-testid={`ai-pricing-net-${i}`}>

@@ -23,12 +23,19 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
   const [kit, setKit] = useState(null);
   const [verify, setVerify] = useState(null);
   const [weekly, setWeekly] = useState(null);
+  const [alerts, setAlerts] = useState([]);
+  const [showAlerts, setShowAlerts] = useState(false);
+  const [fa, setFa] = useState(null);
+  const [mapping, setMapping] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const loadHealth = useCallback(async () => {
     try {
-      const r = await axios.get(`${API}/api/pms-connect/health/${pid}`, { withCredentials: true });
-      setHealth(r.data);
+      const [r, a] = await Promise.all([
+        axios.get(`${API}/api/pms-connect/health/${pid}`, { withCredentials: true }),
+        axios.get(`${API}/api/pms-connect/alerts/${pid}`, { withCredentials: true }),
+      ]);
+      setHealth(r.data); setAlerts(a.data.alerts || []);
     } catch { /* sessiz */ }
   }, [pid]);
 
@@ -60,6 +67,41 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
       toast.success(`Gece push çalıştı — ${done} kanala basıldı, ${r.data.results.length - done} atlandı`);
       loadHealth(); load();
     } catch (e) { toast.error(e.response?.data?.detail || "Gece push çalıştırılamadı"); } finally { setBusy(false); }
+  };
+
+  const resolveAlert = async (aid) => {
+    try {
+      await axios.post(`${API}/api/pms-connect/alerts/${aid}/resolve`, {}, { withCredentials: true });
+      toast.success("Uyarı çözüldü olarak işaretlendi");
+      loadHealth();
+    } catch { toast.error("İşaretlenemedi"); }
+  };
+
+  const loadFa = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.get(`${API}/api/pms-connect/forecast-accuracy/${pid}`, { withCredentials: true });
+      setFa(r.data);
+    } catch { toast.error("Forecast raporu yüklenemedi"); } finally { setBusy(false); }
+  };
+
+  const loadMapping = async (prov) => {
+    try {
+      const r = await axios.get(`${API}/api/pms-connect/${prov}/rate-mapping/${pid}`, { withCredentials: true });
+      const rows = r.data.room_types.map((rt) => {
+        const ex = (r.data.mappings || []).find((m) => m.room_type_id === rt.id);
+        return { room_type_id: rt.id, room_type_name: rt.name, channel_rate_code: ex?.channel_rate_code || "", multiplier: ex?.multiplier ?? 1.0 };
+      });
+      setMapping(rows);
+    } catch { setMapping([]); }
+  };
+
+  const saveMapping = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/pms-connect/${sel.id}/rate-mapping/${pid}`, { mappings: mapping }, { withCredentials: true });
+      toast.success(r.data.count > 0 ? `${r.data.count} oda tipi eşleştirmesi kaydedildi — push artık oda tipi bazında` : "Eşleştirme temizlendi — push tek fiyatla devam eder");
+    } catch { toast.error("Eşleştirme kaydedilemedi"); } finally { setBusy(false); }
   };
 
   const runVerify = async () => {
@@ -116,7 +158,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
     } catch { setLog([]); }
   }, [pid]);
 
-  const pick = (p) => { setSel(p); setCreds({}); setLastPush(null); setKit(null); loadLog(p.id); };
+  const pick = (p) => { setSel(p); setCreds({}); setLastPush(null); setKit(null); setVerify(null); setMapping(null); loadLog(p.id); loadMapping(p.id); };
 
   const saveCreds = async () => {
     setBusy(true);
@@ -181,8 +223,16 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
       {health && (
         <section className="bg-white border border-stone-200 rounded-xl p-4" data-testid="pms-health-board">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-            <h2 className="text-base font-bold text-stone-800">📡 Kanal Sağlık Panosu</h2>
+            <h2 className="text-base font-bold text-stone-800 flex items-center gap-2">📡 Kanal Sağlık Panosu
+              {alerts.length > 0 && (
+                <button onClick={() => setShowAlerts((s) => !s)} data-testid="pms-alert-bell"
+                  className="relative px-2 py-0.5 rounded-full bg-rose-600 text-white text-[11px] font-black animate-pulse">
+                  🔔 {alerts.length} SAPMA UYARISI
+                </button>
+              )}
+            </h2>
             <div className="flex items-center gap-2">
+              <button onClick={loadFa} disabled={busy} data-testid="pms-forecast-btn" className="px-3 py-1.5 rounded-lg border border-purple-300 text-purple-700 text-[12px] font-bold disabled:opacity-50">🎯 Forecast Doğruluk</button>
               <button onClick={toggleNightPush} disabled={busy} data-testid="pms-nightpush-toggle"
                 className={`px-3 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-50 ${health.auto_night_push ? "bg-emerald-600 text-white" : "border border-stone-300 text-stone-600"}`}>
                 🌙 Otomatik Gece Push: {health.auto_night_push ? "AÇIK" : "KAPALI"}
@@ -212,6 +262,38 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
           </div>
           {health.last_night_push && (
             <p className="text-[11px] text-stone-400 mt-2" data-testid="pms-last-nightpush">Son gece push: {String(health.last_night_push.ran_at).slice(0, 16).replace("T", " ")} — {health.last_night_push.results.filter((x) => !x.skipped && !x.error).length} kanala basıldı</p>
+          )}
+          {showAlerts && alerts.length > 0 && (
+            <div className="mt-3 border border-rose-200 bg-rose-50 rounded-xl p-3 space-y-2" data-testid="pms-alerts-list">
+              {alerts.map((a) => (
+                <div key={a.id} className="flex items-start justify-between gap-2 text-[12px]">
+                  <span>🚨 <b>{a.provider}</b> — fiyat sapması (maks %{a.max_drift_pct}) · {String(a.created_at).slice(0, 16).replace("T", " ")}</span>
+                  <button onClick={() => resolveAlert(a.id)} data-testid={`pms-alert-resolve-${a.id}`} className="px-2 py-0.5 rounded-lg bg-white border border-rose-300 text-rose-700 text-[11px] font-bold shrink-0">Çözüldü</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {fa && (
+            <div className="mt-3 border-t border-stone-100 pt-3" data-testid="pms-forecast-section">
+              <p className="text-[12px] font-bold text-stone-700 mb-1">🎯 Canlı Veri Forecast Kıyası</p>
+              <p className="text-[12px] text-stone-500 mb-2" data-testid="pms-forecast-note">{fa.note}</p>
+              {fa.mae_occ_pts != null && <p className="text-sm font-black text-purple-700 mb-2">MAE: {fa.mae_occ_pts} doluluk puanı ({fa.matured_points} nokta)</p>}
+              <p className="text-[12px] font-bold text-emerald-700 mb-1">Mews canlı rezervasyon katkısı (14 gün toplam: {fa.mews_total_contribution_14d} oda-gece):</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px]" data-testid="pms-mews-impact-table">
+                  <thead><tr className="text-left text-[10px] text-stone-400"><th className="p-1">Tarih</th><th className="p-1">OTB (Mews'li)</th><th className="p-1">OTB (Mews'siz)</th><th className="p-1">Mews Katkısı</th><th className="p-1">Doluluk Farkı</th></tr></thead>
+                  <tbody>
+                    {fa.mews_impact.filter((r) => r.mews_contribution > 0 || fa.mews_total_contribution_14d === 0).slice(0, 8).map((r) => (
+                      <tr key={r.date} className="border-t border-stone-100">
+                        <td className="p-1 font-bold">{r.date}</td><td className="p-1">{r.otb_with_mews}</td><td className="p-1">{r.otb_without_mews}</td>
+                        <td className="p-1 font-black text-emerald-700">+{r.mews_contribution}</td>
+                        <td className="p-1">%{r.occ_without_pct} → %{r.occ_with_pct}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
           {weekly && (
             <div className="mt-3 border-t border-stone-100 pt-3" data-testid="pms-weekly-section">
@@ -264,6 +346,30 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
             </div>
           )}
 
+          {mapping && mapping.length > 0 && (
+            <section className="bg-white border border-stone-200 rounded-xl p-4" data-testid="pms-mapping-section">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div>
+                  <h2 className="text-base font-bold text-stone-800">🗂 Rate Plan Eşleştirme</h2>
+                  <p className="text-[12px] text-stone-500">Oda tipi ↔ {sel.name} rate kodu + fiyat çarpanı. Eşleştirme kaydedilince push oda tipi bazında ayrı ayrı basılır.</p>
+                </div>
+                <button onClick={saveMapping} disabled={busy} data-testid="pms-mapping-save-btn" className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[12px] font-bold disabled:opacity-50">Eşleştirmeyi Kaydet</button>
+              </div>
+              <table className="w-full text-[12px]" data-testid="pms-mapping-table">
+                <thead><tr className="text-left text-[10px] text-stone-400"><th className="p-1.5">Oda Tipi</th><th className="p-1.5">{sel.name} Rate Kodu / ID</th><th className="p-1.5 w-24">Çarpan</th></tr></thead>
+                <tbody>
+                  {mapping.map((m, i) => (
+                    <tr key={m.room_type_id} className="border-t border-stone-100">
+                      <td className="p-1.5 font-bold">{m.room_type_name}</td>
+                      <td className="p-1.5"><input value={m.channel_rate_code} data-testid={`pms-mapping-code-${i}`} onChange={(e) => setMapping((arr) => arr.map((x, j) => j === i ? { ...x, channel_rate_code: e.target.value } : x))} className="w-full border border-stone-300 rounded px-2 py-1 text-[12px]" placeholder="boş = bu oda tipi push edilmez" /></td>
+                      <td className="p-1.5"><input type="number" step="0.05" value={m.multiplier} data-testid={`pms-mapping-mult-${i}`} onChange={(e) => setMapping((arr) => arr.map((x, j) => j === i ? { ...x, multiplier: parseFloat(e.target.value) || 1 } : x))} className="w-20 border border-stone-300 rounded px-2 py-1 text-[12px]" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          )}
+
           {verify && (
             <section className={`border rounded-xl p-4 ${verify.ok ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200"}`} data-testid="pms-verify-section">
               <div className="flex items-center justify-between gap-2 mb-2">
@@ -275,8 +381,8 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
                   <table className="w-full text-[12px]" data-testid="pms-verify-table">
                     <thead><tr className="text-left text-[10px] text-stone-400"><th className="p-1.5">Tarih</th><th className="p-1.5">Basılan</th><th className="p-1.5">Kanaldaki</th><th className="p-1.5">Sapma</th><th className="p-1.5">Durum</th></tr></thead>
                     <tbody>
-                      {verify.rows.map((r) => (
-                        <tr key={r.date} className="border-t border-stone-200/60">
+                      {verify.rows.map((r, i) => (
+                        <tr key={`${r.date}-${r.rate_code || i}`} className="border-t border-stone-200/60">
                           <td className="p-1.5 font-bold">{r.date}</td>
                           <td className="p-1.5">₺{r.pushed}</td>
                           <td className="p-1.5">{r.channel != null ? `₺${r.channel}` : "—"}</td>
@@ -333,6 +439,15 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
               {lastPush && (
                 <div className="text-[12px] bg-stone-50 border border-stone-200 rounded-lg p-2 space-y-1" data-testid="pms-last-push">
                   <div>{lastPush.mocked ? "🟡 MOCK" : lastPush.mocked === false ? "🟢 CANLI" : "ℹ"} · {lastPush.pushed_days ?? 0} gün{lastPush.message ? ` · ${lastPush.message}` : ""}</div>
+                  {lastPush.per_room_type && (
+                    <div className="space-y-0.5" data-testid="pms-per-roomtype">
+                      {lastPush.per_room_type.map((r, i) => (
+                        <div key={`${r.room_type}-${i}`} className="text-[11px]">
+                          {r.error ? "❌" : "✅"} <b>{r.room_type}</b> → {r.channel_rate_code} (×{r.multiplier ?? 1}){r.error ? ` — ${r.error}` : ` · ${r.pushed_days} gün ${r.mocked ? "MOCK" : "CANLI"}`}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {lastPush.translated_preview && (
                     <details><summary className="cursor-pointer font-bold text-stone-500">Çevrilmiş payload önizleme ({sel.format === "ota_xml" ? "OTA XML" : "JSON"})</summary>
                       <pre className="text-[10px] bg-stone-900 text-emerald-300 rounded p-2 mt-1 max-h-40 overflow-auto whitespace-pre-wrap" data-testid="pms-translated-preview">{JSON.stringify(lastPush.translated_preview, null, 1).slice(0, 1200)}</pre>

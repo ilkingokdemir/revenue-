@@ -95,7 +95,7 @@ def _translate(provider: str, cfg: dict, rows: list, currency: str = "EUR") -> d
     if provider == "siteminder":
         msgs = "".join(
             f'<RateAmountMessage><StatusApplicationControl Start="{r["date"]}" End="{r["date"]}" '
-            f'InvTypeCode="{cfg.get("hotel_code", "")}-STD" RatePlanCode="RMS"/>'
+            f'InvTypeCode="{cfg.get("hotel_code", "")}-{cfg.get("inv_code", "STD")}" RatePlanCode="RMS"/>'
             f'<Rates><Rate><BaseByGuestAmts><BaseByGuestAmt AmountAfterTax="{r["rate"]}" '
             f'CurrencyCode="{currency}" NumberOfGuests="2"/></BaseByGuestAmts></Rate></Rates>'
             f"</RateAmountMessage>" for r in rows)
@@ -121,10 +121,12 @@ async def _cfg(db, pid: str, provider: str) -> dict:
 
 
 async def _log(db, pid: str, provider: str, kind: str, mode: str,
-               standard_rows: list, translated: dict, result: dict, cert_test: bool = False):
+               standard_rows: list, translated: dict, result: dict, cert_test: bool = False,
+               rate_code: str = ""):
     await db.pms_push_log.insert_one({
         "id": str(uuid.uuid4()), "property_id": pid, "provider": provider,
         "kind": kind, "mode": mode, "standard_rows": standard_rows,
+        "rate_code": rate_code,
         "translated_sample": {k: (v[:400] if isinstance(v, str) else v)
                               for k, v in list(translated.items())[:3]},
         "result": result, "cert_test": cert_test,
@@ -186,8 +188,11 @@ async def _live_send(provider: str, cfg: dict, translated: dict) -> dict:
         return {"status_code": r.status_code, "body": r.text[:300]}
 
 
-async def _push(db, pid: str, provider: str, rows: list, cert_test: bool = False) -> dict:
+async def _push(db, pid: str, provider: str, rows: list, cert_test: bool = False,
+                cfg_override: dict = None) -> dict:
     cfg = await _cfg(db, pid, provider)
+    if cfg_override:
+        cfg = {**cfg, **cfg_override}
     translated = _translate(provider, cfg, rows)
     live = _has_creds(provider, cfg)
     if live and not cert_test:
@@ -198,52 +203,66 @@ async def _push(db, pid: str, provider: str, rows: list, cert_test: bool = False
     if not live:
         result = {"mocked": True, "would_send": len(rows),
                   "message": "MOCK — kimlik girilmediği için gerçek push yapılmadı."}
-        await _log(db, pid, provider, "rate_push", "mocked", rows, translated, result, cert_test)
+        await _log(db, pid, provider, "rate_push", "mocked", rows, translated, result, cert_test,
+                   rate_code=cfg.get("rate_id") or cfg.get("rate_plan_id") or cfg.get("inv_code", ""))
         return {"pushed_days": len(rows), "sample": rows[:3],
                 "translated_preview": translated, **result}
     result = await _live_send(provider, cfg, translated)
-    await _log(db, pid, provider, "rate_push", "live", rows, translated, result, cert_test)
+    await _log(db, pid, provider, "rate_push", "live", rows, translated, result, cert_test,
+               rate_code=cfg.get("rate_id") or cfg.get("rate_plan_id") or cfg.get("inv_code", ""))
     return {"pushed_days": len(rows), "sample": rows[:3], "mocked": False, "result": result}
 
 
 async def _verify_channel(db, pid: str, provider: str) -> dict:
-    """Push Fark Kontrolü: son push'u kanaldan geri okuyup basılanla karşılaştırır."""
-    log = await db.pms_push_log.find_one(
+    """Push Fark Kontrolü: her rate koduna en son basılanı kanaldan geri okuyup karşılaştırır
+    (rate plan eşleştirmesi varsa kod bazında ayrı doğrulanır)."""
+    recent = await db.pms_push_log.find(
         {"property_id": pid, "provider": provider, "kind": "rate_push", "cert_test": False},
-        sort=[("created_at", -1)])
-    if not log or not log.get("standard_rows"):
+        sort=[("created_at", -1)]).to_list(10)
+    if not recent or not any(l.get("standard_rows") for l in recent):
         return {"ok": False, "message": "Doğrulanacak push bulunamadı — önce fiyat push yapın."}
-    rows = log["standard_rows"]
+    latest_ts = recent[0]["created_at"][:16]
+    by_code = {}
+    for l in recent:
+        if l["created_at"][:16] != latest_ts or not l.get("standard_rows"):
+            continue
+        code = l.get("rate_code", "") or "_default"
+        if code not in by_code:
+            by_code[code] = l
     cfg = await _cfg(db, pid, provider)
     live = provider == "mews" and _has_creds(provider, cfg)
     out_rows, mocked = [], not live
-    if live:
-        base = (cfg.get("endpoint_url") or PROVIDERS["mews"]["base_url"]).rstrip("/")
-        tz = cfg.get("tz", "UTC")
-        async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.post(f"{base}/api/connector/v1/rates/getPricing",
-                                  json={"ClientToken": cfg["client_token"],
-                                        "AccessToken": cfg["access_token"],
-                                        "Client": "MyHotelBox-RMS/1.0",
-                                        "RateId": cfg["rate_id"],
-                                        "FirstTimeUnitStartUtc": _mews_utc(rows[0]["date"], tz),
-                                        "LastTimeUnitStartUtc": _mews_utc(rows[-1]["date"], tz)})
-        if r.status_code != 200:
-            return {"ok": False, "message": f"Kanaldan geri okuma başarısız: {r.text[:200]}"}
-        d = r.json() or {}
-        price_map = {}
-        for ts, price in zip(d.get("TimeUnitStartsUtc", []), d.get("BasePrices", [])):
-            price_map[str(ts).replace(".000Z", "Z").replace("Z", "")[:19]] = price
-        for row in rows:
-            key = _mews_utc(row["date"], tz).replace(".000Z", "")[:19]
-            ch = price_map.get(key)
-            drift = round((ch - row["rate"]) / row["rate"] * 100, 2) if (ch is not None and row["rate"]) else None
-            out_rows.append({"date": row["date"], "pushed": row["rate"], "channel": ch,
-                             "drift_pct": drift, "ok": drift is not None and abs(drift) <= 0.5})
-    else:
-        for row in rows:
-            out_rows.append({"date": row["date"], "pushed": row["rate"], "channel": row["rate"],
-                             "drift_pct": 0.0, "ok": True})
+    for code, log in by_code.items():
+        rows = log["standard_rows"]
+        if live:
+            base = (cfg.get("endpoint_url") or PROVIDERS["mews"]["base_url"]).rstrip("/")
+            tz = cfg.get("tz", "UTC")
+            rate_id = code if code != "_default" else cfg["rate_id"]
+            async with httpx.AsyncClient(timeout=30) as client:
+                r = await client.post(f"{base}/api/connector/v1/rates/getPricing",
+                                      json={"ClientToken": cfg["client_token"],
+                                            "AccessToken": cfg["access_token"],
+                                            "Client": "MyHotelBox-RMS/1.0",
+                                            "RateId": rate_id,
+                                            "FirstTimeUnitStartUtc": _mews_utc(rows[0]["date"], tz),
+                                            "LastTimeUnitStartUtc": _mews_utc(rows[-1]["date"], tz)})
+            if r.status_code != 200:
+                return {"ok": False, "message": f"Kanaldan geri okuma başarısız: {r.text[:200]}"}
+            d = r.json() or {}
+            price_map = {}
+            for ts, price in zip(d.get("TimeUnitStartsUtc", []), d.get("BasePrices", [])):
+                price_map[str(ts).replace(".000Z", "Z").replace("Z", "")[:19]] = price
+            for row in rows:
+                key = _mews_utc(row["date"], tz).replace(".000Z", "")[:19]
+                ch = price_map.get(key)
+                drift = round((ch - row["rate"]) / row["rate"] * 100, 2) if (ch is not None and row["rate"]) else None
+                out_rows.append({"date": row["date"], "rate_code": code, "pushed": row["rate"],
+                                 "channel": ch, "drift_pct": drift,
+                                 "ok": drift is not None and abs(drift) <= 0.5})
+        else:
+            for row in rows:
+                out_rows.append({"date": row["date"], "rate_code": code, "pushed": row["rate"],
+                                 "channel": row["rate"], "drift_pct": 0.0, "ok": True})
     bad = [r for r in out_rows if not r["ok"]]
     max_drift = max((abs(r["drift_pct"]) for r in out_rows if r["drift_pct"] is not None), default=0.0)
     result = {"ok": len(bad) == 0, "mocked": mocked, "provider": provider,
@@ -279,6 +298,9 @@ async def run_auto_night_push(db, pid: str, days: int = 14) -> dict:
             item = {"provider": key, "pushed_days": r.get("pushed_days", 0),
                     "mode": "mocked" if r.get("mocked") else "live"}
             try:
+                if item["mode"] == "live":
+                    import asyncio
+                    await asyncio.sleep(6)
                 v = await _verify_channel(db, pid, key)
                 item["verify_ok"] = v.get("ok")
                 item["max_drift_pct"] = v.get("max_drift_pct", 0.0)
@@ -382,7 +404,117 @@ def create_pms_connect_router(db, require_roles):
         rows = await _rms_rows(db, pid, days)
         if not rows:
             return {"pushed_days": 0, "message": "Gönderilecek RMS fiyatı yok — önce fiyat oluşturun."}
-        return await _push(db, pid, provider, rows)
+        mp = await db.pms_rate_mapping.find_one(
+            {"property_id": pid, "provider": provider}, {"_id": 0})
+        mappings = [m for m in (mp or {}).get("mappings", []) if m.get("channel_rate_code")]
+        if not mappings:
+            return await _push(db, pid, provider, rows)
+        per_rt, first_preview = [], None
+        for m in mappings:
+            mult = float(m.get("multiplier", 1.0) or 1.0)
+            scaled = [{**r, "rate": round(r["rate"] * mult, 2)} for r in rows]
+            code = m["channel_rate_code"]
+            try:
+                r = await _push(db, pid, provider, scaled,
+                                cfg_override={"rate_id": code, "rate_plan_id": code, "inv_code": code})
+                if first_preview is None:
+                    first_preview = r.get("translated_preview")
+                per_rt.append({"room_type": m.get("room_type_name", "?"), "channel_rate_code": code,
+                               "multiplier": mult, "pushed_days": r.get("pushed_days", 0),
+                               "mocked": r.get("mocked", None) is not False})
+            except HTTPException as e:
+                per_rt.append({"room_type": m.get("room_type_name", "?"), "channel_rate_code": code,
+                               "error": str(e.detail)[:150]})
+        ok = [x for x in per_rt if "error" not in x]
+        return {"pushed_days": len(rows) if ok else 0, "per_room_type": per_rt,
+                "mocked": all(x.get("mocked") for x in ok) if ok else None,
+                "translated_preview": first_preview,
+                "message": f"{len(ok)}/{len(per_rt)} oda tipi için ayrı push yapıldı (eşleştirme tablosu aktif)."}
+
+    @router.get("/{provider}/rate-mapping/{pid}")
+    async def get_rate_mapping(provider: str, pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        if provider not in PROVIDERS:
+            raise HTTPException(404, "Bilinmeyen sağlayıcı")
+        mp = await db.pms_rate_mapping.find_one(
+            {"property_id": pid, "provider": provider}, {"_id": 0}) or {}
+        rts = await db.room_types.find({"property_id": pid},
+                                       {"_id": 0, "id": 1, "name": 1}).to_list(50)
+        return {"mappings": mp.get("mappings", []), "room_types": rts}
+
+    @router.post("/{provider}/rate-mapping/{pid}")
+    async def save_rate_mapping(provider: str, pid: str, data: dict,
+                                _u: dict = Depends(require_roles(*ROLES))):
+        if provider not in PROVIDERS:
+            raise HTTPException(404, "Bilinmeyen sağlayıcı")
+        mappings = []
+        for m in (data.get("mappings") or [])[:20]:
+            mappings.append({"room_type_id": str(m.get("room_type_id", "")),
+                             "room_type_name": str(m.get("room_type_name", ""))[:80],
+                             "channel_rate_code": str(m.get("channel_rate_code", "")).strip()[:120],
+                             "multiplier": max(0.1, min(10.0, float(m.get("multiplier", 1.0) or 1.0)))})
+        await db.pms_rate_mapping.update_one(
+            {"property_id": pid, "provider": provider},
+            {"$set": {"property_id": pid, "provider": provider, "mappings": mappings,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        return {"ok": True, "count": len([m for m in mappings if m["channel_rate_code"]])}
+
+    @router.get("/alerts/{pid}")
+    async def list_alerts(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        rows = await db.pms_alerts.find(
+            {"property_id": pid, "resolved": {"$ne": True}},
+            {"_id": 0}).sort("created_at", -1).to_list(50)
+        return {"alerts": rows, "active_count": len(rows)}
+
+    @router.post("/alerts/{alert_id}/resolve")
+    async def resolve_alert(alert_id: str, _u: dict = Depends(require_roles(*ROLES))):
+        r = await db.pms_alerts.update_one(
+            {"id": alert_id},
+            {"$set": {"resolved": True, "resolved_at": datetime.now(timezone.utc).isoformat()}})
+        if not r.matched_count:
+            raise HTTPException(404, "Uyarı bulunamadı")
+        return {"ok": True}
+
+    @router.get("/forecast-accuracy/{pid}")
+    async def forecast_accuracy(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Canlı veri forecast kıyası: snapshot'lar olgunlaştıkça isabet (MAE) + Mews katkısı."""
+        today = datetime.now(timezone.utc).date()
+        total_rooms = await db.rooms.count_documents({"property_id": pid}) or 20
+        snaps = await db.forecast_snapshots.find(
+            {"property_id": pid, "snapshot_date": {"$lt": today.isoformat()}},
+            {"_id": 0}).sort("snapshot_date", -1).to_list(30)
+        matured, errs = [], []
+        for s in snaps:
+            for row in s.get("rows", []):
+                if row["date"] >= today.isoformat() or row["date"] <= s["snapshot_date"]:
+                    continue
+                actual = await db.bookings.count_documents({
+                    "property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
+                    "check_in": {"$lte": row["date"]}, "check_out": {"$gt": row["date"]}})
+                actual_occ = round(actual / total_rooms * 100, 1)
+                err = round(abs(row["occ_pct"] - actual_occ), 1)
+                errs.append(err)
+                matured.append({"snapshot_date": s["snapshot_date"], "date": row["date"],
+                                "predicted_occ_pct": row["occ_pct"], "actual_occ_pct": actual_occ,
+                                "abs_error_pts": err})
+        mae = round(sum(errs) / len(errs), 2) if errs else None
+        mews_impact = []
+        for i in range(14):
+            ds = (today + timedelta(days=i)).isoformat()
+            q = {"property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
+                 "check_in": {"$lte": ds}, "check_out": {"$gt": ds}}
+            all_otb = await db.bookings.count_documents(q)
+            wo_mews = await db.bookings.count_documents({**q, "source": {"$ne": "pms:mews"}})
+            mews_impact.append({"date": ds, "otb_with_mews": all_otb, "otb_without_mews": wo_mews,
+                                "mews_contribution": all_otb - wo_mews,
+                                "occ_with_pct": round(all_otb / total_rooms * 100, 1),
+                                "occ_without_pct": round(wo_mews / total_rooms * 100, 1)})
+        total_contrib = sum(r["mews_contribution"] for r in mews_impact)
+        return {"mae_occ_pts": mae, "matured_points": len(matured),
+                "matured_sample": matured[:20], "mews_impact": mews_impact,
+                "mews_total_contribution_14d": total_contrib,
+                "note": (f"Tahmin isabeti: MAE {mae} doluluk puanı ({len(matured)} olgun nokta).")
+                if mae is not None else
+                "Snapshot'lar henüz olgunlaşmadı — gece robotu her çalıştığında 14 günlük tahmin fotoğrafı kaydediyor; günler geçtikçe isabet ölçümü burada birikecek. Mews canlı katkısı aşağıda hemen görünür."}
 
     @router.post("/{provider}/pull-reservations/{pid}")
     async def pull_reservations(provider: str, pid: str, _u: dict = Depends(require_roles(*ROLES))):
@@ -509,8 +641,11 @@ def create_pms_connect_router(db, require_roles):
         st = await db.pms_connect_settings.find_one({"property_id": pid}, {"_id": 0}) or {}
         last_np = await db.pms_night_push_log.find_one({"property_id": pid}, {"_id": 0},
                                                        sort=[("ran_at", -1)])
+        active_alerts = await db.pms_alerts.count_documents(
+            {"property_id": pid, "resolved": {"$ne": True}})
         return {"property_id": pid, "channels": channels,
                 "auto_night_push": bool(st.get("auto_night_push")),
+                "active_alerts": active_alerts,
                 "last_night_push": last_np}
 
     @router.post("/night-push/{pid}")

@@ -782,4 +782,13 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Apaleo Sandbox Rehberi: PmsConnectHub'da apaleo seçilince 4 adımlı kurulum kutusu (apaleo.dev hesabını KULLANICI açmalı — ajan harici hesap açamaz; kimlik girilince Mews akışıyla aynı canlı sertifikasyon+push hazır).
 - iteration_550: backend 11/11, frontend %100 geçti.
 - BEKLEYEN: Apaleo canlı testi kullanıcının client_id/client_secret girmesini bekliyor.
+
+## Güncelleme (2026-08-15, iter 558 — Sapma Uyarısı, Forecast Kıyası, Rate Plan Eşleştirme)
+- Sapma Uyarı Bildirimi: GET /api/pms-connect/alerts/{pid} + resolve endpoint'i; sağlık panosunda kırmızı uyarı zili (pms-alert-bell, animate-pulse) + liste + "Çözüldü" butonu; morning report anomalilerine son 24h çözülmemiş sapma uyarıları "Dağıtım:" satırı olarak düşüyor. health response'una active_alerts eklendi.
+- Canlı Veri Forecast Kıyası: night_audit her çalıştığında db.forecast_snapshots'a 14 günlük OTB/doluluk fotoğrafı; GET /api/pms-connect/forecast-accuracy/{pid} — olgun snapshot'lardan MAE + Mews gerçek rezervasyon katkısı (dahil/hariç, 14 günde +8 oda-gece). UI: "🎯 Forecast Doğruluk" butonu + tablo.
+- Rate Plan Eşleştirme: db.pms_rate_mapping — oda tipi ↔ kanal rate kodu + çarpan; GET/POST rate-mapping endpoint'leri; push_from_rms eşleştirme varsa oda tipi bazında ayrı basar (cfg_override rate_id/rate_plan_id/inv_code). CANLI test: Mews'e 2 oda tipi (×1.0 Standard, ×1.4 Deluxe) mocked:false basıldı.
+- Verify mapping-aware yapıldı: push loglarına rate_code eklendi; son push batch'i kod bazında gruplanıp her kodun kendi getPricing'i ile karşılaştırılıyor — mapped push sonrası %0 sapma doğrulandı (161.0 = 115×1.4 birebir). Gece push'ta canlı verify öncesi 6sn bekleme (Mews asenkron işleme yanlış pozitifini önler).
+- iteration_551: backend 13/14 (tek fark verify tasarım konusuydu, düzeltildi), frontend %100. React duplicate-key uyarısı giderildi.
+- ÖĞRENİM: Mews updatePrice asenkron — push'tan hemen sonra getPricing eski değeri dönebilir; verify'ı geciktir.
+- BEKLEYEN: Apaleo canlı testi kullanıcının client_id/client_secret girmesini bekliyor (rehber panelde).
 - Kalan: lisanslı rate-shopping feed (P2), Expo EAS build (P3), tüm PMS'lerde CANLI mod (partner kimlikleri bekleniyor: Mews demo token, Cloudbeds API key, SiteMinder pmsXchange, eviivo NDA, Elektraweb entegrasyon ekibi).

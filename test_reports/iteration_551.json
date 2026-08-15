@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 551 — Verified 3 new features: (1) Drift Alert Notifications with bell/list/resolve + morning report anomaly injection, (2) Live-Data Forecast Comparison with 14-day Mews impact table + snapshot persistence, (3) Rate Plan Mapping with per-room-type LIVE push (2/2 room types, mocked:false). Backend: 13/14 pytest passed. Frontend: All flows verified interactively — bell showed real drift alerts (from prior mapped push), forecast section rendered 14-day impact, mapping table showed Standard Double ×1 + Deluxe Suite ×1.4, saving multiplier persisted, Fiyat Push produced pms-per-roomtype list with 2 ✅ CANLI entries, Eviivo card also renders mapping section, weekly report + regressions OK.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/pms-connect/mews/verify-push/default", "issue": "After push-from-rms with 2 mapped room-types (multipliers ×1.0 and ×1.4), verify-push returns ok:false, max_drift_pct:28.57%, mismatches:2. Verify appears to compare channel rate against a single (unmapped) RMS base price, so the Deluxe ×1.4 push produces a legitimate 40%/28.57% delta. Consider making verify mapping-aware (per room type) so verify.ok stays true after mapped push. Currently this side-effect actually feeds the alert system (which is why the bell showed 2 alerts) — behaviour is arguably desired but internally inconsistent (mapped push considered a drift)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PmsConnectHub push results / mapping table", "issues": ["React console warning: 'Encountered two children with the same key' when rendering pms-per-roomtype / mapping table rows — use a unique key (e.g. `${provider}:${roomTypeId}` or index) instead of shared field. Non-blocking but should be fixed."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration551_features.py",
+    "/app/test_reports/pytest/iteration_551.xml"
+  ],
+  "action_items": [
+    "(Optional) Make Mews verify-push mapping-aware so it multiplies expected price by room-type multiplier before drift comparison; otherwise every mapped push will auto-create a drift alert.",
+    "Fix duplicate-key React warning in per-roomtype push results and/or mapping table rendering."
+  ],
+  "critical_code_review_comments": [
+    "GET /api/pms-connect/alerts/{pid}, POST resolve, and mongo pms_alerts flow all work correctly (insert→list→resolve→404 for unknown).",
+    "Morning-report correctly appends 'Dağıtım:' anomaly line for unresolved fresh alerts within last 24h and persists a 14-row forecast_snapshots doc for today.",
+    "forecast-accuracy endpoint returns 14 mews_impact rows (with otb_with_mews / otb_without_mews / mews_contribution) + mews_total_contribution_14d=8 as expected; mae_occ_pts null (snapshots not matured) as documented.",
+    "rate-mapping GET returns 2 pre-saved mappings + room_types; POST persists modified multiplier (verified round-trip).",
+    "push-from-rms mews with mapping loop produces per_room_type array with 2 entries both mocked:false and message '2/2 oda tipi'.",
+    "verify-push after mapped push produces max_drift_pct=28.57 → auto-created 2 pms_alerts (correctly surfaced by bell). Consider whether this is intended UX.",
+    "Frontend PmsConnectHub.js: duplicate React key warning — action item above."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration551_features.py"],
+  "success_rate": {"backend": "93% (13/14; the 1 failure is verify-push post-mapped-push, likely by design)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Inserted temp alert docs (test-alert-1, test-alert-mr) into db.pms_alerts and cleaned up. A real Mews push-from-rms with mapping was executed multiple times (per_room_type 2/2). Morning-report was run twice, refreshing today's forecast_snapshots doc.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iteration551_features.py covers all 3 new features (drift alerts, forecast-accuracy, rate mapping) plus regressions. Uses pymongo directly (MONGO_URL / DB_NAME from backend/.env) to inject/cleanup pms_alerts docs. The Mews API is real — pushes/verify take 10-60s. After mapped push (multipliers 1.0/1.4) verify-push reports 28.57% drift and auto-creates pms_alerts; this is why the frontend bell shows non-zero alerts even after cleanup. If main agent decides to make verify mapping-aware, update the verify-push regression assertion in this test file.",
+  "rca of the issue": "verify-push with 2 mapped room-types → drift 28.57%: root cause is that verify_push reads only the root/base rate expectation from RMS and compares against pushed channel prices; but push_from_rms now scales prices per room-type multiplier (Deluxe ×1.4). Verify has no knowledge of the mapping table so the ×1.4 row is flagged as drift. Mitigation options: (a) make verify_push iterate rate-mapping and multiply expected price per row, or (b) restrict verify comparison to the root/base row only. Recommendation: (a). This is orthogonal to iteration 551's stated scope but a natural follow-up."
+}

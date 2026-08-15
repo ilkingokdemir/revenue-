@@ -48,6 +48,13 @@ async def run_night_audit(db, pid: str, audit_date: str = "") -> dict:
         anomalies.append(f"ADR ₺{m['adr']:g} — ortalamadan (₺{avg_adr:.0f}) %15+ düşük")
     if m["arrivals"] == 0 and avg_occ > 10:
         anomalies.append("Dün hiç giriş olmadı — kanal bağlantılarını kontrol edin")
+    # Dağıtım sapma uyarıları (son 24 saat, çözülmemiş)
+    since24 = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    drift_alerts = await db.pms_alerts.find(
+        {"property_id": pid, "resolved": {"$ne": True}, "created_at": {"$gte": since24}},
+        {"_id": 0, "provider": 1, "max_drift_pct": 1}).to_list(20)
+    for a in drift_alerts:
+        anomalies.append(f"Dağıtım: {a.get('provider', '?')} kanalında fiyat sapması tespit edildi (maks %{a.get('max_drift_pct', 0)}) — geri okuma basılanla eşleşmedi")
     audit = {**m, "property_id": pid,
              "avg7_occupancy_pct": round(avg_occ, 1), "avg7_revenue": round(avg_rev, 2),
              "avg7_adr": round(avg_adr, 2), "anomalies": anomalies,
@@ -64,6 +71,25 @@ async def run_night_audit(db, pid: str, audit_date: str = "") -> dict:
                                                 {"$set": {"night_push": audit["night_push"]}})
         except Exception as e:
             audit["night_push"] = {"error": str(e)[:200]}
+    # Forecast fotoğrafı: önümüzdeki 14 günün OTB/doluluk tahmini (isabet ölçümü için birikir)
+    try:
+        total_rooms = await db.rooms.count_documents({"property_id": pid}) or 20
+        today = datetime.now(timezone.utc).date()
+        snap_rows = []
+        for i in range(14):
+            ds = (today + timedelta(days=i)).isoformat()
+            otb = await db.bookings.count_documents({
+                "property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
+                "check_in": {"$lte": ds}, "check_out": {"$gt": ds}})
+            snap_rows.append({"date": ds, "otb_rooms": otb,
+                              "occ_pct": round(otb / total_rooms * 100, 1)})
+        await db.forecast_snapshots.update_one(
+            {"property_id": pid, "snapshot_date": today.isoformat()},
+            {"$set": {"property_id": pid, "snapshot_date": today.isoformat(),
+                      "total_rooms": total_rooms, "rows": snap_rows,
+                      "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    except Exception:
+        pass
     return audit
 
 

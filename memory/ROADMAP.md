@@ -219,3 +219,58 @@ Nihai sıra: 1-TalepTakvimi, 2-TopluGeriAlma, 3-OrphanGap, 4-LOS, 5-GrupWash, 6-
 - C1 pilot otel: 1-3 otel görüşmesi; ücretsiz/indirimli pilot ↔ veri izni + vaka çalışması hakkı.
 - C3 niş kararı: Türkiye 50-200 oda butik/orta segment + yerel kanal yöneticileri (mevcut analiz dosyalarıyla uyumlu).
 - C4 birim ekonomi: oda başına aylık fiyat + rate shopper maliyeti hesabı.
+
+# ============================================================
+# RAKİP KARŞI-ANALİZ GAP'LERİ (2026-08-15) — rakipte VAR, bizde YOK/EKSİK
+# Kaynak: rakibin bizim MVP dokümanımıza verdiği madde-madde cevap
+# ============================================================
+
+## P0 — Guardrail ve karar hijyeni (küçük, hızlı işler)
+- [ ] K1 ASİMETRİK ADIM TAVANI: tek ±%15 yerine max_up / max_down ayrı limitler +
+      cold-start modu (yeni otel: down=%0, up=%10) + güven skoruyla ölçekli tavan
+      (guardrail_config'e alanlar + _apply_one genişletme, ~yarım gün)
+- [ ] K2 KARAR SONUÇ TAKİBİ (outcome ledger): her uygulanan fiyat kararının GERÇEKLEŞEN
+      sonucu (pickup, gelir farkı) append-only olay zincirine yazılır; kabul oranı paneline
+      "karar → sonuç" kolonu (rakipteki decision_evaluation karşılığı)
+- [ ] K3 KILL SWITCH: tüm robot push'larını tek tuşla durduran global acil durdurma
+      (anomali dondurmanın üstünde, tesis+global seviye)
+
+## P1 — Model olgunluğu
+- [ ] K4 İPTAL MODELİ v2: p_cancel'e kanal + iade edilebilirlik (refundable/non-ref) +
+      no-show özellikleri; Brier skoru + temporal validation + data-trust kapısı
+      (G5 isotonic ile birleşik iş)
+- [ ] K5 GÜVEN SEMANTİĞİ + KANIT ZARFI: her öneriye confidence skoru + dayanak kanıt
+      listesi (veri tazeliği, örneklem, sinyal uyumu); düşük güven → öneri "gri" gösterilir
+- [ ] K6 VERİ-GÜVEN KAPISI: girdi verisi bayat/eksik/sapan ise model o tarihi fiyatlamaz
+      (data_quality modülüyle motor arasına kapı)
+- [ ] K7 SHADOW ÇIKIŞ KRİTERLERİ: yazılı exit-criteria (ör. 4 hafta + uyum ≥%X + MAE ≤Y)
+      dokümanı + panelde "canlıya geçmeye hazır" rozeti
+- [ ] K8 EVENT SİNYALİ v2: etkinlik sinyaline mekan kapasitesi ağırlığı + otele uzaklık
+      (rakipte Ticketmaster/PredictHQ venue-weighted; bizde public_events zayıf)
+
+## P2 — Simülasyon ve fiyat bilimi
+- [ ] K9 POINT-IN-TIME REPLAY BACKTEST: geçmiş bir günün verisiyle "o gün robot ne derdi"
+      tekrarı + politika taraması + sold-out nedensel kazanç analizi (G7 kapsam genişletme)
+- [ ] K10 FİYAT FAKTÖR ŞELALESİ: öneri açıklamasını yapılandırılmış waterfall görseline çevir
+      (baz → lead → occ → STR → öğrenilmiş → guardrail kırpma, ₺ katkılarıyla)
+- [ ] K11 BID-PRICE DISPLACEMENT AĞI: displacement + MinLOS/CTA/CTD kısıtlarını tek
+      bid-price çerçevesinde birleştir (mevcut hurdle_lrv + restriction_advisor üstüne)
+- [ ] K12 ESNEKLİK SHRINKAGE + GÜÇ ANALİZİ: G9 randomizasyonuna güç analizi + doğal
+      deney tespiti + shrinkage kalibrasyonu ekle
+
+## P3 — Ürünleşme
+- [ ] K13 PUBLISHER SERTİFİKASYONU: kanala yazma öncesi otomatik sertifikasyon testi
+      (test push + doğrulama + geri okuma) — HotelRunner canlıya geçişte zorunlu adım
+- [ ] K14 ÇOKLU PMS/KANAL ADAPTÖRÜ: HotelRunner'a ek Cloudbeds/SiteMinder yazma adaptörleri
+- [ ] K15 TEKNİK SÖZLEŞME DOKÜMANLARI: CONFIDENCE-SEMANTICS.md, PRICE-DOMAIN-CONTRACT.md,
+      RATE-PROVENANCE.md (D1 anayasasının teknik ekleri)
+
+## BİZDE VAR, RAKİPTE YOK (satış kozları — koru ve vitrine çıkar)
+HotelRunner yazma adaptörü (TR pazarı) · hava durumu sinyali · KVKK/GDPR modülü ·
+grup wash projeksiyonu · rate parity monitor + heatmap · RGI/MPI endeks raporu ·
+haftalık Exec PDF · günlük push limiti (bizde VAR, rakipte YOK) · yazılı uyum anayasası (D1).
+
+## STRATEJİK NOT — scraping çelişkisi
+Rakip kendi scraping'ini canlı kullanıyor (Booking GraphQL) ve bunu hukuki açık olarak kabul
+ediyor. Bizim D1 anayasamız scraping'i yasaklıyor — bu bizim SATIŞ AVANTAJIMIZ (EU AI Act +
+OTA ToS uyumu). Karar: ilkeyi KORU, G8 lisanslı rate shopping bütçesini pilot sözleşmesine yaz.

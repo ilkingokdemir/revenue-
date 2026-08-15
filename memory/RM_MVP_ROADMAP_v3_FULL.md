@@ -136,3 +136,19 @@ Envanter: 70 backend RM modülü (routes/revenue_ext + distribution) + 45+ panel
 
 ## BİLİNÇLİ YAPILMAYACAKLAR
 Derin öğrenme (şimdilik) · Kafka/mikroservis · rakibe otomatik fiyat tepkisi · scraping · çok segmentli genel ürün.
+
+═══════════════════════════════════════════════════════
+# EK — RAKİP KARŞI-ANALİZ (2026-08-15): 15 yeni gap (K1-K15)
+═══════════════════════════════════════════════════════
+Rakipte var/ileri, bizde yok/eksik → ROADMAP.md'ye K1-K15 olarak eklendi:
+P0: K1 asimetrik adım tavanı (max_up/max_down + cold-start + güven ölçekli),
+    K2 karar sonuç takibi (outcome ledger), K3 kill switch.
+P1: K4 iptal modeli v2 (kanal+iade+no-show, Brier+temporal validation),
+    K5 güven semantiği + kanıt zarfı, K6 veri-güven kapısı,
+    K7 shadow çıkış kriterleri, K8 event sinyali v2 (venue kapasitesi ağırlıklı).
+P2: K9 point-in-time replay backtest, K10 fiyat faktör şelalesi,
+    K11 bid-price displacement ağı, K12 esneklik shrinkage + güç analizi.
+P3: K13 publisher sertifikasyonu, K14 çoklu PMS adaptörü, K15 teknik sözleşme dokümanları.
+BİZİM KOZLAR (rakipte yok): HotelRunner adaptörü, hava sinyali, KVKK, grup wash,
+parity monitor, RGI raporu, haftalık PDF, günlük push limiti, yazılı uyum anayasası.
+Stratejik karar: scraping yasağı ilkesi KORUNUR (satış avantajı), lisanslı feed bütçelenir.

@@ -726,3 +726,6 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 ## Güncelleme (2026-08-15, iter 549 — Robot Güven Merkezi)
 - RM MVP gap listesinden G1 (guardrail ±%15 + günlük limit + ihlal logu), G2 (kabul oranı raporu), G4 (Net OTB / p_cancel katmanı — motor artık net dolulukla fiyatlıyor) ve G6 (Shadow Mode) tamamlandı, iteration_542 %100.
 - Kalan gap'ler: G3 compset source etiketi, G5 isotonic kalibrasyon, G7 talep simülatörü, G8 lisanslı rate shopping, G9 esneklik, G10 havuz veri.
+
+## Güncelleme (2026-08-15, rakip karşı-analizi)
+- Rakip raporu incelendi: 15 yeni gap (K1-K15) ROADMAP'e eklendi. P0 hızlı işler: K1 asimetrik adım tavanı, K2 karar sonuç takibi, K3 kill switch. Bizim 9 satış kozumuz netleşti (HotelRunner, hava sinyali, KVKK, grup wash, parity, RGI, PDF, günlük limit, uyum anayasası).

@@ -874,6 +874,54 @@ async def group_wash_alert_loop(db, interval_seconds: int = 21600):
         await asyncio.sleep(interval_seconds)
 
 
+async def run_proposal_reminder_check(db, days_old: int = 3) -> dict:
+    """3+ gündür yanıtsız (status=sent) fonksiyon tekliflerine hatırlatma kuyruğu + bildirim."""
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(days=days_old)).isoformat()
+    stale = await db.function_proposals.find(
+        {"status": "sent", "created_at": {"$lte": cutoff},
+         "reminder_sent_at": {"$exists": False}},
+        {"_id": 0}).to_list(100)
+    reminded = 0
+    for prop in stale:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if prop.get("client_email"):
+            await db.outbound_email_queue.insert_one({
+                "id": str(uuid.uuid4()), "to": prop["client_email"],
+                "subject": f"Hatırlatma: {prop['space_name']} teklifi ({prop['date']})",
+                "body": (f"Sayın {prop['client_name']},\n\n"
+                         f"{prop['date']} tarihli {prop['space_name']} teklifimiz hâlâ değerlendirmenizde. "
+                         f"Toplam: {prop['total']} {prop.get('currency', '')}. "
+                         f"Teklif {prop.get('valid_until', '')} tarihine kadar geçerlidir.\n\n"
+                         f"Sorularınız için bize ulaşabilirsiniz.\nSaygılarımızla."),
+                "status": "queued", "kind": "proposal_reminder",
+                "delivery_status": "mocked_email_queued", "created_at": now_iso})
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "type": "info",
+            "title": "Teklif takibi gerekli",
+            "message": (f"{prop['client_name']} — {prop['space_name']} ({prop['date']}) teklifi "
+                        f"{days_old} gündür yanıtsız. "
+                        + ("Hatırlatma e-postası kuyruğa alındı." if prop.get("client_email") else "Müşteri e-postası yok — telefonla arayın.")),
+            "category": "sales", "target_user": "", "target_role": "manager",
+            "link_to": "function-space", "priority": "normal", "read": False,
+            "created_by": "Teklif Takip Robotu", "created_at": now_iso})
+        await db.function_proposals.update_one(
+            {"id": prop["id"]}, {"$set": {"reminder_sent_at": now_iso}})
+        reminded += 1
+    return {"reminded": reminded}
+
+
+async def proposal_reminder_loop(db, interval_seconds: int = 21600):
+    while True:
+        try:
+            r = await run_proposal_reminder_check(db)
+            if r["reminded"]:
+                logger.info(f"proposal_reminder_loop: {r['reminded']} hatırlatma")
+        except Exception as e:
+            logger.warning(f"proposal_reminder_loop error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def marketing_radar_loop(db, interval_seconds: int = 3600):
     """Fırsat Radarı otomasyonu — haftada bir tesis başına tarar, pencere bulursa bildirim düşer."""
     import logging

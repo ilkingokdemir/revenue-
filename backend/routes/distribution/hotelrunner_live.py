@@ -145,6 +145,41 @@ def create_hotelrunner_router(db, require_roles):
         await _log(pid, "res_pull", "live", {}, {"imported": imported})
         return {"mocked": False, "imported": imported}
 
+    @router.get("/price-drift/{pid}")
+    async def price_drift(pid: str, days: int = 14, threshold: float = 5.0,
+                          _u: dict = Depends(require_roles(*ROLES))):
+        """Kanala son gönderilen fiyat vs güncel RMS fiyatı — sapma tablosu."""
+        days = max(1, min(90, days))
+        last_push = await db.hr_push_log.find_one(
+            {"property_id": pid, "kind": "ari_push"}, {"_id": 0}, sort=[("created_at", -1)])
+        pushed = {}
+        if last_push:
+            for room in (last_push.get("payload") or {}).get("rooms", []):
+                for d in room.get("dates", []):
+                    if d.get("price") is not None:
+                        pushed[d["date"]] = float(d["price"])
+        today = datetime.now(timezone.utc).date()
+        rows = []
+        for i in range(days):
+            ds = (today + timedelta(days=i)).isoformat()
+            ov = await db.rate_overrides.find_one({"property_id": pid, "date": ds}, {"_id": 0, "rate": 1})
+            rms = round(float(ov["rate"]), 2) if ov and ov.get("rate") else None
+            ch = pushed.get(ds)
+            drift = None
+            if rms is not None and ch:
+                drift = round((rms - ch) / ch * 100, 1)
+            rows.append({"date": ds, "channel_price": ch, "rms_price": rms,
+                         "drift_pct": drift,
+                         "status": ("drift" if drift is not None and abs(drift) > threshold
+                                    else "ok" if drift is not None else "no_data")})
+        drift_count = sum(1 for r in rows if r["status"] == "drift")
+        return {"property_id": pid, "threshold_pct": threshold,
+                "last_push_at": last_push.get("created_at") if last_push else None,
+                "last_push_mode": last_push.get("mode") if last_push else None,
+                "rows": rows, "drift_count": drift_count,
+                "note": ("Sapma yok — kanal fiyatları RMS ile uyumlu." if drift_count == 0
+                         else f"{drift_count} tarihte %{threshold:g}'i aşan sapma var — yeniden push önerilir.")}
+
     @router.get("/log/{pid}")
     async def push_log(pid: str, limit: int = 20, _u: dict = Depends(require_roles(*ROLES))):
         rows = await db.hr_push_log.find(

@@ -3964,3 +3964,16 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   (onClick closure'da ReferenceError). Test ajanı ekledi, doğrulandı.
 - TEST: iteration_539.json — backend 7/7, frontend %100. Bilinen kozmetik: '<span> in <option>'
   konsol uyarısı (önceden mevcut, kaynak FunctionSpacePanel değil).
+
+## Iter 548 (2026-08-15) — Teklif Takip Hatırlatması + Kanal Fiyat Sapma Tablosu
+- 1) TEKLİF TAKİP ROBOTU: workers.py run_proposal_reminder_check + proposal_reminder_loop (6 saatte
+  bir, server.py startup'ta) — 3+ gündür status=sent teklifler: müşteriye hatırlatma e-postası
+  kuyruğu (outbound_email_queue, Resend MOCK) + manager bildirimi + reminder_sent_at dedupe.
+  Manuel tetik: POST /api/function-space/{pid}/reminders/run. UI: "⏰ Hatırlatmaları Çalıştır"
+  butonu (fs-run-reminders-btn) + tekliflerde "⏰ Hatırlatıldı" rozeti.
+- 2) KANAL FİYAT SAPMA: GET /api/hotelrunner/price-drift/{pid}?days=14&threshold=5 — son ari_push
+  payload fiyatları vs güncel rate_overrides; |sapma|>%5 → status=drift. UI: HotelRunnerPanel'de
+  kırmızı satırlı karşılaştırma tablosu (hr-drift-section) + sapma rozeti.
+- Kozmetik: FunctionSpacePanel select option'ı template string'e çevrildi (span-in-option uyarısı).
+- TEST: iteration_540.json — frontend %100 (backend curl ile main agent doğruladı: reminder dedupe,
+  drift_count=2 senaryosu 2026-08-17/+18.2%, 2026-08-19/+16.7%).

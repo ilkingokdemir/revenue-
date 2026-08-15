@@ -15,14 +15,16 @@ export default function HotelRunnerPanel({ activePropertyId, properties = [] }) 
   const [invCode, setInvCode] = useState("RMS-DEFAULT");
   const [busy, setBusy] = useState(false);
   const [lastPush, setLastPush] = useState(null);
+  const [drift, setDrift] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const [s, l] = await Promise.all([
+      const [s, l, d] = await Promise.all([
         axios.get(`${API}/api/hotelrunner/status/${pid}`, { withCredentials: true }),
         axios.get(`${API}/api/hotelrunner/log/${pid}`, { withCredentials: true }),
+        axios.get(`${API}/api/hotelrunner/price-drift/${pid}?days=14`, { withCredentials: true }),
       ]);
-      setStatus(s.data); setLog(l.data.log || []);
+      setStatus(s.data); setLog(l.data.log || []); setDrift(d.data);
     } catch { toast.error("HotelRunner durumu yüklenemedi"); }
   }, [pid]);
 
@@ -119,6 +121,42 @@ export default function HotelRunnerPanel({ activePropertyId, properties = [] }) 
           )}
         </div>
       </section>
+
+      {drift && (
+        <section data-testid="hr-drift-section">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <h2 className="text-base font-bold text-stone-800">Kanal Fiyat Karşılaştırma (14 gün · eşik ±%{drift.threshold_pct})</h2>
+            <span className={`px-2.5 py-1 rounded-full text-[11px] font-black ${drift.drift_count > 0 ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`} data-testid="hr-drift-badge">
+              {drift.drift_count > 0 ? `${drift.drift_count} tarihte sapma` : "Uyumlu"}
+            </span>
+          </div>
+          <p className="text-[12px] text-stone-500 mb-2">{drift.note}{drift.last_push_at ? ` · Son push: ${String(drift.last_push_at).slice(0, 16).replace("T", " ")} (${drift.last_push_mode === "live" ? "CANLI" : "MOCK"})` : " · Henüz push yapılmadı — önce ARI Push çalıştırın."}</p>
+          <div className="bg-white border border-stone-200 rounded-xl overflow-x-auto">
+            <table className="w-full text-sm" data-testid="hr-drift-table">
+              <thead><tr className="text-left text-[11px] text-stone-400 border-b border-stone-100">
+                <th className="p-2">Tarih</th><th className="p-2">Kanal Fiyatı</th><th className="p-2">RMS Fiyatı</th><th className="p-2">Sapma</th><th className="p-2">Durum</th>
+              </tr></thead>
+              <tbody>
+                {drift.rows.map((r) => (
+                  <tr key={r.date} className={`border-t border-stone-100 ${r.status === "drift" ? "bg-rose-50" : ""}`} data-testid={`hr-drift-row-${r.date}`}>
+                    <td className="p-2 font-bold">{r.date}</td>
+                    <td className="p-2">{r.channel_price != null ? `₺${r.channel_price}` : "—"}</td>
+                    <td className="p-2">{r.rms_price != null ? `₺${r.rms_price}` : "—"}</td>
+                    <td className={`p-2 font-black ${r.status === "drift" ? "text-rose-600" : r.drift_pct != null ? "text-emerald-600" : "text-stone-400"}`}>
+                      {r.drift_pct != null ? `${r.drift_pct > 0 ? "+" : ""}${r.drift_pct}%` : "—"}
+                    </td>
+                    <td className="p-2 text-[11px]">
+                      {r.status === "drift" ? <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold">SAPMA — yeniden push</span>
+                        : r.status === "ok" ? <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold">Uyumlu</span>
+                        : <span className="text-stone-400">veri yok</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section data-testid="hr-log-section">
         <h2 className="text-base font-bold text-stone-800 mb-2">Push Geçmişi</h2>

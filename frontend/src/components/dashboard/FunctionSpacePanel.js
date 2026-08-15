@@ -74,6 +74,15 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
     } catch (e) { toast.error(e.response?.data?.detail || "E-posta gönderilemedi"); }
   };
 
+  const runReminders = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/function-space/${pid}/reminders/run`, {}, { withCredentials: true });
+      toast.success(r.data.reminded > 0 ? `${r.data.reminded} teklif için hatırlatma kuyruğa alındı (MOCK)` : "Hatırlatma gereken teklif yok — hepsi 3 günden yeni veya zaten hatırlatıldı");
+      load();
+    } catch { toast.error("Hatırlatmalar çalıştırılamadı"); } finally { setBusy(false); }
+  };
+
   const shiftWeek = (n) => {
     const base = new Date((cal?.week_start || new Date().toISOString().slice(0, 10)) + "T00:00:00");
     base.setDate(base.getDate() + n * 7);
@@ -118,7 +127,7 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
         <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-3" data-testid="fs-quote-form">
           <h2 className="text-base font-bold text-stone-800">Hızlı Teklif</h2>
           <select value={form.space_id} onChange={(e) => F("space_id", e.target.value)} data-testid="fs-space-select" className="w-full border border-stone-300 rounded-lg px-2.5 py-2 text-sm">
-            {spaces.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.capacity} kişi)</option>)}
+            {spaces.map((s) => <option key={s.id} value={s.id}>{`${s.name} (${s.capacity} kişi)`}</option>)}
           </select>
           <div className="grid grid-cols-3 gap-2">
             <input type="date" value={form.date} onChange={(e) => F("date", e.target.value)} data-testid="fs-date" className="border border-stone-300 rounded-lg px-2 py-2 text-sm" />
@@ -195,7 +204,10 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
       )}
 
       <section data-testid="fs-proposals-section">
-        <div className="flex items-center gap-2 mb-2"><FileText size={16} className="text-stone-600" /><h2 className="text-base font-bold text-stone-800">Teklifler ({props.length})</h2></div>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2"><FileText size={16} className="text-stone-600" /><h2 className="text-base font-bold text-stone-800">Teklifler ({props.length})</h2></div>
+          <button onClick={runReminders} disabled={busy} data-testid="fs-run-reminders-btn" className="px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 text-[12px] font-bold disabled:opacity-50">⏰ Hatırlatmaları Çalıştır (3+ gün yanıtsız)</button>
+        </div>
         {props.length === 0 ? <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-500" data-testid="fs-proposals-empty">Henüz teklif yok.</div> : (
           <div className="bg-white border border-stone-200 rounded-xl overflow-x-auto">
             <table className="w-full text-sm" data-testid="fs-proposals-table">
@@ -210,7 +222,9 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
                     <td className="p-2.5 text-[12px]">{p.date} {String(p.start).slice(11, 16)}–{String(p.end).slice(11, 16)}</td>
                     <td className="p-2.5">{p.attendees}</td>
                     <td className="p-2.5 font-black">₺{p.total}</td>
-                    <td className="p-2.5"><span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${STATUS[p.status] || ""}`}>{STATUS_TR[p.status] || p.status}</span></td>
+                    <td className="p-2.5"><span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${STATUS[p.status] || ""}`}>{STATUS_TR[p.status] || p.status}</span>
+                      {p.reminder_sent_at && <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold" data-testid={`fs-reminded-${p.id}`}>⏰ Hatırlatıldı</span>}
+                    </td>
                     <td className="p-2.5">
                       <div className="flex gap-1.5 flex-wrap">
                         {p.status === "sent" && (

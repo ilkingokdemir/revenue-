@@ -284,4 +284,11 @@ def create_function_space_router(db, require_roles):
                         "open_hour": oh, "close_hour": ch, "days": day_rows})
         return {"property_id": pid, "week_start": days[0], "days": days, "spaces": out}
 
+    @router.post("/function-space/{pid}/reminders/run")
+    async def run_reminders(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        from workers import run_proposal_reminder_check
+        r = await run_proposal_reminder_check(db)
+        return {"ok": True, **r,
+                "note": "3+ gündür yanıtsız teklifler için hatırlatma kuyruğa alındı (Resend MOCK modda bekler)."}
+
     return router

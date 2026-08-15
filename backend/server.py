@@ -2098,6 +2098,8 @@ async def startup_event():
     asyncio.create_task(marketing_radar_loop(db))
     from workers import group_wash_alert_loop
     asyncio.create_task(group_wash_alert_loop(db))
+    from workers import proposal_reminder_loop
+    asyncio.create_task(proposal_reminder_loop(db))
     asyncio.create_task(profit_autopilot_loop(db))
     asyncio.create_task(data_quality_sentinel_loop(db))
     asyncio.create_task(open_pricing_optimizer_loop(db))

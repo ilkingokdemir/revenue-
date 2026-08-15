@@ -714,3 +714,6 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 ## Güncelleme (2026-08-15, iter 547)
 - HotelRunner canlı kanal bağlantısı (MOCK↔CANLI mod, kimlik bekliyor), TRevPOR/GOPPAR hedef ayarları, fonksiyon teklifi PDF + e-posta (Resend MOCK) ve haftalık salon takvimi (boş slot→teklif) tamamlandı (iteration_539 %100).
 - Bekleyen kullanıcı girdileri: HotelRunner HR_ID+TOKEN, Resend API anahtarı, Expo Access Token.
+
+## Güncelleme (2026-08-15, iter 548)
+- Teklif takip hatırlatma robotu (3 gün yanıtsız → otomatik e-posta kuyruğu + bildirim) ve kanal fiyat sapma tablosu (kırmızı vurgulu, ±%5 eşik) tamamlandı (iteration_540 %100).

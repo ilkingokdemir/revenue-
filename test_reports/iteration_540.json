@@ -1,0 +1,22 @@
+{
+  "summary": "Frontend testing for Proposal Follow-up Reminder + Channel Price Drift features. All new UI elements render correctly. Drift table shows 14 rows with 2026-08-17 (+18.2%) and 2026-08-19 (+16.7%) marked rose/SAPMA, badge '2 tarihte sapma' rose, MOCK note present, other rows show 'Uyumlu' or 'veri yok'. fs-run-reminders-btn renders with correct Turkish text, toast shows 'Hatırlatma gereken teklif yok — hepsi 3 günden yeni veya zaten hatırlatıldı' (dedupe confirmed), one fs-reminded-<pid> amber chip present. Regressions passed: hr-push-btn visible (ARI Push), fs-quote-btn → fs-quote-total = ₺645.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Console hydration warning: FunctionSpacePanel.js line 130 — <span> as child of <option> (spaces <select>). Likely from x-source wrapper on dynamic option name; consider using flat text child {s.name} without extra span wrappers to avoid React hydration warning."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None — used pre-seeded state from main agent (rate_overrides + push mock + reminder_sent_at).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Navigation: click nav-mode-pro toggle → click 'Revenue & rates' sidebar section to expand → hotelrunner-live-btn (has hr-drift-section) and function-space-btn (has fs-run-reminders-btn + fs-reminded chips). Login sometimes shows console 401 (stale) but succeeds; URL may still show /login while dashboard is rendered — assert on element visibility not URL.",
+  "rca of the issue": "N/A — no issues found; all three feature requirements verified end-to-end."
+}

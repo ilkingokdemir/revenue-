@@ -537,8 +537,23 @@ def create_ai_pricing_router(db, require_roles):
         """Write a single suggestion to rate_overrides and log decision.
         Guardrail'ler: günlük push limiti (blok) + ±max_step_pct adım limiti (kırpma)."""
         now_iso = datetime.now(timezone.utc).isoformat()
+        ks = await db.kill_switch.find_one(
+            {"property_id": {"$in": [property_id, "global"]}, "active": True})
+        if ks:
+            await db.guardrail_violations.insert_one({
+                "property_id": property_id, "type": "kill_switch", "blocked": True,
+                "date": item.get("date"), "detail": "KILL SWITCH aktif — tüm robot push'ları durduruldu",
+                "source": source, "created_at": now_iso})
+            return False
         g = await db.guardrail_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
-        max_step = float(g.get("max_step_pct", 15))
+        max_up = float(g.get("max_up_pct", g.get("max_step_pct", 15)))
+        max_down = float(g.get("max_down_pct", g.get("max_step_pct", 15)))
+        cold_note = ""
+        if g.get("cold_start_mode", "auto") == "auto":
+            _bcount = await db.bookings.count_documents({"property_id": property_id})
+            if _bcount < 100:
+                max_up, max_down = min(max_up, 10.0), 0.0
+                cold_note = " (cold-start: indirim kilitli, artış ≤%10)"
         daily_cap = int(g.get("daily_push_limit", 50))
         today_start = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00")
         pushed_today = await db.ai_pricing_decisions.count_documents({
@@ -554,17 +569,18 @@ def create_ai_pricing_router(db, require_roles):
         new_rate = float(item["suggested_rate"])
         if prev > 0:
             step_pct = (new_rate - prev) / prev * 100
-            if abs(step_pct) > max_step:
-                clamped_rate = round(prev * (1 + (max_step if step_pct > 0 else -max_step) / 100), 2)
+            limit = max_up if step_pct > 0 else max_down
+            if abs(step_pct) > limit:
+                clamped_rate = round(prev * (1 + (limit if step_pct > 0 else -limit) / 100), 2)
                 await db.guardrail_violations.insert_one({
                     "property_id": property_id, "type": "step_limit", "blocked": False,
                     "date": item.get("date"), "original_rate": new_rate, "clamped_rate": clamped_rate,
-                    "step_pct": round(step_pct, 1), "max_step_pct": max_step,
-                    "detail": f"Tek adımda %{abs(step_pct):.1f} değişim > ±%{max_step:g} limiti — {clamped_rate} değerine kırpıldı",
+                    "step_pct": round(step_pct, 1), "max_step_pct": limit,
+                    "detail": f"Tek adımda %{abs(step_pct):.1f} değişim > {'artış' if step_pct > 0 else 'indirim'} limiti ±%{limit:g}{cold_note} — {clamped_rate} değerine kırpıldı",
                     "source": source, "created_at": now_iso})
                 item["suggested_rate"] = clamped_rate
                 rationale = ((rationale or item.get("rationale") or "")
-                             + f" · Guardrail: ±%{max_step:g} adım limiti, {clamped_rate} değerine kırpıldı")
+                             + f" · Guardrail: %{limit:g} {'artış' if step_pct > 0 else 'indirim'} limiti{cold_note}, {clamped_rate} değerine kırpıldı")
         await db.rate_overrides.update_one(
             {"property_id": property_id, "date": item["date"], "room_type_id": item.get("room_type_id", "")},
             {"$set": {

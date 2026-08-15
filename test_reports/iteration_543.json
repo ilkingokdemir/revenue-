@@ -1,0 +1,19 @@
+{
+  "summary": "Frontend-only regression for Trust Center new competitor-gap P0 elements. All 5 requested items verified (a-e) + regression sections OK. (a) tc-kill-switch-btn: initial text '🛑 Kill Switch (acil fren)' with outline (border-2 border-rose-300 text-rose-600); click → text becomes '🛑 KILL SWITCH AKTİF — Kaldır', class flips to bg-rose-600 text-white animate-pulse (red pulsing confirmed), tc-kill-status appears with text \"Tüm robot push'ları bloklu\"; second click reverts to outline style, tc-kill-status disappears — LEFT OFF at end. (b) Guardrail: tc-up-input=15, tc-down-input=8, tc-daily-input=50, tc-coldstart-toggle unchecked; changed down to 10, tc-gr-save-btn persisted (verified: input read-back 10). (c) tc-outcomes-section present, tc-outcomes-empty renders with Turkish message 'Henüz sonuçlanmış karar yok — robot her sabah tarihi geçen kararların gerçekleşen sonucunu buraya yazar.' (default property has no past decisions — expected). (d) tc-scraper-section: mode pills present — tc-scraper-mode-scraper is dark/selected (has stone-900), mock & licensed not dark; tc-scraper-status BEFORE showed 'kaynak: mock_fallback · 8 otel · toplam 1 tarama'; after tc-scan-btn click and 7s wait, incremented to '2 tarama' with mock_fallback source (amber) — Booking bot protection fallback as expected per problem statement. (e) tc-shadow-exit-badge shows 'Çıkış: 1/28 gün + uyum ≥%60' with grey classes (bg-stone-100 text-stone-500) — not ready, matches spec. Regression: tc-acceptance-section, tc-netotb-chart, tc-viol-table all render; violation table now includes new rows — 'ADIM LİMİTİ — KILL SWITCH aktif — tüm robot pushları durduruldu' and asymmetric 'ADIM LİMİTİ — Tek adımda %20.0 değişim > indirim limiti ±%8 — 92.0 değerine kırpıldı' (down-limit clamp visible), plus historical GÜNLÜK LİMİT + %400>±%15 rows. Shadow left ACTIVE (AKTİF · 1 gün), kill switch left OFF. No JS console errors during Trust Center panel usage (only pre-login 401s on unrelated endpoints).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_trust_center.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Violation ledger uses type='ADIM LİMİTİ' for both kill-switch blocks and step-clamp events; consider a distinct type label (e.g., 'KILL SWITCH' or 'ACİL FREN') for kill-switch triggered blocks to make operator forensics clearer.",
+    "tc-scraper-status shows source in amber but with no explicit hint that mock_fallback == degraded (bot protection); a small tooltip/subtext would help operators distinguish healthy scraper vs fallback."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% — all 5 sub-tasks (a-e) + regression PASS"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Toggled kill switch on then off (final=OFF). Changed guardrail max_down 8→10 via UI. Ran tc-scan-btn once (scan counter 1→2). Shadow left ACTIVE as required.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Nav: landing → Sign In button → email/password → Login → click 'PRO' pill button in top-left BASIT/PRO toggle → sidebar 'Revenue & rates' → Robot Güven Merkezi link (data-testid=trust-center-btn). Current state: guardrails max_up=15, max_down=10 (updated this run), daily=50, cold_start=off; kill switch OFF; scraper mode=scraper with 2 mock_fallback scans; shadow AKTİF 1 gün; exit badge 1/28 grey.",
+  "rca of the issue": "n/a — all functionality works exactly per spec."
+}

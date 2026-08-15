@@ -970,6 +970,21 @@ async def drift_autopush_loop(db, interval_seconds: int = 21600):
         await asyncio.sleep(interval_seconds)
 
 
+async def outcome_ledger_loop(db, interval_seconds: int = 3600):
+    """K2: tarihi geçmiş fiyat kararlarının gerçekleşen sonucunu günlük değerlendirir."""
+    from routes.revenue_ext.trust_center import run_outcome_evaluation
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            if 6 <= now.hour <= 11:
+                r = await run_outcome_evaluation(db)
+                if r["evaluated"]:
+                    logger.info(f"outcome_ledger: {r['evaluated']} karar değerlendirildi")
+        except Exception as e:
+            logger.warning(f"outcome_ledger_loop error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def shadow_mode_loop(db, interval_seconds: int = 3600):
     """Shadow mode aktif tesislerde günde 1 kez robot önerisi snapshot'ı alır (push YOK)."""
     from routes.revenue_ext.trust_center import run_shadow_snapshot

@@ -226,13 +226,13 @@ Nihai sıra: 1-TalepTakvimi, 2-TopluGeriAlma, 3-OrphanGap, 4-LOS, 5-GrupWash, 6-
 # ============================================================
 
 ## P0 — Guardrail ve karar hijyeni (küçük, hızlı işler)
-- [ ] K1 ASİMETRİK ADIM TAVANI: tek ±%15 yerine max_up / max_down ayrı limitler +
+- [x] K1 (TAMAM iter 550) ASİMETRİK ADIM TAVANI: tek ±%15 yerine max_up / max_down ayrı limitler +
       cold-start modu (yeni otel: down=%0, up=%10) + güven skoruyla ölçekli tavan
       (guardrail_config'e alanlar + _apply_one genişletme, ~yarım gün)
-- [ ] K2 KARAR SONUÇ TAKİBİ (outcome ledger): her uygulanan fiyat kararının GERÇEKLEŞEN
+- [x] K2 (TAMAM iter 550) KARAR SONUÇ TAKİBİ (outcome ledger): her uygulanan fiyat kararının GERÇEKLEŞEN
       sonucu (pickup, gelir farkı) append-only olay zincirine yazılır; kabul oranı paneline
       "karar → sonuç" kolonu (rakipteki decision_evaluation karşılığı)
-- [ ] K3 KILL SWITCH: tüm robot push'larını tek tuşla durduran global acil durdurma
+- [x] K3 (TAMAM iter 550) KILL SWITCH: tüm robot push'larını tek tuşla durduran global acil durdurma
       (anomali dondurmanın üstünde, tesis+global seviye)
 
 ## P1 — Model olgunluğu
@@ -243,7 +243,7 @@ Nihai sıra: 1-TalepTakvimi, 2-TopluGeriAlma, 3-OrphanGap, 4-LOS, 5-GrupWash, 6-
       listesi (veri tazeliği, örneklem, sinyal uyumu); düşük güven → öneri "gri" gösterilir
 - [ ] K6 VERİ-GÜVEN KAPISI: girdi verisi bayat/eksik/sapan ise model o tarihi fiyatlamaz
       (data_quality modülüyle motor arasına kapı)
-- [ ] K7 SHADOW ÇIKIŞ KRİTERLERİ: yazılı exit-criteria (ör. 4 hafta + uyum ≥%X + MAE ≤Y)
+- [x] K7 (TAMAM iter 550) SHADOW ÇIKIŞ KRİTERLERİ: yazılı exit-criteria (ör. 4 hafta + uyum ≥%X + MAE ≤Y)
       dokümanı + panelde "canlıya geçmeye hazır" rozeti
 - [ ] K8 EVENT SİNYALİ v2: etkinlik sinyaline mekan kapasitesi ağırlığı + otele uzaklık
       (rakipte Ticketmaster/PredictHQ venue-weighted; bizde public_events zayıf)
@@ -270,7 +270,7 @@ HotelRunner yazma adaptörü (TR pazarı) · hava durumu sinyali · KVKK/GDPR mo
 grup wash projeksiyonu · rate parity monitor + heatmap · RGI/MPI endeks raporu ·
 haftalık Exec PDF · günlük push limiti (bizde VAR, rakipte YOK) · yazılı uyum anayasası (D1).
 
-## STRATEJİK NOT — scraping çelişkisi
+## STRATEJİK NOT — scraping (KARAR VERİLDİ 2026-08-15: canlı scraper opsiyonu eklendi, D1 rev.2)
 Rakip kendi scraping'ini canlı kullanıyor (Booking GraphQL) ve bunu hukuki açık olarak kabul
 ediyor. Bizim D1 anayasamız scraping'i yasaklıyor — bu bizim SATIŞ AVANTAJIMIZ (EU AI Act +
 OTA ToS uyumu). Karar: ilkeyi KORU, G8 lisanslı rate shopping bütçesini pilot sözleşmesine yaz.

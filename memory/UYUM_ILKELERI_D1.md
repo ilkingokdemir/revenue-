@@ -11,9 +11,11 @@ Tarih: 2026-08-15 · Bu doküman mimari kararların anayasasıdır. Her yeni fiy
 - Havuzlanmış çok-otel verisi yalnızca ANONİM model eğitiminde kullanılır; asla "X oteli şu fiyatı verdi, sen de ver" koordinasyonuna dönüşemez.
 - RealPage davası emsali: fiyat önerisi motoru hiçbir zaman oteller arası fiyat hizalama aracı olamaz.
 
-## 3. Scraping YASAK
-- OTA sitelerinden kazıma yapılmaz (IP ban + hukuki risk). Yalnızca resmi API veya lisanslı rate shopper.
-- Mevcut mock compset verisi canlıya geçmeden lisanslı kaynakla değiştirilecek (Faz: rate shopping).
+## 3. Scraping — REVİZE (kullanıcı kararı 2026-08-15, rev.2)
+- Kamuya açık OTA fiyatlarının YASAL TOPLANMASI (scraping) artık CANLI bir opsiyondur (rakip paritesi).
+- İki kaynak modu: `scraper` (kendi canlı toplama, yalnızca halka açık fiyatlar) | `licensed` (lisanslı rate shopper — üretim hedefi).
+- Kurallar: yalnızca herkese açık arama sonuçları; oturum/hesap arkası veri ASLA; hız sınırı ve robots duyarlılığı; kaynak etiketi (`scraped_live` / `licensed` / `mock`) zorunlu.
+- Bot koruması engellerse otomatik mock_fallback + neden logu.
 
 ## 4. Açıklanabilirlik (EU AI Act)
 - Her fiyat önerisi "neden" dökümüyle üretilir (OTB sapması, pickup hızı, LOS, tarih olayı, guardrail durumu).

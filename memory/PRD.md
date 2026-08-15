@@ -729,3 +729,7 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 
 ## Güncelleme (2026-08-15, rakip karşı-analizi)
 - Rakip raporu incelendi: 15 yeni gap (K1-K15) ROADMAP'e eklendi. P0 hızlı işler: K1 asimetrik adım tavanı, K2 karar sonuç takibi, K3 kill switch. Bizim 9 satış kozumuz netleşti (HotelRunner, hava sinyali, KVKK, grup wash, parity, RGI, PDF, günlük limit, uyum anayasası).
+
+## Güncelleme (2026-08-15, iter 550 — Rakip gap P0)
+- K1 asimetrik adım tavanı + cold-start, K2 karar sonuç zinciri (outcome ledger + günlük worker), K3 kill switch (acil fren), K7 shadow çıkış kriterleri tamamlandı. Kullanıcı kararıyla CANLI SCRAPER opsiyonu eklendi (D1 ilkesi rev.2: yasal kamuya açık toplama; bot koruması→mock_fallback). iteration_543 %100.
+- Kalan rakip gap'leri: K4 iptal modeli v2 (Brier+temporal), K5 güven zarfı, K6 veri-güven kapısı, K8 event v2, K9-K12 (P2), K13-K15 (P3).

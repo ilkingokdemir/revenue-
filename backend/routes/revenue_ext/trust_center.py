@@ -5,6 +5,48 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 
+async def run_outcome_evaluation(db, limit: int = 200) -> dict:
+    """K2: tarihi geçmiş uygulanmış fiyat kararlarının GERÇEKLEŞEN sonucunu kaydeder."""
+    today = datetime.now(timezone.utc).date().isoformat()
+    decs = await db.ai_pricing_decisions.find(
+        {"status": {"$in": ["accepted", "auto-applied"]}, "date": {"$lt": today},
+         "outcome_recorded": {"$exists": False}},
+        {"_id": 0}).to_list(limit)
+    evaluated = 0
+    rooms_cache = {}
+    for d in decs:
+        pid = d["property_id"]
+        if pid not in rooms_cache:
+            rooms_cache[pid] = await db.rooms.count_documents({"property_id": pid}) or 20
+        bks = await db.bookings.find(
+            {"property_id": pid, "check_in": {"$lte": d["date"]}, "check_out": {"$gt": d["date"]},
+             "status": {"$nin": ["cancelled", "no_show"]}},
+            {"_id": 0, "check_in": 1, "check_out": 1, "total_price": 1}).to_list(2000)
+        occ = round(min(100, len(bks) / rooms_cache[pid] * 100), 1)
+        adr = 0.0
+        if bks:
+            per_night = []
+            for b in bks:
+                try:
+                    n = max((datetime.strptime(b["check_out"], "%Y-%m-%d")
+                             - datetime.strptime(b["check_in"], "%Y-%m-%d")).days, 1)
+                except Exception:
+                    n = 1
+                per_night.append((b.get("total_price") or 0) / n)
+            adr = round(sum(per_night) / len(per_night), 2)
+        occ_at_dec = float(d.get("occupancy_pct") or 0)
+        outcome = {"realized_occupancy_pct": occ, "realized_adr": adr,
+                   "occ_at_decision": occ_at_dec, "occ_delta": round(occ - occ_at_dec, 1),
+                   "decision_rate": d.get("new_rate"), "evaluated_at": datetime.now(timezone.utc).isoformat()}
+        await db.ai_pricing_decisions.update_one(
+            {"property_id": pid, "date": d["date"], "room_type_id": d.get("room_type_id", "")},
+            {"$set": {"outcome_recorded": True, "outcome": outcome}})
+        await db.decision_outcomes.insert_one({"property_id": pid, "date": d["date"],
+                                               "status": d["status"], **outcome})
+        evaluated += 1
+    return {"evaluated": evaluated}
+
+
 async def run_shadow_snapshot(db, pid: str) -> dict:
     """Robot önerilerini push ETMEDEN kaydeder — otelin gerçek fiyatıyla kıyas için."""
     import routes.revenue_ext.ai_pricing_engine as eng
@@ -40,18 +82,65 @@ def create_trust_center_router(db, require_roles):
     @router.get("/guardrails/{pid}/config")
     async def get_gr_config(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         g = await db.guardrail_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+        bcount = await db.bookings.count_documents({"property_id": pid})
         return {"property_id": pid,
-                "max_step_pct": float(g.get("max_step_pct", 15)),
+                "max_up_pct": float(g.get("max_up_pct", g.get("max_step_pct", 15))),
+                "max_down_pct": float(g.get("max_down_pct", g.get("max_step_pct", 15))),
+                "cold_start_mode": g.get("cold_start_mode", "auto"),
+                "cold_start_active": g.get("cold_start_mode", "auto") == "auto" and bcount < 100,
                 "daily_push_limit": int(g.get("daily_push_limit", 50))}
 
     @router.put("/guardrails/{pid}/config")
     async def put_gr_config(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
         upd = {"property_id": pid,
-               "max_step_pct": max(1.0, min(50.0, float(data.get("max_step_pct", 15)))),
+               "max_up_pct": max(1.0, min(50.0, float(data.get("max_up_pct", data.get("max_step_pct", 15))))),
+               "max_down_pct": max(0.0, min(50.0, float(data.get("max_down_pct", data.get("max_step_pct", 15))))),
+               "cold_start_mode": data.get("cold_start_mode") if data.get("cold_start_mode") in ("auto", "off") else "auto",
                "daily_push_limit": max(1, min(500, int(data.get("daily_push_limit", 50)))),
                "updated_at": datetime.now(timezone.utc).isoformat()}
         await db.guardrail_config.update_one({"property_id": pid}, {"$set": upd}, upsert=True)
-        return {"ok": True, **{k: upd[k] for k in ("max_step_pct", "daily_push_limit")}}
+        return {"ok": True, **{k: upd[k] for k in ("max_up_pct", "max_down_pct", "cold_start_mode", "daily_push_limit")}}
+
+    # ---------- K3: Kill Switch ----------
+    @router.get("/kill-switch/{pid}")
+    async def kill_status(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        ks = await db.kill_switch.find_one(
+            {"property_id": {"$in": [pid, "global"]}, "active": True}, {"_id": 0})
+        return {"active": bool(ks), "scope": (ks or {}).get("property_id"), "since": (ks or {}).get("activated_at")}
+
+    @router.post("/kill-switch/{pid}/activate")
+    async def kill_on(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        now = datetime.now(timezone.utc).isoformat()
+        await db.kill_switch.update_one(
+            {"property_id": pid},
+            {"$set": {"property_id": pid, "active": True, "activated_at": now,
+                      "activated_by": _u.get("name", "")}}, upsert=True)
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "type": "warning", "title": "🛑 KILL SWITCH AKTİF",
+            "message": f"Tüm robot fiyat push'ları durduruldu ({pid}). Tekrar açana kadar hiçbir otomatik fiyat uygulanmaz.",
+            "category": "revenue", "target_user": "", "target_role": "manager",
+            "link_to": "trust-center", "priority": "high", "read": False,
+            "created_by": _u.get("name", ""), "created_at": now})
+        return {"ok": True, "active": True}
+
+    @router.post("/kill-switch/{pid}/deactivate")
+    async def kill_off(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        await db.kill_switch.update_one({"property_id": pid}, {"$set": {"active": False}})
+        return {"ok": True, "active": False}
+
+    # ---------- K2: Karar sonuç takibi ----------
+    @router.get("/rms-acceptance/{pid}/outcomes")
+    async def outcomes(pid: str, limit: int = 20, _u: dict = Depends(require_roles(*ROLES))):
+        rows = await db.decision_outcomes.find(
+            {"property_id": pid}, {"_id": 0}).sort("date", -1).to_list(min(limit, 100))
+        n = len(rows)
+        return {"outcomes": rows, "count": n,
+                "avg_occ_delta": round(sum(r["occ_delta"] for r in rows) / n, 1) if n else None,
+                "note": "Karar → gerçekleşen sonuç zinciri: fiyat kararı anındaki doluluk vs tarihin nihai doluluk/ADR'si."}
+
+    @router.post("/rms-acceptance/{pid}/evaluate-outcomes")
+    async def evaluate_now(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        return {"ok": True, **(await run_outcome_evaluation(db))}
 
     @router.get("/guardrails/{pid}/violations")
     async def violations(pid: str, limit: int = 50, _u: dict = Depends(require_roles(*ROLES))):
@@ -156,13 +245,17 @@ def create_trust_center_router(db, require_roles):
                         "avg_diff_pct": round(w["sum_diff"] / w["n"], 1),
                         "agreement_pct": round(w["agree"] / w["n"] * 100, 1)})
         snaps = sorted({r["snapshot_date"] for r in rows})
+        agreement_pct = round(agree / len(diffs) * 100, 1)
+        exit_ready = len(snaps) >= 28 and agreement_pct >= 60
         return {"property_id": pid, "samples": len(rows),
                 "snapshot_days": len(snaps), "first_snapshot": snaps[0], "last_snapshot": snaps[-1],
                 "avg_diff_pct": round(sum(diffs) / len(diffs), 1),
-                "agreement_pct": round(agree / len(diffs) * 100, 1),
+                "agreement_pct": agreement_pct,
                 "robot_higher_pct": round(higher / len(diffs) * 100, 1),
                 "robot_lower_pct": round(lower / len(diffs) * 100, 1),
                 "weeks": out,
-                "note": "Uyum = |fark| ≤ %5. Robot önerisi vs otelin gerçek fiyatı — 4 haftalık pilot güven inşası."}
+                "exit_criteria": {"min_days": 28, "min_agreement_pct": 60,
+                                  "days_done": len(snaps), "ready_for_live": exit_ready},
+                "note": "Uyum = |fark| ≤ %5. Çıkış kriteri: ≥28 gün snapshot VE uyum ≥%60 → canlıya geçmeye hazır."}
 
     return router

@@ -3997,3 +3997,18 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - UI: TrustCenterPanel (trust-center-btn) — 4 bölüm: guardrail config+ihlal logu, kabul oranı
   stacked chart+red nedenleri, brüt vs net doluluk çizgi grafiği, shadow rapor kartları.
 - TEST: iteration_542.json — backend 8/8 pytest, frontend %100. Shadow AKTİF bırakıldı, config 15/50.
+
+## Iter 550 (2026-08-15) — Rakip Gap P0: K1+K2+K3+K7 + CANLI SCRAPER OPSİYONU
+- K1 ASİMETRİK ADIM TAVANI: guardrail_config'e max_up_pct/max_down_pct + cold_start_mode (auto:
+  <100 rezervasyonlu tesiste indirim %0 / artış ≤%10). Test: 100→80 talebi -%8 limitle 92'ye kırpıldı.
+- K2 KARAR SONUÇ ZİNCİRİ: trust_center.run_outcome_evaluation + workers.outcome_ledger_loop (06-11
+  UTC) — tarihi geçen uygulanmış kararların gerçekleşen doluluk/ADR'si db.decision_outcomes'a
+  yazılır (10 karar değerlendirildi). GET /api/rms-acceptance/{pid}/outcomes + UI tablosu.
+- K3 KILL SWITCH: db.kill_switch (tesis+global) — _apply_one en başta kontrol eder, blok + ihlal
+  logu + bildirim. POST /api/kill-switch/{pid}/activate|deactivate. UI: kırmızı acil fren butonu.
+- K7 SHADOW ÇIKIŞ KRİTERLERİ: report'a exit_criteria (≥28 gün + uyum ≥%60 → ready_for_live) + rozet.
+- CANLI SCRAPER (kullanıcı kararı — D1 ilkesi rev.2): live_scraper.py — mod: scraper|licensed|mock.
+  Booking.com halka açık arama denemesi (mobil UA); bot koruması (HTTP 202) → mock_fallback + neden
+  logu. db.compset_live kaynak etiketli (scraped_live/mock_fallback/mock). UI: mod pilleri + Şimdi Tara.
+- UI düzeltme: ihlal tablosunda kill_switch tipi ayrı '🛑 KILL SWITCH' etiketi.
+- TEST: iteration_543.json — frontend %100 (a-e hepsi), backend curl doğrulaması main agent.

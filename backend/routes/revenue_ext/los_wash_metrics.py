@@ -188,6 +188,16 @@ def create_los_wash_metrics_router(db, require_roles):
         target_goppar = float(tgt.get("target_goppar") or (round(sum(vals_g) / len(vals_g) * 1.1, 2) if vals_g else 0))
         return {"property_id": pid, "months": out,
                 "target_trevpor": target_trevpor, "target_goppar": target_goppar,
+                "targets_custom": bool(tgt),
                 "note": "Hedefler ayarlanmadıysa son dönem ortalamasının %110'u hedef alınır."}
+
+    @router.put("/modern-metrics/{pid}/targets")
+    async def set_targets(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        upd = {"property_id": pid, "updated_at": datetime.now(timezone.utc).isoformat()}
+        for k in ("target_trevpor", "target_goppar"):
+            if data.get(k) is not None:
+                upd[k] = float(data[k])
+        await db.metric_targets.update_one({"property_id": pid}, {"$set": upd}, upsert=True)
+        return {"ok": True, **{k: v for k, v in upd.items() if k.startswith("target")}}
 
     return router

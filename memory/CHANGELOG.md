@@ -3945,3 +3945,22 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   + hedefe uzaklık rozetleri (yeşil/amber/kırmızı).
 - TEST: iteration_538.json — backend 6/6 pytest, frontend %100, regresyon temiz. Kapasite aşımı
   guard'ı FE'ye eklendi (teklif göndermeden engeller).
+
+## Iter 547 (2026-08-15) — HotelRunner Canlı Bağlantı + Hedef Ayarları + Teklif PDF/E-posta + Salon Takvimi
+- 1) HOTELRUNNER CANLI KANAL: distribution/hotelrunner_live.py — /api/hotelrunner/status, /config
+  (HR_ID+TOKEN kaydı → canlı mod), /test-connection, /push-ari, /push-from-rms (RMS rate_overrides +
+  müsaitlikten N günlük ARI), /pull-reservations, /log. Kimlik yoksa MOCK simülasyon + hr_push_log.
+  UI: HotelRunnerPanel (hotelrunner-live-btn) — mod rozeti, kimlik formu, push/pull, log tablosu.
+  NOT: Kullanıcı HR_ID+TOKEN vermedikçe MOCK modda kalır.
+- 2) HEDEF AYARLARI: PUT /api/modern-metrics/{pid}/targets (db.metric_targets) — trend artık
+  targets_custom döner. UI: "⚙ Hedefleri Ayarla" formu (mm-target-edit-btn), rozetler yeni hedefe
+  göre yeşil/amber/kırmızı.
+- 3) TEKLİF PDF + E-POSTA: GET /proposals/{id}/pdf (reportlab, marka başlıklı kalem dökümü),
+  POST /proposals/{id}/email → outbound_email_queue (Resend MOCK). UI: PDF linki + E-posta butonu.
+- 4) SALON TAKVİMİ: GET /function-space/{pid}/calendar?week_start= — salon başına 7 gün dolu/boş
+  saat aralıkları. UI: haftalık grid, ←/→ hafta gezinme, yeşil boş slot tıklanınca teklif formuna
+  aktarılır (fs-slot-*).
+- BUGFIX (testing agent): LosWashMetricsPanel'de showTgt/tgtT/tgtG useState bildirimleri eksikti
+  (onClick closure'da ReferenceError). Test ajanı ekledi, doğrulandı.
+- TEST: iteration_539.json — backend 7/7, frontend %100. Bilinen kozmetik: '<span> in <option>'
+  konsol uyarısı (önceden mevcut, kaynak FunctionSpacePanel değil).

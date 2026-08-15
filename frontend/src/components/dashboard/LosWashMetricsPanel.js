@@ -22,6 +22,9 @@ export default function LosWashMetricsPanel({ activePropertyId, properties = [] 
   const [trend, setTrend] = useState(null);
   const [fence, setFence] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [showTgt, setShowTgt] = useState(false);
+  const [tgtT, setTgtT] = useState("");
+  const [tgtG, setTgtG] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -56,6 +59,20 @@ export default function LosWashMetricsPanel({ activePropertyId, properties = [] 
     } catch { toast.error("Kapatılamadı"); } finally { setBusy(false); }
   };
 
+  const saveTargets = async () => {
+    setBusy(true);
+    try {
+      const body = {};
+      if (tgtT !== "") body.target_trevpor = +tgtT;
+      if (tgtG !== "") body.target_goppar = +tgtG;
+      await axios.put(`${API}/api/modern-metrics/${pid}/targets`, body, { withCredentials: true });
+      toast.success("Hedefler kaydedildi");
+      setShowTgt(false);
+      const t = await axios.get(`${API}/api/modern-metrics/${pid}/trend?months=6`, { withCredentials: true });
+      setTrend(t.data);
+    } catch { toast.error("Hedefler kaydedilemedi"); } finally { setBusy(false); }
+  };
+
   return (
     <div className="p-5 max-w-[1200px] mx-auto space-y-6" data-testid="los-wash-metrics-panel">
       <div>
@@ -82,7 +99,7 @@ export default function LosWashMetricsPanel({ activePropertyId, properties = [] 
             <div className="bg-white border border-stone-200 rounded-xl p-4 mt-3" data-testid="mm-trend-chart">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <h3 className="text-sm font-bold text-stone-700">Aylık Trend — TRevPOR & GOPPAR (6 ay)</h3>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {(() => {
                     const last = trend.months[trend.months.length - 1];
                     const badge = (val, tgt, label) => {
@@ -93,8 +110,21 @@ export default function LosWashMetricsPanel({ activePropertyId, properties = [] 
                     };
                     return [badge(last.trevpor, trend.target_trevpor, "TRevPOR"), badge(last.goppar, trend.target_goppar, "GOPPAR")];
                   })()}
+                  <button onClick={() => { setShowTgt((s) => !s); setTgtT(trend.target_trevpor); setTgtG(trend.target_goppar); }} data-testid="mm-target-edit-btn" className="px-2 py-0.5 rounded-full border border-stone-300 text-[11px] font-bold text-stone-600">⚙ Hedefleri Ayarla</button>
                 </div>
               </div>
+              {showTgt && (
+                <div className="flex flex-wrap items-end gap-2 mb-3 bg-stone-50 border border-stone-200 rounded-lg p-2.5" data-testid="mm-target-form">
+                  <label className="text-[11px] text-stone-500 font-bold">TRevPOR hedefi
+                    <input type="number" value={tgtT} onChange={(e) => setTgtT(e.target.value)} data-testid="mm-target-trevpor-input" className="block border border-stone-300 rounded-md px-2 py-1 text-sm w-28 mt-0.5" />
+                  </label>
+                  <label className="text-[11px] text-stone-500 font-bold">GOPPAR hedefi
+                    <input type="number" value={tgtG} onChange={(e) => setTgtG(e.target.value)} data-testid="mm-target-goppar-input" className="block border border-stone-300 rounded-md px-2 py-1 text-sm w-28 mt-0.5" />
+                  </label>
+                  <button onClick={saveTargets} disabled={busy} data-testid="mm-target-save-btn" className="px-3 py-1.5 rounded-lg bg-stone-900 text-white text-[12px] font-bold disabled:opacity-50">Kaydet</button>
+                  {trend.targets_custom && <span className="text-[11px] text-emerald-600 font-bold">Özel hedefler aktif</span>}
+                </div>
+              )}
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={trend.months} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />

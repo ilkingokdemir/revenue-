@@ -35,6 +35,7 @@ export const ErrorSentinelPanel = L(() => import("./components/dashboard/ErrorSe
 export const DemandCalendarPanel = L(() => import("./components/dashboard/DemandCalendarPanel"));
 export const LosWashMetricsPanel = L(() => import("./components/dashboard/LosWashMetricsPanel"));
 export const FunctionSpacePanel = L(() => import("./components/dashboard/FunctionSpacePanel"));
+export const HotelRunnerPanel = L(() => import("./components/dashboard/HotelRunnerPanel"));
 export const KDSPanel = L(() => import("./components/dashboard/KDSPanel"));
 export const LoyaltyV2Panel = L(() => import("./components/dashboard/LoyaltyV2Panel"));
 export const ExternalLoyaltyPanel = L(() => import("./components/dashboard/ExternalLoyaltyPanel"));

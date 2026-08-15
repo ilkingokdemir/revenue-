@@ -1762,6 +1762,8 @@ api_router.include_router(create_direct_conversion_router(db, require_roles))
 
 from routes.distribution.siteminder_adapter import create_siteminder_router
 api_router.include_router(create_siteminder_router(db, require_roles))
+from routes.distribution.hotelrunner_live import create_hotelrunner_router
+api_router.include_router(create_hotelrunner_router(db, require_roles))
 
 # ===== Booking.com Premier prototype (Iter 290 - XML push, pre-cert ready) =====
 from routes.distribution.booking_com import create_booking_com_router

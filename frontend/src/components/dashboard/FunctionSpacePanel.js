@@ -15,20 +15,23 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
   const [form, setForm] = useState({ space_id: "", date: new Date().toISOString().slice(0, 10), start_hour: 9, end_hour: 17, attendees: 10, fnb_package: "lunch", av_needed: true, client_name: "", client_email: "" });
   const [quote, setQuote] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [cal, setCal] = useState(null);
+  const [weekStart, setWeekStart] = useState("");
 
   const load = useCallback(async () => {
     try {
-      const [s, r, p] = await Promise.all([
+      const [s, r, p, c] = await Promise.all([
         axios.get(`${API}/api/spaces/${pid}`, { withCredentials: true }),
         axios.get(`${API}/api/function-space/${pid}/revpam`, { withCredentials: true }),
         axios.get(`${API}/api/function-space/${pid}/proposals`, { withCredentials: true }),
+        axios.get(`${API}/api/function-space/${pid}/calendar${weekStart ? `?week_start=${weekStart}` : ""}`, { withCredentials: true }),
       ]);
       const meets = (s.data.spaces || s.data || []).filter((x) => x.kind === "meeting_room");
       setSpaces(meets);
       if (meets.length && !form.space_id) setForm((f) => ({ ...f, space_id: meets[0].id }));
-      setRevpam(r.data); setProps(p.data.proposals || []);
+      setRevpam(r.data); setProps(p.data.proposals || []); setCal(c.data);
     } catch { toast.error("Fonksiyon alanı verileri yüklenemedi"); }
-  }, [pid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pid, weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
 
@@ -63,6 +66,26 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
   };
 
   const F = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const emailProposal = async (id) => {
+    try {
+      const r = await axios.post(`${API}/api/function-space/${pid}/proposals/${id}/email`, {}, { withCredentials: true });
+      toast.success(`E-posta kuyruğa alındı: ${r.data.queued_to} (Resend anahtarı girilene kadar MOCK)`);
+    } catch (e) { toast.error(e.response?.data?.detail || "E-posta gönderilemedi"); }
+  };
+
+  const shiftWeek = (n) => {
+    const base = new Date((cal?.week_start || new Date().toISOString().slice(0, 10)) + "T00:00:00");
+    base.setDate(base.getDate() + n * 7);
+    setWeekStart(base.toISOString().slice(0, 10));
+  };
+
+  const slotToQuote = (spaceId, date, slot) => {
+    setForm((f) => ({ ...f, space_id: spaceId, date, start_hour: slot.start_hour, end_hour: Math.min(slot.start_hour + 2, slot.end_hour) }));
+    setQuote(null);
+    toast.info("Boş saat forma aktarıldı — Fiyat Hesapla'ya basın");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   return (
     <div className="p-5 max-w-[1200px] mx-auto space-y-6" data-testid="function-space-panel">
@@ -136,6 +159,41 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
         </div>
       </section>
 
+      {cal && (
+        <section data-testid="fs-calendar-section">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <h2 className="text-base font-bold text-stone-800">Salon Takvimi — {cal.week_start} haftası</h2>
+            <div className="flex items-center gap-2">
+              <button onClick={() => shiftWeek(-1)} data-testid="fs-cal-prev" className="px-2.5 py-1.5 border border-stone-300 rounded-lg text-sm">←</button>
+              <button onClick={() => shiftWeek(1)} data-testid="fs-cal-next" className="px-2.5 py-1.5 border border-stone-300 rounded-lg text-sm">→</button>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {cal.spaces.map((sp) => (
+              <div key={sp.space_id} className="bg-white border border-stone-200 rounded-xl p-3" data-testid={`fs-cal-${sp.space_id}`}>
+                <div className="text-xs font-bold text-stone-700 mb-2">{sp.name} <span className="text-stone-400 font-normal">({sp.open_hour}:00–{sp.close_hour}:00)</span></div>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {sp.days.map((d) => (
+                    <div key={d.date} className="rounded-lg border border-stone-100 p-1.5 min-h-[70px]">
+                      <div className="text-[10px] font-bold text-stone-500 mb-1">{["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"][(new Date(d.date+"T00:00:00").getDay()+6)%7]} {d.date.slice(8)}</div>
+                      {d.busy.map((b, i) => (
+                        <div key={`b${i}`} className="text-[10px] bg-rose-100 text-rose-700 rounded px-1 py-0.5 mb-0.5 truncate" title={b.guest}>{b.start_hour}–{b.end_hour} dolu</div>
+                      ))}
+                      {d.free.filter((f) => f.end_hour - f.start_hour >= 1).slice(0, 2).map((f, i) => (
+                        <button key={`f${i}`} onClick={() => slotToQuote(sp.space_id, d.date, f)} data-testid={`fs-slot-${sp.space_id}-${d.date}-${f.start_hour}`}
+                          className="block w-full text-left text-[10px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded px-1 py-0.5 mb-0.5 font-bold">
+                          {f.start_hour}–{f.end_hour} boş → teklif
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section data-testid="fs-proposals-section">
         <div className="flex items-center gap-2 mb-2"><FileText size={16} className="text-stone-600" /><h2 className="text-base font-bold text-stone-800">Teklifler ({props.length})</h2></div>
         {props.length === 0 ? <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-500" data-testid="fs-proposals-empty">Henüz teklif yok.</div> : (
@@ -154,12 +212,16 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
                     <td className="p-2.5 font-black">₺{p.total}</td>
                     <td className="p-2.5"><span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${STATUS[p.status] || ""}`}>{STATUS_TR[p.status] || p.status}</span></td>
                     <td className="p-2.5">
-                      {p.status === "sent" && (
-                        <div className="flex gap-1.5">
-                          <button onClick={() => act(p.id, "accept")} data-testid={`fs-accept-${p.id}`} className="px-2 py-1 rounded-md bg-emerald-600 text-white text-[11px] font-bold">Kabul + Rezerve</button>
-                          <button onClick={() => act(p.id, "reject")} data-testid={`fs-reject-${p.id}`} className="px-2 py-1 rounded-md bg-stone-200 text-stone-600 text-[11px] font-bold">Red</button>
-                        </div>
-                      )}
+                      <div className="flex gap-1.5 flex-wrap">
+                        {p.status === "sent" && (
+                          <>
+                            <button onClick={() => act(p.id, "accept")} data-testid={`fs-accept-${p.id}`} className="px-2 py-1 rounded-md bg-emerald-600 text-white text-[11px] font-bold">Kabul + Rezerve</button>
+                            <button onClick={() => act(p.id, "reject")} data-testid={`fs-reject-${p.id}`} className="px-2 py-1 rounded-md bg-stone-200 text-stone-600 text-[11px] font-bold">Red</button>
+                          </>
+                        )}
+                        <a href={`${API}/api/function-space/${pid}/proposals/${p.id}/pdf`} target="_blank" rel="noreferrer" data-testid={`fs-pdf-${p.id}`} className="px-2 py-1 rounded-md bg-indigo-100 text-indigo-700 text-[11px] font-bold">PDF</a>
+                        {p.client_email && <button onClick={() => emailProposal(p.id)} data-testid={`fs-email-${p.id}`} className="px-2 py-1 rounded-md bg-sky-100 text-sky-700 text-[11px] font-bold">{p.emailed_at ? "Tekrar Gönder" : "E-posta"}</button>}
+                      </div>
                     </td>
                   </tr>
                 ))}

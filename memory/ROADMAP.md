@@ -168,3 +168,5 @@ YENİ eksikler (PriceLabs/Beyond/Wheelhouse'dan):
 - [x] 4) P2 LOS Bazlı Fiyatlama (TAMAM iter 545) (3+/7+ gece kademeli fiyat önerisi)
 Nihai sıra: 1-TalepTakvimi, 2-TopluGeriAlma, 3-OrphanGap, 4-LOS, 5-GrupWash, 6-TRevPOR/GOPPAR, 7-FonksiyonBooking (TAMAM iter 546).
 *Lighthouse rate-shop gerçek verisi API anahtarı bekliyor (BLOKLU).
+
+- [x] Canlı Kanal: HotelRunner ARI push altyapısı (iter 547) — GERÇEK moda geçiş için kullanıcıdan HR_ID+TOKEN bekleniyor

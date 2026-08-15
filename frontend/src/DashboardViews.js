@@ -217,6 +217,7 @@ import {
   DemandCalendarPanel,
   LosWashMetricsPanel,
   FunctionSpacePanel,
+  HotelRunnerPanel,
   RevenueStrategistPanel,
   ReviewAgentPanel,
   ReviewSentimentPanel,
@@ -825,6 +826,9 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         )}
         {activeView === "function-space" && (
           <FunctionSpacePanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "hotelrunner-live" && (
+          <HotelRunnerPanel activePropertyId={activePropertyId} properties={properties} />
         )}
 
         {/* Setup Wizard */}

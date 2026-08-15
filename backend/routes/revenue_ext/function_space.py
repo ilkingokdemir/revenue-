@@ -145,4 +145,143 @@ def create_function_space_router(db, require_roles):
                 "total_revpam": round(tot_rev / tot_sqm / days, 2) if tot_sqm else 0,
                 "note": "RevPAM = gelir / m² / gün. m² tanımlı değilse kapasite × 1.5 m² varsayılır."}
 
+    @router.get("/function-space/{pid}/proposals/{prop_id}/pdf")
+    async def proposal_pdf(pid: str, prop_id: str, _u: dict = Depends(require_roles(*ROLES))):
+        prop = await db.function_proposals.find_one({"id": prop_id, "property_id": pid}, {"_id": 0})
+        if not prop:
+            raise HTTPException(404, "Teklif bulunamadı")
+        prop_doc = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+        hotel = prop_doc.get("name") or "Otel"
+        from io import BytesIO
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas as pdfcanvas
+        from reportlab.lib.units import mm
+        _t = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+        buf = BytesIO()
+        c = pdfcanvas.Canvas(buf, pagesize=A4)
+        w, h = A4
+        c.setFillColorRGB(0.28, 0.24, 0.55)
+        c.rect(0, h - 40 * mm, w, 40 * mm, fill=1, stroke=0)
+        c.setFillColorRGB(1, 1, 1)
+        c.setFont("Helvetica-Bold", 20)
+        c.drawString(20 * mm, h - 22 * mm, hotel.translate(_t))
+        c.setFont("Helvetica", 12)
+        c.drawString(20 * mm, h - 32 * mm, "Fonksiyon Alani Teklifi".translate(_t))
+        y = h - 55 * mm
+        c.setFillColorRGB(0.15, 0.15, 0.15)
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(20 * mm, y, f"Sayin {prop['client_name']}".translate(_t))
+        y -= 10 * mm
+        c.setFont("Helvetica", 10)
+        rows = [
+            ("Salon", prop["space_name"]),
+            ("Tarih", f"{prop['date']}  {prop['start'][11:16]} - {prop['end'][11:16]} ({prop['hours']} saat)"),
+            ("Katilimci", str(prop["attendees"])),
+            ("Gecerlilik", prop.get("valid_until", "")),
+        ]
+        for label, val in rows:
+            c.setFont("Helvetica-Bold", 10)
+            c.drawString(20 * mm, y, (label + ":").translate(_t))
+            c.setFont("Helvetica", 10)
+            c.drawString(55 * mm, y, str(val).translate(_t))
+            y -= 7 * mm
+        y -= 5 * mm
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(20 * mm, y, "Kalem")
+        c.drawRightString(w - 20 * mm, y, "Tutar")
+        y -= 2 * mm
+        c.line(20 * mm, y, w - 20 * mm, y)
+        y -= 8 * mm
+        items = [
+            (f"Salon kirasi ({prop['hours']} saat x {prop['rate_per_hour']})", prop["rental"]),
+            (f"F&B: {prop['fnb_label']} x {prop['attendees']} kisi", prop["fnb"]),
+            ("AV ekipmani", prop["av"]),
+        ]
+        c.setFont("Helvetica", 10)
+        for label, val in items:
+            c.drawString(20 * mm, y, label.translate(_t))
+            c.drawRightString(w - 20 * mm, y, f"{val:,.2f} {prop.get('currency', '')}")
+            y -= 7 * mm
+        y -= 2 * mm
+        c.line(20 * mm, y, w - 20 * mm, y)
+        y -= 9 * mm
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(20 * mm, y, "TOPLAM")
+        c.drawRightString(w - 20 * mm, y, f"{prop['total']:,.2f} {prop.get('currency', '')}")
+        y -= 15 * mm
+        c.setFont("Helvetica-Oblique", 9)
+        c.setFillColorRGB(0.4, 0.4, 0.4)
+        c.drawString(20 * mm, y, f"Teklif no: {prop_id[:8]} - Bu teklif {prop.get('valid_until','')} tarihine kadar gecerlidir.".translate(_t))
+        c.save()
+        buf.seek(0)
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(buf, media_type="application/pdf",
+                                 headers={"Content-Disposition": f'inline; filename="teklif-{prop_id[:8]}.pdf"'})
+
+    @router.post("/function-space/{pid}/proposals/{prop_id}/email")
+    async def email_proposal(pid: str, prop_id: str, _u: dict = Depends(require_roles(*ROLES))):
+        prop = await db.function_proposals.find_one({"id": prop_id, "property_id": pid}, {"_id": 0})
+        if not prop:
+            raise HTTPException(404, "Teklif bulunamadı")
+        if not prop.get("client_email"):
+            raise HTTPException(400, "Teklifte müşteri e-postası yok")
+        now = datetime.now(timezone.utc).isoformat()
+        body = (f"Sayın {prop['client_name']},\n\n"
+                f"{prop['space_name']} için hazırladığımız teklif:\n"
+                f"Tarih: {prop['date']} {prop['start'][11:16]}–{prop['end'][11:16]} ({prop['hours']} saat)\n"
+                f"Katılımcı: {prop['attendees']} kişi\n"
+                f"Salon kirası: {prop['rental']} · F&B ({prop['fnb_label']}): {prop['fnb']} · AV: {prop['av']}\n"
+                f"TOPLAM: {prop['total']} {prop.get('currency', '')}\n\n"
+                f"Teklif {prop.get('valid_until', '')} tarihine kadar geçerlidir.\nSaygılarımızla.")
+        await db.outbound_email_queue.insert_one({
+            "id": str(uuid.uuid4()), "to": prop["client_email"],
+            "subject": f"Fonksiyon Alanı Teklifi — {prop['space_name']} ({prop['date']})",
+            "body": body, "status": "queued", "kind": "function_proposal",
+            "delivery_status": "mocked_email_queued", "created_at": now})
+        await db.function_proposals.update_one({"id": prop_id}, {"$set": {"emailed_at": now}})
+        return {"ok": True, "queued_to": prop["client_email"],
+                "note": "E-posta kuyruğa alındı. Resend API anahtarı girilene kadar gönderim MOCK modda bekler."}
+
+    @router.get("/function-space/{pid}/calendar")
+    async def week_calendar(pid: str, week_start: str = "", _u: dict = Depends(require_roles(*ROLES))):
+        today = datetime.now(timezone.utc).date()
+        try:
+            ws = datetime.strptime(week_start, "%Y-%m-%d").date() if week_start else today - timedelta(days=today.weekday())
+        except ValueError:
+            raise HTTPException(400, "week_start YYYY-MM-DD olmalı")
+        days = [(ws + timedelta(days=i)).isoformat() for i in range(7)]
+        spaces = await db.spaces.find(
+            {"property_id": pid, "kind": "meeting_room", "active": {"$ne": False}},
+            {"_id": 0}).to_list(50)
+        start_iso, end_iso = f"{days[0]}T00:00:00", f"{days[-1]}T23:59:59"
+        bks = await db.space_bookings.find(
+            {"space_id": {"$in": [s["id"] for s in spaces]}, "status": {"$ne": "cancelled"},
+             "start": {"$lt": end_iso}, "end": {"$gt": start_iso}},
+            {"_id": 0, "space_id": 1, "start": 1, "end": 1, "guest_name": 1}).to_list(1000)
+        out = []
+        for sp in spaces:
+            oh, ch = int(sp.get("open_hour", 8)), int(sp.get("close_hour", 22))
+            day_rows = []
+            for d in days:
+                busy = []
+                for b in bks:
+                    if b["space_id"] != sp["id"] or b["start"][:10] > d or b["end"][:10] < d:
+                        continue
+                    sh = int(b["start"][11:13]) if b["start"][:10] == d else oh
+                    eh = int(b["end"][11:13]) if b["end"][:10] == d else ch
+                    busy.append({"start_hour": sh, "end_hour": max(eh, sh + 1), "guest": b.get("guest_name", "")})
+                busy.sort(key=lambda x: x["start_hour"])
+                free, cur = [], oh
+                for bl in busy:
+                    if bl["start_hour"] > cur:
+                        free.append({"start_hour": cur, "end_hour": bl["start_hour"]})
+                    cur = max(cur, bl["end_hour"])
+                if cur < ch:
+                    free.append({"start_hour": cur, "end_hour": ch})
+                day_rows.append({"date": d, "busy": busy, "free": free,
+                                 "busy_hours": sum(b["end_hour"] - b["start_hour"] for b in busy)})
+            out.append({"space_id": sp["id"], "name": sp["name"],
+                        "open_hour": oh, "close_hour": ch, "days": day_rows})
+        return {"property_id": pid, "week_start": days[0], "days": days, "spaces": out}
+
     return router

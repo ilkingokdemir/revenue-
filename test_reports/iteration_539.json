@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 539 — 4 new features tested end-to-end. Backend: 7/7 pytest passed (HotelRunner status/push/log mocked; PUT modern-metrics targets + trend returns targets_custom; function-space calendar returns Acme busy block 09-17 on 2026-08-25; proposal PDF returns application/pdf ~2KB; email endpoint queues successfully). Frontend: HotelRunnerPanel (hotelrunner-live-btn) opens correctly — hr-mode-badge='MOCK MOD' amber, hr-days=5, hr-push-btn → 'MOCK — kimlik girilmeden rezervasyon çekilemez' toast, hr-last-push shows '🟡 MOCK · 5 gün · örnek: 2026-08-15..08-17', hr-log-table populated with new MOCK ARI Push + Rezervasyon rows, hr-pull-btn also fires MOCK toast. LosWashMetricsPanel target flow WORKS AFTER FIX — see below; mm-target-edit-btn opens mm-target-form prefilled with current (139.37/38.05), saved 120/50, badges recolored (TRevPOR -10%, GOPPAR -49%), 'Özel hedefler aktif' shown on reopen. FunctionSpacePanel (function-space-btn under Revenue & rates in PRO): fs-calendar-section renders both Executive & Board Room as weekly 7-col grid, fs-cal-prev/fs-cal-next navigate, 14 free-slot buttons visible (fs-slot-{spaceId}-{date}-{hour}), clicking a slot updates fs-quote-date + shows 'Boş saat forma aktarıldı' toast. Teklifler table shows PDF link (opens correct /api/function-space/default/proposals/{id}/pdf) and E-posta button — clicking Acme row's fs-email-* fired 'E-posta kuyruğa alındı: ops@acme.com (Resend anahtarı girilene kadar MOCK)' toast. Regression: LosWashMetricsPanel still renders TRevPOR/RevPAG/GOPPAR cards + LOS Bazlı Fiyatlama section + wash table.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "LosWashMetricsPanel", "issue": "FIXED by testing agent — panel crashed with ReferenceError: showTgt is not defined because state variables showTgt/tgtT/tgtG were referenced but never declared via useState. Added missing useState declarations at lines 25-27.", "selector": "[data-testid='los-wash-metrics-btn']", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "FunctionSpacePanel space-picker", "issues": ["Console warning still present: '<span> cannot be a child of <option>' — pre-existing hydration warning (also noted in iter 538). Cosmetic but should be addressed."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration539_hr_targets_pdf_calendar.py",
+    "/app/test_reports/pytest/iteration539.xml"
+  ],
+  "action_items": [
+    "Testing agent already applied fix to LosWashMetricsPanel.js (added missing useState hooks). Main agent should review this minor fix.",
+    "Remove <span> wrapper from <option> children in FunctionSpacePanel space-picker to eliminate React hydration warning."
+  ],
+  "critical_code_review_comments": [
+    "LosWashMetricsPanel.js used showTgt/setShowTgt/tgtT/setTgtT/tgtG/setTgtG without any useState declaration — build didn't catch it because setters were assigned inside a callback. ErrorBoundary caught it at runtime. Standard oversight; agents should always match every setter/getter to a useState call.",
+    "FunctionSpacePanel calendar 'busy' block wasn't visually verified for Executive/2026-08-25 because the navigation loop breaks when the Acme proposal row (also containing '2026-08-24') matches the substring lower down on the page. Recommend more specific detection (e.g. reading the h3 'Salon Takvimi — YYYY-MM-DD haftası'). Backend response confirms busy block returned correctly."
+  ],
+  "updated_files": [
+    "/app/frontend/src/components/dashboard/LosWashMetricsPanel.js",
+    "/app/backend/tests/test_iteration539_hr_targets_pdf_calendar.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Set property 'default' custom targets to target_trevpor=120, target_goppar=50 during UI test, then pytest reset to 160/90 to preserve main agent context. No other seed data created. HotelRunner config remains empty → MOCK mode intact (no credentials saved). All previous seed data (LOS fence active, Acme booking on 2026-08-25) untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Nav path in PRO mode: click 'Revenue & rates' section header to expand → hotelrunner-live-btn (under Market & Compset), los-wash-metrics-btn, function-space-btn are children. Property selector: sidebar branch is 'All Branches' by default and properties[0].id='default' so all panels use pid='default'. HotelRunner has no credentials → MOCK mode. To visually verify calendar busy block, match on the 'Salon Takvimi — 2026-08-24 haftası' h3 header, not on generic '2026-08-24' body substring (which also appears in Acme proposal row).",
+  "rca of the issue": "LosWashMetricsPanel bug RCA: E1 added <button onClick={() => { setShowTgt(...); setTgtT(...); setTgtG(...); }} …> plus the target form JSX referencing showTgt/tgtT/tgtG, but forgot to add the corresponding `const [showTgt, setShowTgt] = useState(false); const [tgtT, setTgtT] = useState(''); const [tgtG, setTgtG] = useState('');` declarations. Because setters were referenced only inside an onClick closure, the ReferenceError surfaces only on first click, not at initial render — hence any manual render-only check would miss it. Repro: open LOS & Wash panel → click ⚙ Hedefleri Ayarla → ErrorBoundary triggers. Fix applied by testing agent."
+}

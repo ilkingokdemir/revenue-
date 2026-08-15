@@ -54,6 +54,16 @@ async def run_night_audit(db, pid: str, audit_date: str = "") -> dict:
              "created_at": datetime.now(timezone.utc).isoformat()}
     await db.morning_reports.update_one({"property_id": pid, "date": d},
                                      {"$set": audit}, upsert=True)
+    # Otomatik gece push: sertifikalı kanallara RMS fiyat senkronu
+    st = await db.pms_connect_settings.find_one({"property_id": pid}, {"_id": 0}) or {}
+    if st.get("auto_night_push"):
+        try:
+            from routes.distribution.pms_connect import run_auto_night_push
+            audit["night_push"] = await run_auto_night_push(db, pid)
+            await db.morning_reports.update_one({"property_id": pid, "date": d},
+                                                {"$set": {"night_push": audit["night_push"]}})
+        except Exception as e:
+            audit["night_push"] = {"error": str(e)[:200]}
     return audit
 
 

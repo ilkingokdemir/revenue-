@@ -107,6 +107,46 @@ def create_public_events_router(db, require_roles):
         return {"ok": True, **update}
 
     # ============ Public event listings ============
+    @router.post("/public-events/estimate-distance")
+    async def estimate_distance(body: dict,
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Mekan adından otele mesafeyi OpenStreetMap (Nominatim) ile otomatik tahmin eder."""
+        import math
+        import httpx as _hx
+        venue = (body.get("venue_name") or "").strip()
+        pid = body.get("property_id") or "default"
+        if not venue:
+            raise HTTPException(400, "venue_name gerekli")
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1, "city": 1}) or {}
+        city = prop.get("city") or ""
+
+        async def _geocode(q: str):
+            async with _hx.AsyncClient(timeout=15) as client:
+                r = await client.get("https://nominatim.openstreetmap.org/search",
+                                     params={"q": q, "format": "json", "limit": 1},
+                                     headers={"User-Agent": "MyHotelBox-RMS/1.0 (rms@myhotelbox.example)"})
+            if r.status_code == 200 and r.json():
+                d = r.json()[0]
+                return float(d["lat"]), float(d["lon"]), d.get("display_name", "")
+            return None
+
+        try:
+            v = await _geocode(f"{venue}, {city}" if city else venue)
+            h = await _geocode(f"{prop.get('name', '')}, {city}" if prop.get("name") else city)
+            if not h and city:
+                h = await _geocode(city)
+        except Exception as e:
+            raise HTTPException(502, f"Geokodlama servisine ulaşılamadı: {str(e)[:120]}")
+        if not v or not h:
+            return {"ok": False, "distance_km": None,
+                    "message": f"'{venue}' bulunamadı — mesafeyi elle girin."}
+        lat1, lon1, lat2, lon2 = map(math.radians, [v[0], v[1], h[0], h[1]])
+        a = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
+        km = round(6371 * 2 * math.asin(math.sqrt(a)), 1)
+        return {"ok": True, "distance_km": km, "venue_resolved": v[2][:120],
+                "hotel_resolved": h[2][:120],
+                "message": f"'{venue}' otele ~{km} km uzaklıkta (OpenStreetMap)."}
+
     @router.post("/public-events")
     async def create_event(body: dict,
                            current_user: dict = Depends(require_roles("admin", "manager"))):

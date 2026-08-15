@@ -334,8 +334,35 @@ def create_simulator_router(db, require_roles):
         c.drawString(18 * mm, y, "Fiyat endeksi 100 = pazar ortalamasi. Simulasyon sentetik pazarda tekrarlanabilir tohumla kosulur.")
         c.save()
         buf.seek(0)
+        # Sunum kütüphanesi: üretilen PDF arşivlenir
+        import base64 as _b64
+        pdf_bytes = buf.getvalue()
+        arc_id = str(__import__("uuid").uuid4())
+        await db.pitch_archive.insert_one({
+            "id": arc_id, "property_id": pid, "property_name": prop.get("name", pid),
+            "days": days, "base_rate": base_rate, "size_kb": round(len(pdf_bytes) / 1024, 1),
+            "robot_uplift_pct": sim.get("robot_uplift_vs_fixed_pct"),
+            "pdf_b64": _b64.b64encode(pdf_bytes).decode(),
+            "created_at": datetime.now(timezone.utc).isoformat()})
         from fastapi.responses import StreamingResponse
         return StreamingResponse(buf, media_type="application/pdf",
                                  headers={"Content-Disposition": 'inline; filename="pilot-sunum.pdf"'})
+
+    @router.get("/{pid}/pitch-archive")
+    async def pitch_archive_list(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        rows = await db.pitch_archive.find(
+            {"property_id": pid}, {"_id": 0, "pdf_b64": 0}).sort("created_at", -1).to_list(50)
+        return {"archive": rows}
+
+    @router.get("/pitch-archive/{arc_id}/download")
+    async def pitch_archive_download(arc_id: str, _u: dict = Depends(require_roles(*ROLES))):
+        import base64 as _b64
+        from io import BytesIO
+        doc = await db.pitch_archive.find_one({"id": arc_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Arşiv kaydı bulunamadı")
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(BytesIO(_b64.b64decode(doc["pdf_b64"])), media_type="application/pdf",
+                                 headers={"Content-Disposition": f'inline; filename="pilot-sunum-{doc["created_at"][:10]}.pdf"'})
 
     return router

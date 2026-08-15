@@ -764,4 +764,14 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Kayıtlar: db.pms_connect_config, db.pms_push_log, db.pms_inbound.
 - iteration_548: backend 19/19, frontend %100 geçti.
 - Yeni sağlayıcı ekleme: pms_connect.py PROVIDERS sözlüğüne kayıt + _translate'e çeviri şablonu eklemek yeterli (UI otomatik).
+
+## Güncelleme (2026-08-15, iter 556 — 7 özellik: Partner Kiti, Mews CANLI, Gece Push, Sağlık Panosu, Esneklik Trendi, Mesafe Otomasyonu, Sunum Kütüphanesi)
+- Partner Başvuru Kiti: GET /api/pms-connect/{provider}/partner-kit/{pid} — hazır İngilizce başvuru e-postası (2-Way ARI, guardrail'ler, sertifikasyon sonuçları) + teknik özet JSON. UI'da kopyala butonu.
+- Mews Demo CANLI: POST /api/pms-connect/mews/demo-connect/{pid} — herkese açık demo token'larıyla api.mews-demo.com'a bağlanır, root rate + enterprise saat dilimini otomatik bulur. _mews_utc() tarihleri enterprise TZ gece yarısına çevirir (ilk denemede 'FirstTimeUnitStartUtc is not start of TimeUnit' hatası alındı, TZ dönüşümüyle çözüldü). CANLI sertifikasyon 4/4 GEÇTİ, CANLI push (mocked:false) doğrulandı — İLK GERÇEK UÇTAN UCA FİYAT PUSH'U.
+- Otomatik Gece Push: pms_connect.run_auto_night_push() — sertifikalı kanallara RMS senkronu; night_audit.run_night_audit'e bağlandı (pms_connect_settings.auto_night_push açıksa). Toggle + 'Şimdi Çalıştır' UI.
+- Kanal Sağlık Panosu: GET /api/pms-connect/health/{pid} — 7 kanal (5 PMS + Cloudbeds + HotelRunner): mod, sertifika, son push, hata oranı. PmsConnectHub üstünde tablo.
+- Esneklik Trendi: db.elasticity_history (aylık) + GET /api/elasticity/{pid}/history + SimulatorPanel'de bar grafik.
+- Etkinlik Mesafe Otomasyonu: POST /api/public-events/estimate-distance — Nominatim (OpenStreetMap) geocode + haversine (Hallenstadion→4.2km doğrulandı). PublicEventsPanel'de 'Mesafeyi Tahmin Et' butonu.
+- Sunum Kütüphanesi: pitch PDF'ler db.pitch_archive'a base64 arşivlenir; liste + indirme endpoint'leri + SimulatorPanel'de kütüphane listesi.
+- iteration_549: backend 14/14, frontend %100 geçti. pms_connect.py helper'ları modül seviyesine refactor edildi (night_audit import edebilsin diye).
 - Kalan: lisanslı rate-shopping feed (P2), Expo EAS build (P3), tüm PMS'lerde CANLI mod (partner kimlikleri bekleniyor: Mews demo token, Cloudbeds API key, SiteMinder pmsXchange, eviivo NDA, Elektraweb entegrasyon ekibi).

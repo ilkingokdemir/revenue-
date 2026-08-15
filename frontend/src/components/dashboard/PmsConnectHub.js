@@ -14,12 +14,21 @@ const API_BADGE = {
 export default function PmsConnectHub({ activePropertyId, properties = [] }) {
   const pid = activePropertyId && activePropertyId !== "all" ? activePropertyId : properties[0]?.id || "default";
   const [data, setData] = useState(null);
+  const [health, setHealth] = useState(null);
   const [sel, setSel] = useState(null);
   const [creds, setCreds] = useState({});
   const [days, setDays] = useState(14);
   const [log, setLog] = useState([]);
   const [lastPush, setLastPush] = useState(null);
+  const [kit, setKit] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  const loadHealth = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/api/pms-connect/health/${pid}`, { withCredentials: true });
+      setHealth(r.data);
+    } catch { /* sessiz */ }
+  }, [pid]);
 
   const load = useCallback(async () => {
     try {
@@ -30,7 +39,46 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pid]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); loadHealth(); }, [load, loadHealth]);
+
+  const toggleNightPush = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/pms-connect/night-push/${pid}`, { enabled: !health?.auto_night_push }, { withCredentials: true });
+      toast.success(r.data.auto_night_push ? "Otomatik gece push AÇIK — sabah raporu sonrası sertifikalı kanallara basılacak" : "Otomatik gece push kapatıldı");
+      loadHealth();
+    } catch { toast.error("Ayar kaydedilemedi"); } finally { setBusy(false); }
+  };
+
+  const runNightPushNow = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/pms-connect/night-push/${pid}/run`, {}, { withCredentials: true });
+      const done = r.data.results.filter((x) => !x.skipped && !x.error).length;
+      toast.success(`Gece push çalıştı — ${done} kanala basıldı, ${r.data.results.length - done} atlandı`);
+      loadHealth(); load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Gece push çalıştırılamadı"); } finally { setBusy(false); }
+  };
+
+  const loadKit = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.get(`${API}/api/pms-connect/${sel.id}/partner-kit/${pid}`, { withCredentials: true });
+      setKit(r.data);
+      toast.success("Başvuru kiti hazırlandı");
+    } catch { toast.error("Kit üretilemedi"); } finally { setBusy(false); }
+  };
+
+  const mewsDemoConnect = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/pms-connect/mews/demo-connect/${pid}`, {}, { withCredentials: true });
+      toast.success(r.data.rate_id ? `Mews demo bağlandı — ${r.data.enterprise} · rate: ${r.data.rate_name}` : r.data.note);
+      await load(); loadHealth();
+      const r2 = await axios.get(`${API}/api/pms-connect/providers/${pid}`, { withCredentials: true });
+      setSel(r2.data.providers.find((p) => p.id === "mews"));
+    } catch (e) { toast.error(e.response?.data?.detail || "Mews demo bağlantısı başarısız"); } finally { setBusy(false); }
+  };
 
   const loadLog = useCallback(async (prov) => {
     try {
@@ -39,7 +87,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
     } catch { setLog([]); }
   }, [pid]);
 
-  const pick = (p) => { setSel(p); setCreds({}); setLastPush(null); loadLog(p.id); };
+  const pick = (p) => { setSel(p); setCreds({}); setLastPush(null); setKit(null); loadLog(p.id); };
 
   const saveCreds = async () => {
     setBusy(true);
@@ -101,6 +149,43 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
         <p className="text-sm text-stone-500 mt-1">RMS fiyatları standart formatta üretilir; her adaptör kendi diline çevirip (JSON / OTA XML) PMS'e basar — onlar da Booking.com, Expedia ve diğer OTA'lara dağıtır.</p>
       </div>
 
+      {health && (
+        <section className="bg-white border border-stone-200 rounded-xl p-4" data-testid="pms-health-board">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <h2 className="text-base font-bold text-stone-800">📡 Kanal Sağlık Panosu</h2>
+            <div className="flex items-center gap-2">
+              <button onClick={toggleNightPush} disabled={busy} data-testid="pms-nightpush-toggle"
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-50 ${health.auto_night_push ? "bg-emerald-600 text-white" : "border border-stone-300 text-stone-600"}`}>
+                🌙 Otomatik Gece Push: {health.auto_night_push ? "AÇIK" : "KAPALI"}
+              </button>
+              <button onClick={runNightPushNow} disabled={busy} data-testid="pms-nightpush-run-btn" className="px-3 py-1.5 rounded-lg bg-stone-900 text-white text-[12px] font-bold disabled:opacity-50">Şimdi Çalıştır</button>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" data-testid="pms-health-table">
+              <thead><tr className="text-left text-[11px] text-stone-400 border-b border-stone-100">
+                <th className="p-2">Kanal</th><th className="p-2">Mod</th><th className="p-2">Sertifika</th><th className="p-2">Son Push</th><th className="p-2">Toplam</th><th className="p-2">Hata Oranı</th>
+              </tr></thead>
+              <tbody>
+                {health.channels.map((ch) => (
+                  <tr key={ch.id} className="border-t border-stone-100" data-testid={`pms-health-row-${ch.id}`}>
+                    <td className="p-2 font-bold">{ch.name}</td>
+                    <td className="p-2"><span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${ch.mode === "live" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{ch.mode === "live" ? "CANLI" : "MOCK"}</span></td>
+                    <td className="p-2">{ch.certified ? <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black">SERTİFİKALI{ch.cert_mode === "live" ? " · CANLI" : ""}</span> : <span className="text-[11px] text-stone-400">—</span>}</td>
+                    <td className="p-2 text-[11px] text-stone-500">{ch.last_push_at ? String(ch.last_push_at).slice(0, 16).replace("T", " ") : "hiç"}</td>
+                    <td className="p-2 text-[12px]">{ch.total_pushes}</td>
+                    <td className="p-2 text-[12px]">{ch.error_rate_pct > 0 ? <span className="text-rose-600 font-bold">%{ch.error_rate_pct}</span> : "%0"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {health.last_night_push && (
+            <p className="text-[11px] text-stone-400 mt-2" data-testid="pms-last-nightpush">Son gece push: {String(health.last_night_push.ran_at).slice(0, 16).replace("T", " ")} — {health.last_night_push.results.filter((x) => !x.skipped && !x.error).length} kanala basıldı</p>
+          )}
+        </section>
+      )}
+
       <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3" data-testid="pms-provider-grid">
         {(data?.providers || []).map((p) => (
           <button key={p.id} onClick={() => pick(p)} data-testid={`pms-card-${p.id}`}
@@ -122,6 +207,25 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
       {sel && (
         <div className="space-y-4" data-testid="pms-detail">
           <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 text-[12px] text-stone-600" data-testid="pms-provider-note">{sel.note}</div>
+
+          <div className="flex flex-wrap gap-2">
+            <button onClick={loadKit} disabled={busy} data-testid="pms-kit-btn" className="px-3 py-2 rounded-lg border border-indigo-300 text-indigo-700 text-sm font-bold disabled:opacity-50">📨 Partner Başvuru Kiti</button>
+            {sel.id === "mews" && <button onClick={mewsDemoConnect} disabled={busy} data-testid="pms-mews-demo-btn" className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold disabled:opacity-50">⚡ Mews Demo'ya Bağlan (Canlı Test)</button>}
+          </div>
+
+          {kit && (
+            <section className="bg-white border border-indigo-200 rounded-xl p-4 space-y-2" data-testid="pms-kit-section">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-bold text-stone-800">{sel.name} Başvuru E-postası</h3>
+                <button onClick={() => { navigator.clipboard.writeText(`${kit.email_subject}\n\n${kit.email_body}`); toast.success("E-posta panoya kopyalandı"); }} data-testid="pms-kit-copy-btn" className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-bold">Kopyala</button>
+              </div>
+              <p className="text-[12px] font-bold text-stone-700" data-testid="pms-kit-subject">Konu: {kit.email_subject}</p>
+              <pre className="text-[11px] bg-stone-50 border border-stone-200 rounded-lg p-3 max-h-64 overflow-auto whitespace-pre-wrap" data-testid="pms-kit-body">{kit.email_body}</pre>
+              <details><summary className="text-[12px] font-bold text-stone-500 cursor-pointer">Teknik yeterlilik özeti (JSON)</summary>
+                <pre className="text-[10px] bg-stone-900 text-emerald-300 rounded p-2 mt-1 max-h-40 overflow-auto">{JSON.stringify(kit.tech_summary, null, 1)}</pre>
+              </details>
+            </section>
+          )}
 
           <section className="grid md:grid-cols-2 gap-4">
             <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-2.5" data-testid="pms-config-form">

@@ -15,7 +15,8 @@ PROVIDERS = {
         "auth_fields": [
             {"key": "client_token", "label": "ClientToken", "secret": True},
             {"key": "access_token", "label": "AccessToken", "secret": True},
-            {"key": "rate_id", "label": "Rate ID (root rate)", "secret": False}],
+            {"key": "rate_id", "label": "Rate ID (root rate)", "secret": False},
+            {"key": "tz", "label": "Saat Dilimi (örn. Europe/Zurich)", "secret": False}],
         "note": "Tamamen açık API (Connector API). Demo: api.mews-demo.com — Marketplace → My subscriptions'tan AccessToken alın. Fiyat push: rates/updatePrice (yalnızca root rate)."},
     "apaleo": {
         "name": "Apaleo", "region": "Almanya · Orta Avrupa", "api_type": "open",
@@ -66,14 +67,25 @@ def _has_creds(provider: str, cfg: dict) -> bool:
     return all(cfg.get(k) for k in _REQUIRED[provider])
 
 
+def _mews_utc(date_str: str, tz_name: str) -> str:
+    from zoneinfo import ZoneInfo
+    try:
+        tz = ZoneInfo(tz_name or "UTC")
+    except Exception:
+        tz = ZoneInfo("UTC")
+    dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=tz)
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
 def _translate(provider: str, cfg: dict, rows: list, currency: str = "EUR") -> dict:
     """Standart RMS satırlarını [{date, rate, availability}] sağlayıcı diline çevirir."""
     if provider == "mews":
+        _tz = cfg.get("tz", "UTC")
         return {"method": "POST", "path": "/api/connector/v1/rates/updatePrice",
                 "body": {"ClientToken": "***", "AccessToken": "***", "Client": "MyHotelBox-RMS/1.0",
                          "RateId": cfg.get("rate_id", ""),
-                         "PriceUpdates": [{"FirstTimeUnitStartUtc": f"{r['date']}T00:00:00.000Z",
-                                           "LastTimeUnitStartUtc": f"{r['date']}T00:00:00.000Z",
+                         "PriceUpdates": [{"FirstTimeUnitStartUtc": _mews_utc(r["date"], _tz),
+                                           "LastTimeUnitStartUtc": _mews_utc(r["date"], _tz),
                                            "Value": r["rate"]} for r in rows]}}
     if provider == "apaleo":
         return {"method": "PUT", "path": f"/rateplan/v1/rate-plans/{cfg.get('rate_plan_id', '')}/rates",
@@ -103,101 +115,136 @@ def _translate(provider: str, cfg: dict, rows: list, currency: str = "EUR") -> d
                                  "allotment": r.get("availability")} for r in rows]}}
 
 
+async def _cfg(db, pid: str, provider: str) -> dict:
+    return await db.pms_connect_config.find_one(
+        {"property_id": pid, "provider": provider}, {"_id": 0}) or {}
+
+
+async def _log(db, pid: str, provider: str, kind: str, mode: str,
+               standard_rows: list, translated: dict, result: dict, cert_test: bool = False):
+    await db.pms_push_log.insert_one({
+        "id": str(uuid.uuid4()), "property_id": pid, "provider": provider,
+        "kind": kind, "mode": mode, "standard_rows": standard_rows,
+        "translated_sample": {k: (v[:400] if isinstance(v, str) else v)
+                              for k, v in list(translated.items())[:3]},
+        "result": result, "cert_test": cert_test,
+        "created_at": datetime.now(timezone.utc).isoformat()})
+
+
+async def _rms_rows(db, pid: str, days: int) -> list:
+    total_rooms = await db.rooms.count_documents({"property_id": pid}) or 20
+    today = datetime.now(timezone.utc).date()
+    rows = []
+    for i in range(days):
+        ds = (today + timedelta(days=i)).isoformat()
+        ov = await db.rate_overrides.find_one({"property_id": pid, "date": ds},
+                                              {"_id": 0, "rate": 1, "custom_rate": 1})
+        if not (ov and (ov.get("custom_rate") or ov.get("rate"))):
+            continue
+        booked = await db.bookings.count_documents({
+            "property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
+            "check_in": {"$lte": ds}, "check_out": {"$gt": ds}})
+        rows.append({"date": ds, "rate": round(float(ov.get("custom_rate") or ov["rate"]), 2),
+                     "availability": max(total_rooms - booked, 0)})
+    return rows
+
+
+async def _live_send(provider: str, cfg: dict, translated: dict) -> dict:
+    base = (cfg.get("endpoint_url") or PROVIDERS[provider]["base_url"]).rstrip("/")
+    if not base:
+        raise HTTPException(400, f"{PROVIDERS[provider]['name']} için endpoint URL gerekli.")
+    async with httpx.AsyncClient(timeout=30) as client:
+        if provider == "mews":
+            body = dict(translated["body"])
+            body["ClientToken"] = cfg["client_token"]
+            body["AccessToken"] = cfg["access_token"]
+            r = await client.post(f"{base}{translated['path']}", json=body)
+        elif provider == "apaleo":
+            tk = await client.post("https://identity.apaleo.com/connect/token",
+                                   data={"grant_type": "client_credentials",
+                                         "client_id": cfg["client_id"],
+                                         "client_secret": cfg["client_secret"]})
+            if tk.status_code != 200:
+                raise HTTPException(502, f"Apaleo OAuth hatası: {tk.text[:200]}")
+            r = await client.put(f"{base}{translated['path']}",
+                                 headers={"Authorization": f"Bearer {tk.json()['access_token']}"},
+                                 json=translated["body"])
+        elif provider == "siteminder":
+            r = await client.post(f"{base}{translated['path']}",
+                                  auth=(cfg["username"], cfg["password"]),
+                                  headers={"Content-Type": "text/xml"},
+                                  content=translated["body_xml"])
+        else:
+            r = await client.post(f"{base}{translated['path']}",
+                                  headers={"x-api-key": cfg["api_key"]},
+                                  json=translated["body"])
+    if r.status_code >= 400:
+        raise HTTPException(502, f"{PROVIDERS[provider]['name']} hatası ({r.status_code}): {r.text[:250]}")
+    try:
+        return r.json()
+    except Exception:
+        return {"status_code": r.status_code, "body": r.text[:300]}
+
+
+async def _push(db, pid: str, provider: str, rows: list, cert_test: bool = False) -> dict:
+    cfg = await _cfg(db, pid, provider)
+    translated = _translate(provider, cfg, rows)
+    live = _has_creds(provider, cfg)
+    if live and not cert_test:
+        cert = cfg.get("certification") or {}
+        if not (cert.get("passed") and cert.get("mode") == "live"):
+            raise HTTPException(428, f"{PROVIDERS[provider]['name']} sertifikasyonu geçilmedi — canlı push bloklandı. "
+                                     "Önce test push + geri okuma doğrulamasını CANLI modda geçin.")
+    if not live:
+        result = {"mocked": True, "would_send": len(rows),
+                  "message": "MOCK — kimlik girilmediği için gerçek push yapılmadı."}
+        await _log(db, pid, provider, "rate_push", "mocked", rows, translated, result, cert_test)
+        return {"pushed_days": len(rows), "sample": rows[:3],
+                "translated_preview": translated, **result}
+    result = await _live_send(provider, cfg, translated)
+    await _log(db, pid, provider, "rate_push", "live", rows, translated, result, cert_test)
+    return {"pushed_days": len(rows), "sample": rows[:3], "mocked": False, "result": result}
+
+
+async def run_auto_night_push(db, pid: str, days: int = 14) -> dict:
+    """Gece robotu: sertifikasyonu geçmiş tüm kanallara RMS fiyatlarını otomatik basar."""
+    rows = await _rms_rows(db, pid, days)
+    results = []
+    for key in PROVIDERS:
+        cfg = await _cfg(db, pid, key)
+        cert = cfg.get("certification") or {}
+        if not cert.get("passed"):
+            results.append({"provider": key, "skipped": True, "reason": "sertifikasyon yok"})
+            continue
+        if not rows:
+            results.append({"provider": key, "skipped": True, "reason": "RMS fiyatı yok"})
+            continue
+        try:
+            r = await _push(db, pid, key, rows)
+            results.append({"provider": key, "pushed_days": r.get("pushed_days", 0),
+                            "mode": "mocked" if r.get("mocked") else "live"})
+        except Exception as e:
+            results.append({"provider": key, "error": str(e)[:150]})
+    out = {"ran_at": datetime.now(timezone.utc).isoformat(), "days": days, "results": results}
+    await db.pms_night_push_log.insert_one({**out, "property_id": pid, "id": str(uuid.uuid4())})
+    return out
+
+
+MEWS_DEMO = {
+    "client_token": "E0D439EE522F44368DC78E1BFB03710C-D24FB11DBE31D4621C4817E028D9E1D",
+    "access_token": "C66EF7B239D24632943D115EDE9CB810-EA00F8FD8294692C940F6B5A8F9453D",
+}
+
+
 def create_pms_connect_router(db, require_roles):
     router = APIRouter(prefix="/pms-connect", tags=["pms-connect"])
     ROLES = ("admin", "manager")
-
-    async def _cfg(pid: str, provider: str) -> dict:
-        return await db.pms_connect_config.find_one(
-            {"property_id": pid, "provider": provider}, {"_id": 0}) or {}
-
-    async def _log(pid: str, provider: str, kind: str, mode: str,
-                   standard_rows: list, translated: dict, result: dict, cert_test: bool = False):
-        await db.pms_push_log.insert_one({
-            "id": str(uuid.uuid4()), "property_id": pid, "provider": provider,
-            "kind": kind, "mode": mode, "standard_rows": standard_rows,
-            "translated_sample": {k: (v[:400] if isinstance(v, str) else v)
-                                  for k, v in list(translated.items())[:3]},
-            "result": result, "cert_test": cert_test,
-            "created_at": datetime.now(timezone.utc).isoformat()})
-
-    async def _rms_rows(pid: str, days: int) -> list:
-        total_rooms = await db.rooms.count_documents({"property_id": pid}) or 20
-        today = datetime.now(timezone.utc).date()
-        rows = []
-        for i in range(days):
-            ds = (today + timedelta(days=i)).isoformat()
-            ov = await db.rate_overrides.find_one({"property_id": pid, "date": ds},
-                                                  {"_id": 0, "rate": 1, "custom_rate": 1})
-            if not (ov and (ov.get("custom_rate") or ov.get("rate"))):
-                continue
-            booked = await db.bookings.count_documents({
-                "property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
-                "check_in": {"$lte": ds}, "check_out": {"$gt": ds}})
-            rows.append({"date": ds, "rate": round(float(ov.get("custom_rate") or ov["rate"]), 2),
-                         "availability": max(total_rooms - booked, 0)})
-        return rows
-
-    async def _live_send(provider: str, cfg: dict, translated: dict) -> dict:
-        base = (cfg.get("endpoint_url") or PROVIDERS[provider]["base_url"]).rstrip("/")
-        if not base:
-            raise HTTPException(400, f"{PROVIDERS[provider]['name']} için endpoint URL gerekli.")
-        async with httpx.AsyncClient(timeout=30) as client:
-            if provider == "mews":
-                body = dict(translated["body"])
-                body["ClientToken"] = cfg["client_token"]
-                body["AccessToken"] = cfg["access_token"]
-                r = await client.post(f"{base}{translated['path']}", json=body)
-            elif provider == "apaleo":
-                tk = await client.post("https://identity.apaleo.com/connect/token",
-                                       data={"grant_type": "client_credentials",
-                                             "client_id": cfg["client_id"],
-                                             "client_secret": cfg["client_secret"]})
-                if tk.status_code != 200:
-                    raise HTTPException(502, f"Apaleo OAuth hatası: {tk.text[:200]}")
-                r = await client.put(f"{base}{translated['path']}",
-                                     headers={"Authorization": f"Bearer {tk.json()['access_token']}"},
-                                     json=translated["body"])
-            elif provider == "siteminder":
-                r = await client.post(f"{base}{translated['path']}",
-                                      auth=(cfg["username"], cfg["password"]),
-                                      headers={"Content-Type": "text/xml"},
-                                      content=translated["body_xml"])
-            else:
-                r = await client.post(f"{base}{translated['path']}",
-                                      headers={"x-api-key": cfg["api_key"]},
-                                      json=translated["body"])
-        if r.status_code >= 400:
-            raise HTTPException(502, f"{PROVIDERS[provider]['name']} hatası ({r.status_code}): {r.text[:250]}")
-        try:
-            return r.json()
-        except Exception:
-            return {"status_code": r.status_code, "body": r.text[:300]}
-
-    async def _push(pid: str, provider: str, rows: list, cert_test: bool = False) -> dict:
-        cfg = await _cfg(pid, provider)
-        translated = _translate(provider, cfg, rows)
-        live = _has_creds(provider, cfg)
-        if live and not cert_test:
-            cert = cfg.get("certification") or {}
-            if not (cert.get("passed") and cert.get("mode") == "live"):
-                raise HTTPException(428, f"{PROVIDERS[provider]['name']} sertifikasyonu geçilmedi — canlı push bloklandı. "
-                                         "Önce test push + geri okuma doğrulamasını CANLI modda geçin.")
-        if not live:
-            result = {"mocked": True, "would_send": len(rows),
-                      "message": "MOCK — kimlik girilmediği için gerçek push yapılmadı."}
-            await _log(pid, provider, "rate_push", "mocked", rows, translated, result, cert_test)
-            return {"pushed_days": len(rows), "sample": rows[:3],
-                    "translated_preview": translated, **result}
-        result = await _live_send(provider, cfg, translated)
-        await _log(pid, provider, "rate_push", "live", rows, translated, result, cert_test)
-        return {"pushed_days": len(rows), "sample": rows[:3], "mocked": False, "result": result}
 
     @router.get("/providers/{pid}")
     async def list_providers(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         out = []
         for key, meta in PROVIDERS.items():
-            cfg = await _cfg(pid, key)
+            cfg = await _cfg(db, pid, key)
             live = _has_creds(key, cfg)
             pushes = await db.pms_push_log.count_documents({"property_id": pid, "provider": key})
             cert = cfg.get("certification")
@@ -225,14 +272,14 @@ def create_pms_connect_router(db, require_roles):
             upd["endpoint_url"] = str(data["endpoint_url"]).strip()
         await db.pms_connect_config.update_one(
             {"property_id": pid, "provider": provider}, {"$set": upd}, upsert=True)
-        cfg = await _cfg(pid, provider)
+        cfg = await _cfg(db, pid, provider)
         return {"ok": True, "mode": "live" if _has_creds(provider, cfg) else "mocked"}
 
     @router.post("/{provider}/test-connection/{pid}")
     async def test_connection(provider: str, pid: str, _u: dict = Depends(require_roles(*ROLES))):
         if provider not in PROVIDERS:
             raise HTTPException(404, "Bilinmeyen sağlayıcı")
-        cfg = await _cfg(pid, provider)
+        cfg = await _cfg(db, pid, provider)
         if not _has_creds(provider, cfg):
             raise HTTPException(400, f"{PROVIDERS[provider]['name']} kimlikleri eksik — önce tüm alanları kaydedin.")
         base = (cfg.get("endpoint_url") or PROVIDERS[provider]["base_url"]).rstrip("/")
@@ -270,18 +317,18 @@ def create_pms_connect_router(db, require_roles):
         if provider not in PROVIDERS:
             raise HTTPException(404, "Bilinmeyen sağlayıcı")
         days = max(1, min(90, int((data or {}).get("days", 14))))
-        rows = await _rms_rows(pid, days)
+        rows = await _rms_rows(db, pid, days)
         if not rows:
             return {"pushed_days": 0, "message": "Gönderilecek RMS fiyatı yok — önce fiyat oluşturun."}
-        return await _push(pid, provider, rows)
+        return await _push(db, pid, provider, rows)
 
     @router.post("/{provider}/pull-reservations/{pid}")
     async def pull_reservations(provider: str, pid: str, _u: dict = Depends(require_roles(*ROLES))):
         if provider not in PROVIDERS:
             raise HTTPException(404, "Bilinmeyen sağlayıcı")
-        cfg = await _cfg(pid, provider)
+        cfg = await _cfg(db, pid, provider)
         if not _has_creds(provider, cfg):
-            await _log(pid, provider, "res_pull", "mocked", [], {}, {"mocked": True})
+            await _log(db, pid, provider, "res_pull", "mocked", [], {}, {"mocked": True})
             return {"mocked": True, "imported": 0,
                     "message": "MOCK — kimlik girilmediği için rezervasyon çekilemedi."}
         if provider == "mews":
@@ -303,9 +350,9 @@ def create_pms_connect_router(db, require_roles):
                               "property_id": pid, "payload": res,
                               "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
                 imported += 1
-            await _log(pid, provider, "res_pull", "live", [], {}, {"imported": imported})
+            await _log(db, pid, provider, "res_pull", "live", [], {}, {"imported": imported})
             return {"mocked": False, "imported": imported}
-        await _log(pid, provider, "res_pull", "live", [], {}, {"note": "generic pull attempted"})
+        await _log(db, pid, provider, "res_pull", "live", [], {}, {"note": "generic pull attempted"})
         return {"mocked": False, "imported": 0,
                 "message": f"{PROVIDERS[provider]['name']} rezervasyon çekme, partner dokümanları gelince endpoint'e bağlanacak."}
 
@@ -315,14 +362,14 @@ def create_pms_connect_router(db, require_roles):
         if provider not in PROVIDERS:
             raise HTTPException(404, "Bilinmeyen sağlayıcı")
         checks = []
-        cfg = await _cfg(pid, provider)
+        cfg = await _cfg(db, pid, provider)
         live = _has_creds(provider, cfg)
         checks.append({"name": "Kimlik yapılandırması", "passed": live,
                        "detail": "Tüm kimlik alanları mevcut" if live else "Kimlik eksik — MOCK sertifikasyon"})
         test_date = (datetime.now(timezone.utc).date() + timedelta(days=60)).isoformat()
         test_rows = [{"date": test_date, "rate": 99.0, "availability": 1}]
         try:
-            res = await _push(pid, provider, test_rows, cert_test=True)
+            res = await _push(db, pid, provider, test_rows, cert_test=True)
             checks.append({"name": "Test push", "passed": True,
                            "detail": f"1 tarih gönderildi ({'CANLI' if not res.get('mocked') else 'MOCK'}) — {PROVIDERS[provider]['format'].upper()} formatına çevrildi"})
         except Exception as e:
@@ -354,5 +401,156 @@ def create_pms_connect_router(db, require_roles):
             {"_id": 0, "standard_rows": 0, "translated_sample": 0}
         ).sort("created_at", -1).to_list(min(limit, 100))
         return {"log": rows}
+
+    @router.get("/health/{pid}")
+    async def health(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Kanal Sağlık Panosu — tüm adaptörlerin son push, sertifika ve hata durumu."""
+        channels = []
+        for key, meta in PROVIDERS.items():
+            cfg = await _cfg(db, pid, key)
+            last = await db.pms_push_log.find_one(
+                {"property_id": pid, "provider": key, "kind": "rate_push"},
+                {"_id": 0, "mode": 1, "created_at": 1, "result": 1}, sort=[("created_at", -1)])
+            total = await db.pms_push_log.count_documents({"property_id": pid, "provider": key})
+            errors = await db.pms_push_log.count_documents(
+                {"property_id": pid, "provider": key, "result.error": {"$exists": True}})
+            cert = cfg.get("certification") or {}
+            channels.append({"id": key, "name": meta["name"],
+                             "mode": "live" if _has_creds(key, cfg) else "mocked",
+                             "certified": bool(cert.get("passed")), "cert_mode": cert.get("mode"),
+                             "last_push_at": (last or {}).get("created_at"),
+                             "last_push_mode": (last or {}).get("mode"),
+                             "total_pushes": total,
+                             "error_rate_pct": round(errors / total * 100, 1) if total else 0.0})
+        cb = await db.cloudbeds_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+        cb_last = await db.cb_push_log.find_one({"property_id": pid, "kind": "rate_push"},
+                                                {"_id": 0, "mode": 1, "created_at": 1}, sort=[("created_at", -1)])
+        cb_total = await db.cb_push_log.count_documents({"property_id": pid})
+        channels.append({"id": "cloudbeds", "name": "Cloudbeds",
+                         "mode": "live" if cb.get("api_key") else "mocked",
+                         "certified": bool((cb.get("certification") or {}).get("passed")),
+                         "cert_mode": (cb.get("certification") or {}).get("mode"),
+                         "last_push_at": (cb_last or {}).get("created_at"),
+                         "last_push_mode": (cb_last or {}).get("mode"),
+                         "total_pushes": cb_total, "error_rate_pct": 0.0})
+        hr = await db.hotelrunner_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+        hr_last = await db.hr_push_log.find_one({"property_id": pid},
+                                                {"_id": 0, "mode": 1, "created_at": 1}, sort=[("created_at", -1)])
+        hr_total = await db.hr_push_log.count_documents({"property_id": pid})
+        channels.append({"id": "hotelrunner", "name": "HotelRunner",
+                         "mode": "live" if (hr.get("hr_id") and hr.get("token")) else "mocked",
+                         "certified": bool((hr.get("certification") or {}).get("passed")),
+                         "cert_mode": (hr.get("certification") or {}).get("mode"),
+                         "last_push_at": (hr_last or {}).get("created_at"),
+                         "last_push_mode": (hr_last or {}).get("mode"),
+                         "total_pushes": hr_total, "error_rate_pct": 0.0})
+        st = await db.pms_connect_settings.find_one({"property_id": pid}, {"_id": 0}) or {}
+        last_np = await db.pms_night_push_log.find_one({"property_id": pid}, {"_id": 0},
+                                                       sort=[("ran_at", -1)])
+        return {"property_id": pid, "channels": channels,
+                "auto_night_push": bool(st.get("auto_night_push")),
+                "last_night_push": last_np}
+
+    @router.post("/night-push/{pid}")
+    async def toggle_night_push(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        enabled = bool(data.get("enabled"))
+        await db.pms_connect_settings.update_one(
+            {"property_id": pid},
+            {"$set": {"property_id": pid, "auto_night_push": enabled,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        return {"ok": True, "auto_night_push": enabled,
+                "note": "Açıkken gece robotu (sabah raporu) sonrası sertifikalı tüm kanallara RMS fiyatları otomatik basılır."}
+
+    @router.post("/night-push/{pid}/run")
+    async def run_night_push_now(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        return {"ok": True, **await run_auto_night_push(db, pid)}
+
+    @router.get("/{provider}/partner-kit/{pid}")
+    async def partner_kit(provider: str, pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Partner başvuru kiti: hazır e-posta + sertifikasyon sonuçlu teknik yeterlilik özeti."""
+        if provider not in PROVIDERS:
+            raise HTTPException(404, "Bilinmeyen sağlayıcı")
+        meta = PROVIDERS[provider]
+        cfg = await _cfg(db, pid, provider)
+        cert = cfg.get("certification") or {}
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1, "city": 1}) or {}
+        pushes = await db.pms_push_log.count_documents({"property_id": pid, "provider": provider})
+        cert_lines = "\n".join(
+            f"  - {c['name']}: {'PASSED' if c['passed'] else 'PENDING (awaiting live credentials)'} — {c['detail']}"
+            for c in cert.get("checks", [])) or "  - Certification not yet run"
+        fmt = "OTA XML (OTA_HotelRateAmountNotifRQ)" if meta["format"] == "ota_xml" else "REST JSON"
+        subject = f"Technology Partner Application — MyHotelBox RMS ({meta['name']} 2-Way ARI Integration)"
+        body = f"""Dear {meta['name']} Partnerships Team,
+
+We are MyHotelBox, an AI-driven Revenue Management System (RMS) serving hotels across Turkey, the UK, Europe, the US and the Middle East. We would like to apply for your Technology Partner program to offer a certified 2-way ARI integration to our mutual customers.
+
+WHAT OUR INTEGRATION DOES
+- Pulls occupancy and reservation data for demand forecasting (net OTB with cancellation probability)
+- Pushes AI-optimized daily rates and restrictions (MinLOS/CTA/CTD via a unified bid-price framework) back to {meta['name']}
+- {meta['name']} then distributes to Booking.com, Expedia and all connected OTAs — no direct OTA connectivity required on our side
+
+TECHNICAL READINESS
+- Adapter already implemented against your {fmt} interface with an agnostic middleware layer
+- Publisher certification pipeline (automated test push + read-back verification) built-in; live pushes are blocked until certification passes
+- Guardrails: asymmetric step caps (±15%), daily push limits, global kill-switch, full audit log ({pushes} logged operations for pilot property "{prop.get('name', pid)}")
+
+INTERNAL CERTIFICATION RESULTS
+{cert_lines}
+
+We would appreciate sandbox/demo credentials and your partner onboarding documentation to complete live certification. We are ready to start immediately.
+
+Best regards,
+MyHotelBox RMS Team
+partnerships@myhotelbox.example"""
+        tech_summary = {
+            "integration_type": "2-Way ARI (rates + restrictions push, reservations pull)",
+            "format": fmt, "api_type": meta["api_type"],
+            "endpoints_implemented": ["config", "test-connection", "push-from-rms", "pull-reservations", "certify", "log"],
+            "safety": ["Publisher certification gate (HTTP 428 before certification)",
+                       "Asymmetric guardrails ±15%", "Global kill-switch", "Full audit log"],
+            "certification": cert or {"status": "not_run"},
+            "provider_note": meta["note"]}
+        return {"provider": provider, "email_subject": subject, "email_body": body,
+                "tech_summary": tech_summary}
+
+    @router.post("/mews/demo-connect/{pid}")
+    async def mews_demo_connect(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Mews demo ortamına (api.mews-demo.com) herkese açık demo token'larıyla bağlanır,
+        ilk aktif root rate'i bulup kaydeder — canlı uçtan uca push testi için."""
+        base = PROVIDERS["mews"]["base_url"]
+        auth = {"ClientToken": MEWS_DEMO["client_token"],
+                "AccessToken": MEWS_DEMO["access_token"], "Client": "MyHotelBox-RMS/1.0"}
+        async with httpx.AsyncClient(timeout=30) as client:
+            conf = await client.post(f"{base}/api/connector/v1/configuration/get", json=auth)
+            if conf.status_code != 200:
+                raise HTTPException(502, f"Mews demo bağlantısı başarısız ({conf.status_code}): {conf.text[:200]}")
+            enterprise = (conf.json() or {}).get("Enterprise", {})
+            tz_name = enterprise.get("TimeZoneIdentifier", "UTC")
+            svc = await client.post(f"{base}/api/connector/v1/services/getAll",
+                                    json={**auth, "Limitation": {"Count": 20}})
+            services = (svc.json() or {}).get("Services", []) if svc.status_code == 200 else []
+            bookable = next((s for s in services if s.get("Type") == "Reservable" or s.get("IsActive")), None)
+            rate_id, rate_name = "", ""
+            if bookable:
+                rts = await client.post(f"{base}/api/connector/v1/rates/getAll",
+                                        json={**auth, "ServiceIds": [bookable["Id"]],
+                                              "Limitation": {"Count": 100}})
+                if rts.status_code == 200:
+                    for rt in (rts.json() or {}).get("Rates", []):
+                        if rt.get("BaseRateId") is None and rt.get("IsActive"):
+                            rate_id, rate_name = rt["Id"], rt.get("Name", "")
+                            break
+        await db.pms_connect_config.update_one(
+            {"property_id": pid, "provider": "mews"},
+            {"$set": {"property_id": pid, "provider": "mews",
+                      "client_token": MEWS_DEMO["client_token"],
+                      "access_token": MEWS_DEMO["access_token"],
+                      "rate_id": rate_id, "endpoint_url": base, "tz": tz_name,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        return {"ok": True, "enterprise": enterprise.get("Name", ""),
+                "service": (bookable or {}).get("Name", ""), "rate_id": rate_id, "rate_name": rate_name,
+                "mode": "live" if rate_id else "mocked",
+                "note": "Demo kimlikleri kaydedildi. Şimdi 'Sertifikasyonu Çalıştır' ile CANLI sertifikasyon geçin, ardından canlı push açılır."
+                if rate_id else "Bağlantı kuruldu ama aktif root rate bulunamadı — rate_id'yi elle girin."}
 
     return router

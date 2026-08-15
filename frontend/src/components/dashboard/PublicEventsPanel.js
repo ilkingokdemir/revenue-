@@ -20,7 +20,22 @@ export default function PublicEventsPanel({ propertyId }) {
   const [form, setForm] = useState({
     title: "", date: "", start_time: "19:00", end_time: "23:00",
     description: "", capacity: 50, price_from: 0, tags: [],
+    venue_name: "", distance_km: null,
   });
+  const [estimating, setEstimating] = useState(false);
+
+  async function estimateDistance() {
+    if (!form.venue_name.trim()) { toast.error("Önce mekan adı girin"); return; }
+    setEstimating(true);
+    try {
+      const r = await axios.post(`${API}/public-events/estimate-distance`,
+        { venue_name: form.venue_name, property_id: propertyId }, { withCredentials: true });
+      if (r.data.ok) {
+        setForm((f) => ({ ...f, distance_km: r.data.distance_km }));
+        toast.success(r.data.message);
+      } else toast.error(r.data.message);
+    } catch (e) { toast.error(e.response?.data?.detail || "Mesafe tahmin edilemedi"); } finally { setEstimating(false); }
+  }
   const [tagInput, setTagInput] = useState("");
 
   const reload = useCallback(async () => {
@@ -39,7 +54,7 @@ export default function PublicEventsPanel({ propertyId }) {
       await axios.post(`${API}/public-events`, { ...form, property_id: propertyId }, { withCredentials: true });
       toast.success("Etkinlik oluşturuldu");
       setShowAdd(false);
-      setForm({ title: "", date: "", start_time: "19:00", end_time: "23:00", description: "", capacity: 50, price_from: 0, tags: [] });
+      setForm({ title: "", date: "", start_time: "19:00", end_time: "23:00", description: "", capacity: 50, price_from: 0, tags: [], venue_name: "", distance_km: null });
       reload();
     } catch (e) { toast.error("Hata"); }
   }
@@ -189,6 +204,14 @@ export default function PublicEventsPanel({ propertyId }) {
               <div className="grid grid-cols-2 gap-2">
                 <Inp label="Kapasite" v={form.capacity} type="number" onChange={v => setForm({...form, capacity:parseInt(v)||50})} />
                 <Inp label="Başlangıç Fiyatı (TL)" v={form.price_from} type="number" onChange={v => setForm({...form, price_from:parseFloat(v)||0})} />
+              </div>
+              <div className="grid grid-cols-[1fr_auto_90px] gap-2 items-end">
+                <Inp label="Mekan Adı" v={form.venue_name} testId="event-venue-input" onChange={v => setForm({...form, venue_name:v})} />
+                <button onClick={estimateDistance} disabled={estimating} data-testid="event-estimate-distance-btn"
+                  className="h-9 px-2.5 rounded-lg bg-indigo-600 text-white text-[11px] font-bold disabled:opacity-50 whitespace-nowrap">
+                  {estimating ? "..." : "📍 Mesafeyi Tahmin Et"}
+                </button>
+                <Inp label="Mesafe (km)" v={form.distance_km ?? ""} type="number" testId="event-distance-km-input" onChange={v => setForm({...form, distance_km: v === "" ? null : parseFloat(v)})} />
               </div>
               <Inp label="Bilet URL" v={form.ticket_url} onChange={v => setForm({...form, ticket_url:v})} />
               <label className="block">

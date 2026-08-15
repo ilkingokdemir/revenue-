@@ -15,14 +15,25 @@ export default function SimulatorPanel({ activePropertyId, properties = [] }) {
   const [rpDate, setRpDate] = useState("");
   const [bp, setBp] = useState(null);
   const [el, setEl] = useState(null);
+  const [elHist, setElHist] = useState([]);
   const [logoUrl, setLogoUrl] = useState("");
+  const [archive, setArchive] = useState([]);
   const [busy, setBusy] = useState(false);
+
+  const loadArchive = async () => {
+    try {
+      const r = await axios.get(`${API}/api/simulator/${pid}/pitch-archive`, { withCredentials: true });
+      setArchive(r.data.archive || []);
+    } catch { /* sessiz */ }
+  };
 
   const measureElasticity = async () => {
     setBusy(true);
     try {
       const r = await axios.get(`${API}/api/elasticity/${pid}`, { withCredentials: true });
       setEl(r.data);
+      const h = await axios.get(`${API}/api/elasticity/${pid}/history`, { withCredentials: true });
+      setElHist(h.data.history || []);
       toast.success("Esneklik ölçüldü");
     } catch (e) { toast.error(e.response?.data?.detail || "Esneklik ölçülemedi"); } finally { setBusy(false); }
   };
@@ -125,6 +136,23 @@ export default function SimulatorPanel({ activePropertyId, properties = [] }) {
                 <span className={`px-2.5 py-1 rounded-full text-[11px] font-black ${el.aggressiveness > 1 ? "bg-emerald-100 text-emerald-700" : el.aggressiveness < 1 ? "bg-amber-100 text-amber-700" : "bg-stone-100 text-stone-600"}`} data-testid="elasticity-agg">Agresiflik ×{el.aggressiveness}</span>
               </div>
               <p className="text-[12px] font-bold text-stone-700">{el.verdict}</p>
+              {elHist.length > 0 && (
+                <div data-testid="elasticity-trend">
+                  <p className="text-[11px] font-bold text-stone-500 mb-1">📈 Aylık Esneklik Trendi ({elHist.length} ay)</p>
+                  <div className="flex items-end gap-1.5 h-16">
+                    {elHist.map((h) => {
+                      const v = Math.min(Math.abs(h.elasticity ?? 0), 3);
+                      return (
+                        <div key={h.month} className="flex flex-col items-center gap-0.5" title={`${h.month}: e=${h.elasticity} (agresiflik ×${h.aggressiveness})`}>
+                          <div className={`w-7 rounded-t ${(h.elasticity ?? 0) < 0 ? "bg-purple-400" : "bg-emerald-400"}`} style={{ height: `${Math.max(v / 3 * 48, 4)}px` }} />
+                          <span className="text-[9px] text-stone-400">{h.month.slice(2)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-stone-400 mt-0.5">|e| düşüyorsa fiyat gücü artıyor · mor = negatif (normal), yeşil = pozitif korelasyon</p>
+                </div>
+              )}
               <p className="text-[10px] text-stone-400">{el.note}</p>
             </div>
           )}
@@ -137,6 +165,25 @@ export default function SimulatorPanel({ activePropertyId, properties = [] }) {
             <button onClick={saveLogo} disabled={busy} data-testid="branding-save-btn" className="px-3 py-2 rounded-lg bg-stone-900 text-white text-sm font-bold disabled:opacity-50">Kaydet</button>
           </div>
           <p className="text-[11px] text-stone-400 mt-2">PDF içeriği: logo + robot vs sabit gelir özeti + önümüzdeki 7 gün rakip fiyat kıyası (fiyat endeksi) + esneklik bulgusu.</p>
+          <div className="mt-3 border-t border-stone-100 pt-2" data-testid="pitch-archive-section">
+            <div className="flex items-center justify-between">
+              <p className="text-[12px] font-bold text-stone-700">📚 Sunum Kütüphanesi</p>
+              <button onClick={loadArchive} data-testid="pitch-archive-refresh-btn" className="text-[11px] font-bold text-indigo-600">Yenile</button>
+            </div>
+            {archive.length === 0 ? (
+              <p className="text-[11px] text-stone-400 mt-1" data-testid="pitch-archive-empty">Henüz arşivlenmiş sunum yok — "Pilot Sunum PDF" üretince otomatik arşivlenir.</p>
+            ) : (
+              <div className="mt-1.5 space-y-1 max-h-40 overflow-auto" data-testid="pitch-archive-list">
+                {archive.map((a) => (
+                  <a key={a.id} href={`${API}/api/simulator/pitch-archive/${a.id}/download`} target="_blank" rel="noreferrer"
+                    className="flex items-center justify-between gap-2 text-[12px] bg-stone-50 hover:bg-indigo-50 border border-stone-200 rounded-lg px-2.5 py-1.5" data-testid={`pitch-archive-item-${a.id}`}>
+                    <span className="font-bold text-stone-700">{String(a.created_at).slice(0, 16).replace("T", " ")}</span>
+                    <span className="text-stone-500">{a.days} gün · baz ₺{a.base_rate}{a.robot_uplift_pct != null ? ` · +%${a.robot_uplift_pct}` : ""} · {a.size_kb} KB</span>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 

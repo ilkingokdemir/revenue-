@@ -65,8 +65,19 @@ def create_elasticity_router(db, require_roles):
                "window_days": window_days, "aggressiveness": agg, "verdict": verdict,
                "computed_at": datetime.now(timezone.utc).isoformat()}
         await db.property_elasticity.update_one({"property_id": pid}, {"$set": doc}, upsert=True)
+        month = today.isoformat()[:7]
+        await db.elasticity_history.update_one(
+            {"property_id": pid, "month": month},
+            {"$set": {**doc, "month": month}}, upsert=True)
         return {**doc,
                 "note": "log-log OLS: ln(satış) = a + e·ln(fiyat). e<0 normaldir; |e| büyüdükçe talep fiyata duyarlı. "
                         "Agresiflik faktörü AI fiyat önerilerinin adım büyüklüğünü otele göre ölçekler (7 gün geçerli)."}
+
+    @router.get("/{pid}/history")
+    async def history(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        rows = await db.elasticity_history.find(
+            {"property_id": pid}, {"_id": 0}).sort("month", 1).to_list(36)
+        return {"history": rows,
+                "note": "Aylık esneklik trendi — |e| düşüyorsa fiyat gücü artıyor demektir."}
 
     return router

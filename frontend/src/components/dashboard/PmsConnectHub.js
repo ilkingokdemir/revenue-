@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis, Legend } from "recharts";
 import { PlugsConnected, PaperPlaneTilt, DownloadSimple, ShieldCheck } from "@phosphor-icons/react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -32,6 +32,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
   const [rateOptions, setRateOptions] = useState([]);
   const [rev, setRev] = useState(null);
   const [revMonth, setRevMonth] = useState("");
+  const [revView, setRevView] = useState("group");
   const [busy, setBusy] = useState(false);
 
   const loadHealth = useCallback(async () => {
@@ -85,12 +86,12 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
   const discoverRates = async () => {
     setBusy(true);
     try {
-      const r = await axios.get(`${API}/api/pms-connect/mews/discover-rates/${pid}`, { withCredentials: true });
+      const r = await axios.get(`${API}/api/pms-connect/${sel.id}/discover-rates/${pid}`, { withCredentials: true });
       const roots = r.data.rates.filter((x) => x.is_root && x.is_active);
       setRateOptions(r.data.rates.filter((x) => x.is_active));
       setMapping((arr) => (arr || []).map((m, i) =>
         m.channel_rate_code ? m : { ...m, channel_rate_code: (roots[i % Math.max(roots.length, 1)] || roots[0] || {}).id || "" }));
-      toast.success(`Mews keşfi: ${r.data.rates.length} rate, ${r.data.resource_categories.length} oda kategorisi bulundu — boş eşleştirmeler otomatik dolduruldu`);
+      toast.success(`${sel.name} keşfi: ${r.data.rates.length} rate, ${r.data.resource_categories.length} oda kategorisi bulundu — boş eşleştirmeler otomatik dolduruldu`);
     } catch (e) { toast.error(e.response?.data?.detail || "Keşif başarısız"); } finally { setBusy(false); }
   };
 
@@ -324,14 +325,41 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
             </div>
           )}
           {rev && (() => {
-            const rows = (rev.by_month[revMonth] || []).slice(0, 10);
+            const srcRows = (rev.by_month[revMonth] || []).slice(0, 10);
+            const grpMap = {};
+            srcRows.forEach((r) => {
+              const g = grpMap[r.group] || { source: r.group, revenue: 0, net_revenue: 0, bookings: 0 };
+              g.revenue += r.revenue; g.net_revenue += r.net_revenue; g.bookings += r.bookings;
+              grpMap[r.group] = g;
+            });
+            const monthTot = srcRows.reduce((s, r) => s + r.revenue, 0) || 1;
+            const grpRows = Object.values(grpMap).map((g) => ({ ...g, pct: Math.round(g.revenue / monthTot * 1000) / 10 })).sort((a, b) => b.revenue - a.revenue);
+            const rows = revView === "group" ? grpRows : srcRows;
+            const topSources = (rev.totals || []).slice(0, 5).map((t) => t.source);
+            const trendData = rev.months.map((m) => {
+              const mr = rev.by_month[m] || [];
+              const tot = mr.reduce((s, r) => s + r.revenue, 0) || 1;
+              const pt = { month: m };
+              topSources.forEach((s) => {
+                pt[s] = Math.round((mr.filter((r) => r.source === s).reduce((x, r) => x + r.revenue, 0) / tot) * 1000) / 10;
+              });
+              return pt;
+            });
+            const trendArrow = (s) => {
+              if (trendData.length < 2) return "";
+              const a = trendData[trendData.length - 2][s] || 0, b = trendData[trendData.length - 1][s] || 0;
+              return b > a + 0.5 ? " ▲" : b < a - 0.5 ? " ▼" : "";
+            };
             return (
               <div className="mt-3 border-t border-stone-100 pt-3" data-testid="pms-revenue-section">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <p className="text-[12px] font-bold text-stone-700">💰 Kanal Gelir Katkısı — rezervasyon kaynağına göre</p>
-                  <select value={revMonth} onChange={(e) => setRevMonth(e.target.value)} data-testid="pms-revenue-month-select" className="border border-stone-300 rounded-lg px-2 py-1 text-[12px] font-bold">
-                    {rev.months.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setRevView((v) => v === "group" ? "source" : "group")} data-testid="pms-revenue-view-toggle" className="px-2.5 py-1 rounded-lg border border-stone-300 text-stone-600 text-[11px] font-bold">{revView === "group" ? "Görünüm: GRUP" : "Görünüm: KAYNAK"}</button>
+                    <select value={revMonth} onChange={(e) => setRevMonth(e.target.value)} data-testid="pms-revenue-month-select" className="border border-stone-300 rounded-lg px-2 py-1 text-[12px] font-bold">
+                      {rev.months.map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
                 </div>
                 <div className="grid md:grid-cols-2 gap-3 items-center">
                   <div className="h-56" data-testid="pms-revenue-pie">
@@ -350,13 +378,29 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
                         <span className="flex items-center gap-1.5 font-bold text-stone-700">
                           <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />{r.source}
                         </span>
-                        <span className="text-stone-500">₺{r.revenue.toLocaleString("tr-TR")} · %{r.pct} · {r.bookings} rez.</span>
+                        <span className="text-stone-500">₺{Math.round(r.revenue).toLocaleString("tr-TR")} · %{r.pct}{r.net_revenue < r.revenue - 0.5 ? ` · net ₺${Math.round(r.net_revenue).toLocaleString("tr-TR")}` : ""} · {r.bookings} rez.</span>
                       </div>
                     ))}
                     {rows.length === 0 && <p className="text-[12px] text-stone-400">Bu ayda gelirli rezervasyon yok.</p>}
                   </div>
                 </div>
-                <p className="text-[11px] text-stone-400 mt-2">6 aylık toplam: ₺{rev.total_revenue.toLocaleString("tr-TR")} · en güçlü kanal: {rev.totals[0]?.source || "—"} (%{rev.totals[0]?.pct || 0})</p>
+                <div className="mt-3" data-testid="pms-revenue-trend">
+                  <p className="text-[12px] font-bold text-stone-700 mb-1">📈 Aylık Pay Trendi (ilk 5 kaynak):
+                    {topSources.map((s, i) => <span key={s} className="ml-2 text-[11px]" style={{ color: PIE_COLORS[i] }}>{s}{trendArrow(s)}</span>)}
+                  </p>
+                  <div className="h-44">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={trendData} margin={{ top: 5, right: 10, bottom: 0, left: -20 }}>
+                        <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} unit="%" />
+                        <Tooltip formatter={(v, n) => [`%${v}`, n]} />
+                        <Legend wrapperStyle={{ fontSize: 10 }} />
+                        {topSources.map((s, i) => <Line key={s} type="monotone" dataKey={s} stroke={PIE_COLORS[i]} strokeWidth={2} dot={{ r: 2 }} />)}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <p className="text-[11px] text-stone-400 mt-2" data-testid="pms-revenue-summary">6 aylık brüt: ₺{rev.total_revenue.toLocaleString("tr-TR")} · komisyon sonrası net: ₺{(rev.total_net_revenue ?? rev.total_revenue).toLocaleString("tr-TR")} · en güçlü kanal: {rev.totals[0]?.source || "—"} (%{rev.totals[0]?.pct || 0}) · {rev.commission_note || ""}</p>
               </div>
             );
           })()}
@@ -419,8 +463,8 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
                   <p className="text-[12px] text-stone-500">Oda tipi ↔ {sel.name} rate kodu + fiyat çarpanı. Eşleştirme kaydedilince push oda tipi bazında ayrı ayrı basılır.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {sel.id === "mews" && sel.mode === "live" && (
-                    <button onClick={discoverRates} disabled={busy} data-testid="pms-discover-btn" className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[12px] font-bold disabled:opacity-50">🔎 Mews Oda/Rate Keşfi</button>
+                  {sel.mode === "live" && ["mews", "apaleo"].includes(sel.id) && (
+                    <button onClick={discoverRates} disabled={busy} data-testid="pms-discover-btn" className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[12px] font-bold disabled:opacity-50">🔎 Oda/Rate Keşfi</button>
                   )}
                   <button onClick={saveMapping} disabled={busy} data-testid="pms-mapping-save-btn" className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[12px] font-bold disabled:opacity-50">Eşleştirmeyi Kaydet</button>
                 </div>

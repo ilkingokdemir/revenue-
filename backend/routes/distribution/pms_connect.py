@@ -320,6 +320,30 @@ MEWS_DEMO = {
 }
 
 
+OTA_COMMISSIONS = {"booking.com": 0.15, "expedia": 0.18, "hotels.com": 0.18, "agoda": 0.17, "airbnb": 0.14}
+
+
+def _channel_group(src: str) -> str:
+    s = (src or "").lower()
+    if s.startswith("ota:") or s.replace("ota:", "") in OTA_COMMISSIONS or s in ("expedia", "hotels.com", "booking.com", "agoda", "airbnb"):
+        return "OTA"
+    if s.startswith("pms:"):
+        return "PMS"
+    if s in ("phone", "walk-in", "manual", "website", "direct", "email"):
+        return "Doğrudan"
+    if s == "group_sales":
+        return "Grup Satış"
+    if s.startswith("demo"):
+        return "Demo/Seed"
+    return "Diğer"
+
+
+def _commission_pct(src: str) -> float:
+    if _channel_group(src) != "OTA":
+        return 0.0
+    return OTA_COMMISSIONS.get((src or "").lower().replace("ota:", ""), 0.15)
+
+
 def create_pms_connect_router(db, require_roles):
     router = APIRouter(prefix="/pms-connect", tags=["pms-connect"])
     ROLES = ("admin", "manager")
@@ -596,12 +620,36 @@ def create_pms_connect_router(db, require_roles):
         ).sort("created_at", -1).to_list(min(limit, 100))
         return {"log": rows}
 
-    @router.get("/mews/discover-rates/{pid}")
-    async def discover_rates(pid: str, _u: dict = Depends(require_roles(*ROLES))):
-        """Mews'teki gerçek rate/oda kategorilerini keşfeder — eşleştirme tablosu otomatik dolar."""
-        cfg = await _cfg(db, pid, "mews")
-        if not _has_creds("mews", cfg):
-            raise HTTPException(400, "Önce Mews'e bağlanın (demo-connect veya kimlik girişi).")
+    @router.get("/{provider}/discover-rates/{pid}")
+    async def discover_rates(provider: str, pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Kanaldaki gerçek rate/oda kategorilerini keşfeder — eşleştirme tablosu otomatik dolar."""
+        if provider not in PROVIDERS:
+            raise HTTPException(404, "Bilinmeyen sağlayıcı")
+        cfg = await _cfg(db, pid, provider)
+        if not _has_creds(provider, cfg):
+            raise HTTPException(400, f"Önce {PROVIDERS[provider]['name']} kimliklerini girin.")
+        if provider == "apaleo":
+            async with httpx.AsyncClient(timeout=30) as client:
+                tk = await client.post("https://identity.apaleo.com/connect/token",
+                                       data={"grant_type": "client_credentials",
+                                             "client_id": cfg["client_id"],
+                                             "client_secret": cfg["client_secret"]})
+                if tk.status_code != 200:
+                    raise HTTPException(502, f"Apaleo OAuth hatası: {tk.text[:200]}")
+                hdr = {"Authorization": f"Bearer {tk.json()['access_token']}"}
+                rp = await client.get("https://api.apaleo.com/rateplan/v1/rate-plans",
+                                      headers=hdr, params={"propertyId": cfg["apaleo_property_id"], "pageSize": 100})
+                rates = [{"id": p["id"], "name": p.get("name", ""), "is_root": True, "is_active": True}
+                         for p in (rp.json() or {}).get("ratePlans", [])] if rp.status_code == 200 else []
+                ug = await client.get("https://api.apaleo.com/inventory/v1/unit-groups",
+                                      headers=hdr, params={"propertyId": cfg["apaleo_property_id"], "pageSize": 100})
+                categories = [{"id": g["id"], "name": g.get("name", ""), "capacity": g.get("maxPersons")}
+                              for g in (ug.json() or {}).get("unitGroups", [])] if ug.status_code == 200 else []
+            return {"service": cfg["apaleo_property_id"], "rates": rates,
+                    "resource_categories": categories,
+                    "note": "Apaleo rate plan'ları ve unit group'ları (gerçek oda tipleri)."}
+        if provider != "mews":
+            raise HTTPException(501, f"{PROVIDERS[provider]['name']} keşfi partner API dokümanları gelince açılacak — kodları elle girin.")
         base = (cfg.get("endpoint_url") or PROVIDERS["mews"]["base_url"]).rstrip("/")
         auth = {"ClientToken": cfg["client_token"], "AccessToken": cfg["access_token"],
                 "Client": "MyHotelBox-RMS/1.0"}
@@ -650,8 +698,12 @@ def create_pms_connect_router(db, require_roles):
         by_month = {}
         for a in agg:
             m, src = a["_id"]["month"], a["_id"]["source"]
+            cpct = _commission_pct(src)
             by_month.setdefault(m, []).append(
-                {"source": src, "revenue": round(a["revenue"], 2), "bookings": a["bookings"]})
+                {"source": src, "group": _channel_group(src),
+                 "revenue": round(a["revenue"], 2), "bookings": a["bookings"],
+                 "commission_pct": round(cpct * 100, 1),
+                 "net_revenue": round(a["revenue"] * (1 - cpct), 2)})
         for m, rows in by_month.items():
             tot = sum(r["revenue"] for r in rows) or 1
             for r in rows:
@@ -659,15 +711,31 @@ def create_pms_connect_router(db, require_roles):
         totals = {}
         for rows in by_month.values():
             for r in rows:
-                t = totals.setdefault(r["source"], {"source": r["source"], "revenue": 0.0, "bookings": 0})
+                t = totals.setdefault(r["source"], {"source": r["source"], "group": r["group"],
+                                                    "revenue": 0.0, "net_revenue": 0.0, "bookings": 0})
                 t["revenue"] = round(t["revenue"] + r["revenue"], 2)
+                t["net_revenue"] = round(t["net_revenue"] + r["net_revenue"], 2)
                 t["bookings"] += r["bookings"]
         tot_all = sum(t["revenue"] for t in totals.values()) or 1
         totals_list = sorted(totals.values(), key=lambda x: -x["revenue"])
         for t in totals_list:
             t["pct"] = round(t["revenue"] / tot_all * 100, 1)
+        groups = {}
+        for t in totals_list:
+            g = groups.setdefault(t["group"], {"group": t["group"], "revenue": 0.0,
+                                               "net_revenue": 0.0, "bookings": 0})
+            g["revenue"] = round(g["revenue"] + t["revenue"], 2)
+            g["net_revenue"] = round(g["net_revenue"] + t["net_revenue"], 2)
+            g["bookings"] += t["bookings"]
+        groups_list = sorted(groups.values(), key=lambda x: -x["revenue"])
+        for g in groups_list:
+            g["pct"] = round(g["revenue"] / tot_all * 100, 1)
+            g["commission_paid"] = round(g["revenue"] - g["net_revenue"], 2)
         return {"months": sorted(by_month.keys()), "by_month": by_month,
-                "totals": totals_list, "total_revenue": round(tot_all, 2)}
+                "totals": totals_list, "groups": groups_list,
+                "total_revenue": round(tot_all, 2),
+                "total_net_revenue": round(sum(t["net_revenue"] for t in totals_list), 2),
+                "commission_note": "OTA komisyonları: Booking %15, Expedia/Hotels.com %18, Agoda %17, diğer OTA %15 varsayılan."}
 
     @router.get("/health/{pid}")
     async def health(pid: str, _u: dict = Depends(require_roles(*ROLES))):

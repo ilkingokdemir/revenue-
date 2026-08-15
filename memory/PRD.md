@@ -797,5 +797,13 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - BUG FIX: loadRev/discoverRates handler tanımları ilk edit'te dosyaya işlenmemişti → "loadRev is not defined" çökme; yeniden eklendi, ekran görüntüsüyle doğrulandı.
 - Ekran doğrulaması: sağlık panosu 7 kanal (Mews CANLI+SERTİFİKALİ·CANLI, tümü sertifikalı), gelir pastası, eşleştirme tablosu keşif sonrası ✓ etiketli.
 - BEKLEYEN: Apaleo kimliği hâlâ girilmedi (panelde rehber hazır — kullanıcı girince canlı sertifikasyon+push).
+
+## Güncelleme (2026-08-15, iter 560 — OTA Kırılımı, Genel Keşif, Aylık Trend)
+- OTA Kırılımı: revenue-by-channel artık kaynakları gruplar (OTA/PMS/Doğrudan/Grup Satış/Demo/Diğer) + komisyon sonrası net gelir (Booking %15, Expedia/Hotels.com %18, Agoda %17, diğer OTA %15). Response: groups[], commission_pct/net_revenue per source, total_net_revenue. UI: GRUP/KAYNAK görünüm anahtarı, legend'da net gelir.
+- Keşif Tüm Kanallara: /api/pms-connect/{provider}/discover-rates/{pid} generic oldu — mews (canlı, 200 rate + 100 kategori) + apaleo (OAuth → rate-plans + unit-groups, kimlik girilince çalışır) + diğerleri 501. UI butonu mews/apaleo canlı modda görünür.
+- Aylık Trend Çizgisi: UI'da ilk 5 kaynağın aylık pay yüzdesi LineChart + son iki ay farkına göre ▲/▼ vurguları.
+- BUG: bir search_replace edit'i bozuk dosya kopyasına uygulandı → dosya sonunda syntax hatası; artık blok temizlendi, generic discover yeniden uygulandı. Test sırasında girilen sahte eviivo kimlikleri temizlendi (tümü tekrar mocked, mews live).
+- Doğrulama: curl (gruplar: OTA %9.4 komisyon ₺2051, net ₺129K; mews keşif 200/100; apaleo 400; eviivo 501) + 2 ekran görüntüsü (pasta+net gelir, GRUP görünümü, trend çizgisi ▼ oklarıyla).
+- BEKLEYEN: Apaleo kimliği hâlâ girilmedi.
 - BEKLEYEN: Apaleo canlı testi kullanıcının client_id/client_secret girmesini bekliyor (rehber panelde).
 - Kalan: lisanslı rate-shopping feed (P2), Expo EAS build (P3), tüm PMS'lerde CANLI mod (partner kimlikleri bekleniyor: Mews demo token, Cloudbeds API key, SiteMinder pmsXchange, eviivo NDA, Elektraweb entegrasyon ekibi).

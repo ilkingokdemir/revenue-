@@ -36,6 +36,9 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
   const [comm, setComm] = useState(null);
   const [tips, setTips] = useState(null);
   const [invite, setInvite] = useState(null);
+  const [leads, setLeads] = useState(null);
+  const [leadForm, setLeadForm] = useState({ hotel_name: "", contact: "", note: "" });
+  const [drill, setDrill] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const loadHealth = useCallback(async () => {
@@ -130,6 +133,48 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
       await axios.post(`${API}/api/pms-connect/direct-booking-tips/${pid}/toggle`, { index, done }, { withCredentials: true });
       toast.success(done ? "Öneri yapıldı olarak işaretlendi" : "İşaret kaldırıldı");
     } catch { toast.error("İşaretlenemedi"); }
+  };
+
+  const loadLeads = async () => {
+    try {
+      const r = await axios.get(`${API}/api/pms-connect/pilot-leads/${pid}`, { withCredentials: true });
+      setLeads(r.data);
+    } catch { toast.error("Pilot listesi yüklenemedi"); }
+  };
+
+  const addLead = async () => {
+    if (!leadForm.hotel_name.trim()) { toast.error("Otel adı girin"); return; }
+    try {
+      await axios.post(`${API}/api/pms-connect/pilot-leads/${pid}`, leadForm, { withCredentials: true });
+      setLeadForm({ hotel_name: "", contact: "", note: "" });
+      toast.success("Otel pilot listesine eklendi (durum: davet)");
+      loadLeads();
+    } catch { toast.error("Eklenemedi"); }
+  };
+
+  const setLeadStatus = async (leadId, status) => {
+    try {
+      await axios.post(`${API}/api/pms-connect/pilot-leads/${leadId}/status`, { status }, { withCredentials: true });
+      setLeads((l) => ({ ...l, leads: l.leads.map((x) => x.id === leadId ? { ...x, status } : x) }));
+      toast.success(`Durum güncellendi: ${status}`);
+    } catch { toast.error("Güncellenemedi"); }
+  };
+
+  const saveLeadNote = async (leadId, note) => {
+    try {
+      await axios.post(`${API}/api/pms-connect/pilot-leads/${leadId}/note`, { note }, { withCredentials: true });
+      setLeads((l) => ({ ...l, leads: l.leads.map((x) => x.id === leadId ? { ...x, note } : x) }));
+      toast.success("Not kaydedildi");
+    } catch { toast.error("Not kaydedilemedi"); }
+  };
+
+  const runDrill = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/pms-connect/killswitch-drill/${pid}`, {}, { withCredentials: true });
+      setDrill(r.data);
+      r.data.passed ? toast.success("Tatbikat BAŞARILI — acil durdurma zinciri çalışıyor") : toast.error("Tatbikat BAŞARISIZ!");
+    } catch { toast.error("Tatbikat çalıştırılamadı"); } finally { setBusy(false); }
   };
 
   const loadInvite = async () => {
@@ -310,6 +355,8 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
               <button onClick={loadRev} disabled={busy} data-testid="pms-revenue-btn" className="px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 text-[12px] font-bold disabled:opacity-50">💰 Kanal Gelir Katkısı</button>
               <a href={`${API}/api/pms-connect/executive-pdf/${pid}`} target="_blank" rel="noreferrer" data-testid="pms-exec-pdf-btn" className="px-3 py-1.5 rounded-lg bg-stone-900 text-white text-[12px] font-bold">📄 Yönetici Özeti PDF</a>
               <button onClick={loadInvite} disabled={busy} data-testid="pms-invite-btn" className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[12px] font-bold disabled:opacity-50">✉ Pilot Davet</button>
+              <button onClick={() => (leads ? setLeads(null) : loadLeads())} data-testid="pms-leads-btn" className="px-3 py-1.5 rounded-lg border border-sky-300 text-sky-700 text-[12px] font-bold">📋 Pilot Takip</button>
+              <button onClick={runDrill} disabled={busy} data-testid="pms-drill-btn" className="px-3 py-1.5 rounded-lg border border-rose-300 text-rose-700 text-[12px] font-bold disabled:opacity-50">🛑 Kill Switch Tatbikatı</button>
               <button onClick={toggleNightPush} disabled={busy} data-testid="pms-nightpush-toggle"
                 className={`px-3 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-50 ${health.auto_night_push ? "bg-emerald-600 text-white" : "border border-stone-300 text-stone-600"}`}>
                 🌙 Otomatik Gece Push: {health.auto_night_push ? "AÇIK" : "KAPALI"}
@@ -496,6 +543,46 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
               </div>
             );
           })()}
+          {drill && (
+            <div className={`mt-3 border rounded-xl p-3 ${drill.passed ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200"}`} data-testid="pms-drill-section">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <p className="text-[12px] font-black text-stone-800">🛑 Kill Switch Tatbikatı: {drill.passed ? "BAŞARILI ✓" : "BAŞARISIZ ✗"}</p>
+                <div className="flex gap-1.5">
+                  <a href={`${API}/api/pms-connect/killswitch-drill/${pid}/report-pdf`} target="_blank" rel="noreferrer" data-testid="pms-drill-pdf-btn" className="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-[11px] font-bold">📄 Güvence PDF</a>
+                  <button onClick={() => { navigator.clipboard.writeText(drill.report); toast.success("Rapor panoya kopyalandı"); }} data-testid="pms-drill-copy-btn" className="px-2.5 py-1 rounded-lg bg-stone-900 text-white text-[11px] font-bold">Raporu Kopyala</button>
+                </div>
+              </div>
+              <pre className="text-[11px] bg-white/70 border border-stone-200 rounded-lg p-2.5 max-h-48 overflow-auto whitespace-pre-wrap" data-testid="pms-drill-report">{drill.report}</pre>
+            </div>
+          )}
+          {leads && (
+            <div className="mt-3 border-t border-stone-100 pt-3" data-testid="pms-leads-section">
+              <p className="text-[12px] font-bold text-stone-700 mb-2">📋 Pilot Takip Listesi ({(leads.leads || []).length} otel)</p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                <input value={leadForm.hotel_name} onChange={(e) => setLeadForm((f) => ({ ...f, hotel_name: e.target.value }))} data-testid="pms-lead-name-input" className="flex-1 min-w-[160px] border border-stone-300 rounded-lg px-2.5 py-1.5 text-[12px]" placeholder="Otel adı" />
+                <input value={leadForm.contact} onChange={(e) => setLeadForm((f) => ({ ...f, contact: e.target.value }))} data-testid="pms-lead-contact-input" className="flex-1 min-w-[160px] border border-stone-300 rounded-lg px-2.5 py-1.5 text-[12px]" placeholder="İletişim (e-posta/telefon)" />
+                <input value={leadForm.note} onChange={(e) => setLeadForm((f) => ({ ...f, note: e.target.value }))} data-testid="pms-lead-note-input" className="flex-1 min-w-[160px] border border-stone-300 rounded-lg px-2.5 py-1.5 text-[12px]" placeholder="Not (opsiyonel)" />
+                <button onClick={addLead} data-testid="pms-lead-add-btn" className="px-3 py-1.5 rounded-lg bg-sky-600 text-white text-[12px] font-bold">Ekle</button>
+              </div>
+              {(leads.leads || []).length === 0 ? <p className="text-[11px] text-stone-400" data-testid="pms-leads-empty">Henüz otel eklenmedi — davet gönderdiğiniz otelleri buradan izleyin.</p> : (
+                <div className="space-y-1.5">
+                  {leads.leads.map((l) => (
+                    <div key={l.id} className="bg-white border border-stone-200 rounded-lg px-2.5 py-1.5 text-[12px]" data-testid={`pms-lead-row-${l.id}`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span><b>{l.hotel_name}</b>{l.contact ? ` · ${l.contact}` : ""} <span className="text-stone-400 text-[10px]">({String(l.created_at).slice(0, 10)})</span></span>
+                        <select value={l.status} onChange={(e) => setLeadStatus(l.id, e.target.value)} data-testid={`pms-lead-status-${l.id}`}
+                          className={`border rounded-lg px-2 py-0.5 text-[11px] font-bold ${l.status === "pilot" ? "border-emerald-300 text-emerald-700" : l.status === "kaybedildi" ? "border-rose-300 text-rose-600" : "border-stone-300 text-stone-600"}`}>
+                          {leads.statuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <input defaultValue={l.note || ""} onBlur={(e) => { if (e.target.value !== (l.note || "")) saveLeadNote(l.id, e.target.value); }} data-testid={`pms-lead-note-${l.id}`}
+                        className="mt-1 w-full border border-stone-200 rounded px-2 py-0.5 text-[11px] text-stone-500 bg-stone-50 focus:bg-white" placeholder="Not ekle… (görüşme özeti, sonraki adım)" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {invite && (
             <div className="mt-3 border-t border-stone-100 pt-3" data-testid="pms-invite-section">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">

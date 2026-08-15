@@ -1,0 +1,34 @@
+{
+  "summary": "Frontend-only regression for two new PMS Connect Hub features: Pilot Takip Listesi (mini-CRM) and Kill Switch Tatbikatı. Logged in as admin, navigated via command palette to PMS Bağlantı Merkezi, exercised full lead CRUD (add → status davet→görüşme→demo → note edit → close/reopen persistence), ran kill-switch drill (BAŞARILI ✓, 4-step report, copy + PDF buttons), fetched PDF via authenticated page.request → HTTP 200 application/pdf 2816 bytes with %PDF magic bytes. Regression checks: Pilot Davet still generates invite section; Trust Center kill-switch button is in default/inactive outlined style after drill (drill self-deactivates in step 4). All acceptance criteria met.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PmsConnectHub.js is 832 lines — consider splitting leads and drill sections into dedicated subcomponents for maintainability.",
+    "saveLeadNote is triggered onBlur only when value changed vs (l.note || '') — this correctly avoids empty-diff writes; good pattern."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created one additional pilot lead 'TEST_Otel_1786832715' (status=demo, note='Demo 20 Ağustos planlandı') alongside pre-existing 'Test Otel Marmaris'. Both prefixed TEST_ compatible; may be cleaned up if needed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Nav path: after admin login, PMS Bağlantı Merkezi lives under Channels & Distribution nav-section but its testid button isn't rendered until section is expanded. Reliable navigation is via [data-testid='command-palette-trigger'] → type 'PMS Bağlantı' → Enter. All hub action buttons live in the header action row: pms-invite-btn, pms-leads-btn, pms-drill-btn, plus existing PDF/forecast/weekly buttons. PDF endpoints require session cookies — use page.request.get (not urllib) to preserve httpOnly cookies.",
+  "verified_flows": [
+    "Login → command palette → PMS Bağlantı Merkezi loads (pms-invite-btn visible)",
+    "pms-leads-btn opens pms-leads-section",
+    "Add lead via name/contact/note inputs + pms-lead-add-btn → new pms-lead-row-{id} appears with status='davet'",
+    "pms-lead-status-{id} select_option 'görüşme' then 'demo' → toast + value updates",
+    "pms-lead-note-{id} fill + blur → note saved",
+    "Close/reopen leads section via pms-leads-btn → status='demo' and note persist",
+    "pms-drill-btn → pms-drill-section BAŞARILI ✓ with 4-step report (830 chars), copy btn + pdf btn present",
+    "pms-drill-pdf-btn href = /api/pms-connect/killswitch-drill/default/report-pdf → 200 application/pdf, %PDF magic, 2816 bytes",
+    "pms-invite-btn → pms-invite-section renders (regression)",
+    "Trust Center tc-kill-switch-btn is in inactive outlined style (border-rose-300 text-rose-600) after drill — drill self-deactivates"
+  ]
+}

@@ -827,3 +827,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - BEKLEYEN: Apaleo kimliği (6. hatırlatma).
 - BEKLEYEN: Apaleo canlı testi kullanıcının client_id/client_secret girmesini bekliyor (rehber panelde).
 - Kalan: lisanslı rate-shopping feed (P2), Expo EAS build (P3), tüm PMS'lerde CANLI mod (partner kimlikleri bekleniyor: Mews demo token, Cloudbeds API key, SiteMinder pmsXchange, eviivo NDA, Elektraweb entegrasyon ekibi).
+
+## Güncelleme (2026-08-15, iter 564 — Pilot Takip Listesi CRM + Kill Switch Tatbikatı TAMAMLANDI)
+- Pilot Takip Listesi (mini CRM): GET/POST /api/pms-connect/pilot-leads/{pid}, POST /pilot-leads/{lead_id}/status (davet→görüşme→demo→pilot→kaybedildi), YENİ: POST /pilot-leads/{lead_id}/note (not güncelleme). UI: "📋 Pilot Takip" butonu → otel adı+iletişim+not ekleme formu, satır bazında durum select'i ve onBlur ile kaydedilen not input'u.
+- Kill Switch Tatbikatı: POST /api/pms-connect/killswitch-drill/{pid} — 4 adımlı tatbikat (aç→blok doğrula→denetim kaydı→kapat, drill=true etiketiyle gerçek olaylardan ayrı). YENİ: GET /killswitch-drill/{pid}/report-pdf — yönetime sunulabilir reportlab güvence PDF'i (adımlar, son 30 gün gerçek blok/guardrail sayıları, tatbikat geçmişi). UI: "🛑 Kill Switch Tatbikatı" butonu + rapor + "📄 Güvence PDF" + kopyala.
+- Test: curl E2E (lead CRUD+not, drill 4/4 geçti, PDF 200 %PDF) + testing_agent iteration_553 frontend %100 (persistence, drill sonrası kill switch pasif regresyonu, pilot davet regresyonu dahil). Test leadleri temizlendi.
+- BEKLEYEN: Apaleo Client ID/Secret (7. hatırlatma), SiteMinder/eviivo/Elektraweb kimlikleri, Expo EAS build.

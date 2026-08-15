@@ -33,6 +33,8 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
   const [rev, setRev] = useState(null);
   const [revMonth, setRevMonth] = useState("");
   const [revView, setRevView] = useState("group");
+  const [comm, setComm] = useState(null);
+  const [tips, setTips] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const loadHealth = useCallback(async () => {
@@ -93,6 +95,32 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
         m.channel_rate_code ? m : { ...m, channel_rate_code: (roots[i % Math.max(roots.length, 1)] || roots[0] || {}).id || "" }));
       toast.success(`${sel.name} keşfi: ${r.data.rates.length} rate, ${r.data.resource_categories.length} oda kategorisi bulundu — boş eşleştirmeler otomatik dolduruldu`);
     } catch (e) { toast.error(e.response?.data?.detail || "Keşif başarısız"); } finally { setBusy(false); }
+  };
+
+  const loadComm = async () => {
+    try {
+      const r = await axios.get(`${API}/api/pms-connect/commission-settings/${pid}`, { withCredentials: true });
+      setComm(r.data.rows);
+    } catch { toast.error("Komisyon ayarları yüklenemedi"); }
+  };
+
+  const saveComm = async () => {
+    setBusy(true);
+    try {
+      const rates = {};
+      comm.forEach((r) => { if (r.custom_pct !== null && r.custom_pct !== "") rates[r.source] = r.custom_pct; });
+      const res = await axios.post(`${API}/api/pms-connect/commission-settings/${pid}`, { rates }, { withCredentials: true });
+      toast.success(`${res.data.count} özel komisyon oranı kaydedildi — net gelir yeniden hesaplanıyor`);
+      loadRev();
+    } catch { toast.error("Kaydedilemedi"); } finally { setBusy(false); }
+  };
+
+  const loadTips = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.get(`${API}/api/pms-connect/direct-booking-tips/${pid}`, { withCredentials: true });
+      setTips(r.data);
+    } catch { toast.error("İpuçları yüklenemedi"); } finally { setBusy(false); }
   };
 
   const loadRev = async () => {
@@ -262,6 +290,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
             <div className="flex items-center gap-2">
               <button onClick={loadFa} disabled={busy} data-testid="pms-forecast-btn" className="px-3 py-1.5 rounded-lg border border-purple-300 text-purple-700 text-[12px] font-bold disabled:opacity-50">🎯 Forecast Doğruluk</button>
               <button onClick={loadRev} disabled={busy} data-testid="pms-revenue-btn" className="px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 text-[12px] font-bold disabled:opacity-50">💰 Kanal Gelir Katkısı</button>
+              <a href={`${API}/api/pms-connect/executive-pdf/${pid}`} target="_blank" rel="noreferrer" data-testid="pms-exec-pdf-btn" className="px-3 py-1.5 rounded-lg bg-stone-900 text-white text-[12px] font-bold">📄 Yönetici Özeti PDF</a>
               <button onClick={toggleNightPush} disabled={busy} data-testid="pms-nightpush-toggle"
                 className={`px-3 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-50 ${health.auto_night_push ? "bg-emerald-600 text-white" : "border border-stone-300 text-stone-600"}`}>
                 🌙 Otomatik Gece Push: {health.auto_night_push ? "AÇIK" : "KAPALI"}
@@ -355,12 +384,45 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <p className="text-[12px] font-bold text-stone-700">💰 Kanal Gelir Katkısı — rezervasyon kaynağına göre</p>
                   <div className="flex items-center gap-2">
+                    <button onClick={loadTips} disabled={busy} data-testid="pms-tips-btn" className="px-2.5 py-1 rounded-lg border border-emerald-300 text-emerald-700 text-[11px] font-bold disabled:opacity-50">💡 Doğrudan Teşvik</button>
+                    <button onClick={() => (comm ? setComm(null) : loadComm())} data-testid="pms-comm-btn" className="px-2.5 py-1 rounded-lg border border-stone-300 text-stone-600 text-[11px] font-bold">⚙ Komisyon Ayarları</button>
                     <button onClick={() => setRevView((v) => v === "group" ? "source" : "group")} data-testid="pms-revenue-view-toggle" className="px-2.5 py-1 rounded-lg border border-stone-300 text-stone-600 text-[11px] font-bold">{revView === "group" ? "Görünüm: GRUP" : "Görünüm: KAYNAK"}</button>
                     <select value={revMonth} onChange={(e) => setRevMonth(e.target.value)} data-testid="pms-revenue-month-select" className="border border-stone-300 rounded-lg px-2 py-1 text-[12px] font-bold">
                       {rev.months.map((m) => <option key={m} value={m}>{m}</option>)}
                     </select>
                   </div>
                 </div>
+                {comm && (
+                  <div className="mt-3 bg-stone-50 border border-stone-200 rounded-xl p-3" data-testid="pms-comm-section">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[12px] font-bold text-stone-700">⚙ OTA Komisyon Oranları (sözleşmenize göre düzenleyin)</p>
+                      <button onClick={saveComm} disabled={busy} data-testid="pms-comm-save-btn" className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-bold disabled:opacity-50">Kaydet</button>
+                    </div>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {comm.map((r, i) => (
+                        <label key={r.source} className="text-[11px] text-stone-600 font-bold flex items-center justify-between gap-2 bg-white border border-stone-200 rounded-lg px-2 py-1.5">
+                          {r.source}
+                          <span className="flex items-center gap-1">
+                            <input type="number" step="0.5" min="0" max="50" value={r.custom_pct ?? ""} placeholder={String(r.default_pct)}
+                              data-testid={`pms-comm-input-${i}`}
+                              onChange={(e) => setComm((arr) => arr.map((x, j) => j === i ? { ...x, custom_pct: e.target.value === "" ? null : parseFloat(e.target.value) } : x))}
+                              className="w-16 border border-stone-300 rounded px-1.5 py-0.5 text-[11px]" />%
+                          </span>
+                        </label>
+                      ))}
+                      {comm.length === 0 && <p className="text-[11px] text-stone-400">OTA kaynağı bulunamadı.</p>}
+                    </div>
+                    <p className="text-[10px] text-stone-400 mt-1.5">Boş bırakılan kaynak varsayılanı kullanır (Booking %15, Expedia/Hotels.com %18, Agoda %17, diğer %15).</p>
+                  </div>
+                )}
+                {tips && (
+                  <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3" data-testid="pms-tips-section">
+                    <p className="text-[12px] font-black text-emerald-800 mb-1">💡 Doğrudan Rezervasyon Teşviki — OTA komisyon kaybı: 6 ayda ₺{Math.round(tips.commission_loss_6m).toLocaleString("tr-TR")} (yıllık tahmini ₺{Math.round(tips.commission_loss_annual_est).toLocaleString("tr-TR")}) · doğrudan pay %{tips.direct_pct}</p>
+                    <ul className="space-y-1">
+                      {tips.tips.map((t, i) => <li key={i} className="text-[11px] text-emerald-900 flex gap-1.5"><span>▸</span><span>{t}</span></li>)}
+                    </ul>
+                  </div>
+                )}
                 <div className="grid md:grid-cols-2 gap-3 items-center">
                   <div className="h-56" data-testid="pms-revenue-pie">
                     <ResponsiveContainer width="100%" height="100%">

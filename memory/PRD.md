@@ -805,5 +805,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - BUG: bir search_replace edit'i bozuk dosya kopyasına uygulandı → dosya sonunda syntax hatası; artık blok temizlendi, generic discover yeniden uygulandı. Test sırasında girilen sahte eviivo kimlikleri temizlendi (tümü tekrar mocked, mews live).
 - Doğrulama: curl (gruplar: OTA %9.4 komisyon ₺2051, net ₺129K; mews keşif 200/100; apaleo 400; eviivo 501) + 2 ekran görüntüsü (pasta+net gelir, GRUP görünümü, trend çizgisi ▼ oklarıyla).
 - BEKLEYEN: Apaleo kimliği hâlâ girilmedi.
+
+## Güncelleme (2026-08-15, iter 561 — Komisyon Ayarları, Yönetici PDF, Doğrudan Teşvik)
+- Komisyon Ayarları: GET/POST /api/pms-connect/commission-settings/{pid} — OTA kaynak bazında özel oran (0-50%), boş = varsayılan; revenue-by-channel net hesabı override'ı kullanıyor (Booking %12 testi: net=brüt×0.88 doğrulandı, sonra temizlendi). UI: ⚙ panel + Kaydet.
+- Aylık Yönetici Özeti PDF: GET /api/pms-connect/executive-pdf/{pid} — reportlab tek sayfa: gelir kırılımı (grup+net+komisyon), kanal sağlığı (7 kanal, sertifika, son push, uyarı), forecast isabeti + Mews katkısı. UI: 📄 buton (health board).
+- Doğrudan Rezervasyon Teşviki: GET /api/pms-connect/direct-booking-tips/{pid} — 6 aylık OTA komisyon kaybı (₺2.052, yıllık ~₺4.103), doğrudan pay (%8.9 vs %30 hedef), 5 akıllı öneri. UI: 💡 yeşil ipucu kartı.
+- Doğrulama: curl (override matematiği, tips, PDF %PDF) + ekran görüntüsü (komisyon paneli tüm OTA kaynaklarıyla, teşvik kartı, PDF butonu).
+- BEKLEYEN: Apaleo kimliği hâlâ girilmedi (4. istek — kullanıcıya tekrar hatırlatıldı).
 - BEKLEYEN: Apaleo canlı testi kullanıcının client_id/client_secret girmesini bekliyor (rehber panelde).
 - Kalan: lisanslı rate-shopping feed (P2), Expo EAS build (P3), tüm PMS'lerde CANLI mod (partner kimlikleri bekleniyor: Mews demo token, Cloudbeds API key, SiteMinder pmsXchange, eviivo NDA, Elektraweb entegrasyon ekibi).

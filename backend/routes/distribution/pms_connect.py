@@ -695,10 +695,18 @@ def create_pms_connect_router(db, require_roles):
                         "revenue": {"$sum": "$total_price"}, "bookings": {"$sum": 1}}},
             {"$sort": {"_id.month": 1, "revenue": -1}}]
         agg = await db.bookings.aggregate(pipe).to_list(2000)
+        cs = await db.commission_settings.find_one({"property_id": pid}, {"_id": 0}) or {}
+        overrides = cs.get("rates") or {}
+
+        def _cpct(src):
+            key = (src or "").lower().replace("ota:", "")
+            if key in overrides:
+                return float(overrides[key]) / 100.0
+            return _commission_pct(src)
         by_month = {}
         for a in agg:
             m, src = a["_id"]["month"], a["_id"]["source"]
-            cpct = _commission_pct(src)
+            cpct = _cpct(src)
             by_month.setdefault(m, []).append(
                 {"source": src, "group": _channel_group(src),
                  "revenue": round(a["revenue"], 2), "bookings": a["bookings"],
@@ -736,6 +744,122 @@ def create_pms_connect_router(db, require_roles):
                 "total_revenue": round(tot_all, 2),
                 "total_net_revenue": round(sum(t["net_revenue"] for t in totals_list), 2),
                 "commission_note": "OTA komisyonları: Booking %15, Expedia/Hotels.com %18, Agoda %17, diğer OTA %15 varsayılan."}
+
+    @router.get("/commission-settings/{pid}")
+    async def get_commission_settings(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        cs = await db.commission_settings.find_one({"property_id": pid}, {"_id": 0}) or {}
+        srcs = await db.bookings.distinct("source", {"property_id": pid})
+        ota_srcs = sorted({s for s in srcs if s and _channel_group(s) == "OTA"})
+        rows = [{"source": s,
+                 "default_pct": round(_commission_pct(s) * 100, 1),
+                 "custom_pct": (cs.get("rates") or {}).get(s.lower().replace("ota:", ""))}
+                for s in ota_srcs]
+        return {"rows": rows,
+                "note": "Boş bırakılan kaynaklar varsayılan oranı kullanır. Oranlar sözleşmenize göre düzenlenebilir."}
+
+    @router.post("/commission-settings/{pid}")
+    async def save_commission_settings(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        rates = {}
+        for k, v in (data.get("rates") or {}).items():
+            if v is None or v == "":
+                continue
+            rates[str(k).lower().replace("ota:", "")] = max(0.0, min(50.0, float(v)))
+        await db.commission_settings.update_one(
+            {"property_id": pid},
+            {"$set": {"property_id": pid, "rates": rates,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        return {"ok": True, "count": len(rates)}
+
+    async def _rev_data(pid: str, months: int = 6) -> dict:
+        return await revenue_by_channel(pid, months, _u={"role": "admin"})
+
+    @router.get("/direct-booking-tips/{pid}")
+    async def direct_booking_tips(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Doğrudan rezervasyon teşviki: OTA komisyon kaybı + akıllı yönlendirme önerileri."""
+        d = await _rev_data(pid, 6)
+        groups = {g["group"]: g for g in d["groups"]}
+        ota = groups.get("OTA", {"revenue": 0, "net_revenue": 0, "pct": 0})
+        direct = groups.get("Doğrudan", {"revenue": 0, "pct": 0})
+        loss_6m = round(ota.get("commission_paid", ota["revenue"] - ota["net_revenue"]), 2)
+        loss_annual = round(loss_6m * 2, 2)
+        direct_pct = direct.get("pct", 0)
+        tips = [
+            f"Son 6 ayda OTA komisyonlarına ₺{loss_6m:,.0f} ödediniz (yıllık tahmini ₺{loss_annual:,.0f}). Bu tutarın %20'si doğrudan kanala kaysa yıllık ₺{loss_annual*0.2:,.0f} cebinizde kalır.",
+            f"Doğrudan kanal payınız %{direct_pct} — sektör hedefi %30+. Web sitenizde 'En İyi Fiyat Garantisi' rozetiyle OTA'dan gelen misafiri kendi sitenize çekin.",
+            "OTA'dan gelen misafire check-in'de e-posta izni alın; bir sonraki konaklama için doğrudan rezervasyona özel %5-8 indirim kuponu gönderin (komisyondan hâlâ kârlı).",
+            "Bid-price tabanının üzerindeyken doğrudan kanalda ücretsiz erken check-in / geç check-out gibi ücretsiz avantajlar sunun — fiyat paritesini bozmadan doğrudan satışı büyütür.",
+            "Sadakat listesi: geçmiş misafirlere sezon açılışında doğrudan-özel ön satış e-postası gönderin (Resend anahtarı girilince otomatikleştirilebilir).",
+        ]
+        return {"ota_revenue_6m": ota["revenue"], "ota_pct": ota["pct"],
+                "commission_loss_6m": loss_6m, "commission_loss_annual_est": loss_annual,
+                "direct_pct": direct_pct, "tips": tips}
+
+    @router.get("/executive-pdf/{pid}")
+    async def executive_pdf(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Aylık yönetici özeti: gelir kırılımı + kanal sağlığı + forecast isabeti tek PDF'te."""
+        d = await _rev_data(pid, 6)
+        h = await health(pid, _u)
+        fa = await forecast_accuracy(pid, _u)
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+        from io import BytesIO
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas as pc
+        from reportlab.lib.units import mm
+        _t = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+        buf = BytesIO()
+        c = pc.Canvas(buf, pagesize=A4)
+        w, hh = A4
+        c.setFillColorRGB(0.05, 0.09, 0.16)
+        c.rect(0, hh - 34 * mm, w, 34 * mm, fill=1, stroke=0)
+        c.setFillColorRGB(1, 1, 1)
+        c.setFont("Helvetica-Bold", 17)
+        c.drawString(18 * mm, hh - 15 * mm, (prop.get("name") or pid).translate(_t))
+        c.setFont("Helvetica", 10)
+        c.drawString(18 * mm, hh - 23 * mm, f"Aylik Yonetici Ozeti - {datetime.now(timezone.utc).date().isoformat()} - Dagitim & Gelir")
+        y = hh - 46 * mm
+        c.setFillColorRGB(0.1, 0.1, 0.1)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(18 * mm, y, f"1. Gelir Kirilimi (6 ay) - Brut {d['total_revenue']:,.0f} / Net {d['total_net_revenue']:,.0f}")
+        y -= 7 * mm
+        c.setFont("Helvetica", 9)
+        for g in d["groups"][:6]:
+            c.setFillColorRGB(0.25, 0.25, 0.25)
+            c.drawString(22 * mm, y, f"{g['group'].translate(_t)}: {g['revenue']:,.0f} (%{g['pct']}) - net {g['net_revenue']:,.0f}"
+                         + (f" - komisyon {g['commission_paid']:,.0f}" if g.get('commission_paid') else ""))
+            y -= 5.5 * mm
+        y -= 5 * mm
+        c.setFillColorRGB(0.1, 0.1, 0.1)
+        c.setFont("Helvetica-Bold", 12)
+        cert_n = sum(1 for ch in h["channels"] if ch["certified"])
+        live_n = sum(1 for ch in h["channels"] if ch["mode"] == "live")
+        c.drawString(18 * mm, y, f"2. Kanal Sagligi - {len(h['channels'])} kanal, {cert_n} sertifikali, {live_n} canli, {h['active_alerts']} aktif uyari")
+        y -= 7 * mm
+        c.setFont("Helvetica", 9)
+        for ch in h["channels"]:
+            c.setFillColorRGB(0.25, 0.25, 0.25)
+            lp = str(ch.get("last_push_at") or "hic")[:16].replace("T", " ")
+            c.drawString(22 * mm, y, f"{ch['name']}: {'CANLI' if ch['mode']=='live' else 'MOCK'} - "
+                         f"{'SERTIFIKALI' if ch['certified'] else 'sertifikasyon bekliyor'} - son push {lp} - {ch['total_pushes']} islem")
+            y -= 5.5 * mm
+        y -= 5 * mm
+        c.setFillColorRGB(0.1, 0.1, 0.1)
+        c.setFont("Helvetica-Bold", 12)
+        mae_txt = (f"MAE {fa['mae_occ_pts']} doluluk puani ({fa['matured_points']} nokta)"
+                   if fa["mae_occ_pts"] is not None else "snapshot birikiyor (gece robotu)")
+        c.drawString(18 * mm, y, f"3. Forecast Isabeti - {mae_txt}")
+        y -= 7 * mm
+        c.setFont("Helvetica", 9)
+        c.setFillColorRGB(0.25, 0.25, 0.25)
+        c.drawString(22 * mm, y, f"Mews canli rezervasyon katkisi (14 gun): +{fa['mews_total_contribution_14d']} oda-gece")
+        y -= 10 * mm
+        c.setFont("Helvetica-Oblique", 8)
+        c.setFillColorRGB(0.45, 0.45, 0.45)
+        c.drawString(18 * mm, y, "Otomatik uretilmistir - MyHotelBox RMS / PMS Baglanti Merkezi. Detaylar panelde.")
+        c.save()
+        buf.seek(0)
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(buf, media_type="application/pdf",
+                                 headers={"Content-Disposition": 'inline; filename="yonetici-ozeti.pdf"'})
 
     @router.get("/health/{pid}")
     async def health(pid: str, _u: dict = Depends(require_roles(*ROLES))):

@@ -757,3 +757,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Pilot Sunum Modu: POST/GET /api/simulator/{pid}/branding (logo_url) + GET /api/simulator/{pid}/pitch-pdf — logo + robot-vs-sabit özeti + 7 günlük rakip fiyat kıyası (fiyat endeksi) + esneklik bulgusu tek PDF. Panelde "Pilot Sunum PDF" butonu + logo girişi.
 - iteration_547: backend 16/16 %100; frontend'de SimulatorPanel state/handler eksiği (testing agent revert'i) bulunup düzeltildi, UI ekran görüntüsüyle doğrulandı. Ayrıca ai_pricing_engine.py sonundaki başıboş "router" satırı (import'u kıran NameError) temizlendi.
 - Kalan: lisanslı rate-shopping feed (P2), Expo EAS build (P3, kullanıcı anahtarı bekleniyor), Cloudbeds/HotelRunner CANLI mod (kullanıcı kimlikleri bekleniyor).
+
+## Güncelleme (2026-08-15, iter 555 — PMS Bağlantı Merkezi + Cloudbeds Sertifikasyonu)
+- PMS Bağlantı Merkezi (agnostic middleware): /api/pms-connect/* — 5 adaptör: Mews (açık, Connector API rates/updatePrice), Apaleo (açık, OAuth2 + rate-plans PUT), SiteMinder (partner, OTA_HotelRateAmountNotifRQ XML), eviivo (kapalı, bulk JSON iskelet), Elektraweb (yarı açık, fiyat matrisi JSON). Standart RMS satırları [{date,rate,availability}] _translate() ile sağlayıcı diline çevrilir. Kimlik yoksa MOCK; sertifikasyon (test push + geri okuma + format çevirisi) geçilmeden CANLI push 428 ile bloklanır. Yeni PmsConnectHub paneli ("pms-connect", Market & Compset menüsü): sağlayıcı kartları (API türü rozetleri), dinamik kimlik formu, push + çevrilmiş payload önizleme, sertifikasyon, log.
+- Cloudbeds Sertifikasyonu: POST /api/cloudbeds/certify/{pid} (test push + geri okuma + canlı API erişim kontrolü), canlı push gate (CERT-TEST bypass riski kapatıldı), CloudbedsPanel'e sertifikasyon bölümü.
+- Kayıtlar: db.pms_connect_config, db.pms_push_log, db.pms_inbound.
+- iteration_548: backend 19/19, frontend %100 geçti.
+- Yeni sağlayıcı ekleme: pms_connect.py PROVIDERS sözlüğüne kayıt + _translate'e çeviri şablonu eklemek yeterli (UI otomatik).
+- Kalan: lisanslı rate-shopping feed (P2), Expo EAS build (P3), tüm PMS'lerde CANLI mod (partner kimlikleri bekleniyor: Mews demo token, Cloudbeds API key, SiteMinder pmsXchange, eviivo NDA, Elektraweb entegrasyon ekibi).

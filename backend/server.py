@@ -1766,6 +1766,8 @@ from routes.distribution.hotelrunner_live import create_hotelrunner_router
 api_router.include_router(create_hotelrunner_router(db, require_roles))
 from routes.distribution.cloudbeds_adapter import create_cloudbeds_router
 api_router.include_router(create_cloudbeds_router(db, require_roles))
+from routes.distribution.pms_connect import create_pms_connect_router
+api_router.include_router(create_pms_connect_router(db, require_roles))
 from routes.revenue_ext.elasticity import create_elasticity_router
 api_router.include_router(create_elasticity_router(db, require_roles))
 from routes.revenue_ext.night_audit import create_night_audit_router

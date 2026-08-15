@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 548 — PMS Connect Hub (5 adaptors) + Cloudbeds certify. Backend: 19/19 pytest passed (providers list, mews config+push+translated preview, siteminder OTA XML, certify for all 5 providers with 4 checks+persistence, eviivo pull, mews log, unknown 404, cloudbeds certify with 3 checks + status + push, and regressions for hotelrunner/elasticity/simulator/ai-pricing). Frontend: PRO mode → Revenue & rates (Market & Compset) → pms-connect-btn renders panel with 5 provider cards; mews card shows credential inputs, Fiyat Push produces pms-last-push + pms-translated-preview, Sertifikasyonu Çalıştır produces 'SERTİFİKALI · MOCK' badge + pms-cert-checks, pms-log-table populates. SiteMinder switch keeps state; Cloudbeds cb-cert-section renders with cb-certify-btn → 'SERTİFİKALI · MOCK' badge and Kimlik check shows ⚠️ amber (not ❌ red). All features working as specified.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration548_pms_connect.py",
+    "/app/test_reports/pytest/iter548.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "pms_connect.py _translate for eviivo/elektraweb are similar bulk-JSON shapes; consider a shared helper if more closed-API providers get added.",
+    "Cloudbeds certify uses rateID='CERT-TEST' as a gate-bypass string; if a customer ever configures that literal rate_id, gate would be bypassed. Consider a separate cert_test flag param like the pms_connect module uses."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None. Existing rate_overrides sufficient — mews push returned pushed_days>0 with translated_preview.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "PMS Connect Hub reached via PRO mode → nav-section 'Revenue & rates' → sidebar contains pms-connect-btn and cloudbeds-live-btn directly (both under 'Market & Compset' sidebar divider). No need to click 'Compset' or 'Market' subgroup — items are already flat once Revenue & rates section is expanded. All 5 PMS providers work in MOCK; certification persists to db.pms_connect_config."
+}

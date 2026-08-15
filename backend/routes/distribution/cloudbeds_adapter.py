@@ -105,6 +105,10 @@ def create_cloudbeds_router(db, require_roles):
                       "message": "MOCK — API key girilmediği için gerçek push yapılmadı."}
             await _log(pid, "rate_push", "mocked", payload, result)
             return {"pushed_days": len(intervals), "sample": intervals[:3], **result}
+        cert = cfg.get("certification") or {}
+        if not (cert.get("passed") and cert.get("mode") == "live"):
+            raise HTTPException(428, "Cloudbeds sertifikasyonu geçilmedi — canlı push bloklandı. "
+                                     "Önce 'Sertifikasyonu Çalıştır' ile test push + geri okuma doğrulamasını CANLI modda geçin.")
         async with httpx.AsyncClient(timeout=30) as client:
             r = await client.post(f"{CB_URL}/putRate",
                                   headers={"x-api-key": cfg["api_key"],
@@ -146,6 +150,59 @@ def create_cloudbeds_router(db, require_roles):
             imported += 1
         await _log(pid, "res_pull", "live", {}, {"imported": imported})
         return {"mocked": False, "imported": imported}
+
+    @router.post("/certify/{pid}")
+    async def certify(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Sertifikasyon: test push + geri okuma doğrulaması — HotelRunner ile aynı güvence."""
+        checks = []
+        cfg = await _cfg(pid)
+        live = bool(cfg.get("api_key"))
+        checks.append({"name": "Kimlik yapılandırması", "passed": live,
+                       "detail": "API key mevcut" if live else "API key yok — MOCK sertifikasyon"})
+        test_date = (datetime.now(timezone.utc).date() + timedelta(days=60)).isoformat()
+        test_payload = {"rates": [{"rateID": "CERT-TEST",
+                                   "interval": [{"startDate": test_date, "endDate": test_date, "rate": 99.0}]}]}
+        try:
+            if live:
+                async with httpx.AsyncClient(timeout=30) as client:
+                    r = await client.post(f"{CB_URL}/putRate",
+                                          headers={"x-api-key": cfg["api_key"],
+                                                   "content-type": "application/x-www-form-urlencoded"},
+                                          content=urlencode(_flatten(test_payload)))
+                push_ok = r.status_code == 200
+                res = r.json() if push_ok else {"status_code": r.status_code}
+                await _log(pid, "rate_push", "live", test_payload, res)
+            else:
+                push_ok = True
+                await _log(pid, "rate_push", "mocked", test_payload, {"mocked": True, "cert": True})
+            checks.append({"name": "Test push", "passed": push_ok,
+                           "detail": f"1 tarih gönderildi ({'CANLI' if live else 'MOCK'})"})
+        except Exception as e:
+            checks.append({"name": "Test push", "passed": False, "detail": str(e)[:150]})
+        log = await db.cb_push_log.find_one(
+            {"property_id": pid, "kind": "rate_push", "payload.rates.rateID": "CERT-TEST"},
+            sort=[("created_at", -1)])
+        readback = bool(log and any(i.get("startDate") == test_date and i.get("rate") == 99.0
+                                    for rt in log["payload"]["rates"] for i in rt.get("interval", [])))
+        checks.append({"name": "Geri okuma doğrulaması", "passed": readback,
+                       "detail": "Push logu geri okundu, tarih+fiyat birebir eşleşti" if readback else "Log eşleşmedi"})
+        if live:
+            try:
+                async with httpx.AsyncClient(timeout=20) as client:
+                    r = await client.get(f"{CB_URL}/getHotels",
+                                         headers={"x-api-key": cfg["api_key"], "accept": "application/json"},
+                                         params={"pageNumber": 1, "pageSize": 1})
+                checks.append({"name": "Canlı API erişimi", "passed": r.status_code == 200,
+                               "detail": f"HTTP {r.status_code}"})
+            except Exception as e:
+                checks.append({"name": "Canlı API erişimi", "passed": False, "detail": str(e)[:120]})
+        passed = all(c["passed"] for c in checks if c["name"] != "Kimlik yapılandırması")
+        cert = {"passed": passed, "mode": "live" if live else "mocked", "checks": checks,
+                "at": datetime.now(timezone.utc).isoformat()}
+        await db.cloudbeds_config.update_one(
+            {"property_id": pid}, {"$set": {"certification": cert}}, upsert=True)
+        return {"ok": True, **cert,
+                "note": "Sertifikasyon geçmeden canlı otomatik push açılmamalı. API key girilince CANLI modda tekrarlayın."}
 
     @router.get("/log/{pid}")
     async def get_log(pid: str, limit: int = 20, _u: dict = Depends(require_roles(*ROLES))):

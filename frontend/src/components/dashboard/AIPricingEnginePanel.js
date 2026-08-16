@@ -48,6 +48,8 @@ const AIPricingEnginePanel = ({ propertyId }) => {
   const [filter, setFilter] = useState("all"); // all | auto | review | pending | accepted
   const [rejecting, setRejecting] = useState(null); // {date, room_type_id} when modal open
   const [rejectReason, setRejectReason] = useState("");
+  const [rejectTag, setRejectTag] = useState("");
+  const [signals, setSignals] = useState(null);
   const [savingCfg, setSavingCfg] = useState(false);
 
   const curFormatter = useMemo(
@@ -87,6 +89,11 @@ const AIPricingEnginePanel = ({ propertyId }) => {
 
   useEffect(() => { loadCfg(); }, [loadCfg]);
   useEffect(() => { loadSuggestions(); }, [loadSuggestions]);
+  useEffect(() => {
+    if (!propertyId || propertyId === "all") return;
+    axios.get(`${API}/demand-signals/${propertyId}?days=14`, { headers: authHeaders() })
+      .then((r) => setSignals(r.data)).catch(() => {});
+  }, [propertyId]);
 
   const saveCfg = async (patch) => {
     if (!cfg) return;
@@ -166,12 +173,13 @@ const AIPricingEnginePanel = ({ propertyId }) => {
     try {
       await axios.post(
         `${API}/revenue/ai-pricing/${propertyId}/reject`,
-        { ...rejecting, reason: rejectReason || "Manuel reddedildi" },
+        { ...rejecting, reason: rejectReason || "Manuel reddedildi", reason_tag: rejectTag || undefined },
         { headers: authHeaders() }
       );
       toast.success("Öneri reddedildi");
       setRejecting(null);
       setRejectReason("");
+      setRejectTag("");
       loadSuggestions();
     } catch (e) {
       toast.error("Reddedilemedi");
@@ -343,6 +351,28 @@ const AIPricingEnginePanel = ({ propertyId }) => {
             className="px-4 py-2 text-xs font-bold rounded-lg bg-amber-600 text-white hover:bg-amber-700">
             Dondurmayı Kaldır
           </button>
+        </div>
+      )}
+
+      {/* HAVA + TATİL SİNYAL ŞERİDİ */}
+      {signals && (signals.rows || []).length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-xl p-3" data-testid="ai-pricing-signals-strip">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-bold text-stone-600">🌤 Hava + Resmi Tatil Sinyalleri (14 gün{signals.geo?.resolved_name ? ` · ${signals.geo.resolved_name}` : ""}) — fiyat motoruna çarpan olarak girer</span>
+          </div>
+          <div className="flex gap-1 overflow-x-auto pb-1">
+            {signals.rows.map((s) => (
+              <div key={s.date} title={(s.reasons || []).join(" · ") || "Nötr"} data-testid={`ai-pricing-signal-${s.date}`}
+                className={`shrink-0 w-[72px] rounded-lg border px-1.5 py-1 text-center ${s.multiplier > 1 ? "border-emerald-200 bg-emerald-50" : s.multiplier < 1 ? "border-rose-200 bg-rose-50" : "border-stone-100 bg-stone-50"}`}>
+                <div className="text-[9px] text-stone-500">{s.date.slice(5)}</div>
+                <div className="text-[11px]">{s.holiday ? "🎌" : s.weather && (s.weather.precip || 0) >= 15 ? "🌧" : s.weather && (s.weather.tmax || 0) >= 22 ? "☀️" : "·"}</div>
+                <div className={`text-[10px] font-black ${s.multiplier > 1 ? "text-emerald-700" : s.multiplier < 1 ? "text-rose-600" : "text-stone-400"}`}>
+                  {s.multiplier === 1 ? "—" : `×${s.multiplier}`}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[9px] text-stone-400 mt-1">{signals.note}</p>
         </div>
       )}
 
@@ -558,6 +588,15 @@ const AIPricingEnginePanel = ({ propertyId }) => {
             <p className="text-sm text-stone-600 mb-4">
               <span className="font-mono">{rejecting.date}</span> önerisini reddetmek istediğine emin misin?
             </p>
+            <label className="block text-xs font-semibold text-stone-700 mb-1.5">Red nedeni (etiket seç — modelin kör nokta haritası)</label>
+            <div className="flex flex-wrap gap-1.5 mb-3" data-testid="ai-pricing-reject-tags">
+              {[["too_aggressive", "Çok agresif artış"], ["too_low", "Gereksiz indirim"], ["event_unknown", "Motor etkinliği bilmiyor"], ["segment_mismatch", "Segment/kanal uyumsuz"], ["data_wrong", "Veri hatalı"], ["strategy_conflict", "Stratejiye aykırı"], ["other", "Diğer"]].map(([tag, label]) => (
+                <button key={tag} type="button" onClick={() => setRejectTag(rejectTag === tag ? "" : tag)} data-testid={`ai-pricing-reject-tag-${tag}`}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors ${rejectTag === tag ? "bg-rose-600 text-white border-rose-600" : "border-stone-300 text-stone-600 hover:border-rose-300"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
             <label className="block text-xs font-semibold text-stone-700 mb-1.5">Sebep (opsiyonel)</label>
             <Input
               data-testid="ai-pricing-reject-reason"
@@ -569,7 +608,7 @@ const AIPricingEnginePanel = ({ propertyId }) => {
             <div className="flex justify-end gap-2">
               <button
                 data-testid="ai-pricing-reject-cancel"
-                onClick={() => { setRejecting(null); setRejectReason(""); }}
+                onClick={() => { setRejecting(null); setRejectReason(""); setRejectTag(""); }}
                 className="px-3 py-1.5 rounded text-sm font-medium text-stone-600 hover:bg-stone-100"
               >
                 İptal

@@ -29,6 +29,26 @@ def _norm(values: List[float]) -> List[float]:
 def create_chain_benchmark_router(db, require_roles, compute_kf):
     router = APIRouter(prefix="/chain")
 
+    @router.get("/benchmark/consent")
+    async def consent_list(current_user: dict = Depends(require_roles("admin", "manager"))):
+        props = await db.properties.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+        consents = {}
+        async for c in db.pool_consent.find({}, {"_id": 0}):
+            consents[c["property_id"]] = c.get("share_data", True)
+        return {"properties": [{"id": p["id"], "name": p.get("name", p["id"]),
+                                "share_data": consents.get(p["id"], True)} for p in props],
+                "note": "İzni kapatılan tesis havuz kıyasına (benchmark) dahil edilmez ve anonim havuz eğitimine veri vermez."}
+
+    @router.put("/benchmark/consent/{pid}")
+    async def set_consent(pid: str, data: dict,
+                          current_user: dict = Depends(require_roles("admin"))):
+        share = bool(data.get("share_data", True))
+        await db.pool_consent.update_one(
+            {"property_id": pid},
+            {"$set": {"property_id": pid, "share_data": share,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        return {"ok": True, "property_id": pid, "share_data": share}
+
     @router.get("/benchmark")
     async def benchmark(days: int = 30, active_only: bool = True,
                         current_user: dict = Depends(require_roles("admin", "manager"))):
@@ -38,7 +58,11 @@ def create_chain_benchmark_router(db, require_roles, compute_kf):
         since_iso = datetime.now(timezone.utc) - timedelta(days=days)
         since = since_iso.isoformat()
 
-        properties = await db.properties.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+        properties = await db.properties.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
+        opted_out = set()
+        async for c in db.pool_consent.find({"share_data": False}, {"_id": 0, "property_id": 1}):
+            opted_out.add(c["property_id"])
+        properties = [p for p in properties if p["id"] not in opted_out]
         rows = []
         for p in properties:
             pid = p["id"]

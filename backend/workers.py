@@ -1244,3 +1244,79 @@ async def open_pricing_optimizer_loop(db, interval_seconds: int = 3600):
         except Exception as e:
             logger.warning(f"open_pricing_optimizer_loop error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+async def killswitch_drill_loop(db, interval_seconds: int = 21600):
+    """Ayın 1'inde kill switch tatbikatını otomatik çalıştırır, güvence PDF'ini arşive kaydeder."""
+    from routes.distribution.pms_connect import run_killswitch_drill, build_drill_pdf
+    import base64
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            if now.day == 1 and 3 <= now.hour <= 9:
+                month_key = now.strftime("%Y-%m")
+                props = await db.properties.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1}).to_list(50)
+                if not props:
+                    props = [{"id": "default"}]
+                for p in props:
+                    pid = p["id"]
+                    if await db.killswitch_drills.find_one(
+                            {"property_id": pid, "triggered_by": "robot",
+                             "created_at": {"$regex": f"^{month_key}"}}):
+                        continue
+                    r = await run_killswitch_drill(db, pid, triggered_by="robot")
+                    drill = await db.killswitch_drills.find_one({"id": r["drill_id"]}, {"_id": 0})
+                    pdf = await build_drill_pdf(db, pid, drill)
+                    await db.killswitch_drills.update_one(
+                        {"id": r["drill_id"]},
+                        {"$set": {"pdf_b64": base64.b64encode(pdf).decode(),
+                                  "pdf_size_kb": round(len(pdf) / 1024, 1)}})
+                    await db.notifications.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "type": "info" if r["passed"] else "warning",
+                        "title": f"🛑 Aylık Kill Switch Tatbikatı — {'BAŞARILI ✓' if r['passed'] else 'BAŞARISIZ ✗'}",
+                        "message": (f"Acil durdurma zinciri otomatik test edildi ({pid}): 4/4 adım geçti. "
+                                    "Güvence PDF'i tatbikat arşivine kaydedildi." if r["passed"] else
+                                    f"Tatbikat BAŞARISIZ ({pid}) — acil durdurma zincirini derhal kontrol edin!"),
+                        "category": "revenue", "target_user": "", "target_role": "manager",
+                        "link_to": "pms-connect", "priority": "normal" if r["passed"] else "high",
+                        "read": False, "created_by": "Tatbikat Robotu", "created_at": now.isoformat()})
+                    logger.info(f"killswitch_drill_loop: {pid} passed={r['passed']} ({month_key})")
+        except Exception as e:
+            logger.warning(f"killswitch_drill_loop error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
+async def pilot_lead_reminder_loop(db, interval_seconds: int = 21600, stale_days: int = 7):
+    """Uzun süre durumu değişmeyen pilot otelleri için 'geri dön' bildirimi bırakır."""
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            cutoff = (now - timedelta(days=stale_days)).isoformat()
+            leads = await db.pilot_leads.find(
+                {"status": {"$in": ["davet", "görüşme", "demo"]},
+                 "updated_at": {"$lt": cutoff},
+                 "$or": [{"reminder_sent_at": {"$exists": False}},
+                         {"reminder_sent_at": {"$lt": cutoff}}]},
+                {"_id": 0}).to_list(100)
+            for l in leads:
+                try:
+                    days = max((now - datetime.fromisoformat(str(l["updated_at"]))).days, stale_days)
+                except Exception:
+                    days = stale_days
+                await db.notifications.insert_one({
+                    "id": str(uuid.uuid4()), "type": "warning",
+                    "title": "⏰ Pilot takibi gerekli",
+                    "message": (f"{l['hotel_name']} — {days} gündür '{l['status']}' aşamasında bekliyor. "
+                                + (f"İletişim: {l['contact']}. " if l.get("contact") else "")
+                                + "Geri dönüş yapın veya durumu güncelleyin."),
+                    "category": "sales", "target_user": "", "target_role": "manager",
+                    "link_to": "pms-connect", "priority": "normal", "read": False,
+                    "created_by": "Pilot Takip Robotu", "created_at": now.isoformat()})
+                await db.pilot_leads.update_one(
+                    {"id": l["id"]}, {"$set": {"reminder_sent_at": now.isoformat()}})
+            if leads:
+                logger.info(f"pilot_lead_reminder_loop: {len(leads)} hatırlatma")
+        except Exception as e:
+            logger.warning(f"pilot_lead_reminder_loop error: {e}")
+        await asyncio.sleep(interval_seconds)

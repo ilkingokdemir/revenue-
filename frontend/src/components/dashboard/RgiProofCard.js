@@ -24,6 +24,8 @@ export default function RgiProofCard({ propertyId }) {
       <div className="text-sm font-semibold text-stone-900 flex items-center gap-2 mb-1">
         <ChartBarHorizontal size={16} weight="fill" className="text-indigo-600" /> RGI — Pazar Endeksli Kanıt
         <span className="text-[10px] text-stone-400 font-normal">— RevPAR endeksi (biz / pazar × 100)</span>
+        {d.avg_mpi != null && <span className="ml-auto px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 text-[10px] font-black" data-testid="rgi-mpi-badge">MPI {d.avg_mpi}</span>}
+        {d.avg_ari != null && <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 text-[10px] font-black" data-testid="rgi-ari-badge">ARI {d.avg_ari}</span>}
       </div>
       <p className="text-[11px] text-indigo-800 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 mb-3" data-testid="rgi-verdict">
         📊 {d.verdict}
@@ -45,6 +47,7 @@ export default function RgiProofCard({ propertyId }) {
                 <div className="absolute top-0 bottom-0 border-l border-dashed border-stone-400" style={{ left: `${100 / maxRgi * 100}%` }} />
               </div>
               <span className="w-14 text-right font-bold text-stone-800 shrink-0">{w.rgi ? w.rgi : "—"}</span>
+              <span className="w-20 text-right text-[9px] text-stone-400 shrink-0" data-testid={`rgi-mpi-ari-${w.week}`}>{w.mpi ? `M${w.mpi}` : ""}{w.ari ? ` A${w.ari}` : ""}</span>
             </div>
           ))}
           <div className="flex justify-between text-[9px] text-stone-400 pt-1">

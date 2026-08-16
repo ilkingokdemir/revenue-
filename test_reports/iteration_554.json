@@ -1,0 +1,36 @@
+{
+  "summary": "Frontend E2E tested the three NEW PMS Bağlantı Merkezi features (Pilot Hunisi Özeti, Takip Hatırlatıcısı, Aylık Tatbikat Robotu arşiv UI) plus regressions. Funnel + drill-history + PDF archive all work; per-lead stale badge (pms-lead-stale-{id}) is NOT rendered in the frontend even though backend returns stale=true for Otel A (10 days).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PmsConnectHub.js pilot leads row", "issue": "Per-lead stale badge with data-testid='pms-lead-stale-{id}' is missing. Backend response includes stale:true and days_in_stage:10 for 'Otel A' but the row markup (~line 601-611) only shows hotel_name, date, status select, and note input. Header badge pms-leads-stale-badge exists and is correct ('⏰ 1 otel 7+ gündür bekliyor') but the per-row ⏰ Xg bekliyor badge required by the spec is absent.", "selector": "[data-testid^='pms-lead-stale-']", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Render per-lead stale badge in PmsConnectHub.js lead row. Example: inside the row header span, add {l.stale && <span data-testid={`pms-lead-stale-${l.id}`} className='ml-2 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black'>⏰ {l.days_in_stage}g bekliyor</span>}. Backend already sends l.stale and l.days_in_stage."
+  ],
+  "critical_code_review_comments": [
+    "PmsConnectHub.js is 864 lines — approaching the 700-line guideline threshold; consider splitting sub-sections (leads/drill/rate-mapping) into child components in a future refactor.",
+    "runDrill fetches history after every click but never handles error separately — history stays stale if history GET fails silently after successful drill."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "80% (4 of 5 sub-checks pass; per-lead stale badge missing)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (worked)",
+  "seed_data_creation": "None. Existing seeded pilot leads (Otel A backdated 10 days -> stale, Otel B görüşme, Otel C demo, Otel D pilot) and 5 drill records incl. one robot+archived were present and verified.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Navigation: /login → email/password submit → do NOT wait for /dashboard URL (login lands on root '/'), just wait 4s → click [data-testid='command-palette-trigger'] → type 'PMS Bağlantı' → Enter. Leads section requires clicking [data-testid='pms-leads-btn'] first. Drill section covers leads once opened, so test leads-add BEFORE running drill. PDF endpoints: /api/pms-connect/killswitch-drill/archive/{id}/pdf and /api/pms-connect/killswitch-drill/{pid}/report-pdf both return 200 application/pdf (~2829 bytes). Backend field names for leads: leads[].stale (bool), leads[].days_in_stage (int). Funnel field: funnel[].reached (cumulative count), funnel[].conv_pct (null for first stage), funnel[].avg_days_in_stage.",
+  "verified_working": [
+    "Funnel chips pms-funnel-{davet|görüşme|demo|pilot} render with correct data: davet 4 ~10g, görüşme 3 %75 ~0g, demo 2 %67 ~0g, pilot 1 %50 ~0g",
+    "Header stale badge pms-leads-stale-badge shows '⏰ 1 otel 7+ gündür bekliyor'",
+    "Drill runs, pms-drill-section shows BAŞARILI ✓",
+    "pms-drill-history block appears with 5 rows including one '🤖 otomatik · 📦 PDF arşivde' row",
+    "Every pms-drill-hist-pdf-{id} link returns HTTP 200 application/pdf",
+    "Latest drill pms-drill-pdf-btn regression: 200 application/pdf",
+    "Note in history: 'Aylık otomatik tatbikat robotu AKTİF — her ayın 1'inde çalışır, PDF'i arşivler' present"
+  ],
+  "rca of the issue": "Frontend PmsConnectHub.js lead row (lines 600-611) never reads l.stale/l.days_in_stage from the API payload. Backend contract is correct and header aggregate badge is rendered from leads.stale_count, but the per-row per-lead visual indicator was omitted from the JSX. Simple additive fix — no state/API changes needed."
+}

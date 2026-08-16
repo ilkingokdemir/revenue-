@@ -39,16 +39,25 @@ def create_rgi_proof_router(db, require_roles):
                 {"$sort": {"scanned_at": -1}},
                 {"$group": {"_id": "$date", "avg_price": {"$first": "$avg_price"},
                             "unavailable_pct": {"$first": "$unavailable_pct"}}}]).to_list(7)
-            mk_revpar = None
+            mk_revpar, mk_adr, mk_occ = None, None, None
             if snaps:
                 vals = [float(s.get("avg_price") or 0) * float(s.get("unavailable_pct") or 0) / 100 for s in snaps]
                 vals = [v for v in vals if v > 0]
                 if vals:
                     mk_revpar = round(sum(vals) / len(vals), 2)
+                adrs = [float(s.get("avg_price") or 0) for s in snaps if s.get("avg_price")]
+                occs = [float(s.get("unavailable_pct") or 0) for s in snaps if s.get("unavailable_pct")]
+                if adrs:
+                    mk_adr = round(sum(adrs) / len(adrs), 2)
+                if occs:
+                    mk_occ = round(sum(occs) / len(occs), 1)
             rgi_v = round(our_revpar / mk_revpar * 100, 1) if (mk_revpar and our_revpar) else None
+            mpi_v = round(occ * 100 / mk_occ * 100, 1) if (mk_occ and occ) else None
+            ari_v = round(adr / mk_adr * 100, 1) if (mk_adr and adr) else None
             rows.append({"week_start": days[0], "week": ws.strftime("%G-W%V"),
                          "our_revpar": our_revpar, "occ_pct": round(occ * 100, 1),
-                         "market_revpar": mk_revpar, "rgi": rgi_v,
+                         "our_adr": round(adr, 2), "market_adr": mk_adr, "market_occ_pct": mk_occ,
+                         "market_revpar": mk_revpar, "rgi": rgi_v, "mpi": mpi_v, "ari": ari_v,
                          "phase": ("robot" if robot_start and days[0] >= robot_start else "önce")})
         before = [r["rgi"] for r in rows if r["phase"] == "önce" and r["rgi"]]
         after = [r["rgi"] for r in rows if r["phase"] == "robot" and r["rgi"]]
@@ -65,6 +74,8 @@ def create_rgi_proof_router(db, require_roles):
             verdict = "RGI hesaplamak için pazar verisi henüz yetersiz — pazar taramaları biriktikçe dolacak."
         return {"property_id": pid, "capacity": cap, "robot_start": robot_start,
                 "weeks": rows, "avg_rgi_before": avg_b, "avg_rgi_after": avg_a, "verdict": verdict,
-                "note": "RGI = bizim RevPAR / pazar RevPAR × 100. Pazar RevPAR'ı halka açık taramadan (ort. fiyat × doluluk vekili) türetilir. 100 üzeri = pazardan iyi."}
+                "avg_mpi": (lambda v: round(sum(v) / len(v), 1) if v else None)([r["mpi"] for r in rows if r.get("mpi")]),
+                "avg_ari": (lambda v: round(sum(v) / len(v), 1) if v else None)([r["ari"] for r in rows if r.get("ari")]),
+                "note": "RGI = bizim RevPAR / pazar RevPAR × 100 · MPI = doluluk endeksi · ARI = ADR endeksi (STR dili: RGI ≈ MPI × ARI / 100). 100 üzeri = pazardan iyi."}
 
     return router

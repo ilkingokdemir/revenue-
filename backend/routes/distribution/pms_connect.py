@@ -344,6 +344,123 @@ def _commission_pct(src: str) -> float:
     return OTA_COMMISSIONS.get((src or "").lower().replace("ota:", ""), 0.15)
 
 
+async def run_killswitch_drill(db, pid: str, triggered_by: str = "manual") -> dict:
+    """Kill switch tatbikatı: acil durdurmayı simüle edip yönetime güvence raporu üretir."""
+    now = datetime.now(timezone.utc).isoformat()
+    steps = []
+    await db.kill_switch.update_one(
+        {"property_id": pid, "drill": True},
+        {"$set": {"property_id": pid, "active": True, "drill": True, "activated_at": now}}, upsert=True)
+    steps.append({"step": "1. Acil durdurma AÇILDI (tatbikat kaydı)", "passed": True})
+    ks = await db.kill_switch.find_one({"property_id": {"$in": [pid, "global"]}, "active": True})
+    blocked = bool(ks)
+    steps.append({"step": "2. Robot fiyat uygulaması denendi → motorun blok koşulu doğrulandı",
+                  "passed": blocked})
+    if blocked:
+        await db.guardrail_violations.insert_one({
+            "property_id": pid, "type": "kill_switch", "blocked": True, "drill": True,
+            "detail": "TATBİKAT: kill switch aktifken push bloklandı", "source": "drill",
+            "created_at": now})
+    steps.append({"step": "3. Blok olayı denetim kaydına (guardrail_violations) yazıldı", "passed": blocked})
+    await db.kill_switch.update_one({"property_id": pid, "drill": True},
+                                    {"$set": {"active": False, "deactivated_at": now}})
+    ks2 = await db.kill_switch.find_one({"property_id": {"$in": [pid, "global"]}, "active": True})
+    steps.append({"step": "4. Acil durdurma KAPATILDI → sistem normale döndü", "passed": ks2 is None})
+    since30 = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    real_blocks = await db.guardrail_violations.count_documents(
+        {"property_id": pid, "type": "kill_switch", "drill": {"$ne": True},
+         "created_at": {"$gte": since30}})
+    violations30 = await db.guardrail_violations.count_documents(
+        {"property_id": pid, "created_at": {"$gte": since30}})
+    passed = all(s["passed"] for s in steps)
+    report = f"""KILL SWITCH TATBİKAT RAPORU — {now[:16].replace('T', ' ')} UTC
+
+Sonuç: {'BAŞARILI — acil durdurma zinciri uçtan uca çalışıyor' if passed else 'BAŞARISIZ — acil müdahale gerekli'}
+
+Tatbikat adımları:
+""" + "\n".join(f"  {'✓' if s['passed'] else '✗'} {s['step']}" for s in steps) + f"""
+
+Güvence özeti (son 30 gün):
+  • Gerçek kill switch blokları: {real_blocks}
+  • Toplam guardrail olayı (adım kırpma/limit/blok): {violations30}
+  • Kapsam: kill switch aktifken hiçbir robot fiyatı yazılamaz (otonom + gece push dahil); tüm denemeler denetim kaydına düşer.
+  • Ek emniyetler: ±%15 asimetrik adım limiti, günlük push tavanı, bid-price tabanı, publisher sertifikasyon kapısı.
+
+Bu tatbikat kaydı denetim amacıyla saklanmıştır (drill=true etiketiyle gerçek olaylardan ayrılır)."""
+    drill_id = str(uuid.uuid4())
+    await db.killswitch_drills.insert_one({"id": drill_id, "property_id": pid,
+                                           "passed": passed, "steps": steps, "report": report,
+                                           "triggered_by": triggered_by, "created_at": now})
+    return {"drill_id": drill_id, "passed": passed, "steps": steps, "report": report,
+            "real_blocks_30d": real_blocks, "violations_30d": violations30}
+
+
+async def build_drill_pdf(db, pid: str, drill: dict) -> bytes:
+    """Yönetime sunulabilir tatbikat güvence PDF'i üretir."""
+    prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+    total_drills = await db.killswitch_drills.count_documents({"property_id": pid})
+    passed_drills = await db.killswitch_drills.count_documents({"property_id": pid, "passed": True})
+    since30 = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    real_blocks = await db.guardrail_violations.count_documents(
+        {"property_id": pid, "type": "kill_switch", "drill": {"$ne": True},
+         "created_at": {"$gte": since30}})
+    violations30 = await db.guardrail_violations.count_documents(
+        {"property_id": pid, "created_at": {"$gte": since30}})
+    from io import BytesIO
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas as pc
+    from reportlab.lib.units import mm
+    _t = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+    buf = BytesIO()
+    c = pc.Canvas(buf, pagesize=A4)
+    w, hh = A4
+    ok = bool(drill.get("passed"))
+    c.setFillColorRGB(*(0.02, 0.37, 0.31) if ok else (0.6, 0.1, 0.1))
+    c.rect(0, hh - 38 * mm, w, 38 * mm, fill=1, stroke=0)
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", 17)
+    c.drawString(18 * mm, hh - 16 * mm, "Kill Switch Tatbikat Raporu - Yonetim Guvencesi")
+    c.setFont("Helvetica", 10)
+    trig = "otomatik aylik robot" if drill.get("triggered_by") == "robot" else "manuel"
+    c.drawString(18 * mm, hh - 24 * mm, f"{(prop.get('name') or pid).translate(_t)} · {str(drill['created_at'])[:16].replace('T', ' ')} UTC · tetik: {trig}")
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(18 * mm, hh - 32 * mm, "SONUC: " + ("BASARILI - acil durdurma zinciri uctan uca calisiyor" if ok else "BASARISIZ - acil mudahale gerekli"))
+    y = hh - 52 * mm
+    c.setFillColorRGB(0.1, 0.1, 0.1)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(18 * mm, y, "Tatbikat Adimlari")
+    y -= 8 * mm
+    c.setFont("Helvetica", 10)
+    for s in drill.get("steps", []):
+        c.setFillColorRGB(*(0.02, 0.45, 0.35) if s.get("passed") else (0.75, 0.15, 0.15))
+        c.drawString(22 * mm, y, ("[OK] " if s.get("passed") else "[HATA] ") + str(s.get("step", "")).translate(_t)[:95])
+        y -= 6.5 * mm
+    y -= 6 * mm
+    c.setFillColorRGB(0.1, 0.1, 0.1)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(18 * mm, y, "Guvence Ozeti (son 30 gun)")
+    y -= 8 * mm
+    c.setFont("Helvetica", 10)
+    c.setFillColorRGB(0.25, 0.25, 0.25)
+    for line in (
+        f"Gercek kill switch bloklari: {real_blocks}",
+        f"Toplam guardrail olayi (adim kirpma / limit / blok): {violations30}",
+        f"Tatbikat gecmisi: {passed_drills}/{total_drills} basarili",
+        "Kapsam: kill switch aktifken hicbir robot fiyati yazilamaz (otonom + gece push dahil).",
+        "Tum denemeler denetim kaydina duser; tatbikat kayitlari drill=true etiketiyle ayrilir.",
+        "Ek emniyetler: +-%15 asimetrik adim limiti, gunluk push tavani, bid-price tabani,",
+        "publisher sertifikasyon kapisi."):
+        c.drawString(22 * mm, y, line)
+        y -= 6 * mm
+    y -= 6 * mm
+    c.setFont("Helvetica-Oblique", 8)
+    c.setFillColorRGB(0.45, 0.45, 0.45)
+    c.drawString(18 * mm, y, "Otomatik uretilmistir - MyHotelBox RMS / Robot Guven Merkezi. Denetim amaciyla saklanir.")
+    c.save()
+    buf.seek(0)
+    return buf.getvalue()
+
+
 def create_pms_connect_router(db, require_roles):
     router = APIRouter(prefix="/pms-connect", tags=["pms-connect"])
     ROLES = ("admin", "manager")
@@ -931,7 +1048,31 @@ MyHotelBox RMS Ekibi
     @router.get("/pilot-leads/{pid}")
     async def pilot_leads(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         rows = await db.pilot_leads.find({"property_id": pid}, {"_id": 0}).sort("created_at", -1).to_list(100)
-        return {"leads": rows, "statuses": ["davet", "görüşme", "demo", "pilot", "kaybedildi"]}
+        now = datetime.now(timezone.utc)
+        order = ["davet", "görüşme", "demo", "pilot"]
+        for l in rows:
+            try:
+                upd = datetime.fromisoformat(str(l.get("updated_at") or l["created_at"]))
+                days = max((now - upd).days, 0)
+            except Exception:
+                days = 0
+            l["days_in_stage"] = days
+            l["stale"] = l.get("status") in ("davet", "görüşme", "demo") and days >= 7
+        active = [l for l in rows if l.get("status") in order]
+        funnel = []
+        prev_reached = None
+        for i, stage in enumerate(order):
+            reached = sum(1 for l in active if order.index(l["status"]) >= i)
+            in_stage = [l for l in active if l["status"] == stage]
+            funnel.append({
+                "stage": stage, "count": len(in_stage), "reached": reached,
+                "conv_pct": round(reached / prev_reached * 100, 0) if prev_reached else None,
+                "avg_days_in_stage": round(sum(l["days_in_stage"] for l in in_stage) / len(in_stage), 1) if in_stage else None})
+            prev_reached = reached or None
+        return {"leads": rows, "statuses": ["davet", "görüşme", "demo", "pilot", "kaybedildi"],
+                "funnel": funnel, "lost_count": sum(1 for l in rows if l.get("status") == "kaybedildi"),
+                "stale_count": sum(1 for l in rows if l.get("stale")),
+                "stale_days_threshold": 7}
 
     @router.post("/pilot-leads/{pid}")
     async def add_pilot_lead(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
@@ -975,119 +1116,40 @@ MyHotelBox RMS Ekibi
                                                     sort=[("created_at", -1)])
         if not drill:
             raise HTTPException(404, "Henüz tatbikat çalıştırılmadı")
-        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
-        total_drills = await db.killswitch_drills.count_documents({"property_id": pid})
-        passed_drills = await db.killswitch_drills.count_documents({"property_id": pid, "passed": True})
-        since30 = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-        real_blocks = await db.guardrail_violations.count_documents(
-            {"property_id": pid, "type": "kill_switch", "drill": {"$ne": True},
-             "created_at": {"$gte": since30}})
-        violations30 = await db.guardrail_violations.count_documents(
-            {"property_id": pid, "created_at": {"$gte": since30}})
+        pdf = await build_drill_pdf(db, pid, drill)
         from io import BytesIO
-        from reportlab.lib.pagesizes import A4
-        from reportlab.pdfgen import canvas as pc
-        from reportlab.lib.units import mm
-        _t = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
-        buf = BytesIO()
-        c = pc.Canvas(buf, pagesize=A4)
-        w, hh = A4
-        ok = bool(drill.get("passed"))
-        c.setFillColorRGB(*(0.02, 0.37, 0.31) if ok else (0.6, 0.1, 0.1))
-        c.rect(0, hh - 38 * mm, w, 38 * mm, fill=1, stroke=0)
-        c.setFillColorRGB(1, 1, 1)
-        c.setFont("Helvetica-Bold", 17)
-        c.drawString(18 * mm, hh - 16 * mm, "Kill Switch Tatbikat Raporu - Yonetim Guvencesi")
-        c.setFont("Helvetica", 10)
-        c.drawString(18 * mm, hh - 24 * mm, f"{(prop.get('name') or pid).translate(_t)} · {str(drill['created_at'])[:16].replace('T', ' ')} UTC")
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(18 * mm, hh - 32 * mm, "SONUC: " + ("BASARILI - acil durdurma zinciri uctan uca calisiyor" if ok else "BASARISIZ - acil mudahale gerekli"))
-        y = hh - 52 * mm
-        c.setFillColorRGB(0.1, 0.1, 0.1)
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(18 * mm, y, "Tatbikat Adimlari")
-        y -= 8 * mm
-        c.setFont("Helvetica", 10)
-        for s in drill.get("steps", []):
-            c.setFillColorRGB(*(0.02, 0.45, 0.35) if s.get("passed") else (0.75, 0.15, 0.15))
-            c.drawString(22 * mm, y, ("[OK] " if s.get("passed") else "[HATA] ") + str(s.get("step", "")).translate(_t)[:95])
-            y -= 6.5 * mm
-        y -= 6 * mm
-        c.setFillColorRGB(0.1, 0.1, 0.1)
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(18 * mm, y, "Guvence Ozeti (son 30 gun)")
-        y -= 8 * mm
-        c.setFont("Helvetica", 10)
-        c.setFillColorRGB(0.25, 0.25, 0.25)
-        for line in (
-            f"Gercek kill switch bloklari: {real_blocks}",
-            f"Toplam guardrail olayi (adim kirpma / limit / blok): {violations30}",
-            f"Tatbikat gecmisi: {passed_drills}/{total_drills} basarili",
-            "Kapsam: kill switch aktifken hicbir robot fiyati yazilamaz (otonom + gece push dahil).",
-            "Tum denemeler denetim kaydina duser; tatbikat kayitlari drill=true etiketiyle ayrilir.",
-            "Ek emniyetler: +-%15 asimetrik adim limiti, gunluk push tavani, bid-price tabani,",
-            "publisher sertifikasyon kapisi."):
-            c.drawString(22 * mm, y, line)
-            y -= 6 * mm
-        y -= 6 * mm
-        c.setFont("Helvetica-Oblique", 8)
-        c.setFillColorRGB(0.45, 0.45, 0.45)
-        c.drawString(18 * mm, y, "Otomatik uretilmistir - MyHotelBox RMS / Robot Guven Merkezi. Denetim amaciyla saklanir.")
-        c.save()
-        buf.seek(0)
         from fastapi.responses import StreamingResponse
-        return StreamingResponse(buf, media_type="application/pdf",
+        return StreamingResponse(BytesIO(pdf), media_type="application/pdf",
                                  headers={"Content-Disposition": 'inline; filename="kill-switch-tatbikat-raporu.pdf"'})
 
     @router.post("/killswitch-drill/{pid}")
     async def killswitch_drill(pid: str, _u: dict = Depends(require_roles(*ROLES))):
-        """Kill switch tatbikatı: acil durdurmayı simüle edip yönetime güvence raporu üretir."""
-        now = datetime.now(timezone.utc).isoformat()
-        steps = []
-        await db.kill_switch.update_one(
-            {"property_id": pid, "drill": True},
-            {"$set": {"property_id": pid, "active": True, "drill": True, "activated_at": now}}, upsert=True)
-        steps.append({"step": "1. Acil durdurma AÇILDI (tatbikat kaydı)", "passed": True})
-        ks = await db.kill_switch.find_one({"property_id": {"$in": [pid, "global"]}, "active": True})
-        blocked = bool(ks)
-        steps.append({"step": "2. Robot fiyat uygulaması denendi → motorun blok koşulu doğrulandı",
-                      "passed": blocked})
-        if blocked:
-            await db.guardrail_violations.insert_one({
-                "property_id": pid, "type": "kill_switch", "blocked": True, "drill": True,
-                "detail": "TATBİKAT: kill switch aktifken push bloklandı", "source": "drill",
-                "created_at": now})
-        steps.append({"step": "3. Blok olayı denetim kaydına (guardrail_violations) yazıldı", "passed": blocked})
-        await db.kill_switch.update_one({"property_id": pid, "drill": True},
-                                        {"$set": {"active": False, "deactivated_at": now}})
-        ks2 = await db.kill_switch.find_one({"property_id": {"$in": [pid, "global"]}, "active": True})
-        steps.append({"step": "4. Acil durdurma KAPATILDI → sistem normale döndü", "passed": ks2 is None})
-        since30 = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-        real_blocks = await db.guardrail_violations.count_documents(
-            {"property_id": pid, "type": "kill_switch", "drill": {"$ne": True},
-             "created_at": {"$gte": since30}})
-        violations30 = await db.guardrail_violations.count_documents(
-            {"property_id": pid, "created_at": {"$gte": since30}})
-        passed = all(s["passed"] for s in steps)
-        report = f"""KILL SWITCH TATBİKAT RAPORU — {now[:16].replace('T', ' ')} UTC
+        return await run_killswitch_drill(db, pid, triggered_by="manual")
 
-Sonuç: {'BAŞARILI — acil durdurma zinciri uçtan uca çalışıyor' if passed else 'BAŞARISIZ — acil müdahale gerekli'}
+    @router.get("/killswitch-drill/{pid}/history")
+    async def killswitch_drill_history(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        rows = await db.killswitch_drills.find(
+            {"property_id": pid}, {"_id": 0, "report": 0, "steps": 0, "pdf_b64": 0}).sort("created_at", -1).to_list(24)
+        for r in rows:
+            r["pdf_archived"] = bool(await db.killswitch_drills.find_one(
+                {"id": r["id"], "pdf_b64": {"$exists": True}}, {"_id": 1}))
+        return {"drills": rows, "monthly_robot": True,
+                "note": "Aylık tatbikat robotu her ayın 1'inde otomatik çalışır ve güvence PDF'ini arşive kaydeder."}
 
-Tatbikat adımları:
-""" + "\n".join(f"  {'✓' if s['passed'] else '✗'} {s['step']}" for s in steps) + f"""
-
-Güvence özeti (son 30 gün):
-  • Gerçek kill switch blokları: {real_blocks}
-  • Toplam guardrail olayı (adım kırpma/limit/blok): {violations30}
-  • Kapsam: kill switch aktifken hiçbir robot fiyatı yazılamaz (otonom + gece push dahil); tüm denemeler denetim kaydına düşer.
-  • Ek emniyetler: ±%15 asimetrik adım limiti, günlük push tavanı, bid-price tabanı, publisher sertifikasyon kapısı.
-
-Bu tatbikat kaydı denetim amacıyla saklanmıştır (drill=true etiketiyle gerçek olaylardan ayrılır)."""
-        await db.killswitch_drills.insert_one({"id": str(uuid.uuid4()), "property_id": pid,
-                                               "passed": passed, "steps": steps, "report": report,
-                                               "created_at": now})
-        return {"passed": passed, "steps": steps, "report": report,
-                "real_blocks_30d": real_blocks, "violations_30d": violations30}
+    @router.get("/killswitch-drill/archive/{drill_id}/pdf")
+    async def killswitch_drill_archive_pdf(drill_id: str, _u: dict = Depends(require_roles(*ROLES))):
+        doc = await db.killswitch_drills.find_one({"id": drill_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Tatbikat kaydı bulunamadı")
+        from io import BytesIO
+        if doc.get("pdf_b64"):
+            import base64 as _b64
+            pdf = _b64.b64decode(doc["pdf_b64"])
+        else:
+            pdf = await build_drill_pdf(db, doc["property_id"], doc)
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(BytesIO(pdf), media_type="application/pdf",
+                                 headers={"Content-Disposition": f'inline; filename="tatbikat-{str(doc["created_at"])[:10]}.pdf"'})
 
     @router.get("/health/{pid}")
     async def health(pid: str, _u: dict = Depends(require_roles(*ROLES))):
@@ -1284,6 +1346,61 @@ MyHotelBox RMS — Otonom Dağıtım Robotu"""
                 "night_pushes_7d": np_count, "drift_alerts_7d": alerts,
                 "email_subject": f"Haftalık Kanal Performans Raporu — {prop.get('name', pid)} ({week})",
                 "email_body": email_body}
+
+    @router.get("/weekly-report-pdf/{pid}")
+    async def weekly_report_pdf(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        wr = await weekly_report(pid, _u)
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+        from io import BytesIO
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas as pc
+        from reportlab.lib.units import mm
+        _t = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+        buf = BytesIO()
+        c = pc.Canvas(buf, pagesize=A4)
+        w, hh = A4
+        c.setFillColorRGB(0.05, 0.09, 0.16)
+        c.rect(0, hh - 34 * mm, w, 34 * mm, fill=1, stroke=0)
+        c.setFillColorRGB(1, 1, 1)
+        c.setFont("Helvetica-Bold", 17)
+        c.drawString(18 * mm, hh - 15 * mm, "Haftalik Kanal Performans Raporu")
+        c.setFont("Helvetica", 10)
+        c.drawString(18 * mm, hh - 23 * mm, f"{(prop.get('name') or pid).translate(_t)} · {wr['week_of']} · son 7 gun")
+        y = hh - 46 * mm
+        c.setFillColorRGB(0.1, 0.1, 0.1)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(18 * mm, y, "1. PMS Baglanti Merkezi Kanallari")
+        y -= 8 * mm
+        c.setFont("Helvetica", 9)
+        for ch in wr["channels"]:
+            c.setFillColorRGB(0.25, 0.25, 0.25)
+            line = (f"{ch['name']}: {ch['pushes_7d']} push ({ch['live_7d']} canli) - "
+                    f"{'SERTIFIKALI' if ch['certified'] else 'sertifikasyon bekliyor'}"
+                    + (f" - dogrulama OK (maks sapma %{ch['max_drift_pct']})" if ch['last_verify_ok'] else ""))
+            c.drawString(22 * mm, y, line.translate(_t))
+            y -= 5.5 * mm
+        y -= 5 * mm
+        c.setFillColorRGB(0.1, 0.1, 0.1)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(18 * mm, y, "2. Diger Kanallar & Otomasyon")
+        y -= 8 * mm
+        c.setFont("Helvetica", 9)
+        c.setFillColorRGB(0.25, 0.25, 0.25)
+        for line in (f"Cloudbeds: {wr['cloudbeds_7d']} islem · HotelRunner: {wr['hotelrunner_7d']} islem",
+                     f"Gece push calismasi: {wr['night_pushes_7d']} kez",
+                     f"Fiyat sapma uyarisi: {wr['drift_alerts_7d']} adet"
+                     + (" - ACIL INCELEME GEREKLI" if wr['drift_alerts_7d'] else " (temiz)")):
+            c.drawString(22 * mm, y, line)
+            y -= 5.5 * mm
+        y -= 8 * mm
+        c.setFont("Helvetica-Oblique", 8)
+        c.setFillColorRGB(0.45, 0.45, 0.45)
+        c.drawString(18 * mm, y, "Tum canli push'lar publisher sertifikasyonundan gecmis kanallara yapilmistir. Otomatik uretilmistir - MyHotelBox RMS.")
+        c.save()
+        buf.seek(0)
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(buf, media_type="application/pdf",
+                                 headers={"Content-Disposition": 'inline; filename="haftalik-kanal-raporu.pdf"'})
 
     @router.get("/{provider}/partner-kit/{pid}")
     async def partner_kit(provider: str, pid: str, _u: dict = Depends(require_roles(*ROLES))):

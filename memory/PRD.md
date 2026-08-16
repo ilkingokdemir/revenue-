@@ -833,3 +833,14 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Kill Switch Tatbikatı: POST /api/pms-connect/killswitch-drill/{pid} — 4 adımlı tatbikat (aç→blok doğrula→denetim kaydı→kapat, drill=true etiketiyle gerçek olaylardan ayrı). YENİ: GET /killswitch-drill/{pid}/report-pdf — yönetime sunulabilir reportlab güvence PDF'i (adımlar, son 30 gün gerçek blok/guardrail sayıları, tatbikat geçmişi). UI: "🛑 Kill Switch Tatbikatı" butonu + rapor + "📄 Güvence PDF" + kopyala.
 - Test: curl E2E (lead CRUD+not, drill 4/4 geçti, PDF 200 %PDF) + testing_agent iteration_553 frontend %100 (persistence, drill sonrası kill switch pasif regresyonu, pilot davet regresyonu dahil). Test leadleri temizlendi.
 - BEKLEYEN: Apaleo Client ID/Secret (7. hatırlatma), SiteMinder/eviivo/Elektraweb kimlikleri, Expo EAS build.
+
+## Güncelleme (2026-08-16, MVP Kapanış Paketi — 7/7 TAMAMLANDI, iterasyon 555)
+- Rakip gap analizi belgesi incelendi; 13 iddianın çoğu zaten bizde vardı (tablo kullanıcıya sunuldu). Gerçek 7 eksik kapatıldı:
+  1) Red nedeni taksonomisi: reject endpoint'i reason_tag enum kabul ediyor (too_aggressive/too_low/event_unknown/segment_mismatch/data_wrong/strategy_conflict/other); AIPricingEnginePanel reject modalında chip'ler; Trust Center kabul raporu reason_tags agregasyonu (REJECT_TAG_LABELS trust_center.py'de).
+  2) MPI/ARI: rgi_proof.py hafta satırlarına our_adr/market_adr/market_occ_pct/mpi/ari + avg_mpi/avg_ari; RgiProofCard rozetleri.
+  3) D1 anayasası: GET /api/compliance-principles (memory/UYUM_ILKELERI_D1.md okur); TrustCenterPanel'de tc-principles-section.
+  4) Haftalık PDF: GET /api/pms-connect/weekly-report-pdf/{pid} (reportlab); PmsConnectHub'da 📄 Haftalık PDF.
+  5+6) weather_calendar.py (YENİ): open-meteo (geocode + günlük tahmin) + Nager.Date resmi tatiller, anahtarsız. Koleksiyonlar: property_geo, holiday_cache, demand_calendar_signals. Çarpanlar: tatil +%5, arife +%3, güneşli hafta sonu (≥22°C, yağışsız) +%3, şiddetli hava (WMO kodu/≥15mm) −%3. GET/POST /api/demand-signals/{pid}. Motor entegrasyonu: ai_pricing_engine BUILD_SUGGESTIONS ext_map → suggested_rate çarpımı + ext_mult/ext_reasons alanları + kanıt satırı. UI: AIPricingEnginePanel 14 günlük sinyal şeridi.
+  7) Havuz izni: /api/chain/benchmark/consent GET/PUT (pool_consent koleksiyonu); share_data=false tesis benchmark'tan hariç; ChainBenchmarkPanel'de toggle'lı Havuz Veri İzinleri bölümü.
+- Test: tüm backend curl E2E (motor ×1.03 canlı Londra verisiyle doğrulandı) + testing_agent iteration_555 frontend %95+ (blokaj yok, opsiyonel palet derin-link P2'ye yazıldı).
+- BEKLEYEN: Apaleo Client ID/Secret hâlâ kullanıcıdan gelmedi (canlı sertifikasyon bloke).

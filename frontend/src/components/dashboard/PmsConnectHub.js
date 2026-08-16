@@ -39,6 +39,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
   const [leads, setLeads] = useState(null);
   const [leadForm, setLeadForm] = useState({ hotel_name: "", contact: "", note: "" });
   const [drill, setDrill] = useState(null);
+  const [drillHist, setDrillHist] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const loadHealth = useCallback(async () => {
@@ -174,6 +175,8 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
       const r = await axios.post(`${API}/api/pms-connect/killswitch-drill/${pid}`, {}, { withCredentials: true });
       setDrill(r.data);
       r.data.passed ? toast.success("Tatbikat BAŞARILI — acil durdurma zinciri çalışıyor") : toast.error("Tatbikat BAŞARISIZ!");
+      const h = await axios.get(`${API}/api/pms-connect/killswitch-drill/${pid}/history`, { withCredentials: true });
+      setDrillHist(h.data);
     } catch { toast.error("Tatbikat çalıştırılamadı"); } finally { setBusy(false); }
   };
 
@@ -363,6 +366,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
               </button>
               <button onClick={runNightPushNow} disabled={busy} data-testid="pms-nightpush-run-btn" className="px-3 py-1.5 rounded-lg bg-stone-900 text-white text-[12px] font-bold disabled:opacity-50">Şimdi Çalıştır</button>
               <button onClick={loadWeekly} disabled={busy} data-testid="pms-weekly-btn" className="px-3 py-1.5 rounded-lg border border-indigo-300 text-indigo-700 text-[12px] font-bold disabled:opacity-50">📧 Haftalık Rapor</button>
+              <a href={`${API}/api/pms-connect/weekly-report-pdf/${pid}`} target="_blank" rel="noreferrer" data-testid="pms-weekly-pdf-btn" className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[12px] font-bold">📄 Haftalık PDF</a>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -553,11 +557,39 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
                 </div>
               </div>
               <pre className="text-[11px] bg-white/70 border border-stone-200 rounded-lg p-2.5 max-h-48 overflow-auto whitespace-pre-wrap" data-testid="pms-drill-report">{drill.report}</pre>
+              {drillHist && (
+                <div className="mt-2" data-testid="pms-drill-history">
+                  <p className="text-[11px] font-bold text-stone-600 mb-1">📜 Tatbikat Arşivi ({drillHist.drills.length}) · <span className="text-emerald-700">Aylık otomatik tatbikat robotu AKTİF — her ayın 1'inde çalışır, PDF'i arşivler</span></p>
+                  <div className="space-y-1 max-h-36 overflow-auto">
+                    {drillHist.drills.map((d) => (
+                      <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 bg-white/70 border border-stone-200 rounded-lg px-2 py-1 text-[11px]" data-testid={`pms-drill-hist-${d.id}`}>
+                        <span>{String(d.created_at).slice(0, 16).replace("T", " ")} · <b className={d.passed ? "text-emerald-700" : "text-rose-600"}>{d.passed ? "BAŞARILI" : "BAŞARISIZ"}</b> · {d.triggered_by === "robot" ? "🤖 otomatik" : "manuel"}{d.pdf_archived ? " · 📦 PDF arşivde" : ""}</span>
+                        <a href={`${API}/api/pms-connect/killswitch-drill/archive/${d.id}/pdf`} target="_blank" rel="noreferrer" data-testid={`pms-drill-hist-pdf-${d.id}`} className="px-2 py-0.5 rounded bg-stone-900 text-white font-bold">PDF</a>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {leads && (
             <div className="mt-3 border-t border-stone-100 pt-3" data-testid="pms-leads-section">
-              <p className="text-[12px] font-bold text-stone-700 mb-2">📋 Pilot Takip Listesi ({(leads.leads || []).length} otel)</p>
+              <p className="text-[12px] font-bold text-stone-700 mb-2">📋 Pilot Takip Listesi ({(leads.leads || []).length} otel){leads.stale_count > 0 && <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black" data-testid="pms-leads-stale-badge">⏰ {leads.stale_count} otel {leads.stale_days_threshold}+ gündür bekliyor</span>}</p>
+              {leads.funnel && (leads.leads || []).length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 mb-2" data-testid="pms-leads-funnel">
+                  {leads.funnel.map((f, i) => (
+                    <React.Fragment key={f.stage}>
+                      {i > 0 && <span className="text-stone-300 text-[11px]">→</span>}
+                      <div className={`px-2.5 py-1 rounded-lg border text-[11px] ${f.stage === "pilot" ? "border-emerald-300 bg-emerald-50" : "border-stone-200 bg-stone-50"}`} data-testid={`pms-funnel-${f.stage}`}>
+                        <b className="capitalize">{f.stage}</b> <b className="text-stone-900">{f.reached}</b>
+                        {f.conv_pct != null && <span className={`ml-1 font-black ${f.conv_pct >= 50 ? "text-emerald-600" : "text-amber-600"}`}>%{f.conv_pct}</span>}
+                        {f.avg_days_in_stage != null && <span className="ml-1 text-stone-400">~{f.avg_days_in_stage}g</span>}
+                      </div>
+                    </React.Fragment>
+                  ))}
+                  {leads.lost_count > 0 && <span className="px-2 py-1 rounded-lg border border-rose-200 bg-rose-50 text-rose-600 text-[11px] font-bold" data-testid="pms-funnel-lost">✗ kaybedildi {leads.lost_count}</span>}
+                </div>
+              )}
               <div className="flex flex-wrap gap-2 mb-2">
                 <input value={leadForm.hotel_name} onChange={(e) => setLeadForm((f) => ({ ...f, hotel_name: e.target.value }))} data-testid="pms-lead-name-input" className="flex-1 min-w-[160px] border border-stone-300 rounded-lg px-2.5 py-1.5 text-[12px]" placeholder="Otel adı" />
                 <input value={leadForm.contact} onChange={(e) => setLeadForm((f) => ({ ...f, contact: e.target.value }))} data-testid="pms-lead-contact-input" className="flex-1 min-w-[160px] border border-stone-300 rounded-lg px-2.5 py-1.5 text-[12px]" placeholder="İletişim (e-posta/telefon)" />
@@ -569,7 +601,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
                   {leads.leads.map((l) => (
                     <div key={l.id} className="bg-white border border-stone-200 rounded-lg px-2.5 py-1.5 text-[12px]" data-testid={`pms-lead-row-${l.id}`}>
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span><b>{l.hotel_name}</b>{l.contact ? ` · ${l.contact}` : ""} <span className="text-stone-400 text-[10px]">({String(l.created_at).slice(0, 10)})</span></span>
+                        <span><b>{l.hotel_name}</b>{l.contact ? ` · ${l.contact}` : ""} <span className="text-stone-400 text-[10px]">({String(l.created_at).slice(0, 10)})</span>{l.stale ? <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black" data-testid={`pms-lead-stale-${l.id}`}>⏰ {l.days_in_stage}g bekliyor</span> : l.days_in_stage > 0 ? <span className="ml-1.5 text-stone-400 text-[10px]">{l.days_in_stage}g</span> : null}</span>
                         <select value={l.status} onChange={(e) => setLeadStatus(l.id, e.target.value)} data-testid={`pms-lead-status-${l.id}`}
                           className={`border rounded-lg px-2 py-0.5 text-[11px] font-bold ${l.status === "pilot" ? "border-emerald-300 text-emerald-700" : l.status === "kaybedildi" ? "border-rose-300 text-rose-600" : "border-stone-300 text-stone-600"}`}>
                           {leads.statuses.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -829,3 +861,4 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
     </div>
   );
 }
+

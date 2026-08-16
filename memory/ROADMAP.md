@@ -274,3 +274,14 @@ haftalık Exec PDF · günlük push limiti (bizde VAR, rakipte YOK) · yazılı 
 Rakip kendi scraping'ini canlı kullanıyor (Booking GraphQL) ve bunu hukuki açık olarak kabul
 ediyor. Bizim D1 anayasamız scraping'i yasaklıyor — bu bizim SATIŞ AVANTAJIMIZ (EU AI Act +
 OTA ToS uyumu). Karar: ilkeyi KORU, G8 lisanslı rate shopping bütçesini pilot sözleşmesine yaz.
+
+## MVP Kapanış Paketi (2026-08-16 — rakip gap analizi sonrası, kullanıcı onayı: "mvp ye kayit et sirayla tamamla")
+- [x] 1. Red nedeni taksonomisi (7 enum etiket, reject modal chip'leri + Trust Center agregasyonu) — 2026-08-16
+- [x] 2. MPI/ARI endeksleri (RGI kartında rozet + hafta satırlarında M/A değerleri) — 2026-08-16
+- [x] 3. Uyum İlkeleri D1 → Trust Center'da /api/compliance-principles + toggle'lı belge görünümü — 2026-08-16
+- [x] 4. Haftalık PDF (/api/pms-connect/weekly-report-pdf/{pid} + 📄 buton) — 2026-08-16
+- [x] 5. Hava durumu sinyali (open-meteo, weather_calendar.py, motor ext_mult entegre) — 2026-08-16
+- [x] 6. Resmi tatil takvimi (Nager.Date, tatil +%5 arife +%3, motor entegre) — 2026-08-16
+- [x] 7. Havuz veri izni (pool_consent, benchmark hariç tutma + panel toggle'ları) — 2026-08-16
+- [ ] P2: AI Pricing Engine (Market Robot alt sekmesi) için komut paletine doğrudan derin-link girişi (test ajanı önerisi, engelleyici değil)
+- [~] 8. Lisanslı rate shopping feed — KOD DEĞİL, sözleşme kararı (OTA Insight/Lighthouse) kullanıcıda

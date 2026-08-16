@@ -18,6 +18,8 @@ export default function TrustCenterPanel({ activePropertyId, properties = [] }) 
   const [kill, setKill] = useState(null);
   const [outcomes, setOutcomes] = useState(null);
   const [scraper, setScraper] = useState(null);
+  const [principles, setPrinciples] = useState(null);
+  const [showPrinciples, setShowPrinciples] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -34,6 +36,8 @@ export default function TrustCenterPanel({ activePropertyId, properties = [] }) 
       ]);
       setGr(g.data); setViol(v.data); setAcc(a.data); setNetOtb(n.data);
       setShadow(s.data); setShReport(r.data); setKill(k.data); setOutcomes(o.data); setScraper(sc.data);
+      axios.get(`${API}/api/compliance-principles`, { withCredentials: true })
+        .then((p) => setPrinciples(p.data)).catch(() => {});
     } catch { toast.error("Güven merkezi verileri yüklenemedi"); }
   }, [pid]);
 
@@ -183,6 +187,15 @@ export default function TrustCenterPanel({ activePropertyId, properties = [] }) 
             </div>
             <div className="bg-white border border-stone-200 rounded-xl p-3" data-testid="tc-acc-reasons">
               <div className="text-xs font-bold text-stone-500 mb-2">RED NEDENLERİ (etiketli veri)</div>
+              {(acc.reason_tags || []).length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-2" data-testid="tc-reason-tags">
+                  {acc.reason_tags.map((t) => (
+                    <span key={t.tag} className="px-2 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-black" data-testid={`tc-reason-tag-${t.tag}`}>
+                      {t.label} ×{t.count}
+                    </span>
+                  ))}
+                </div>
+              )}
               {acc.reasons.length === 0 ? <p className="text-[12px] text-stone-400">Henüz red nedeni yok.</p> : acc.reasons.map((r) => (
                 <div key={r.reason} className="flex items-center justify-between text-sm mb-1"><span className="text-stone-700 truncate mr-2">{r.reason}</span><span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[11px] font-black">{r.count}</span></div>
               ))}
@@ -307,6 +320,25 @@ export default function TrustCenterPanel({ activePropertyId, properties = [] }) 
               </div>
             </div>
           )}
+        </section>
+      )}
+
+      {principles && (
+        <section data-testid="tc-principles-section">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <h2 className="text-base font-bold text-stone-800">⚖️ Uyum İlkeleri Anayasası (D1) — Rekabet Hukuku · KVKK/GDPR · EU AI Act</h2>
+            <button onClick={() => setShowPrinciples((s) => !s)} data-testid="tc-principles-toggle-btn"
+              className="px-3 py-1.5 rounded-lg border border-stone-300 text-stone-700 text-[12px] font-bold">
+              {showPrinciples ? "Gizle" : "Belgeyi Göster"}
+            </button>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-xl p-3 text-sm text-stone-600">
+            Her yeni fiyatlama özelliği bu 6 ilkeye uymak zorundadır: yalnızca halka açık fiyat girdisi · otel başına bağımsız karar · yasal veri toplama · açıklanabilirlik · insan kontrolü · veri minimizasyonu.
+            <span className="text-[11px] text-stone-400 ml-1">Son güncelleme: {String(principles.updated_at).slice(0, 10)}</span>
+            {showPrinciples && (
+              <pre className="mt-2 text-[11px] bg-stone-50 border border-stone-200 rounded-lg p-3 max-h-80 overflow-auto whitespace-pre-wrap" data-testid="tc-principles-content">{principles.content}</pre>
+            )}
+          </div>
         </section>
       )}
     </div>

@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend UI verification for MVP closure package (7 features). All new UI is wired correctly with data-testids matching spec. Weather/holiday signal strip renders 14 cells with 2026-08-16 = ×1.03 (Güneşli hafta sonu tooltip) for London properties. Trust Center reason chips + D1 Compliance Principles section (2704 char content) render and toggle. PMS weekly PDF endpoint reachable from UI button (200 application/pdf 2370 bytes with %PDF magic). Chain Benchmark pool-consent-section toggles a property OFF (rows go 4→3, target removed from list, toast shown), restored ON at end (rows back to 4). Reject modal taxonomy chips are hard-coded in markup (7 chips with proper testids ai-pricing-reject-tag-{too_aggressive,too_low,event_unknown,segment_mismatch,data_wrong,strategy_conflict,other}); modal open flow could not be executed on Aldgate Flats or All Branches because the current data has 0 suggestions (Toplam Öneri 0) even after Run Scan — but the aggregation of a previously stored tag is confirmed visible in Trust Center tc-reason-tags ('Motor etkinliği bilmiyor ×1' = event_unknown). Regression: pilot Takip, Kill Switch Tatbikatı, Haftalık Rapor buttons all present.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AI Pricing Engine (Market Robot subtab)", "issues": ["Panel is only reachable via Revenue Management → Market Robot → AI Pricing subtab; not exposed via a top-level command palette entry. The palette command 'AI pricing' (id=ai-pricing-v2) navigates to a different V2 panel, and 'AI Fiyatlama' navigates to the profit-priority pricing panel. Consider adding a direct palette entry so QA/users can jump straight to AIPricingEnginePanel."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "None blocking. Optional: add a first-class command palette entry for the AI Pricing Engine (Market Robot > AI Pricing subtab) so users don't need to drill through two levels.",
+    "Live reject modal flow could not be exercised end-to-end via UI on Aldgate/All Branches (no suggestions produced after Run Scan). This is a data condition, not a UI defect — chips are hard-coded and backend already validated storage+aggregation."
+  ],
+  "critical_code_review_comments": [
+    "AIPricingEnginePanel.js reject taxonomy is hard-coded inline (7 tuples). Consider extracting to a shared constant to keep in sync with backend REJECT_TAG_LABELS.",
+    "Chain Benchmark toast text 'Tesis havuz kıyasına dahil edildi' fires on any toggle (both directions). Consider distinct copy for enable vs disable for clearer UX."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (curl-verified by main agent)", "frontend": "95% (6/7 flows fully verified; reject modal chip markup verified via source, live open blocked by empty suggestions data)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (works via /login)",
+  "seed_data_creation": "None. Toggled pool-consent OFF/ON for pid=default — restored to ON at end (verified is_checked=true, benchmark rows returned to initial 4).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Navigation notes: (1) Landing page has 'Sign In' NAV link, use /login directly. (2) Command palette works but many panels are behind Revenue > Market Robot subtabs; the AI Pricing Engine (target of these features) is at Sidebar → Revenue Management → Market Robot tab → AI Pricing subtab. (3) Branch selector top-left of sidebar controls property; 'All Branches' disables AI Pricing engine ('AI Pricing motoru için lütfen bir otel seçin'). Pick Aldgate Flats or Franziskaner by Centra. (4) 14-day signal strip is live (open-meteo + Nager.Date, London city). 2026-08-16 & 2026-08-29 both show ×1.03 for sunny weekends. (5) Chain Benchmark has 13 pool-consent toggles but only 4 properties appear as benchmark rows (those with stats). Toggling a benched pid OFF removes its row; restored fine.",
+  "rca of the issue": "N/A — no bugs found. Reject modal live flow gap is a data condition (empty suggestions table for currently-visible properties), not a code defect."
+}

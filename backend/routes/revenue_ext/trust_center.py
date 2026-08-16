@@ -4,6 +4,16 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
+REJECT_TAG_LABELS = {
+    "too_aggressive": "Çok agresif artış",
+    "too_low": "Gereksiz indirim",
+    "event_unknown": "Motor etkinliği bilmiyor",
+    "segment_mismatch": "Segment/kanal uyumsuz",
+    "data_wrong": "Veri hatalı",
+    "strategy_conflict": "Stratejiye aykırı",
+    "other": "Diğer",
+}
+
 
 async def run_outcome_evaluation(db, limit: int = 200) -> dict:
     """K2: tarihi geçmiş uygulanmış fiyat kararlarının GERÇEKLEŞEN sonucunu kaydeder."""
@@ -159,8 +169,8 @@ def create_trust_center_router(db, require_roles):
         since = (datetime.now(timezone.utc) - timedelta(weeks=weeks)).isoformat()
         decs = await db.ai_pricing_decisions.find(
             {"property_id": pid, "decided_at": {"$gte": since}},
-            {"_id": 0, "status": 1, "decided_at": 1, "reason": 1}).to_list(10000)
-        weekly, reasons = {}, {}
+            {"_id": 0, "status": 1, "decided_at": 1, "reason": 1, "reason_tag": 1}).to_list(10000)
+        weekly, reasons, tag_counts = {}, {}, {}
         acc_total, rej_total, auto_total = 0, 0, 0
         for d in decs:
             try:
@@ -180,6 +190,8 @@ def create_trust_center_router(db, require_roles):
                 rej_total += 1
                 reason = (d.get("reason") or "belirtilmedi").strip()[:60]
                 reasons[reason] = reasons.get(reason, 0) + 1
+                if d.get("reason_tag"):
+                    tag_counts[d["reason_tag"]] = tag_counts.get(d["reason_tag"], 0) + 1
         out = sorted(weekly.values(), key=lambda x: x["week"])
         for w in out:
             decided = w["accepted"] + w["auto_applied"] + w["rejected"]
@@ -188,11 +200,26 @@ def create_trust_center_router(db, require_roles):
         return {"property_id": pid, "weeks": out,
                 "reasons": sorted([{"reason": k, "count": v} for k, v in reasons.items()],
                                   key=lambda x: -x["count"])[:10],
+                "reason_tags": sorted([{"tag": k, "label": REJECT_TAG_LABELS.get(k, k), "count": v}
+                                       for k, v in tag_counts.items()], key=lambda x: -x["count"]),
+                "tag_taxonomy": [{"tag": k, "label": v} for k, v in REJECT_TAG_LABELS.items()],
                 "total_accepted": acc_total, "total_auto_applied": auto_total,
                 "total_rejected": rej_total,
                 "overall_acceptance_pct": round((acc_total + auto_total) / decided_all * 100, 1) if decided_all else None,
                 "target_pct": 70,
                 "note": "Hedef kabul oranı ≥%70. Red nedenleri modelin kör nokta haritasıdır — etiketli veri olarak saklanır."}
+
+    # ---------- D1: Uyum İlkeleri Anayasası ----------
+    @router.get("/compliance-principles")
+    async def compliance_principles(_u: dict = Depends(require_roles(*ROLES))):
+        import os
+        path = "/app/memory/UYUM_ILKELERI_D1.md"
+        if not os.path.exists(path):
+            raise HTTPException(404, "Uyum ilkeleri belgesi bulunamadı")
+        with open(path, encoding="utf-8") as f:
+            content = f.read()
+        return {"title": "Uyum İlkeleri Anayasası (D1)", "content": content,
+                "updated_at": datetime.fromtimestamp(os.path.getmtime(path), tz=timezone.utc).isoformat()}
 
     # ---------- G6: Shadow Mode ----------
     @router.get("/shadow-mode/{pid}/status")

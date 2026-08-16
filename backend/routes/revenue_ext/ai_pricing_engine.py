@@ -405,6 +405,12 @@ def create_ai_pricing_router(db, require_roles):
         occ_map = {d: data for d, data in occ_results}
 
         # Build flat suggestions list — one per (date, room_type)
+        # Hava/tatil takvim sinyalleri (cache'ten — canlı çağrı yok)
+        try:
+            from routes.revenue_ext.weather_calendar import get_signal_map
+            ext_map = await get_signal_map(db, property_id, [s.get("date") for s in snaps if s.get("date")])
+        except Exception:
+            ext_map = {}
         suggestions: list[dict] = []
         llm_input: list[dict] = []
 
@@ -480,6 +486,15 @@ def create_ai_pricing_router(db, require_roles):
                     if current_rate:
                         calc["delta_vs_current_pct"] = round((_boosted - current_rate) / current_rate * 100.0, 2)
 
+                # Hava durumu + resmi tatil çarpanı
+                ext_sig = ext_map.get(date)
+                ext_mult = float(ext_sig["mult"]) if ext_sig else 1.0
+                if ext_mult != 1.0:
+                    _e_adj = round(max(calc["floor_rate"], min(calc["ceil_rate"], calc["suggested_rate"] * ext_mult)), 2)
+                    calc["suggested_rate"] = _e_adj
+                    if current_rate:
+                        calc["delta_vs_current_pct"] = round((_e_adj - current_rate) / current_rate * 100.0, 2)
+
                 # K12: esneklik agresifliği — delta otele göre ölçeklenir
                 elast_applied = False
                 if agg_factor != 1.0 and current_rate and calc["suggested_rate"] != current_rate:
@@ -523,6 +538,8 @@ def create_ai_pricing_router(db, require_roles):
                     evidence.append("Öğrenilmiş çarpan devrede (geçmiş kararlardan)")
                 if ev_boost > 0:
                     evidence.append(f"Etkinlik sinyali: kapasite ağırlıklı +%{ev_boost*100:.0f} boost")
+                if ext_sig:
+                    evidence.append("Takvim sinyali: " + "; ".join(ext_sig["reasons"]))
                 if bid_floor_applied:
                     evidence.append(f"Bid-price tabanı devrede: öneri fırsat maliyeti tabanına (₺{bid_price}) çekildi")
                 if elast_applied:
@@ -579,6 +596,8 @@ def create_ai_pricing_router(db, require_roles):
                     "restrictions": bid_restrictions,
                     "elasticity_aggressiveness": agg_factor,
                     "event_boost_pct": round(ev_boost * 100, 1) if ev_boost else 0,
+                    "ext_mult": round(ext_mult, 3),
+                    "ext_reasons": (ext_sig or {}).get("reasons") or [],
                     "status": status,
                     "decision_reason": prev_decision.get("reason"),
                     "auto_apply_eligible": (abs(calc["delta_vs_current_pct"]) <= float(cfg.get("auto_apply_threshold_pct", 5.0))
@@ -972,12 +991,15 @@ def create_ai_pricing_router(db, require_roles):
     @router.post("/revenue/ai-pricing/{property_id}/reject")
     async def reject_suggestion(property_id: str, data: Dict,
                                  _u: dict = Depends(require_roles("admin", "manager"))):
-        """Reject one suggestion. Body: { date, room_type_id?, reason }"""
+        """Reject one suggestion. Body: { date, room_type_id?, reason, reason_tag? }"""
+        REJECT_TAGS = ("too_aggressive", "too_low", "event_unknown", "segment_mismatch",
+                       "data_wrong", "strategy_conflict", "other")
         date = data.get("date")
         if not date:
             raise HTTPException(status_code=400, detail="date is required")
         room_type_id = data.get("room_type_id", "")
         reason = (data.get("reason") or "").strip() or "Manuel reddedildi"
+        reason_tag = data.get("reason_tag") if data.get("reason_tag") in REJECT_TAGS else None
         await db.ai_pricing_decisions.update_one(
             {"property_id": property_id, "date": date, "room_type_id": room_type_id},
             {"$set": {
@@ -986,11 +1008,12 @@ def create_ai_pricing_router(db, require_roles):
                 "room_type_id": room_type_id,
                 "status": "rejected",
                 "reason": reason,
+                "reason_tag": reason_tag,
                 "decided_at": datetime.now(timezone.utc).isoformat(),
             }},
             upsert=True,
         )
-        return {"status": "rejected", "date": date, "reason": reason}
+        return {"status": "rejected", "date": date, "reason": reason, "reason_tag": reason_tag}
 
     @router.post("/revenue/ai-pricing/{property_id}/run-auto-apply")
     async def run_auto_apply(property_id: str,

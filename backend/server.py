@@ -1736,6 +1736,8 @@ from routes.revenue_ext.parking_rms import create_parking_rms_router
 api_router.include_router(create_parking_rms_router(db, require_roles))
 from routes.revenue_ext.rgi_proof import create_rgi_proof_router
 api_router.include_router(create_rgi_proof_router(db, require_roles))
+from routes.revenue_ext.weather_calendar import create_weather_calendar_router
+api_router.include_router(create_weather_calendar_router(db, require_roles))
 from routes.client_errors import create_client_errors_router
 api_router.include_router(create_client_errors_router(db, require_roles))
 from routes.revenue_ext.demand_calendar import create_demand_calendar_router
@@ -2125,6 +2127,9 @@ async def startup_event():
     asyncio.create_task(outcome_ledger_loop(db))
     from workers import calibration_loop
     asyncio.create_task(calibration_loop(db))
+    from workers import killswitch_drill_loop, pilot_lead_reminder_loop
+    asyncio.create_task(killswitch_drill_loop(db))
+    asyncio.create_task(pilot_lead_reminder_loop(db))
     asyncio.create_task(profit_autopilot_loop(db))
     asyncio.create_task(data_quality_sentinel_loop(db))
     asyncio.create_task(open_pricing_optimizer_loop(db))

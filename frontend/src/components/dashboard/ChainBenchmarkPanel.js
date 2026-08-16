@@ -15,6 +15,7 @@ const METRIC_SHORT = { occupancy: "Doluluk", revpar: "RevPAR", review: "Puan", q
 export default function ChainBenchmarkPanel({ onNavigate }) {
   const [data, setData] = useState(null);
   const [days, setDays] = useState(30);
+  const [consent, setConsent] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -23,6 +24,18 @@ export default function ChainBenchmarkPanel({ onNavigate }) {
     } catch { toast.error("Benchmark yüklenemedi"); }
   }, [days]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    axios.get(`${API}/benchmark/consent`).then((r) => setConsent(r.data)).catch(() => {});
+  }, []);
+
+  const toggleConsent = async (pid, share) => {
+    try {
+      await axios.put(`${API}/benchmark/consent/${pid}`, { share_data: share });
+      setConsent((c) => ({ ...c, properties: c.properties.map((p) => p.id === pid ? { ...p, share_data: share } : p) }));
+      toast.success(share ? "Tesis havuz kıyasına dahil edildi" : "Tesis havuz kıyasından ÇIKARILDI — verisi paylaşılmaz");
+      load();
+    } catch { toast.error("İzin güncellenemedi"); }
+  };
 
   if (!data) return <div className="p-8 text-center text-stone-400">Tesisler kıyaslanıyor…</div>;
   const rows = data.properties || [];
@@ -130,6 +143,21 @@ export default function ChainBenchmarkPanel({ onNavigate }) {
         </table>
       </div>
       <p className="text-[11px] text-stone-400">Tesis Skoru = doluluk %30 + RevPAR %30 + misafir puanı %20 + rezervasyon kalitesi %10 + otomasyon aktivitesi %10 (zincir içi göreli normalize, {data.start} → {data.end}).</p>
+
+      {consent && (
+        <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="pool-consent-section">
+          <div className="text-sm font-bold text-stone-800 mb-1">🔒 Havuz Veri İzinleri</div>
+          <p className="text-[11px] text-stone-500 mb-3">{consent.note}</p>
+          <div className="flex flex-wrap gap-2">
+            {consent.properties.map((p) => (
+              <label key={p.id} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[12px] font-bold cursor-pointer ${p.share_data ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-600"}`} data-testid={`pool-consent-${p.id}`}>
+                <input type="checkbox" checked={p.share_data} onChange={(e) => toggleConsent(p.id, e.target.checked)} data-testid={`pool-consent-toggle-${p.id}`} />
+                {p.name}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import {
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const TAB_COLORS = { overview: "bg-blue-500", revenue: "bg-emerald-500", occupancy: "bg-violet-500", commission: "bg-red-500" };
+const TAB_COLORS = { overview: "bg-blue-500", revenue: "bg-emerald-500", occupancy: "bg-violet-500", commission: "bg-red-500", pdf: "bg-stone-800" };
 
 export const ReportsHub = ({ propertyId }) => {
   const [tab, setTab] = useState("overview");
@@ -16,8 +16,16 @@ export const ReportsHub = ({ propertyId }) => {
   const [revenue, setRevenue] = useState(null);
   const [occupancy, setOccupancy] = useState(null);
   const [commission, setCommission] = useState(null);
+  const [pdfCenter, setPdfCenter] = useState(null);
   const [loading, setLoading] = useState(true);
   const pid = propertyId || "all";
+  const pdfPid = propertyId && propertyId !== "all" ? propertyId : "default";
+
+  useEffect(() => {
+    if (tab !== "pdf" || pdfCenter) return;
+    axios.get(`${API}/pms-connect/pdf-center/${pdfPid}`)
+      .then(r => setPdfCenter(r.data)).catch(() => {});
+  }, [tab, pdfPid, pdfCenter]);
 
   useEffect(() => {
     setLoading(true);
@@ -43,6 +51,7 @@ export const ReportsHub = ({ propertyId }) => {
           { id: "revenue", label: "Revenue Report", icon: DollarSign },
           { id: "occupancy", label: "Occupancy Report", icon: Bed },
           { id: "commission", label: "Commission Report", icon: PieChart },
+          { id: "pdf", label: "PDF Arşivi", icon: Calendar },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} data-testid={`report-tab-${t.id}`}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold rounded-lg ${tab === t.id ? `${TAB_COLORS[t.id]} text-white` : "text-stone-500"}`}>
@@ -52,6 +61,44 @@ export const ReportsHub = ({ propertyId }) => {
       </div>
 
       {/* OVERVIEW */}
+      {tab === "pdf" && (
+        <div className="space-y-4" data-testid="pdf-report-center">
+          {!pdfCenter ? <div className="text-center py-10 text-stone-400 text-sm">Yükleniyor…</div> : <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {pdfCenter.on_demand.map(r => (
+                <div key={r.key} className="bg-white border border-stone-200 rounded-2xl p-4 flex flex-col" data-testid={`pdf-center-card-${r.key}`}>
+                  <div className="text-sm font-black text-stone-800">📄 {r.title}</div>
+                  <p className="text-[11px] text-stone-500 mt-1 flex-1">{r.desc}</p>
+                  {r.available === false ? (
+                    <span className="mt-3 text-[11px] text-stone-400 font-bold">Henüz tatbikat çalıştırılmadı</span>
+                  ) : (
+                    <a href={`${process.env.REACT_APP_BACKEND_URL}${r.url}`} target="_blank" rel="noreferrer"
+                      className="mt-3 self-start px-4 py-1.5 rounded-xl bg-stone-900 text-white text-[12px] font-bold" data-testid={`pdf-center-dl-${r.key}`}>
+                      ⬇ İndir / Görüntüle
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="bg-white border border-stone-200 rounded-2xl p-4" data-testid="pdf-center-drill-archive">
+              <div className="text-sm font-black text-stone-800 mb-1">📦 Tatbikat Arşivi ({pdfCenter.drill_archive.length})</div>
+              <p className="text-[10px] text-stone-400 mb-2">{pdfCenter.branding.note}{pdfCenter.branding.has_logo ? " ✓ Logo yüklü." : ""}</p>
+              {pdfCenter.drill_archive.length === 0 ? <p className="text-[12px] text-stone-400">Kayıt yok.</p> : (
+                <div className="space-y-1 max-h-56 overflow-auto">
+                  {pdfCenter.drill_archive.map(d => (
+                    <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-[11px]">
+                      <span>{String(d.created_at).slice(0, 16).replace("T", " ")} · <b className={d.passed ? "text-emerald-700" : "text-rose-600"}>{d.passed ? "BAŞARILI" : "BAŞARISIZ"}</b> · {d.triggered_by === "robot" ? "🤖 otomatik" : "manuel"}{d.pdf_size_kb ? ` · ${d.pdf_size_kb}KB arşiv` : ""}</span>
+                      <a href={`${process.env.REACT_APP_BACKEND_URL}${d.url}`} target="_blank" rel="noreferrer"
+                        className="px-2.5 py-0.5 rounded-lg bg-stone-900 text-white font-bold" data-testid={`pdf-center-drill-${d.id}`}>PDF</a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>}
+        </div>
+      )}
+
       {tab === "overview" && overview && (<>
         <div className="grid grid-cols-5 gap-3" data-testid="overview-kpis">
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center"><p className="text-xl font-black text-emerald-700">{cur(overview.kpis.room_revenue)}</p><p className="text-[9px] text-emerald-500">Room Revenue</p></div>

@@ -862,3 +862,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Logo Yükleme: YENİ routes/platform_ext/branding.py — POST/GET/DELETE /api/branding/logo/{pid} (b64, max 700KB, PNG/JPEG/WebP; template_settings.logo_b64); get_logo_reader+draw_logo helper'ları exec/haftalık/tatbikat/gap PDF'lerinin tümünde sağ üst logo çizer. UI: SettingsHubPanel 'Hotel Logo (PDF)' bölümü (yükle/önizle/kaldır).
 - Tatil Önizleme: GET /api/demand-signals/{pid}/holidays?days=90; RateCalendarEditable gün hücrelerinde teal 🎌 tatil bandı + lejant (CH tesiste Jeûne genevois/Bettagsmontag doğrulandı).
 - BEKLEYEN: Apaleo Client ID/Secret (kullanıcı bu turda Apaleo'yu seçmedi; hâlâ boş).
+
+## Güncelleme (2026-08-16, 2 özellik — iter. 559, %100 geçti)
+- Tatil Fiyat Önerisi: RateCalendarEditable'da tatil bandına tıklayınca modal (rev-cal-holiday-modal) — base × (1+holiday_pct/100) önerisi, 'Zammı Uygula' mevcut rate-override PUT'unu kullanır. holiday_pct sinyal config'inden gelir. Testing agent düzeltmeleri: Room Type dedupe (duplicate key uyarısı) + base Math.round (off-by-one algısı).
+- PDF Rapor Merkezi: GET /api/pms-connect/pdf-center/{pid} (4 on-demand rapor + tatbikat arşivi + logo notu); ReportsHub'a 5. sekme 'PDF Arşivi' (report-tab-pdf, pdf-report-center) indirme linkleriyle.
+- BEKLEYEN: Apaleo Client ID/Secret (hâlâ boş), Resend anahtarı (haftalık e-posta otomasyonu için).

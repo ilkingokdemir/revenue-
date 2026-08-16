@@ -22,6 +22,14 @@ export const RateCalendarEditable = ({ propertyId }) => {
   const [bulkDays, setBulkDays] = useState([]);
   const [bulkRate, setBulkRate] = useState("");
   const [holidays, setHolidays] = useState({});
+  const [holidayPct, setHolidayPct] = useState(5);
+  const [holidayPrompt, setHolidayPrompt] = useState(null);
+
+  useEffect(() => {
+    if (!propertyId) return;
+    axios.get(`${API}/demand-signals/${propertyId}/config`)
+      .then(r => setHolidayPct(Number(r.data.holiday_pct) || 5)).catch(() => {});
+  }, [propertyId]);
 
   useEffect(() => {
     if (!propertyId) return;
@@ -146,7 +154,7 @@ export const RateCalendarEditable = ({ propertyId }) => {
             <label className="text-xs text-stone-500 mr-2">Room Type</label>
             <Select value={roomType || cal.room_type?.id || "default"} onValueChange={v => setRoomType(v)}>
               <SelectTrigger className="w-44 h-9 text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>{cal.room_types.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
+              <SelectContent>{[...new Map(cal.room_types.map(r => [r.id, r])).values()].map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="text-xs text-stone-400 flex items-center gap-1">
@@ -259,8 +267,14 @@ export const RateCalendarEditable = ({ propertyId }) => {
                   )}
                   {d.is_full && <Badge className="text-[8px] bg-emerald-500 text-white mt-1">Full</Badge>}
                   {holidays[d.date] && (
-                    <div className="absolute bottom-0 left-0 right-0 bg-teal-500/90 text-white text-[8px] font-bold px-1.5 py-0.5 truncate"
-                      title={holidays[d.date]} data-testid={`rev-cal-holiday-${d.day}`}>
+                    <div className="absolute bottom-0 left-0 right-0 bg-teal-500/90 hover:bg-teal-600 text-white text-[8px] font-bold px-1.5 py-0.5 truncate cursor-pointer"
+                      title={`${holidays[d.date]} — tatil zammı önerisi için tıkla`} data-testid={`rev-cal-holiday-${d.day}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const base = Math.round(Number(d.custom_rate || d.recommended_rate || 0));
+                        setHolidayPrompt({ date: d.date, day: d.day, name: holidays[d.date], base,
+                          suggested: Math.round(base * (1 + holidayPct / 100)) });
+                      }}>
                       🎌 {holidays[d.date]}
                     </div>
                   )}
@@ -270,6 +284,29 @@ export const RateCalendarEditable = ({ propertyId }) => {
           </div>
         ))}
       </div>
+
+      {/* Holiday Rate Prompt */}
+      {holidayPrompt && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => setHolidayPrompt(null)}>
+          <div className="bg-white rounded-2xl p-5 w-[360px] shadow-2xl" onClick={e => e.stopPropagation()} data-testid="rev-cal-holiday-modal">
+            <div className="text-sm font-black text-stone-800 mb-1">🎌 {holidayPrompt.name}</div>
+            <div className="text-xs text-stone-500 mb-3">{holidayPrompt.date} — resmi tatil için önerilen zam: <b className="text-teal-700">+%{holidayPct}</b> (sinyal ayarlarındaki tatil çarpanı)</div>
+            <div className="flex items-center justify-center gap-3 bg-teal-50 border border-teal-200 rounded-xl py-3 mb-4">
+              <span className="text-sm text-stone-500 line-through">{cur(holidayPrompt.base)}</span>
+              <span className="text-stone-400">→</span>
+              <span className="text-xl font-black text-teal-700" data-testid="rev-cal-holiday-suggested">{cur(holidayPrompt.suggested)}</span>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={async () => { await saveRate(holidayPrompt.date, holidayPrompt.suggested); setHolidayPrompt(null); }}
+                disabled={saving || !holidayPrompt.base}
+                className="flex-1 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold py-2 rounded-xl disabled:opacity-50" data-testid="rev-cal-holiday-apply">
+                Zammı Uygula
+              </button>
+              <button onClick={() => setHolidayPrompt(null)} className="px-4 py-2 border border-stone-300 rounded-xl text-sm text-stone-600" data-testid="rev-cal-holiday-cancel">Vazgeç</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Legend */}
       <div className="flex items-center gap-4 mt-3 text-[10px] text-stone-400">

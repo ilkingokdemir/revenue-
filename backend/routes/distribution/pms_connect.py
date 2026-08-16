@@ -1408,6 +1408,35 @@ MyHotelBox RMS — Otonom Dağıtım Robotu"""
                 "email_subject": f"Haftalık Kanal Performans Raporu — {prop.get('name', pid)} ({week})",
                 "email_body": email_body}
 
+    @router.get("/pdf-center/{pid}")
+    async def pdf_center(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Tüm PDF raporlarının tek arşiv listesi."""
+        drills = await db.killswitch_drills.find(
+            {"property_id": pid}, {"_id": 0, "id": 1, "created_at": 1, "passed": 1,
+                                   "triggered_by": 1, "pdf_size_kb": 1}).sort("created_at", -1).to_list(24)
+        for d in drills:
+            d["url"] = f"/api/pms-connect/killswitch-drill/archive/{d['id']}/pdf"
+        has_logo = bool(await db.template_settings.find_one(
+            {"property_id": pid, "logo_b64": {"$exists": True}}, {"_id": 1}))
+        on_demand = [
+            {"key": "weekly", "title": "Haftalık Kanal Performans Raporu",
+             "desc": "Son 7 gün: PMS push'ları, sertifikasyon, gece robotu, sapma uyarıları",
+             "url": f"/api/pms-connect/weekly-report-pdf/{pid}"},
+            {"key": "executive", "title": "Aylık Yönetici Özeti",
+             "desc": "Kanal karışımı, gece robotu, forecast isabeti, kör nokta radarı, sinyal etkisi",
+             "url": f"/api/pms-connect/executive-pdf/{pid}"},
+            {"key": "gap", "title": "Rakip Gap Analizi",
+             "desc": "17 kalemlik kapsam karşılaştırması — müşteri sunumuna hazır, markalanabilir",
+             "url": f"/api/competitive-gap-pdf?pid={pid}"},
+            {"key": "drill", "title": "Son Kill Switch Tatbikat Raporu",
+             "desc": "Acil durdurma zincirinin uçtan uca çalıştığının yönetim güvencesi",
+             "url": f"/api/pms-connect/killswitch-drill/{pid}/report-pdf",
+             "available": bool(drills)},
+        ]
+        return {"property_id": pid, "on_demand": on_demand, "drill_archive": drills,
+                "branding": {"has_logo": has_logo,
+                             "note": "Logo yüklüyse tüm PDF'lerde otomatik kullanılır (Ayarlar → Hotel Logo)."}}
+
     @router.get("/weekly-report-pdf/{pid}")
     async def weekly_report_pdf(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         wr = await weekly_report(pid, _u)

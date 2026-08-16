@@ -1,0 +1,57 @@
+{
+  "summary": "Frontend testing for 2 new features: 'Tatil Fiyat Önerisi' (holiday markup modal on Rate Calendar) and 'PDF Rapor Merkezi' (new PDF Arşivi tab in Reports Centre). Both features work end-to-end. Cleanup completed — no leftover overrides on Sept 10 for property 'default'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Rate Calendar (Room Type dropdown)", "issues": ["React duplicate key warnings for Room Type options (Standard Double Room, Deluxe King Room, Family Suite, Superior Twin Room, Executive Suite appear repeatedly with duplicate keys). Not a functional break but pollutes console — occurs after selecting Franziskaner branch."]}
+    ]
+  },
+  "test_results": {
+    "tatil_fiyat_onerisi": {
+      "sep2026_holiday_bands_visible": ["rev-cal-holiday-10 (Jeûne genevois)", "rev-cal-holiday-20 (Eidgenössischer Dank-, Buss- und Bettag)", "rev-cal-holiday-21 (Bettagsmontag)"],
+      "modal_opens_on_band_click": true,
+      "modal_content": "🎌 Jeûne genevois — 2026-09-10 — resmi tatil için önerilen zam: +%5 — £117 → £122",
+      "suggested_price_shown": "£122",
+      "vazgec_closes_modal_without_changes": true,
+      "zammi_uygula_applies_and_reloads": true,
+      "toast_after_apply": "Rate set to £122",
+      "sept10_becomes_amber_custom_rate": true,
+      "rev_cal_clear_10_restores": true,
+      "cleanup_done": "Sept 10 override cleared, no test data left (toast: 'Override cleared')"
+    },
+    "pdf_rapor_merkezi": {
+      "report_tab_pdf_present": true,
+      "tabs_found": ["overview", "revenue", "occupancy", "commission", "pdf"],
+      "pdf_report_center_visible": true,
+      "cards_found": ["pdf-center-card-weekly", "pdf-center-card-executive", "pdf-center-card-gap", "pdf-center-card-drill"],
+      "each_card_has_indir_link": true,
+      "drill_archive_present": true,
+      "drill_archive_label": "Tatbikat Arşivi (5)",
+      "drill_items_count": 5,
+      "weekly_pdf_link_status": "200 application/pdf",
+      "weekly_pdf_href": "/api/pms-connect/weekly-report-pdf/default"
+    },
+    "regression": {
+      "reports_centre_other_tabs": "Tabs render (overview/revenue/occupancy/commission all present)",
+      "rate_calendar_normal_day_click_opens_input": true,
+      "day5_input_verified": true
+    }
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Low) Fix React duplicate key warnings for Room Type <select> options in RateCalendarEditable — use unique keys (perhaps room_type_id) instead of names.",
+    "(Info) Suggested price rounding: modal shows £117 → £122, but 117 × 1.05 = 122.85 which Math.round would yield 123. Likely underlying base is float ~116.5. Consider showing consistent rounded base or making calc use displayed integer to avoid perceived off-by-one."
+  ],
+  "critical_code_review_comments": [
+    "The tour modal (RevenueRobotTour for rate_cal_tour_done) blocks interactions on first visit until dismissed. Test scripts need localStorage flag pre-set. Consider allowing Escape key to close the tour."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100% (both new features + regression pass)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! ; property 'default' = Franziskaner by Centra",
+  "seed_data_creation": "None (test data on Sept 10 cleaned up after run)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "For property 'default' (Franziskaner by Centra), holiday_pct = 5. Sept 2026 holidays: 10 (Jeûne genevois), 20/21 (Bettag/Bettagsmontag). To skip tour: localStorage.setItem('rate_cal_tour_done','1'). Branch dropdown ('All Branches'/'Franziskaner by Centra') sets activePropertyId; must be set for holidays to appear. RateCalendarEditable has React duplicate-key warnings for Room Type dropdown."
+}

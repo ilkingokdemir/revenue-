@@ -879,3 +879,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Arşiv Temizliği: db.pdf_archive_config.retention_months (3-36, default 12); PUT /api/pms-connect/pdf-archive/{pid}/retention (anında purge) + archive_pdf_reports her çalışmada purge; ReportsHub'da Saklama select'i (6/12/24/36 ay).
 - Takvim Tur Hatırlama: YENİ routes/platform_ext/ui_prefs.py (GET/PUT /api/ui-prefs, kullanıcı bazlı); RevenuePanel tur bayraklarını sunucuyla senkronlar (tarayıcı değişse de bir kez gösterim). Test: yeni browser context'te tur açılmadı ✓.
 - Console uyarı düzeltmeleri: retention option template literal + arşiv listelerinde index'li key.
+
+## Güncelleme (2026-08-16, 3 özellik — iter. 562, %100 geçti)
+- Zam Geri Alma: POST /api/demand-signals/{pid}/apply-markup (prev_custom_rate saklar, markup_kind/markup_name) + POST /{pid}/undo-markups (manuel fiyat varsa restore, yoksa override silinir); takvim modalları artık apply-markup kullanır; header'da ↩ Zamları Geri Al (rev-cal-undo-markups-btn).
+- Sinyal Özeti Bildirimi: send_weekly_signal_digest (hafta dedupe, refresh + 7 gün tatil/hava/etkinlik satırları) + weekly_signal_digest_loop (Pzt 03-09 UTC) + manuel POST /{pid}/weekly-digest/run. W33 özeti bildirimlerde.
+- Mükerrer Veri Temizliği: YENİ routes/hotel_ops/data_cleanup.py — GET dry-run + POST merge (en çok rezervasyonlu kayıt korunur; bookings/rooms/rate_overrides/pms_rate_mapping remap; data_cleanup_log denetim). Settings → 'Veri Temizliği' (DB temiz: 78 kayıt, 0 grup → yeşil rozet).

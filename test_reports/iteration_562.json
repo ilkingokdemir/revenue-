@@ -1,0 +1,22 @@
+{
+  "summary": "Frontend-only validation of 3 new Turkish RMS features (backend curl-verified by main agent). All PASS. (1) Zam Geri Alma: '↩ Zamları Geri Al' button (rev-cal-undo-markups-btn) present on Rate Calendar next to '🎌 Tüm Tatillere Zam'. Empty-state click → info toast 'Geri alınacak tatil/etkinlik zammı yok'. Applied event markup Aug 18 via purple band rev-cal-event-18 → violet modal shows suggested £144 → rev-cal-event-apply → toast 'Etkinlik zammı uygulandı: £144' and Aug 18 flipped to £144 amber. Then rev-cal-undo-markups-btn → toast '1 zam geri alındı (1 manuel fiyata, 0 otomatik fiyata döndü)'; Aug 18 restored to previous manual price £125 (correct behavior — task description explicitly states 'restores previous manual price if there was one, else back to auto price'; Aug 18 in seed data has pre-existing custom rate). Round-trip cleanup verified — no residual override introduced by test. (2) Sinyal Özeti Bildirimi: notification bell (rendered twice in DOM; desktop visible instance) opens Notifications panel; entry '📅 Haftalık Sinyal Özeti (2026-W33)' present under REVENUE section with weather signal lines (☀ 2026-08-16 Güneşli hafta sonu (31°C) +%3, 🌧 2026-08-17 şiddetli yağış, ...). (3) Mükerrer Veri Temizliği: Settings hub sidebar shows new 'Veri Temizliği' item (settings-nav-cleanup); clicking loads section settings-data-cleanup with green badge cleanup-clean-badge '✓ Temiz — 78 oda tipi kaydında mükerrer bulunamadı'; merge button (cleanup-merge-btn) is correctly HIDDEN. (4) Regression: Aug 31 teal 'Summer Bank Holiday' band (rev-cal-holiday-31) opens holiday modal with suggested £138, Vazgeç closes cleanly with no side-effect. Hotel Logo (PDF) settings sidebar item still renders. Note: task mentioned Sept 10 holiday but current 90-day holiday window in Sept only shows an event on Sept 1 (TEST Draft Event, no holiday-10 element) — validated equivalent regression on Aug 31 instead.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "NotificationBell is mounted twice (mobile + desktop) with the same data-testid='notification-bell-btn'; strict Playwright/CDD queries hit visibility errors. Consider distinct testids (e.g., notification-bell-btn-mobile / -desktop) for robust automation.",
+    "Undo toast wording assumes bulk semantics; single-signal restoration to a pre-existing manual price reads a bit ambiguously ('1 manuel fiyata, 0 otomatik fiyata döndü'). Consider clarifying tooltip explaining that manual restoration means the previous user-set custom rate was reinstated."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (from request)",
+  "seed_data_creation": "None — event markup applied on Aug 18 was immediately undone by the tested flow; no residual state.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 3 new features validated end-to-end on frontend. Aug 18 pre-seed has a custom rate £125 so undo restores to £125 (manual restore), not to auto — task description covers both branches. If you retest, use Franziskaner by Centra property; Rate Calendar reached via revenue-btn → rev-tab-calendar. Notification bell has two DOM instances with same testid; iterate .query_selector_all and click the visible one. Sept has no rev-cal-holiday-10 in current 90-day window — use Aug 31 (rev-cal-holiday-31) for holiday-modal regression."
+}

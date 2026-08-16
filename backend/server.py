@@ -1742,6 +1742,8 @@ from routes.platform_ext.branding import create_branding_router
 api_router.include_router(create_branding_router(db, require_roles))
 from routes.platform_ext.ui_prefs import create_ui_prefs_router
 api_router.include_router(create_ui_prefs_router(db, require_roles))
+from routes.hotel_ops.data_cleanup import create_data_cleanup_router
+api_router.include_router(create_data_cleanup_router(db, require_roles))
 from routes.client_errors import create_client_errors_router
 api_router.include_router(create_client_errors_router(db, require_roles))
 from routes.revenue_ext.demand_calendar import create_demand_calendar_router
@@ -2138,6 +2140,8 @@ async def startup_event():
     asyncio.create_task(blind_spot_alert_loop(db))
     from workers import pdf_archive_loop
     asyncio.create_task(pdf_archive_loop(db))
+    from workers import weekly_signal_digest_loop
+    asyncio.create_task(weekly_signal_digest_loop(db))
     asyncio.create_task(profit_autopilot_loop(db))
     asyncio.create_task(data_quality_sentinel_loop(db))
     asyncio.create_task(open_pricing_optimizer_loop(db))

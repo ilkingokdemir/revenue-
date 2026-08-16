@@ -165,6 +165,15 @@ export const RateCalendarEditable = ({ propertyId }) => {
           <button onClick={() => setBulkHolidayOpen(true)} disabled={Object.keys(holidays).length === 0}
             className="px-3 py-1.5 text-xs font-medium rounded-lg bg-teal-600 text-white disabled:opacity-40"
             data-testid="rev-cal-bulk-holiday-btn">🎌 Tüm Tatillere Zam</button>
+          <button onClick={async () => {
+            try {
+              const r = await axios.post(`${API}/demand-signals/${propertyId}/undo-markups`, {});
+              r.data.total === 0 ? toast.info("Geri alınacak tatil/etkinlik zammı yok")
+                : toast.success(`${r.data.total} zam geri alındı (${r.data.restored_manual} manuel fiyata, ${r.data.reverted_to_auto} otomatik fiyata döndü)`);
+              load();
+            } catch { toast.error("Geri alınamadı"); }
+          }} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-300 text-rose-600 hover:bg-rose-50"
+            data-testid="rev-cal-undo-markups-btn">↩ Zamları Geri Al</button>
         </div>
       </div>
 
@@ -361,7 +370,7 @@ export const RateCalendarEditable = ({ propertyId }) => {
               <span className="text-xl font-black text-violet-700" data-testid="rev-cal-event-suggested">{cur(eventPrompt.suggested)}</span>
             </div>
             <div className="flex gap-2">
-              <button onClick={async () => { await saveRate(eventPrompt.date, eventPrompt.suggested); setEventPrompt(null); }}
+              <button onClick={async () => { await axios.post(`${API}/demand-signals/${propertyId}/apply-markup`, { date: eventPrompt.date, room_type_id: roomType || cal?.room_type?.id || "", new_rate: eventPrompt.suggested, kind: "event", name: eventPrompt.titles[0] }).then(() => { toast.success(`Etkinlik zammı uygulandı: ${cur(eventPrompt.suggested)}`); load(); }).catch(() => toast.error("Uygulanamadı")); setEventPrompt(null); }}
                 disabled={saving || !eventPrompt.base || eventPrompt.pct <= 0}
                 className="flex-1 bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold py-2 rounded-xl disabled:opacity-50" data-testid="rev-cal-event-apply">
                 Zammı Uygula
@@ -384,7 +393,7 @@ export const RateCalendarEditable = ({ propertyId }) => {
               <span className="text-xl font-black text-teal-700" data-testid="rev-cal-holiday-suggested">{cur(holidayPrompt.suggested)}</span>
             </div>
             <div className="flex gap-2">
-              <button onClick={async () => { await saveRate(holidayPrompt.date, holidayPrompt.suggested); setHolidayPrompt(null); }}
+              <button onClick={async () => { await axios.post(`${API}/demand-signals/${propertyId}/apply-markup`, { date: holidayPrompt.date, room_type_id: roomType || cal?.room_type?.id || "", new_rate: holidayPrompt.suggested, kind: "holiday", name: holidayPrompt.name }).then(() => { toast.success(`Tatil zammı uygulandı: ${cur(holidayPrompt.suggested)}`); load(); }).catch(() => toast.error("Uygulanamadı")); setHolidayPrompt(null); }}
                 disabled={saving || !holidayPrompt.base}
                 className="flex-1 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold py-2 rounded-xl disabled:opacity-50" data-testid="rev-cal-holiday-apply">
                 Zammı Uygula

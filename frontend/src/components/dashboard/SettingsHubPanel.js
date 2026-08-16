@@ -61,6 +61,49 @@ const GenericSettings = ({ endpoint, title, subtitle, columns, formFields, testP
 
 const badgeRender = (val) => val ? <Badge className="text-[10px] bg-emerald-50 text-emerald-600">{val}</Badge> : "—";
 
+const DataCleanupSettings = () => {
+  const [report, setReport] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const scan = async () => {
+    try { const r = await axios.get(`${API}/data-cleanup/room-types/all`); setReport(r.data); }
+    catch { toast.error("Tarama başarısız"); }
+  };
+  useEffect(() => { scan(); }, []);
+
+  const merge = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/data-cleanup/room-types/all/merge`);
+      toast.success(`${r.data.merged} mükerrer kayıt birleştirildi, ${r.data.references_remapped} referans taşındı`);
+      scan();
+    } catch { toast.error("Birleştirme başarısız"); } finally { setBusy(false); }
+  };
+
+  return (
+    <div data-testid="settings-data-cleanup">
+      <div className="mb-5"><h3 className="text-base font-bold text-stone-800">Veri Temizliği — Oda Tipleri</h3>
+        <p className="text-xs text-stone-500">Aynı tesiste aynı isimli mükerrer oda tipi kayıtlarını güvenli birleştirir: en çok rezervasyon referanslı kayıt korunur, tüm referanslar (rezervasyon/oda/fiyat override/PMS eşleme) ona taşınır, işlem denetim loguna yazılır.</p></div>
+      {!report ? <p className="text-sm text-stone-400">Taranıyor…</p> : report.clean ? (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-700 font-bold" data-testid="cleanup-clean-badge">
+          ✓ Temiz — {report.total_room_types} oda tipi kaydında mükerrer bulunamadı
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {report.duplicate_groups.map((g, i) => (
+            <div key={i} className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs" data-testid={`cleanup-group-${i}`}>
+              <b>{g.name}</b> ({g.property_id}) — korunacak: {g.keeper.id.slice(0, 8)} ({g.keeper.booking_refs} rezervasyon) · silinecek: {g.duplicates.length}
+            </div>
+          ))}
+          <button onClick={merge} disabled={busy} className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-bold disabled:opacity-50" data-testid="cleanup-merge-btn">
+            🧹 Güvenli Birleştir ({report.duplicate_groups.length} grup)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const BrandingSettings = () => {
   const [props, setProps] = useState([]);
   const [pid, setPid] = useState("");
@@ -174,6 +217,10 @@ export const SettingsHubPanel = () => {
               className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-colors ${activeSection === "branding" ? "bg-emerald-50 text-emerald-700 font-medium" : "text-stone-500 hover:bg-stone-100"}`} data-testid="settings-nav-branding">
               Hotel Logo (PDF)
             </button>
+            <button onClick={() => setActiveSection("cleanup")}
+              className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-colors ${activeSection === "cleanup" ? "bg-emerald-50 text-emerald-700 font-medium" : "text-stone-500 hover:bg-stone-100"}`} data-testid="settings-nav-cleanup">
+              Veri Temizliği
+            </button>
           </nav>
         </div>
         {/* Settings Content */}
@@ -181,6 +228,7 @@ export const SettingsHubPanel = () => {
           <AnimatePresence mode="wait">
             <motion.div key={activeSection} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}>
               {activeSection === "branding" ? <BrandingSettings /> :
+                activeSection === "cleanup" ? <DataCleanupSettings /> :
                 section && <GenericSettings endpoint={section.endpoint} title={section.title} subtitle={section.subtitle} columns={section.columns} formFields={section.fields} testPrefix={section.testPrefix} />}
             </motion.div>
           </AnimatePresence>

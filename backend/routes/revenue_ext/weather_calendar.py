@@ -169,6 +169,50 @@ async def compute_impact_report(db, pid: str, weeks: int = 4) -> dict:
             "note": "Tahmin: sinyal çarpanı uygulanan günlerde satılan oda-gece × ADR × (çarpan−1)/çarpan. Çarpanın öneriye yansıdığı ve önerinin uygulandığı varsayımıyla üst sınır tahminidir."}
 
 
+async def send_weekly_signal_digest(db, pid: str, force: bool = False) -> dict:
+    """Haftanın tatil/etkinlik/hava sinyallerini pazartesi sabahı yöneticiye özetler."""
+    import uuid as _uuid
+    now = datetime.now(timezone.utc)
+    week_key = now.strftime("%G-W%V")
+    dup = await db.notifications.find_one(
+        {"created_by": "Sinyal Özeti Robotu", "property_id": pid, "week": week_key}, {"_id": 1})
+    if dup and not force:
+        return {"sent": False, "reason": f"{week_key} özeti zaten gönderildi"}
+    await refresh_signals(db, pid, 21)
+    today = now.date()
+    dates = [(today + timedelta(days=i)).isoformat() for i in range(7)]
+    sigs = await db.demand_calendar_signals.find(
+        {"property_id": pid, "date": {"$in": dates}}, {"_id": 0}).sort("date", 1).to_list(10)
+    evs = await db.public_events.find(
+        {"date": {"$gte": dates[0], "$lte": dates[-1]}},
+        {"_id": 0, "date": 1, "title": 1}).to_list(50)
+    lines = []
+    for s in sigs:
+        if s.get("holiday"):
+            lines.append(f"🎌 {s['date']}: {s['holiday']}")
+        w = s.get("weather") or {}
+        if (w.get("precip") or 0) >= 15:
+            lines.append(f"🌧 {s['date']}: şiddetli yağış beklentisi ({w['precip']:.0f}mm)")
+        elif s.get("multiplier", 1) > 1 and not s.get("holiday") and s.get("reasons"):
+            lines.append(f"☀️ {s['date']}: {s['reasons'][0]}")
+    ev_by_date = {}
+    for e in evs:
+        ev_by_date.setdefault(e["date"], []).append(e.get("title") or "Etkinlik")
+    for d, titles in sorted(ev_by_date.items()):
+        lines.append(f"🎪 {d}: {', '.join(titles[:2])}")
+    msg = ("Bu hafta sinyal yok — nötr talep haftası." if not lines
+           else "Bu haftanın talep sinyalleri:\n" + "\n".join(lines[:10])
+           + "\n\nFiyat takviminde tatil/etkinlik bantlarından tek tıkla zam uygulayabilirsiniz.")
+    await db.notifications.insert_one({
+        "id": str(_uuid.uuid4()), "type": "info",
+        "title": f"📅 Haftalık Sinyal Özeti ({week_key})",
+        "message": msg, "category": "revenue", "target_user": "", "target_role": "manager",
+        "link_to": "revenue", "priority": "normal", "read": False,
+        "property_id": pid, "week": week_key,
+        "created_by": "Sinyal Özeti Robotu", "created_at": now.isoformat()})
+    return {"sent": True, "week": week_key, "signal_lines": len(lines)}
+
+
 def create_weather_calendar_router(db, require_roles):
     router = APIRouter(prefix="/demand-signals", tags=["demand-signals"])
     ROLES = ("admin", "manager")
@@ -280,6 +324,61 @@ def create_weather_calendar_router(db, require_roles):
         return {"ok": True, "pct": pct, "room_type_id": rt_id,
                 "applied": applied, "skipped": skipped,
                 "note": f"%{pct:g} tatil zammı uygulandı. Manuel override'lı günler atlandı; tatil zamları tekrar çalıştırılırsa güncellenir."}
+
+    @router.post("/{pid}/apply-markup")
+    async def apply_markup(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        """Tek güne tatil/etkinlik zammı uygular; eski fiyatı geri alma için saklar."""
+        ds = (data.get("date") or "").strip()
+        kind = data.get("kind") if data.get("kind") in ("holiday", "event") else "holiday"
+        try:
+            new_rate = float(data.get("new_rate"))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "new_rate gerekli")
+        if not ds:
+            raise HTTPException(400, "date gerekli")
+        rt_id = (data.get("room_type_id") or "").strip()
+        existing = await db.rate_overrides.find_one(
+            {"property_id": pid, "date": ds, "room_type_id": rt_id}, {"_id": 0})
+        prev = None
+        if existing:
+            prev = existing.get("prev_custom_rate") if existing.get("markup_kind") else existing.get("custom_rate")
+        await db.rate_overrides.update_one(
+            {"property_id": pid, "date": ds, "room_type_id": rt_id},
+            {"$set": {"property_id": pid, "date": ds, "room_type_id": rt_id,
+                      "custom_rate": new_rate, "markup_kind": kind,
+                      "holiday_markup": kind == "holiday",
+                      "markup_name": (data.get("name") or "")[:80],
+                      "prev_custom_rate": prev, "set_by": "Zam Robotu",
+                      "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        return {"ok": True, "date": ds, "kind": kind, "new_rate": new_rate, "prev_custom_rate": prev}
+
+    @router.post("/{pid}/undo-markups")
+    async def undo_markups(pid: str, data: dict = None, _u: dict = Depends(require_roles(*ROLES))):
+        """Tatil/etkinlik zamlarını eski fiyata döndürür (manuel fiyat varsa onu geri yükler)."""
+        q = {"property_id": pid,
+             "$or": [{"markup_kind": {"$exists": True}}, {"holiday_markup": True}]}
+        if data and data.get("date"):
+            q["date"] = data["date"]
+        restored, removed = 0, 0
+        async for o in db.rate_overrides.find(q):
+            prev = o.get("prev_custom_rate")
+            if prev is not None:
+                await db.rate_overrides.update_one(
+                    {"_id": o["_id"]},
+                    {"$set": {"custom_rate": float(prev), "set_by": "Zam Geri Alma",
+                              "updated_at": datetime.now(timezone.utc).isoformat()},
+                     "$unset": {"markup_kind": "", "holiday_markup": "", "markup_name": "",
+                                "prev_custom_rate": "", "holiday_name": ""}})
+                restored += 1
+            else:
+                await db.rate_overrides.delete_one({"_id": o["_id"]})
+                removed += 1
+        return {"ok": True, "restored_manual": restored, "reverted_to_auto": removed,
+                "total": restored + removed}
+
+    @router.post("/{pid}/weekly-digest/run")
+    async def weekly_digest_run(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        return await send_weekly_signal_digest(db, pid, force=True)
 
     @router.get("/{pid}/config")
     async def get_config(pid: str, _u: dict = Depends(require_roles(*ROLES))):

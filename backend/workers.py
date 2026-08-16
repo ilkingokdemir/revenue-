@@ -1393,3 +1393,20 @@ async def pdf_archive_loop(db, interval_seconds: int = 21600):
         except Exception as e:
             logger.warning(f"pdf_archive_loop error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+async def weekly_signal_digest_loop(db, interval_seconds: int = 21600):
+    """Pazartesi sabahı haftalık tatil/etkinlik/hava sinyal özetini yöneticiye bırakır."""
+    from routes.revenue_ext.weather_calendar import send_weekly_signal_digest
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            if now.weekday() == 0 and 3 <= now.hour <= 9:
+                props = await db.properties.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1}).to_list(50)
+                for p in (props or [{"id": "default"}]):
+                    r = await send_weekly_signal_digest(db, p["id"])
+                    if r.get("sent"):
+                        logger.info(f"weekly_signal_digest_loop: {p['id']} {r['week']} gönderildi")
+        except Exception as e:
+            logger.warning(f"weekly_signal_digest_loop error: {e}")
+        await asyncio.sleep(interval_seconds)

@@ -1740,6 +1740,8 @@ from routes.revenue_ext.weather_calendar import create_weather_calendar_router
 api_router.include_router(create_weather_calendar_router(db, require_roles))
 from routes.platform_ext.branding import create_branding_router
 api_router.include_router(create_branding_router(db, require_roles))
+from routes.platform_ext.ui_prefs import create_ui_prefs_router
+api_router.include_router(create_ui_prefs_router(db, require_roles))
 from routes.client_errors import create_client_errors_router
 api_router.include_router(create_client_errors_router(db, require_roles))
 from routes.revenue_ext.demand_calendar import create_demand_calendar_router

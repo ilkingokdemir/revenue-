@@ -150,11 +150,20 @@ export const RevenuePanel = ({ properties, activePropertyId, initialTab }) => {
   );
   const pid = activePropertyId || "all";
   const [panelTour, setPanelTour] = useState(null);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   useEffect(() => {
+    axios.get(`${API}/ui-prefs`).then(r => {
+      Object.entries(r.data.prefs || {}).forEach(([k, v]) => { if (v) localStorage.setItem(k, "1"); });
+      setPrefsLoaded(true);
+    }).catch(() => setPrefsLoaded(true));
+  }, []);
+
+  useEffect(() => {
+    if (!prefsLoaded) return;
     const cfg = PANEL_TOURS[tab];
     if (cfg && !localStorage.getItem(cfg.key)) setPanelTour(tab);
-  }, [tab]);
+  }, [tab, prefsLoaded]);
 
   useEffect(() => {
     axios.get(`${API}/revenue/pricing-strategy-full/${pid}`).then(r => setRoomTypes(r.data.room_types || [])).catch(() => {});
@@ -268,7 +277,11 @@ export const RevenuePanel = ({ properties, activePropertyId, initialTab }) => {
           {PANEL_TOURS[tab] && panelTour === tab && (
             <Suspense fallback={null}>
               <RevenueRobotTour open steps={PANEL_TOURS[tab].steps}
-                onClose={() => { localStorage.setItem(PANEL_TOURS[tab].key, "1"); setPanelTour(null); }} />
+                onClose={() => {
+                  localStorage.setItem(PANEL_TOURS[tab].key, "1");
+                  axios.put(`${API}/ui-prefs`, { key: PANEL_TOURS[tab].key, value: true }).catch(() => {});
+                  setPanelTour(null);
+                }} />
             </Suspense>
           )}
 

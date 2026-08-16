@@ -472,7 +472,7 @@ PDF_BUILDERS = {}
 
 
 async def archive_pdf_reports(db, pid: str, keys=("weekly", "executive")) -> dict:
-    """Haftalık/aylık PDF'leri üretip tarihli arşive kaydeder (dönem başına 1 kez)."""
+    """Haftalık/aylık PDF'leri üretip tarihli arşive kaydeder (dönem başına 1 kez); saklama süresini uygular."""
     import base64 as _b64
     now = datetime.now(timezone.utc)
     periods = {"weekly": now.strftime("%G-W%V"), "executive": now.strftime("%Y-%m")}
@@ -498,7 +498,12 @@ async def archive_pdf_reports(db, pid: str, keys=("weekly", "executive")) -> dic
                             "size_kb": round(len(pdf) / 1024, 1)})
         except Exception as e:
             results.append({"key": key, "period": period, "status": f"hata: {e}"})
-    return {"property_id": pid, "results": results}
+    cfg = await db.pdf_archive_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+    months = int(cfg.get("retention_months", 12))
+    cutoff = (now - timedelta(days=months * 30)).isoformat()
+    purge = await db.pdf_archive.delete_many({"property_id": pid, "created_at": {"$lt": cutoff}})
+    return {"property_id": pid, "results": results,
+            "retention_months": months, "purged": purge.deleted_count}
 
 
 def create_pms_connect_router(db, require_roles):
@@ -1471,10 +1476,26 @@ MyHotelBox RMS — Otonom Dağıtım Robotu"""
             {"_id": 0, "pdf_b64": 0}).sort("created_at", -1).to_list(50)
         for a in arch:
             a["url"] = f"/api/pms-connect/pdf-archive/{a['id']}/download"
+        _rcfg = await db.pdf_archive_config.find_one({"property_id": pid}, {"_id": 0}) or {}
         return {"property_id": pid, "on_demand": on_demand, "drill_archive": drills,
                 "scheduled_archive": arch,
+                "retention_months": int(_rcfg.get("retention_months", 12)),
                 "branding": {"has_logo": has_logo,
                              "note": "Logo yüklüyse tüm PDF'lerde otomatik kullanılır (Ayarlar → Hotel Logo)."}}
+
+    @router.put("/pdf-archive/{pid}/retention")
+    async def set_pdf_retention(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        try:
+            months = max(3, min(36, int(data.get("retention_months", 12))))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "retention_months 3-36 arası olmalı")
+        await db.pdf_archive_config.update_one(
+            {"property_id": pid},
+            {"$set": {"property_id": pid, "retention_months": months,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=months * 30)).isoformat()
+        purge = await db.pdf_archive.delete_many({"property_id": pid, "created_at": {"$lt": cutoff}})
+        return {"ok": True, "retention_months": months, "purged": purge.deleted_count}
 
     @router.post("/pdf-archive/{pid}/run-now")
     async def pdf_archive_run_now(pid: str, _u: dict = Depends(require_roles(*ROLES))):

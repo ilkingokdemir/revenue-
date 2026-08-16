@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend testing of 3 new Turkish RMS features. All primary scenarios PASS. (1) Takvim Tur Hatırlama: fresh browser shows tour on Rate Calendar; after tour-close, PUT /api/ui-prefs saves rate_cal_tour_done=true; new browser context (different cookies + cleared localStorage) after login does NOT show tour → server-persisted per-user pref verified. (2) Etkinlik Zam Önerisi: purple event band Aug 18 opens violet modal, shows +%15 with suggested £167 (base £145 × 1.15 = £166.75 → rounded £167); Vazgeç closes without change; Zammı Uygula sets Aug 18 to amber custom rate with 'Rate set to £167' toast; cleanup via rev-cal-clear-18 succeeded ('Override cleared'), Aug 18 back to £70 base. (3) Arşiv Temizliği: PDF Arşivi tab shows pdf-center-retention-select; changing to 6 ay updates 'Saklama: 6 ay' badge and description 'Robot… 6 aydan eski kayıtlar otomatik silinir.'; Zamanlanmış Arşiv (2) entries preserved (recent); switching back to 12 ay restores 'Saklama: 12 ay'; Şimdi Üret regression works — list stays 2 (dedupe). (4) Regression: teal holiday band (rev-cal-holiday-31) opens Summer Bank Holiday modal +%5 → £128; bulk holiday button (rev-cal-bulk-holiday-btn '🎌 Tüm Tatillere Zam') present. CLEANUP: Aug 18 override cleared; retention restored to 12 ay.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Reports Centre → PDF Arşivi", "issues": [
+        "React console warning: 'Encountered two children with the same key' repeated ~80 times when rendering PDF archive lists — likely duplicate keys in archive/tatbikat entries mapping. Not a functional blocker but should be fixed to prevent list rendering artifacts.",
+        "React hydration warning: '<span> cannot be a child of <option>' inside pdf-center-retention-select — an <option> element contains a <span> child (probably emoji + label wrapper). Should be flattened to plain text to satisfy HTML spec."
+      ]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix duplicate React keys in PDF Arşivi lists (Zamanlanmış Arşiv / Tatbikat Arşivi) — inspect ReportsHub.js .map() key props.",
+    "Fix <span> child inside <option> in pdf-center-retention-select (ReportsHub.js ~L87) — use plain text or move emoji into label prop, not span."
+  ],
+  "critical_code_review_comments": [
+    "ui_prefs PUT endpoint expects {'key','value'} shape; there's no 'clear all' or DELETE — server-side reset requires DB write. Acceptable for MVP but could be documented.",
+    "PDF center retention select emits repeated React warnings; keys should combine (type, date, filename) to guarantee uniqueness."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend only)", "frontend": "100% (5/5 scenarios)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (Franziskaner by Centra)",
+  "seed_data_creation": "None. Reset user ui_prefs by clearing the prefs.rate_cal_tour_done key via PUT was not needed — DB started clean. Aug 18 override cleaned after test. Retention restored to 12 ay.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All three features (tour persistence, event markup modal, PDF retention) validated end-to-end. Only cosmetic React warnings remain in ReportsHub. Note: 'default retention' reflects backend-stored value per property — test may see current value != 12 if previous test left non-default. Always restore to 12 at end.",
+  "rca of the issue": "N/A — no functional issues found."
+}

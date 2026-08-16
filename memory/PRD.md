@@ -873,3 +873,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Rapor Zamanlayıcı: pms_connect PDF_BUILDERS kaydı + archive_pdf_reports (db.pdf_archive, dönem dedupe) + pdf_archive_loop (Pzt haftalık, ayın 1'i aylık); POST run-now + GET download; ReportsHub 'Zamanlanmış Arşiv' bloğu + ⚡ Şimdi Üret.
 - Takvim Etkinlik Bandı: GET /api/demand-signals/{pid}/events?days=90 (public_events, kapasite×mesafe decay boost); RateCalendarEditable mor 🎪 bant + lejant (tatil bandıyla dikey istif).
 - P2 notları ROADMAP'e eklendi (duplicate room_types verisi, tur modalı persistence).
+
+## Güncelleme (2026-08-16, 3 özellik — iter. 561, %100 geçti)
+- Etkinlik Zam Önerisi: mor 🎪 banda tıklayınca violet modal (rev-cal-event-modal) — base × (1+boost_pct/100), Zammı Uygula/Vazgeç.
+- Arşiv Temizliği: db.pdf_archive_config.retention_months (3-36, default 12); PUT /api/pms-connect/pdf-archive/{pid}/retention (anında purge) + archive_pdf_reports her çalışmada purge; ReportsHub'da Saklama select'i (6/12/24/36 ay).
+- Takvim Tur Hatırlama: YENİ routes/platform_ext/ui_prefs.py (GET/PUT /api/ui-prefs, kullanıcı bazlı); RevenuePanel tur bayraklarını sunucuyla senkronlar (tarayıcı değişse de bir kez gösterim). Test: yeni browser context'te tur açılmadı ✓.
+- Console uyarı düzeltmeleri: retention option template literal + arşiv listelerinde index'li key.

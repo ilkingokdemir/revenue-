@@ -83,20 +83,32 @@ export const ReportsHub = ({ propertyId }) => {
             <div className="bg-white border border-stone-200 rounded-2xl p-4" data-testid="pdf-center-scheduled">
               <div className="flex items-center justify-between mb-1">
                 <div className="text-sm font-black text-stone-800">🗓 Zamanlanmış Arşiv ({(pdfCenter.scheduled_archive || []).length})</div>
-                <button onClick={async () => {
-                  try {
-                    await axios.post(`${API}/pms-connect/pdf-archive/${pdfPid}/run-now`);
-                    setPdfCenter(null);
-                  } catch { /* sessiz */ }
-                }} className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold" data-testid="pdf-center-run-now">
-                  ⚡ Şimdi Üret
-                </button>
+                <div className="flex items-center gap-2">
+                  <select value={pdfCenter.retention_months} data-testid="pdf-center-retention-select"
+                    onChange={async (e) => {
+                      try {
+                        await axios.put(`${API}/pms-connect/pdf-archive/${pdfPid}/retention`, { retention_months: Number(e.target.value) });
+                        setPdfCenter(null);
+                      } catch { /* sessiz */ }
+                    }}
+                    className="border border-stone-300 rounded-lg px-2 py-1 text-[11px] text-stone-600">
+                    {[6, 12, 24, 36].map(m => <option key={m} value={m}>{`Saklama: ${m} ay`}</option>)}
+                  </select>
+                  <button onClick={async () => {
+                    try {
+                      await axios.post(`${API}/pms-connect/pdf-archive/${pdfPid}/run-now`);
+                      setPdfCenter(null);
+                    } catch { /* sessiz */ }
+                  }} className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold" data-testid="pdf-center-run-now">
+                    ⚡ Şimdi Üret
+                  </button>
+                </div>
               </div>
-              <p className="text-[10px] text-stone-400 mb-2">Robot her pazartesi haftalık, her ayın 1'inde aylık raporu otomatik üretip tarihli saklar.</p>
+              <p className="text-[10px] text-stone-400 mb-2">Robot her pazartesi haftalık, her ayın 1'inde aylık raporu otomatik üretip tarihli saklar. {pdfCenter.retention_months} aydan eski kayıtlar otomatik silinir.</p>
               {(pdfCenter.scheduled_archive || []).length === 0 ? <p className="text-[12px] text-stone-400">Henüz zamanlanmış arşiv yok — "Şimdi Üret" ile başlatabilirsiniz.</p> : (
                 <div className="space-y-1 max-h-44 overflow-auto">
-                  {pdfCenter.scheduled_archive.map(a => (
-                    <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-[11px]">
+                  {pdfCenter.scheduled_archive.map((a, i) => (
+                    <div key={`${a.id}-${i}`} className="flex flex-wrap items-center justify-between gap-2 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-[11px]">
                       <span><b>{a.report_key === "weekly" ? "Haftalık" : "Aylık Yönetici"}</b> · {a.period} · {String(a.created_at).slice(0, 10)} · {a.size_kb}KB</span>
                       <a href={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} target="_blank" rel="noreferrer"
                         className="px-2.5 py-0.5 rounded-lg bg-stone-900 text-white font-bold" data-testid={`pdf-center-arch-${a.id}`}>PDF</a>
@@ -110,8 +122,8 @@ export const ReportsHub = ({ propertyId }) => {
               <p className="text-[10px] text-stone-400 mb-2">{pdfCenter.branding.note}{pdfCenter.branding.has_logo ? " ✓ Logo yüklü." : ""}</p>
               {pdfCenter.drill_archive.length === 0 ? <p className="text-[12px] text-stone-400">Kayıt yok.</p> : (
                 <div className="space-y-1 max-h-56 overflow-auto">
-                  {pdfCenter.drill_archive.map(d => (
-                    <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-[11px]">
+                  {pdfCenter.drill_archive.map((d, i) => (
+                    <div key={`${d.id}-${i}`} className="flex flex-wrap items-center justify-between gap-2 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-[11px]">
                       <span>{String(d.created_at).slice(0, 16).replace("T", " ")} · <b className={d.passed ? "text-emerald-700" : "text-rose-600"}>{d.passed ? "BAŞARILI" : "BAŞARISIZ"}</b> · {d.triggered_by === "robot" ? "🤖 otomatik" : "manuel"}{d.pdf_size_kb ? ` · ${d.pdf_size_kb}KB arşiv` : ""}</span>
                       <a href={`${process.env.REACT_APP_BACKEND_URL}${d.url}`} target="_blank" rel="noreferrer"
                         className="px-2.5 py-0.5 rounded-lg bg-stone-900 text-white font-bold" data-testid={`pdf-center-drill-${d.id}`}>PDF</a>

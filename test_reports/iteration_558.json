@@ -1,0 +1,48 @@
+{
+  "summary": "Frontend verification of 3 features: Logo Yükleme (Settings > Hotel Logo PDF), Tatil Önizleme (holiday teal bands on Rate Calendar), and Etki Arşivi (executive PDF endpoint). All three features work end-to-end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification_details": {
+    "logo_upload": {
+      "settings-nav-branding": "present",
+      "settings-branding": "present",
+      "branding-property-select": "present (Franziskaner by Centra)",
+      "branding-logo-preview_initial": "'Logo yüklenmedi'",
+      "branding-upload-btn + branding-file-input": "present; set_input_files uploaded 73-byte PNG",
+      "post_upload": "toast 'Logo yüklendi (0.1KB) — tüm PDF raporlarında kullanılacak'; preview <img> visible; branding-delete-btn (Kaldır) visible; 'Logoyu Değiştir' button visible",
+      "post_delete": "preview text back to 'Logo yüklenmedi'; GET /api/branding/logo/default -> 404 (clean state restored)"
+    },
+    "tatil_onizleme": {
+      "route": "Revenue management (revenue-btn) -> Rate Calendar tab -> navigate next once from Aug 2026 to Sept 2026",
+      "rev-cal-holiday-10": "present, text '🎌 Jeûne genevois', bgcolor rgba(20,184,166,0.9) (teal-500)",
+      "rev-cal-holiday-20": "present, 'Eidgenössischer Dank-, Buss- und Bettag' (bonus – matches CH holiday list)",
+      "rev-cal-holiday-21": "present, text '🎌 Bettagsmontag', bgcolor teal-500",
+      "rev-cal-holiday-legend": "present, 'Resmi Tatil (90 gün)'",
+      "note": "Requires branch = Franziskaner (property 'default', country CH). On 'All Branches' (pid=all) holidays API returns GB set (no Sept dates) — expected."
+    },
+    "etki_arsivi_light": {
+      "GET /api/pms-connect/executive-pdf/default": "200 application/pdf, ~2966 bytes, valid PDF magic bytes"
+    },
+    "regression": {
+      "rate_calendar_day_click": "click rev-cal-day-15 → input focused; Escape → input closes (works)",
+      "settings_currencies": "Currencies section renders with GBP/EUR/USD/TRY rows and +Add button"
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Property selector shadcn <Select> uses data-testid='property-selector' on component wrapper but the attribute is not forwarded to the rendered trigger DOM node — makes automated branch switching fragile (had to fallback to text locator 'All Branches'). Consider forwarding data-testid to SelectTrigger.",
+    "RateCalendarEditable in RevenuePanel receives pid='all' when 'All Branches' is selected; holidays API for 'all' returns GB (Summer Bank Holiday only). Not a bug, but users on multi-branch view will not see Swiss/property-specific holidays until they pick a branch. Optionally show a hint."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Uploaded temporary 73-byte test PNG for property 'default'; deleted after verification (GET returns 404).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "To reach Rate Calendar with Swiss holidays, first switch top-left branch dropdown from 'All Branches' to 'Franziskaner by Centra' (options are role=option). Rev-mgmt panel opens a tour overlay data-testid='revenue-robot-tour' — remove via DOM before clicking rev-cal-next. Dismiss localStorage keys rateCalendarTourDone/revenueRobotTourDone. Current month defaults to Aug 2026 (today is 2026-08-15/16); one rev-cal-next click reaches September 2026."
+}

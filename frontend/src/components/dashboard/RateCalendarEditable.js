@@ -21,6 +21,17 @@ export const RateCalendarEditable = ({ propertyId }) => {
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkDays, setBulkDays] = useState([]);
   const [bulkRate, setBulkRate] = useState("");
+  const [holidays, setHolidays] = useState({});
+
+  useEffect(() => {
+    if (!propertyId) return;
+    axios.get(`${API}/demand-signals/${propertyId}/holidays?days=90`)
+      .then(r => {
+        const map = {};
+        (r.data.holidays || []).forEach(h => { map[h.date] = h.name; });
+        setHolidays(map);
+      }).catch(() => {});
+  }, [propertyId]);
 
   const load = useCallback(async () => {
     try {
@@ -247,6 +258,12 @@ export const RateCalendarEditable = ({ propertyId }) => {
                     </>
                   )}
                   {d.is_full && <Badge className="text-[8px] bg-emerald-500 text-white mt-1">Full</Badge>}
+                  {holidays[d.date] && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-teal-500/90 text-white text-[8px] font-bold px-1.5 py-0.5 truncate"
+                      title={holidays[d.date]} data-testid={`rev-cal-holiday-${d.day}`}>
+                      🎌 {holidays[d.date]}
+                    </div>
+                  )}
                 </>}
               </div>
             ))}
@@ -259,6 +276,7 @@ export const RateCalendarEditable = ({ propertyId }) => {
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-violet-50 border border-violet-300" />Today</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-50 border border-amber-200" />Custom Rate</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-white border border-stone-200" />Auto-priced</span>
+        <span className="flex items-center gap-1" data-testid="rev-cal-holiday-legend"><span className="w-3 h-3 rounded bg-teal-500" />Resmi Tatil (90 gün)</span>
       </div>
     </div>
   );

@@ -417,6 +417,13 @@ async def build_drill_pdf(db, pid: str, drill: dict) -> bytes:
     ok = bool(drill.get("passed"))
     c.setFillColorRGB(*(0.02, 0.37, 0.31) if ok else (0.6, 0.1, 0.1))
     c.rect(0, hh - 38 * mm, w, 38 * mm, fill=1, stroke=0)
+    try:
+        from routes.platform_ext.branding import get_logo_reader, draw_logo
+        _logo = await get_logo_reader(db, pid)
+        if _logo:
+            draw_logo(c, _logo, w, hh, mm)
+    except Exception:
+        pass
     c.setFillColorRGB(1, 1, 1)
     c.setFont("Helvetica-Bold", 17)
     c.drawString(18 * mm, hh - 16 * mm, "Kill Switch Tatbikat Raporu - Yonetim Guvencesi")
@@ -995,6 +1002,13 @@ MyHotelBox RMS Ekibi
         w, hh = A4
         c.setFillColorRGB(0.05, 0.09, 0.16)
         c.rect(0, hh - 34 * mm, w, 34 * mm, fill=1, stroke=0)
+        try:
+            from routes.platform_ext.branding import get_logo_reader, draw_logo
+            _logo = await get_logo_reader(db, pid)
+            if _logo:
+                draw_logo(c, _logo, w, hh, mm)
+        except Exception:
+            pass
         c.setFillColorRGB(1, 1, 1)
         c.setFont("Helvetica-Bold", 17)
         c.drawString(18 * mm, hh - 15 * mm, (prop.get("name") or pid).translate(_t))
@@ -1060,6 +1074,27 @@ MyHotelBox RMS Ekibi
             else:
                 c.drawString(18 * mm, y, "4. Kor Nokta Radari - etiketli red yok (temiz)")
             y -= 10 * mm
+        except Exception:
+            y -= 1 * mm
+        try:
+            from routes.revenue_ext.weather_calendar import compute_impact_report
+            imp = await compute_impact_report(db, pid, 4)
+            c.setFillColorRGB(0.1, 0.1, 0.1)
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(18 * mm, y, "5. Sinyal Etkisi - hava + tatil carpanlari (son 4 hafta)")
+            y -= 7 * mm
+            c.setFont("Helvetica", 9)
+            c.setFillColorRGB(*(0.02, 0.45, 0.35) if imp["total_est_impact"] >= 0 else (0.75, 0.15, 0.15))
+            c.drawString(22 * mm, y, f"Toplam tahmini katki: {'+' if imp['total_est_impact'] >= 0 else ''}"
+                         f"{imp['total_est_impact']} {imp['currency']} ({imp['total_signal_days']} sinyalli gun)")
+            y -= 5.5 * mm
+            c.setFillColorRGB(0.25, 0.25, 0.25)
+            for wk in imp["weeks"]:
+                if wk["signal_days"]:
+                    c.drawString(22 * mm, y, f"{wk['week']}: {wk['signal_days']} gun · {wk['room_nights']} oda-gece · "
+                                 f"{'+' if wk['est_impact'] >= 0 else ''}{wk['est_impact']} {imp['currency']}")
+                    y -= 5 * mm
+            y -= 5 * mm
         except Exception:
             y -= 1 * mm
         c.setFont("Helvetica-Oblique", 8)
@@ -1387,6 +1422,13 @@ MyHotelBox RMS — Otonom Dağıtım Robotu"""
         w, hh = A4
         c.setFillColorRGB(0.05, 0.09, 0.16)
         c.rect(0, hh - 34 * mm, w, 34 * mm, fill=1, stroke=0)
+        try:
+            from routes.platform_ext.branding import get_logo_reader, draw_logo
+            _logo = await get_logo_reader(db, pid)
+            if _logo:
+                draw_logo(c, _logo, w, hh, mm)
+        except Exception:
+            pass
         c.setFillColorRGB(1, 1, 1)
         c.setFont("Helvetica-Bold", 17)
         c.drawString(18 * mm, hh - 15 * mm, "Haftalik Kanal Performans Raporu")

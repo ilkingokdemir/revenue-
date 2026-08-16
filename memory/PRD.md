@@ -856,3 +856,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Radar Bildirimi: workers.check_blind_spot_alert (min 3 etiketli red, pay ≥%50, 7 gün dedupe, notifications'a high priority uyarı) + günlük blind_spot_alert_loop; manuel tetik POST /api/rms-acceptance/{pid}/blind-spot-alert/run.
 - Gap PDF Markalama: /api/competitive-gap-pdf?pid=&customer= — template_settings logo_url (varsa çizilir) + 'X icin hazirlanmistir' altın satır; RmsComparisonPanel'de müşteri adı inputu (rmsc-gap-customer-input).
 - BEKLEYEN: Apaleo Client ID/Secret (4. kez istendi, hâlâ gelmedi — DB'de credentials boş).
+
+## Güncelleme (2026-08-16, 3 özellik — iter. 558, %100 geçti)
+- Etki Arşivi: compute_impact_report module-level yapıldı (weather_calendar.py); aylık yönetici PDF'ine '5. Sinyal Etkisi' bölümü (toplam katkı + haftalık satırlar).
+- Logo Yükleme: YENİ routes/platform_ext/branding.py — POST/GET/DELETE /api/branding/logo/{pid} (b64, max 700KB, PNG/JPEG/WebP; template_settings.logo_b64); get_logo_reader+draw_logo helper'ları exec/haftalık/tatbikat/gap PDF'lerinin tümünde sağ üst logo çizer. UI: SettingsHubPanel 'Hotel Logo (PDF)' bölümü (yükle/önizle/kaldır).
+- Tatil Önizleme: GET /api/demand-signals/{pid}/holidays?days=90; RateCalendarEditable gün hücrelerinde teal 🎌 tatil bandı + lejant (CH tesiste Jeûne genevois/Bettagsmontag doğrulandı).
+- BEKLEYEN: Apaleo Client ID/Secret (kullanıcı bu turda Apaleo'yu seçmedi; hâlâ boş).

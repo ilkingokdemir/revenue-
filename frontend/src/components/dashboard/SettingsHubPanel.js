@@ -61,6 +61,71 @@ const GenericSettings = ({ endpoint, title, subtitle, columns, formFields, testP
 
 const badgeRender = (val) => val ? <Badge className="text-[10px] bg-emerald-50 text-emerald-600">{val}</Badge> : "—";
 
+const BrandingSettings = () => {
+  const [props, setProps] = useState([]);
+  const [pid, setPid] = useState("");
+  const [ver, setVer] = useState(0);
+  const [hasLogo, setHasLogo] = useState(false);
+
+  useEffect(() => {
+    axios.get(`${API}/properties`).then(r => {
+      const list = Array.isArray(r.data) ? r.data : r.data.properties || [];
+      setProps(list);
+      if (list[0]) setPid(list[0].id);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!pid) return;
+    axios.get(`${API}/branding/logo/${pid}`, { responseType: "blob" })
+      .then(() => setHasLogo(true)).catch(() => setHasLogo(false));
+  }, [pid, ver]);
+
+  const upload = (file) => {
+    if (!file) return;
+    if (file.size > 500 * 1024) { toast.error("Logo en fazla 500KB olabilir"); return; }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const r = await axios.post(`${API}/branding/logo/${pid}`, { logo_b64: reader.result });
+        toast.success(`Logo yüklendi (${r.data.size_kb}KB) — tüm PDF raporlarında kullanılacak`);
+        setVer(v => v + 1);
+      } catch (e) { toast.error(e.response?.data?.detail || "Yüklenemedi"); }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeLogo = async () => {
+    try { await axios.delete(`${API}/branding/logo/${pid}`); toast.success("Logo kaldırıldı"); setVer(v => v + 1); }
+    catch { toast.error("Kaldırılamadı"); }
+  };
+
+  return (
+    <div data-testid="settings-branding">
+      <div className="mb-5"><h3 className="text-base font-bold text-stone-800">Otel Logosu</h3>
+        <p className="text-xs text-stone-500">Yüklenen logo tüm PDF raporlarında (yönetici özeti, haftalık rapor, tatbikat, gap analizi) otomatik kullanılır. PNG/JPEG/WebP, max 500KB.</p></div>
+      <div className="flex flex-wrap items-center gap-4">
+        <select value={pid} onChange={e => setPid(e.target.value)} data-testid="branding-property-select"
+          className="border border-stone-300 rounded-lg px-3 py-2 text-sm">
+          {props.map(p => <option key={p.id} value={p.id}>{p.name || p.id}</option>)}
+        </select>
+        <div className="w-28 h-28 border-2 border-dashed border-stone-300 rounded-xl flex items-center justify-center bg-stone-50 overflow-hidden" data-testid="branding-logo-preview">
+          {hasLogo ? <img src={`${API}/branding/logo/${pid}?v=${ver}`} alt="logo" className="max-w-full max-h-full object-contain" />
+            : <span className="text-[10px] text-stone-400 text-center px-2">Logo yüklenmedi</span>}
+        </div>
+        <div className="flex flex-col gap-2">
+          <label className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium cursor-pointer text-center" data-testid="branding-upload-btn">
+            {hasLogo ? "Logoyu Değiştir" : "Logo Yükle"}
+            <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" data-testid="branding-file-input"
+              onChange={e => { upload(e.target.files?.[0]); e.target.value = ""; }} />
+          </label>
+          {hasLogo && <button onClick={removeLogo} className="px-4 py-2 border border-rose-300 text-rose-600 rounded-lg text-sm font-medium" data-testid="branding-delete-btn">Kaldır</button>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const settingsSections = [
   { id: "currencies", title: "Currencies", subtitle: "Manage supported currencies", endpoint: "currencies", testPrefix: "currency",
     columns: [{ key: "code", label: "Code" }, { key: "name", label: "Name" }, { key: "symbol", label: "Symbol" }, { key: "is_default", label: "Default", render: v => v ? <Badge className="text-[10px] bg-emerald-50 text-emerald-600">Default</Badge> : "" }],
@@ -105,13 +170,18 @@ export const SettingsHubPanel = () => {
                 {s.title}
               </button>
             ))}
+            <button onClick={() => setActiveSection("branding")}
+              className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-colors ${activeSection === "branding" ? "bg-emerald-50 text-emerald-700 font-medium" : "text-stone-500 hover:bg-stone-100"}`} data-testid="settings-nav-branding">
+              Hotel Logo (PDF)
+            </button>
           </nav>
         </div>
         {/* Settings Content */}
         <div className="flex-1">
           <AnimatePresence mode="wait">
             <motion.div key={activeSection} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}>
-              {section && <GenericSettings endpoint={section.endpoint} title={section.title} subtitle={section.subtitle} columns={section.columns} formFields={section.fields} testPrefix={section.testPrefix} />}
+              {activeSection === "branding" ? <BrandingSettings /> :
+                section && <GenericSettings endpoint={section.endpoint} title={section.title} subtitle={section.subtitle} columns={section.columns} formFields={section.fields} testPrefix={section.testPrefix} />}
             </motion.div>
           </AnimatePresence>
         </div>

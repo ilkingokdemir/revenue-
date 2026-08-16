@@ -298,21 +298,20 @@ def create_trust_center_router(db, require_roles):
         _t = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
         c.setFillColorRGB(0.05, 0.09, 0.16)
         c.rect(0, hh - 30 * mm, w, 30 * mm, fill=1, stroke=0)
-        if logo_url:
-            try:
+        try:
+            from routes.platform_ext.branding import get_logo_reader, draw_logo
+            _logo = await get_logo_reader(db, pid)
+            if _logo:
+                draw_logo(c, _logo, w, hh, mm)
+            elif logo_url:
                 import httpx
                 from reportlab.lib.utils import ImageReader
                 async with httpx.AsyncClient(timeout=10, follow_redirects=True) as cl:
                     lr = await cl.get(logo_url)
                 if lr.status_code == 200:
-                    img = ImageReader(BytesIO(lr.content))
-                    iw, ih = img.getSize()
-                    lw = 24 * mm
-                    lh = lw * ih / iw
-                    c.drawImage(img, w - lw - 10 * mm, hh - lh - 5 * mm, width=lw, height=lh,
-                                mask="auto", preserveAspectRatio=True)
-            except Exception:
-                pass
+                    draw_logo(c, ImageReader(BytesIO(lr.content)), w, hh, mm)
+        except Exception:
+            pass
         c.setFillColorRGB(1, 1, 1)
         c.setFont("Helvetica-Bold", 16)
         c.drawString(16 * mm, hh - 12 * mm, "Rakip Gap Analizi - Kapsam Karsilastirmasi")

@@ -285,3 +285,8 @@ OTA ToS uyumu). Karar: ilkeyi KORU, G8 lisanslı rate shopping bütçesini pilot
 - [x] 7. Havuz veri izni (pool_consent, benchmark hariç tutma + panel toggle'ları) — 2026-08-16
 - [ ] P2: AI Pricing Engine (Market Robot alt sekmesi) için komut paletine doğrudan derin-link girişi (test ajanı önerisi, engelleyici değil)
 - [~] 8. Lisanslı rate shopping feed — KOD DEĞİL, sözleşme kararı (OTA Insight/Lighthouse) kullanıcıda
+
+## P2 (test ajanı önerileri, engelleyici değil — 2026-08-16)
+- [ ] room_types koleksiyonunda mükerrer kayıtlar console'da duplicate key uyarısı üretiyor (veri temizliği gerekir; id'ler referans edildiğinden dikkatli migrasyon)
+- [ ] Rate Calendar tur modalı her ziyarette açılıyor — localStorage ile "bir kez göster" yapılmalı
+- [ ] AI Pricing Engine için komut paletine derin-link

@@ -9,6 +9,8 @@ logger = logging.getLogger(__name__)
 
 WMO_BAD = {65, 66, 67, 75, 82, 86, 95, 96, 99}
 
+PDF_ARCHIVE_KEYS = ("weekly", "executive")
+
 DEFAULT_SIGNAL_CFG = {"holiday_pct": 5.0, "eve_pct": 3.0, "sunny_weekend_pct": 3.0,
                       "bad_weather_pct": 3.0, "enabled": True}
 
@@ -210,6 +212,74 @@ def create_weather_calendar_router(db, require_roles):
         rows = [{"date": d, "name": n} for d, n in sorted(hols.items())
                 if today.isoformat() <= d <= end.isoformat()]
         return {"property_id": pid, "country": country, "days": days, "holidays": rows}
+
+    @router.get("/{pid}/events")
+    async def upcoming_events(pid: str, days: int = 90, _u: dict = Depends(require_roles(*ROLES))):
+        """Önümüzdeki N günün etkinlik sinyalleri (fiyat takvimi mor bandı için)."""
+        days = max(7, min(180, days))
+        t0 = datetime.now(timezone.utc).date()
+        evs = await db.public_events.find(
+            {"date": {"$gte": t0.isoformat(), "$lte": (t0 + timedelta(days=days)).isoformat()}},
+            {"_id": 0, "date": 1, "title": 1, "capacity": 1, "distance_km": 1}).to_list(500)
+        by_date = {}
+        for e in evs:
+            capw = min(int(e.get("capacity") or 0) / 2000.0, 1.0) * 0.15
+            dist = e.get("distance_km")
+            decay = max(0.25, 1 - float(dist) / 10.0) if dist is not None else 1.0
+            d = by_date.setdefault(e["date"], {"date": e["date"], "titles": [], "boost_pct": 0.0})
+            d["titles"].append(e.get("title") or "Etkinlik")
+            d["boost_pct"] = round(min(d["boost_pct"] + capw * decay * 100, 25.0), 1)
+        rows = sorted(by_date.values(), key=lambda x: x["date"])
+        for r in rows:
+            r["titles"] = r["titles"][:3]
+        return {"property_id": pid, "days": days, "events": rows}
+
+    @router.post("/{pid}/apply-holiday-markup")
+    async def apply_holiday_markup(pid: str, data: dict,
+                                   _u: dict = Depends(require_roles(*ROLES))):
+        """90 gündeki tüm resmi tatillere önerilen zammı topluca uygular (manuel override'lara dokunmaz)."""
+        room_type_id = (data.get("room_type_id") or "").strip()
+        cfg = await get_signal_cfg(db, pid)
+        pct = float(cfg["holiday_pct"])
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "city": 1}) or {}
+        geo = await _geocode(db, pid, (prop.get("city") or "London").strip())
+        today = datetime.now(timezone.utc).date()
+        end = today + timedelta(days=90)
+        hols = await _holidays(db, (geo or {}).get("country_code", "GB"),
+                               sorted({today.year, end.year}))
+        targets = {d: n for d, n in hols.items() if today.isoformat() <= d <= end.isoformat()}
+        room_types = await db.room_types.find({"property_id": pid}, {"_id": 0}).to_list(20)
+        rt = next((r for r in room_types if r.get("id") == room_type_id), None) or \
+            (room_types[0] if room_types else {"id": "default", "base_rate": 100})
+        rt_id = rt.get("id", "")
+        base_rate = float(rt.get("base_rate", 100) or 100)
+        total_rooms = await db.rooms.count_documents({"property_id": pid}) or 10
+        now_iso = datetime.now(timezone.utc).isoformat()
+        applied, skipped = [], []
+        for ds, name in sorted(targets.items()):
+            ovr = await db.rate_overrides.find_one(
+                {"property_id": pid, "date": ds,
+                 "room_type_id": {"$in": [rt_id, "", "default"]}}, {"_id": 0})
+            if ovr and not ovr.get("holiday_markup"):
+                skipped.append({"date": ds, "name": name, "reason": "manuel override var"})
+                continue
+            booked = await db.bookings.count_documents(
+                {"property_id": pid, "check_in": {"$lte": ds}, "check_out": {"$gt": ds},
+                 "status": {"$ne": "cancelled"}})
+            occ = min(100, round(booked / max(total_rooms, 1) * 100))
+            mult = 1.4 if occ >= 90 else 1.2 if occ >= 75 else 1.0 if occ >= 50 else 0.85 if occ >= 25 else 0.7
+            recommended = round(base_rate * mult, 2)
+            new_rate = round(recommended * (1 + pct / 100))
+            await db.rate_overrides.update_one(
+                {"property_id": pid, "date": ds, "room_type_id": rt_id},
+                {"$set": {"property_id": pid, "date": ds, "room_type_id": rt_id,
+                          "custom_rate": float(new_rate), "holiday_markup": True,
+                          "holiday_name": name, "set_by": "Tatil Zam Robotu",
+                          "updated_at": now_iso}}, upsert=True)
+            applied.append({"date": ds, "name": name, "base": recommended, "new_rate": new_rate})
+        return {"ok": True, "pct": pct, "room_type_id": rt_id,
+                "applied": applied, "skipped": skipped,
+                "note": f"%{pct:g} tatil zammı uygulandı. Manuel override'lı günler atlandı; tatil zamları tekrar çalıştırılırsa güncellenir."}
 
     @router.get("/{pid}/config")
     async def get_config(pid: str, _u: dict = Depends(require_roles(*ROLES))):

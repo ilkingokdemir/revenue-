@@ -2134,6 +2134,8 @@ async def startup_event():
     asyncio.create_task(pilot_lead_reminder_loop(db))
     from workers import blind_spot_alert_loop
     asyncio.create_task(blind_spot_alert_loop(db))
+    from workers import pdf_archive_loop
+    asyncio.create_task(pdf_archive_loop(db))
     asyncio.create_task(profit_autopilot_loop(db))
     asyncio.create_task(data_quality_sentinel_loop(db))
     asyncio.create_task(open_pricing_optimizer_loop(db))

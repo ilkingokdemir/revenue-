@@ -867,3 +867,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Tatil Fiyat Önerisi: RateCalendarEditable'da tatil bandına tıklayınca modal (rev-cal-holiday-modal) — base × (1+holiday_pct/100) önerisi, 'Zammı Uygula' mevcut rate-override PUT'unu kullanır. holiday_pct sinyal config'inden gelir. Testing agent düzeltmeleri: Room Type dedupe (duplicate key uyarısı) + base Math.round (off-by-one algısı).
 - PDF Rapor Merkezi: GET /api/pms-connect/pdf-center/{pid} (4 on-demand rapor + tatbikat arşivi + logo notu); ReportsHub'a 5. sekme 'PDF Arşivi' (report-tab-pdf, pdf-report-center) indirme linkleriyle.
 - BEKLEYEN: Apaleo Client ID/Secret (hâlâ boş), Resend anahtarı (haftalık e-posta otomasyonu için).
+
+## Güncelleme (2026-08-16, 3 özellik — iter. 560, %100 geçti)
+- Toplu Tatil Zammı: POST /api/demand-signals/{pid}/apply-holiday-markup (90 gün tatilleri, base=occ-katmanlı recommended × (1+holiday_pct/100); manuel/diğer robot override'ları korunur, holiday_markup=True idempotent). UI: rev-cal-bulk-holiday-btn + onay modalı.
+- Rapor Zamanlayıcı: pms_connect PDF_BUILDERS kaydı + archive_pdf_reports (db.pdf_archive, dönem dedupe) + pdf_archive_loop (Pzt haftalık, ayın 1'i aylık); POST run-now + GET download; ReportsHub 'Zamanlanmış Arşiv' bloğu + ⚡ Şimdi Üret.
+- Takvim Etkinlik Bandı: GET /api/demand-signals/{pid}/events?days=90 (public_events, kapasite×mesafe decay boost); RateCalendarEditable mor 🎪 bant + lejant (tatil bandıyla dikey istif).
+- P2 notları ROADMAP'e eklendi (duplicate room_types verisi, tur modalı persistence).

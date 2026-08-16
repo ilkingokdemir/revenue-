@@ -1,0 +1,36 @@
+{
+  "summary": "Frontend E2E for 3 new features: (1) Takvim Etkinlik Bandı, (2) Toplu Tatil Zammı bulk holiday markup, (3) Rapor Zamanlayıcı scheduled PDF archive. All flows verified against Franziskaner by Centra as admin. Cleanup of Sept 10 override performed at end. Regression: single holiday click modal + PDF on-demand cards + Tatbikat archive still render.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Reports Centre / anywhere with room type list", "issues": ["React warning: duplicate keys (Standard Double Room, Deluxe King Room, Family Suite, Superior Twin Room, Executive Suite) - repeated many times in console. Non-blocking but should use unique key (e.g., room id) to avoid rendering issues."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Consider fixing duplicate React keys warning for room type lists (uses room name as key; use id instead).",
+    "Rate Calendar tour modal auto-opens each visit — consider persistence (localStorage) so it isn't shown to returning users."
+  ],
+  "critical_code_review_comments": [
+    "Bulk holiday endpoint correctly protects manual overrides (1 applied / 3 skipped) — expected protective behavior.",
+    "PDF archive dedupe on per-period key works (still 2 after Şimdi Üret).",
+    "Archive download href uses correct /api/pms-connect/pdf-archive/{id}/download route with cookie auth — returns application/pdf with %PDF- header."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (curl-verified upstream)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None. Cleaned up Sep 10 override (rev-cal-clear-10) after bulk-holiday apply to leave calendar in original state.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Franziskaner by Centra branch has 4 holidays in next 90d (Sept 10, Sept 20/21, Nov 1). Existing overrides on Sept 20/21 and Nov 1 owned by other robots -> bulk markup only applies to Sept 10 with +%5 (£88->£92). Rate Calendar tour modal appears on entry; dismiss via 'İleri'/'Bitir'. Reports Centre -> report-tab-pdf shows pdf-center-scheduled with 2 entries (weekly W33, executive 2026-08). Archive PDF href path is /api/pms-connect/pdf-archive/{id}/download.",
+  "verified_flows": {
+    "event_band": "Aug 18 purple band 🎪 Stadyum Konseri (Demo) via rev-cal-event-18; Sep 1 purple event (TEST Draft Event 285 +1) via rev-cal-event-1; Sep 10 teal holiday (Jeûne genevois) via rev-cal-holiday-10; legend rev-cal-event-legend='Etkinlik (konser/fuar)' visible.",
+    "bulk_holiday": "Modal lists 4 holidays 2026-09-10/20/21 and 2026-11-01 with +%5. Apply -> toast '1 tatile +%5 zam uygulandı (3 gün manuel override nedeniyle atlandı)'. Sep 10 became amber £92 with rev-cal-clear-10 present.",
+    "cleanup": "rev-cal-clear-10 removed override (toast 'Override cleared'); Sep 10 back to £88 auto.",
+    "scheduled_archive": "pdf-center-scheduled shows 'Zamanlanmış Arşiv (2)' with weekly 2026-W33 (2.3KB) and executive 2026-08 (2.9KB); 2 pdf-center-arch-{id} entries; download 200 application/pdf %PDF- 2370 bytes.",
+    "run_now": "pdf-center-run-now click keeps count at 2 (dedupe correct).",
+    "regression": "Single holiday click opens rev-cal-holiday-modal with Vazgeç button; 4 on-demand PDF cards render (weekly, executive, gap, drill); Tatbikat archive shows 5 entries."
+  }
+}

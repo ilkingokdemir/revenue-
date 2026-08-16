@@ -1370,3 +1370,26 @@ async def blind_spot_alert_loop(db, interval_seconds: int = 86400):
         except Exception as e:
             logger.warning(f"blind_spot_alert_loop error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+async def pdf_archive_loop(db, interval_seconds: int = 21600):
+    """Pazartesi haftalık, ayın 1'i aylık PDF'leri üretip tarihli arşive kaydeder."""
+    from routes.distribution.pms_connect import archive_pdf_reports
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            keys = []
+            if now.weekday() == 0 and 3 <= now.hour <= 9:
+                keys.append("weekly")
+            if now.day == 1 and 3 <= now.hour <= 9:
+                keys.append("executive")
+            if keys:
+                props = await db.properties.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1}).to_list(50)
+                for p in (props or [{"id": "default"}]):
+                    r = await archive_pdf_reports(db, p["id"], tuple(keys))
+                    for res in r["results"]:
+                        if res["status"] == "arşivlendi":
+                            logger.info(f"pdf_archive_loop: {p['id']} {res['key']} {res['period']} arşivlendi")
+        except Exception as e:
+            logger.warning(f"pdf_archive_loop error: {e}")
+        await asyncio.sleep(interval_seconds)

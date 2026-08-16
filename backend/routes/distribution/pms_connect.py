@@ -468,6 +468,39 @@ async def build_drill_pdf(db, pid: str, drill: dict) -> bytes:
     return buf.getvalue()
 
 
+PDF_BUILDERS = {}
+
+
+async def archive_pdf_reports(db, pid: str, keys=("weekly", "executive")) -> dict:
+    """Haftalık/aylık PDF'leri üretip tarihli arşive kaydeder (dönem başına 1 kez)."""
+    import base64 as _b64
+    now = datetime.now(timezone.utc)
+    periods = {"weekly": now.strftime("%G-W%V"), "executive": now.strftime("%Y-%m")}
+    results = []
+    for key in keys:
+        period = periods[key]
+        if await db.pdf_archive.find_one({"property_id": pid, "report_key": key, "period": period}, {"_id": 1}):
+            results.append({"key": key, "period": period, "status": "zaten arşivde"})
+            continue
+        fn = PDF_BUILDERS.get(key)
+        if not fn:
+            results.append({"key": key, "period": period, "status": "üretici yok"})
+            continue
+        try:
+            resp = await fn(pid)
+            pdf = b"".join([c async for c in resp.body_iterator])
+            await db.pdf_archive.insert_one({
+                "id": str(uuid.uuid4()), "property_id": pid, "report_key": key,
+                "period": period, "size_kb": round(len(pdf) / 1024, 1),
+                "pdf_b64": _b64.b64encode(pdf).decode(),
+                "created_at": now.isoformat()})
+            results.append({"key": key, "period": period, "status": "arşivlendi",
+                            "size_kb": round(len(pdf) / 1024, 1)})
+        except Exception as e:
+            results.append({"key": key, "period": period, "status": f"hata: {e}"})
+    return {"property_id": pid, "results": results}
+
+
 def create_pms_connect_router(db, require_roles):
     router = APIRouter(prefix="/pms-connect", tags=["pms-connect"])
     ROLES = ("admin", "manager")
@@ -1433,9 +1466,30 @@ MyHotelBox RMS — Otonom Dağıtım Robotu"""
              "url": f"/api/pms-connect/killswitch-drill/{pid}/report-pdf",
              "available": bool(drills)},
         ]
+        arch = await db.pdf_archive.find(
+            {"property_id": pid},
+            {"_id": 0, "pdf_b64": 0}).sort("created_at", -1).to_list(50)
+        for a in arch:
+            a["url"] = f"/api/pms-connect/pdf-archive/{a['id']}/download"
         return {"property_id": pid, "on_demand": on_demand, "drill_archive": drills,
+                "scheduled_archive": arch,
                 "branding": {"has_logo": has_logo,
                              "note": "Logo yüklüyse tüm PDF'lerde otomatik kullanılır (Ayarlar → Hotel Logo)."}}
+
+    @router.post("/pdf-archive/{pid}/run-now")
+    async def pdf_archive_run_now(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        return await archive_pdf_reports(db, pid)
+
+    @router.get("/pdf-archive/{doc_id}/download")
+    async def pdf_archive_download(doc_id: str, _u: dict = Depends(require_roles(*ROLES))):
+        import base64 as _b64
+        doc = await db.pdf_archive.find_one({"id": doc_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Arşiv kaydı bulunamadı")
+        from io import BytesIO
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(BytesIO(_b64.b64decode(doc["pdf_b64"])), media_type="application/pdf",
+                                 headers={"Content-Disposition": f'inline; filename="{doc["report_key"]}-{doc["period"]}.pdf"'})
 
     @router.get("/weekly-report-pdf/{pid}")
     async def weekly_report_pdf(pid: str, _u: dict = Depends(require_roles(*ROLES))):
@@ -1587,4 +1641,6 @@ partnerships@myhotelbox.example"""
                 "note": "Demo kimlikleri kaydedildi. Şimdi 'Sertifikasyonu Çalıştır' ile CANLI sertifikasyon geçin, ardından canlı push açılır."
                 if rate_id else "Bağlantı kuruldu ama aktif root rate bulunamadı — rate_id'yi elle girin."}
 
+    PDF_BUILDERS["weekly"] = weekly_report_pdf
+    PDF_BUILDERS["executive"] = executive_pdf
     return router

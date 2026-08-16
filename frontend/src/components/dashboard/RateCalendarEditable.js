@@ -22,8 +22,31 @@ export const RateCalendarEditable = ({ propertyId }) => {
   const [bulkDays, setBulkDays] = useState([]);
   const [bulkRate, setBulkRate] = useState("");
   const [holidays, setHolidays] = useState({});
+  const [events, setEvents] = useState({});
   const [holidayPct, setHolidayPct] = useState(5);
   const [holidayPrompt, setHolidayPrompt] = useState(null);
+  const [bulkHolidayOpen, setBulkHolidayOpen] = useState(false);
+
+  useEffect(() => {
+    if (!propertyId) return;
+    axios.get(`${API}/demand-signals/${propertyId}/events?days=90`)
+      .then(r => {
+        const map = {};
+        (r.data.events || []).forEach(e => { map[e.date] = e; });
+        setEvents(map);
+      }).catch(() => {});
+  }, [propertyId]);
+
+  const applyBulkHoliday = async () => {
+    try {
+      const r = await axios.post(`${API}/demand-signals/${propertyId}/apply-holiday-markup`, {
+        room_type_id: roomType || cal?.room_type?.id || ""
+      });
+      toast.success(`${r.data.applied.length} tatile +%${r.data.pct} zam uygulandı${r.data.skipped.length ? ` (${r.data.skipped.length} gün manuel override nedeniyle atlandı)` : ""}`);
+      setBulkHolidayOpen(false);
+      load();
+    } catch { toast.error("Toplu zam uygulanamadı"); }
+  };
 
   useEffect(() => {
     if (!propertyId) return;
@@ -138,6 +161,9 @@ export const RateCalendarEditable = ({ propertyId }) => {
           <button onClick={() => { setBulkMode(!bulkMode); setBulkDays([]); }}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg ${bulkMode ? "bg-amber-500 text-white" : "text-stone-500 hover:bg-stone-100 border border-stone-200"}`}
             data-testid="rev-cal-bulk">Bulk Edit</button>
+          <button onClick={() => setBulkHolidayOpen(true)} disabled={Object.keys(holidays).length === 0}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-teal-600 text-white disabled:opacity-40"
+            data-testid="rev-cal-bulk-holiday-btn">🎌 Tüm Tatillere Zam</button>
         </div>
       </div>
 
@@ -266,16 +292,27 @@ export const RateCalendarEditable = ({ propertyId }) => {
                     </>
                   )}
                   {d.is_full && <Badge className="text-[8px] bg-emerald-500 text-white mt-1">Full</Badge>}
-                  {holidays[d.date] && (
-                    <div className="absolute bottom-0 left-0 right-0 bg-teal-500/90 hover:bg-teal-600 text-white text-[8px] font-bold px-1.5 py-0.5 truncate cursor-pointer"
-                      title={`${holidays[d.date]} — tatil zammı önerisi için tıkla`} data-testid={`rev-cal-holiday-${d.day}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const base = Math.round(Number(d.custom_rate || d.recommended_rate || 0));
-                        setHolidayPrompt({ date: d.date, day: d.day, name: holidays[d.date], base,
-                          suggested: Math.round(base * (1 + holidayPct / 100)) });
-                      }}>
-                      🎌 {holidays[d.date]}
+                  {(holidays[d.date] || events[d.date]) && (
+                    <div className="absolute bottom-0 left-0 right-0 flex flex-col">
+                      {events[d.date] && (
+                        <div className="bg-violet-500/90 text-white text-[8px] font-bold px-1.5 py-0.5 truncate"
+                          title={`${events[d.date].titles.join(" · ")} — motor boost +%${events[d.date].boost_pct}`}
+                          data-testid={`rev-cal-event-${d.day}`}>
+                          🎪 {events[d.date].titles[0]}{events[d.date].titles.length > 1 ? ` +${events[d.date].titles.length - 1}` : ""}
+                        </div>
+                      )}
+                      {holidays[d.date] && (
+                        <div className="bg-teal-500/90 hover:bg-teal-600 text-white text-[8px] font-bold px-1.5 py-0.5 truncate cursor-pointer"
+                          title={`${holidays[d.date]} — tatil zammı önerisi için tıkla`} data-testid={`rev-cal-holiday-${d.day}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const base = Math.round(Number(d.custom_rate || d.recommended_rate || 0));
+                            setHolidayPrompt({ date: d.date, day: d.day, name: holidays[d.date], base,
+                              suggested: Math.round(base * (1 + holidayPct / 100)) });
+                          }}>
+                          🎌 {holidays[d.date]}
+                        </div>
+                      )}
                     </div>
                   )}
                 </>}
@@ -284,6 +321,25 @@ export const RateCalendarEditable = ({ propertyId }) => {
           </div>
         ))}
       </div>
+
+      {/* Bulk Holiday Markup Confirm */}
+      {bulkHolidayOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => setBulkHolidayOpen(false)}>
+          <div className="bg-white rounded-2xl p-5 w-[400px] shadow-2xl" onClick={e => e.stopPropagation()} data-testid="rev-cal-bulk-holiday-modal">
+            <div className="text-sm font-black text-stone-800 mb-1">🎌 Tüm Tatillere Toplu Zam</div>
+            <p className="text-xs text-stone-500 mb-3">Önümüzdeki 90 gündeki <b>{Object.keys(holidays).length} resmi tatile</b> önerilen <b className="text-teal-700">+%{holidayPct}</b> zam uygulanacak. Manuel girdiğiniz fiyatlar korunur; sadece otomatik/tatil günleri güncellenir.</p>
+            <div className="max-h-36 overflow-auto space-y-1 mb-4">
+              {Object.entries(holidays).sort().map(([d, n]) => (
+                <div key={d} className="text-[11px] bg-teal-50 border border-teal-100 rounded px-2 py-1">{d} — {n}</div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={applyBulkHoliday} className="flex-1 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold py-2 rounded-xl" data-testid="rev-cal-bulk-holiday-apply">Onayla ve Uygula</button>
+              <button onClick={() => setBulkHolidayOpen(false)} className="px-4 py-2 border border-stone-300 rounded-xl text-sm text-stone-600" data-testid="rev-cal-bulk-holiday-cancel">Vazgeç</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Holiday Rate Prompt */}
       {holidayPrompt && (
@@ -314,6 +370,7 @@ export const RateCalendarEditable = ({ propertyId }) => {
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-50 border border-amber-200" />Custom Rate</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-white border border-stone-200" />Auto-priced</span>
         <span className="flex items-center gap-1" data-testid="rev-cal-holiday-legend"><span className="w-3 h-3 rounded bg-teal-500" />Resmi Tatil (90 gün)</span>
+        <span className="flex items-center gap-1" data-testid="rev-cal-event-legend"><span className="w-3 h-3 rounded bg-violet-500" />Etkinlik (konser/fuar)</span>
       </div>
     </div>
   );

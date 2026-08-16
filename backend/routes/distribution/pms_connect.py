@@ -1035,7 +1035,33 @@ MyHotelBox RMS Ekibi
         c.setFont("Helvetica", 9)
         c.setFillColorRGB(0.25, 0.25, 0.25)
         c.drawString(22 * mm, y, f"Mews canli rezervasyon katkisi (14 gun): +{fa['mews_total_contribution_14d']} oda-gece")
-        y -= 10 * mm
+        y -= 9 * mm
+        try:
+            from routes.revenue_ext.trust_center import REJECT_TAG_LABELS, BLIND_SPOT_RECS
+            since90 = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
+            _tags = {}
+            async for dec in db.ai_pricing_decisions.find(
+                    {"property_id": pid, "status": "rejected", "reason_tag": {"$ne": None},
+                     "decided_at": {"$gte": since90}}, {"_id": 0, "reason_tag": 1}):
+                _tags[dec["reason_tag"]] = _tags.get(dec["reason_tag"], 0) + 1
+            c.setFillColorRGB(0.1, 0.1, 0.1)
+            c.setFont("Helvetica-Bold", 12)
+            if _tags:
+                _top, _n = max(_tags.items(), key=lambda x: x[1])
+                c.drawString(18 * mm, y, "4. Kor Nokta Radari (son 90 gun)")
+                y -= 7 * mm
+                c.setFont("Helvetica", 9)
+                c.setFillColorRGB(0.6, 0.15, 0.15)
+                c.drawString(22 * mm, y, f"En zayif alan: {REJECT_TAG_LABELS.get(_top, _top).translate(_t)} "
+                             f"({_n}/{sum(_tags.values())} etiketli red)")
+                y -= 5.5 * mm
+                c.setFillColorRGB(0.25, 0.25, 0.25)
+                c.drawString(22 * mm, y, "Oneri: " + BLIND_SPOT_RECS.get(_top, "").translate(_t)[:105])
+            else:
+                c.drawString(18 * mm, y, "4. Kor Nokta Radari - etiketli red yok (temiz)")
+            y -= 10 * mm
+        except Exception:
+            y -= 1 * mm
         c.setFont("Helvetica-Oblique", 8)
         c.setFillColorRGB(0.45, 0.45, 0.45)
         c.drawString(18 * mm, y, "Otomatik uretilmistir - MyHotelBox RMS / PMS Baglanti Merkezi. Detaylar panelde.")

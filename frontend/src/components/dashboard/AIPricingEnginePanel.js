@@ -50,6 +50,8 @@ const AIPricingEnginePanel = ({ propertyId }) => {
   const [rejectReason, setRejectReason] = useState("");
   const [rejectTag, setRejectTag] = useState("");
   const [signals, setSignals] = useState(null);
+  const [sigCfg, setSigCfg] = useState(null);
+  const [showSigCfg, setShowSigCfg] = useState(false);
   const [savingCfg, setSavingCfg] = useState(false);
 
   const curFormatter = useMemo(
@@ -166,6 +168,26 @@ const AIPricingEnginePanel = ({ propertyId }) => {
     } finally {
       setRunning(false);
     }
+  };
+
+  const openSigCfg = async () => {
+    if (!showSigCfg && !sigCfg) {
+      try {
+        const r = await axios.get(`${API}/demand-signals/${propertyId}/config`, { headers: authHeaders() });
+        setSigCfg(r.data);
+      } catch { toast.error("Sinyal ayarları yüklenemedi"); return; }
+    }
+    setShowSigCfg((s) => !s);
+  };
+
+  const saveSigCfg = async () => {
+    try {
+      const r = await axios.put(`${API}/demand-signals/${propertyId}/config`, sigCfg, { headers: authHeaders() });
+      setSigCfg(r.data);
+      toast.success("Sinyal ağırlıkları kaydedildi — takvim yeniden hesaplandı");
+      const s = await axios.get(`${API}/demand-signals/${propertyId}?days=14`, { headers: authHeaders() });
+      setSignals(s.data);
+    } catch { toast.error("Kaydedilemedi"); }
   };
 
   const confirmReject = async () => {
@@ -359,7 +381,25 @@ const AIPricingEnginePanel = ({ propertyId }) => {
         <div className="bg-white border border-stone-200 rounded-xl p-3" data-testid="ai-pricing-signals-strip">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-[11px] font-bold text-stone-600">🌤 Hava + Resmi Tatil Sinyalleri (14 gün{signals.geo?.resolved_name ? ` · ${signals.geo.resolved_name}` : ""}) — fiyat motoruna çarpan olarak girer</span>
+            <button onClick={openSigCfg} data-testid="ai-pricing-signal-cfg-btn" className="px-2 py-0.5 rounded-lg border border-stone-300 text-stone-500 text-[10px] font-bold hover:border-stone-400">⚙ Ağırlıklar</button>
           </div>
+          {showSigCfg && sigCfg && (
+            <div className="flex flex-wrap items-end gap-2 mb-2 bg-stone-50 border border-stone-200 rounded-lg p-2" data-testid="ai-pricing-signal-cfg">
+              {[["holiday_pct", "Tatil +%"], ["eve_pct", "Arife +%"], ["sunny_weekend_pct", "Güneşli h.sonu +%"], ["bad_weather_pct", "Şiddetli hava −%"]].map(([k, label]) => (
+                <label key={k} className="text-[10px] text-stone-500 font-bold">
+                  {label}
+                  <input type="number" min="0" max="15" step="0.5" value={sigCfg[k]} data-testid={`ai-pricing-sigcfg-${k}`}
+                    onChange={(e) => setSigCfg((c) => ({ ...c, [k]: e.target.value }))}
+                    className="block w-20 mt-0.5 border border-stone-300 rounded-lg px-2 py-1 text-[12px] font-normal" />
+                </label>
+              ))}
+              <label className="text-[10px] text-stone-500 font-bold flex items-center gap-1 pb-1.5">
+                <input type="checkbox" checked={!!sigCfg.enabled} data-testid="ai-pricing-sigcfg-enabled"
+                  onChange={(e) => setSigCfg((c) => ({ ...c, enabled: e.target.checked }))} /> Aktif
+              </label>
+              <button onClick={saveSigCfg} data-testid="ai-pricing-sigcfg-save" className="px-3 py-1.5 rounded-lg bg-stone-900 text-white text-[11px] font-bold">Kaydet</button>
+            </div>
+          )}
           <div className="flex gap-1 overflow-x-auto pb-1">
             {signals.rows.map((s) => (
               <div key={s.date} title={(s.reasons || []).join(" · ") || "Nötr"} data-testid={`ai-pricing-signal-${s.date}`}

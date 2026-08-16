@@ -187,6 +187,17 @@ export default function TrustCenterPanel({ activePropertyId, properties = [] }) 
             </div>
             <div className="bg-white border border-stone-200 rounded-xl p-3" data-testid="tc-acc-reasons">
               <div className="text-xs font-bold text-stone-500 mb-2">RED NEDENLERİ (etiketli veri)</div>
+              {acc.blind_spot && (
+                <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 p-2" data-testid="tc-blind-spot">
+                  <div className="text-[11px] font-black text-amber-800">🎯 Kör Nokta Radarı: {acc.blind_spot.label} — %{acc.blind_spot.share_pct} ({acc.blind_spot.count}/{acc.blind_spot.total_tagged} etiketli red)</div>
+                  <div className="text-[10px] text-amber-700 mt-0.5">{acc.blind_spot.recommendation}</div>
+                  {(acc.monthly_tags || []).length > 0 && (
+                    <div className="text-[9px] text-amber-600 mt-1" data-testid="tc-blind-spot-monthly">
+                      {acc.monthly_tags.slice(-3).map((m) => `${m.month}: ${Object.entries(m.tags).map(([t, n]) => `${m.labels[t]}×${n}`).join(", ")}`).join(" · ")}
+                    </div>
+                  )}
+                </div>
+              )}
               {(acc.reason_tags || []).length > 0 && (
                 <div className="flex flex-wrap gap-1 mb-2" data-testid="tc-reason-tags">
                   {acc.reason_tags.map((t) => (

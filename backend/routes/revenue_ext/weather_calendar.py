@@ -9,6 +9,14 @@ logger = logging.getLogger(__name__)
 
 WMO_BAD = {65, 66, 67, 75, 82, 86, 95, 96, 99}
 
+DEFAULT_SIGNAL_CFG = {"holiday_pct": 5.0, "eve_pct": 3.0, "sunny_weekend_pct": 3.0,
+                      "bad_weather_pct": 3.0, "enabled": True}
+
+
+async def get_signal_cfg(db, pid: str) -> dict:
+    doc = await db.demand_signal_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+    return {**DEFAULT_SIGNAL_CFG, **{k: doc[k] for k in DEFAULT_SIGNAL_CFG if k in doc}}
+
 
 async def _geocode(db, pid: str, city: str):
     cached = await db.property_geo.find_one({"property_id": pid}, {"_id": 0})
@@ -80,26 +88,30 @@ async def refresh_signals(db, pid: str, days: int = 21) -> dict:
             logger.warning(f"open-meteo fail: {e}")
     country = (geo or {}).get("country_code", "GB")
     hols = await _holidays(db, country, sorted({int(d[:4]) for d in dates}))
+    cfg = await get_signal_cfg(db, pid)
+    hp, ep, sp, bp = cfg["holiday_pct"], cfg["eve_pct"], cfg["sunny_weekend_pct"], cfg["bad_weather_pct"]
     now_iso = datetime.now(timezone.utc).isoformat()
     for ds in dates:
         mult, reasons = 1.0, []
         hol = hols.get(ds)
-        if hol:
-            mult *= 1.05
-            reasons.append(f"Resmi tatil: {hol} (+%5)")
+        if not cfg["enabled"]:
+            hol = hols.get(ds)
+        elif hol:
+            mult *= 1 + hp / 100
+            reasons.append(f"Resmi tatil: {hol} (+%{hp:g})")
         nxt = (datetime.strptime(ds, "%Y-%m-%d").date() + timedelta(days=1)).isoformat()
-        if not hol and hols.get(nxt):
-            mult *= 1.03
-            reasons.append(f"Tatil arifesi: {hols[nxt]} (+%3)")
+        if cfg["enabled"] and not hol and hols.get(nxt):
+            mult *= 1 + ep / 100
+            reasons.append(f"Tatil arifesi: {hols[nxt]} (+%{ep:g})")
         w = weather_map.get(ds)
         weekend = datetime.strptime(ds, "%Y-%m-%d").weekday() >= 4
-        if w:
+        if cfg["enabled"] and w:
             if (w.get("code") in WMO_BAD) or ((w.get("precip") or 0) >= 15):
-                mult *= 0.97
-                reasons.append(f"Şiddetli hava (yağış {w.get('precip') or 0:.0f}mm) (−%3)")
+                mult *= 1 - bp / 100
+                reasons.append(f"Şiddetli hava (yağış {w.get('precip') or 0:.0f}mm) (−%{bp:g})")
             elif weekend and (w.get("tmax") or 0) >= 22 and (w.get("precip") or 0) < 1:
-                mult *= 1.03
-                reasons.append(f"Güneşli hafta sonu ({w.get('tmax'):.0f}°C) (+%3)")
+                mult *= 1 + sp / 100
+                reasons.append(f"Güneşli hafta sonu ({w.get('tmax'):.0f}°C) (+%{sp:g})")
         await db.demand_calendar_signals.update_one(
             {"property_id": pid, "date": ds},
             {"$set": {"property_id": pid, "date": ds, "multiplier": round(mult, 3),
@@ -141,5 +153,28 @@ def create_weather_calendar_router(db, require_roles):
     @router.post("/{pid}/refresh")
     async def refresh(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         return {"ok": True, **(await refresh_signals(db, pid, 21))}
+
+    @router.get("/{pid}/config")
+    async def get_config(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        return {"property_id": pid, **(await get_signal_cfg(db, pid)),
+                "defaults": DEFAULT_SIGNAL_CFG}
+
+    @router.put("/{pid}/config")
+    async def put_config(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        upd = {}
+        for k in ("holiday_pct", "eve_pct", "sunny_weekend_pct", "bad_weather_pct"):
+            if k in data:
+                try:
+                    upd[k] = max(0.0, min(15.0, float(data[k])))
+                except (TypeError, ValueError):
+                    pass
+        if "enabled" in data:
+            upd["enabled"] = bool(data["enabled"])
+        if upd:
+            upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+            await db.demand_signal_config.update_one(
+                {"property_id": pid}, {"$set": {"property_id": pid, **upd}}, upsert=True)
+        await refresh_signals(db, pid, 21)
+        return {"ok": True, "property_id": pid, **(await get_signal_cfg(db, pid))}
 
     return router

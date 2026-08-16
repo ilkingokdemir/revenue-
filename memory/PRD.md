@@ -844,3 +844,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   7) Havuz izni: /api/chain/benchmark/consent GET/PUT (pool_consent koleksiyonu); share_data=false tesis benchmark'tan hariç; ChainBenchmarkPanel'de toggle'lı Havuz Veri İzinleri bölümü.
 - Test: tüm backend curl E2E (motor ×1.03 canlı Londra verisiyle doğrulandı) + testing_agent iteration_555 frontend %95+ (blokaj yok, opsiyonel palet derin-link P2'ye yazıldı).
 - BEKLEYEN: Apaleo Client ID/Secret hâlâ kullanıcıdan gelmedi (canlı sertifikasyon bloke).
+
+## Güncelleme (2026-08-16, 3 özellik — iter. 556, %100 geçti)
+- Sinyal Ağırlık Ayarı: GET/PUT /api/demand-signals/{pid}/config (holiday_pct/eve_pct/sunny_weekend_pct/bad_weather_pct 0-15 clamp + enabled; demand_signal_config koleksiyonu); PUT sonrası otomatik takvim yenileme. UI: AIPricingEnginePanel sinyal şeridinde ⚙ Ağırlıklar dişlisi.
+- Rakip Karşılaştırma PDF: GET /api/competitive-gap-pdf (trust_center.py; 17 kalem G1-G10+ekstralar, 16 VAR/1 KISMI + benzersiz farklar bölümü). UI: RmsComparisonPanel'de 📄 Gap Analizi PDF butonu (rmsc-gap-pdf-btn).
+- Kör Nokta Radarı: rms-acceptance raporuna blind_spot (en yaygın red etiketi + % pay + öneri, BLIND_SPOT_RECS) ve monthly_tags eklendi; TrustCenterPanel'de amber tc-blind-spot kartı; aylık yönetici PDF'ine '4. Kor Nokta Radari' bölümü (son 90 gün).
+- BEKLEYEN: Apaleo Client ID/Secret hâlâ gelmedi (kullanıcı 2 kez 'Evet' dedi ama anahtar yapıştırmadı; DB'de credentials boş — canlı sertifikasyon bloke).

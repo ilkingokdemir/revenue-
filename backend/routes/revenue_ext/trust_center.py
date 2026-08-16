@@ -14,6 +14,16 @@ REJECT_TAG_LABELS = {
     "other": "Diğer",
 }
 
+BLIND_SPOT_RECS = {
+    "too_aggressive": "Adım tavanını (max_up_pct) düşürmeyi veya otonom güven eşiğini yükseltmeyi değerlendirin.",
+    "too_low": "Taban fiyat / bid-price alt sınırını gözden geçirin; gereksiz indirim baskısı olabilir.",
+    "event_unknown": "Etkinlik sinyal kaynaklarını genişletin (tarama yarıçapı, venue listesi, takvim sinyalleri).",
+    "segment_mismatch": "Segment/kanal bazlı fiyat katmanlarını ve kanal kurallarını motor konfigürasyonuna işleyin.",
+    "data_wrong": "PMS/OTB veri senkronunu ve pazar tarama tazeliğini kontrol edin.",
+    "strategy_conflict": "Strateji dönemlerini (fiyat dondurma, promosyon) motor kısıtı olarak tanımlayın.",
+    "other": "Serbest metin nedenlerini inceleyip yeni etiket türetin.",
+}
+
 
 async def run_outcome_evaluation(db, limit: int = 200) -> dict:
     """K2: tarihi geçmiş uygulanmış fiyat kararlarının GERÇEKLEŞEN sonucunu kaydeder."""
@@ -197,7 +207,25 @@ def create_trust_center_router(db, require_roles):
             decided = w["accepted"] + w["auto_applied"] + w["rejected"]
             w["acceptance_rate_pct"] = round((w["accepted"] + w["auto_applied"]) / decided * 100, 1) if decided else None
         decided_all = acc_total + auto_total + rej_total
+        monthly_tags = {}
+        for d in decs:
+            if d.get("status") == "rejected" and d.get("reason_tag"):
+                mk = str(d.get("decided_at") or "")[:7]
+                monthly_tags.setdefault(mk, {})
+                monthly_tags[mk][d["reason_tag"]] = monthly_tags[mk].get(d["reason_tag"], 0) + 1
+        blind_spot = None
+        if tag_counts:
+            top_tag, top_n = max(tag_counts.items(), key=lambda x: x[1])
+            total_tagged = sum(tag_counts.values())
+            blind_spot = {"tag": top_tag, "label": REJECT_TAG_LABELS.get(top_tag, top_tag),
+                          "count": top_n, "total_tagged": total_tagged,
+                          "share_pct": round(top_n / total_tagged * 100, 0),
+                          "recommendation": BLIND_SPOT_RECS.get(top_tag, "")}
         return {"property_id": pid, "weeks": out,
+                "blind_spot": blind_spot,
+                "monthly_tags": [{"month": k, "tags": {t: n for t, n in v.items()},
+                                  "labels": {t: REJECT_TAG_LABELS.get(t, t) for t in v}}
+                                 for k, v in sorted(monthly_tags.items())],
                 "reasons": sorted([{"reason": k, "count": v} for k, v in reasons.items()],
                                   key=lambda x: -x["count"])[:10],
                 "reason_tags": sorted([{"tag": k, "label": REJECT_TAG_LABELS.get(k, k), "count": v}
@@ -220,6 +248,86 @@ def create_trust_center_router(db, require_roles):
             content = f.read()
         return {"title": "Uyum İlkeleri Anayasası (D1)", "content": content,
                 "updated_at": datetime.fromtimestamp(os.path.getmtime(path), tz=timezone.utc).isoformat()}
+
+    # ---------- Rakip Karşılaştırma (Gap Analizi) PDF ----------
+    @router.get("/competitive-gap-pdf")
+    async def competitive_gap_pdf(_u: dict = Depends(require_roles(*ROLES))):
+        """Rakip gap analizi tablosu — müşteri sunumu için tek sayfalık PDF."""
+        rows = [
+            ("G1", "Tek adim +-% limit + gunluk push tavani", "VAR", "Asimetrik adim limiti + cold-start korumasi + gunluk tavan + ihlal logu"),
+            ("G2", "Kabul orani + red nedeni taksonomisi", "VAR", "8 haftalik kabul raporu + 7 etiketli red taksonomisi + kor nokta radari"),
+            ("G3", "Uyum ilkeleri anayasasi (D1)", "VAR", "6 ilke, Robot Guven Merkezi'nde goruntulenebilir"),
+            ("G4", "Beklenen Net OTB (p_cancel)", "VAR", "Lead/kanal/iade bazli iptal+no-show modeli, overbooking optimizer"),
+            ("G5", "Iptal modeli kalibrasyonu", "VAR", "Aylik otomatik kalibrasyon + Brier + veri-guven kapisi"),
+            ("G6", "Shadow Mode + cikis kriterleri", "VAR", ">=28 gun + uyum >=%60 yazili cikis kriteri"),
+            ("G7", "Talep simulatoru / backtest", "VAR", "Point-in-time replay + politika taramasi + nedensel analiz"),
+            ("G8", "Lisansli rate shopping", "KISMI", "scraper/licensed/mock mod anahtari hazir - feed sozlesmesi karar bekliyor"),
+            ("G9", "Esneklik randomizasyonu", "VAR", "Guc analizli fiyat deneyi + dogal deney tespiti"),
+            ("G10", "Havuz veri izni / transfer learning", "VAR", "Tesis bazli consent bayragi + benchmark haric tutma"),
+            ("+", "HotelRunner yazma adaptoru", "VAR", "Canli push + drift auto-repush"),
+            ("+", "Hava durumu sinyali", "VAR", "open-meteo, otel bazli ayarlanabilir carpan, motora entegre"),
+            ("+", "Resmi tatil takvimi", "VAR", "Nager.Date, tatil/arife carpani, motora entegre"),
+            ("+", "KVKK/GDPR modulu", "VAR", "Veri arama/export/silme + denetim logu"),
+            ("+", "Grup wash + rate parity monitor", "VAR", "Grup wash robotu + kanal parite izleme"),
+            ("+", "RGI / MPI / ARI endeksleri", "VAR", "STR dilinde haftalik endeks kaniti"),
+            ("+", "Haftalik + aylik yonetici PDF", "VAR", "Kanal performans + yonetici ozeti PDF'leri"),
+        ]
+        uniques = ["Kanit zarfi + guven semantigi", "Bid-price displacement agi (MinLOS/CTA/CTD)",
+                   "Publisher sertifikasyonu + kill switch tatbikat robotu",
+                   "Kanal ekonomisi (komisyon/VAT/promo ile net katki)",
+                   "Fiyat faktor selalesi + aciklanabilir oneri kaniti"]
+        from io import BytesIO
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas as pc
+        from reportlab.lib.units import mm
+        buf = BytesIO()
+        c = pc.Canvas(buf, pagesize=A4)
+        w, hh = A4
+        c.setFillColorRGB(0.05, 0.09, 0.16)
+        c.rect(0, hh - 30 * mm, w, 30 * mm, fill=1, stroke=0)
+        c.setFillColorRGB(1, 1, 1)
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(16 * mm, hh - 13 * mm, "Rakip Gap Analizi - Kapsam Karsilastirmasi")
+        c.setFont("Helvetica", 9)
+        c.drawString(16 * mm, hh - 21 * mm,
+                     f"MyHotelBox RMS · {datetime.now(timezone.utc).date().isoformat()} · 17 kalemde 16 VAR / 1 KISMI")
+        y = hh - 40 * mm
+        for code, item, st, note in rows:
+            if y < 26 * mm:
+                c.showPage()
+                y = hh - 20 * mm
+            c.setFont("Helvetica-Bold", 9)
+            c.setFillColorRGB(0.15, 0.15, 0.15)
+            c.drawString(16 * mm, y, f"{code}  {item}")
+            c.setFillColorRGB(*(0.02, 0.45, 0.35) if st == "VAR" else (0.8, 0.55, 0.05))
+            c.drawRightString(w - 16 * mm, y, st)
+            y -= 4.6 * mm
+            c.setFont("Helvetica", 8)
+            c.setFillColorRGB(0.42, 0.42, 0.42)
+            c.drawString(22 * mm, y, note[:110])
+            y -= 6.2 * mm
+        y -= 3 * mm
+        if y < 50 * mm:
+            c.showPage()
+            y = hh - 20 * mm
+        c.setFont("Helvetica-Bold", 11)
+        c.setFillColorRGB(0.1, 0.1, 0.1)
+        c.drawString(16 * mm, y, "Rakip listesinde hic olmayan farklarimiz")
+        y -= 7 * mm
+        c.setFont("Helvetica", 8.5)
+        for u in uniques:
+            c.setFillColorRGB(0.25, 0.25, 0.25)
+            c.drawString(22 * mm, y, "+ " + u)
+            y -= 5.5 * mm
+        y -= 4 * mm
+        c.setFont("Helvetica-Oblique", 7.5)
+        c.setFillColorRGB(0.45, 0.45, 0.45)
+        c.drawString(16 * mm, y, "G8 notu: lisansli feed teknik olarak hazir; saglayici sozlesmesi (OTA Insight/Lighthouse vb.) ticari karardir.")
+        c.save()
+        buf.seek(0)
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(buf, media_type="application/pdf",
+                                 headers={"Content-Disposition": 'inline; filename="rakip-gap-analizi.pdf"'})
 
     # ---------- G6: Shadow Mode ----------
     @router.get("/shadow-mode/{pid}/status")

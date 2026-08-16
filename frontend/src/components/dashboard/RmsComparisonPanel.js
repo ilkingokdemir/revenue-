@@ -117,6 +117,10 @@ export default function RmsComparisonPanel({ activePropertyId, properties = [] }
                 </select>
               </label>
             )}
+            <a href={`${API}/api/competitive-gap-pdf`} target="_blank" rel="noreferrer" data-testid="rmsc-gap-pdf-btn"
+              className="px-4 py-2.5 rounded-xl border border-stone-600 hover:border-stone-400 text-stone-200 text-sm font-black inline-flex items-center gap-2">
+              📄 Gap Analizi PDF
+            </a>
             <button onClick={() => { setSlide(0); setPresenting(true); }} data-testid="rmsc-present-btn"
               className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-900 text-sm font-black inline-flex items-center gap-2">
               <Presentation size={16} weight="fill" /> Sunum Modu

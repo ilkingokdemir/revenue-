@@ -1,0 +1,16 @@
+{
+  "summary": "Frontend E2E verified all 3 new features for the iteration: (1) Signal Weight Config (Sinyal Ağırlık Ayarı) — opened ⚙ Ağırlıklar config row in AI Pricing Engine (Revenue Management → Market Robot → AI Pricing subtab, property 'default'/Franziskaner by Centra); confirmed 4 pct inputs + Aktif checkbox + Kaydet; changed sunny_weekend_pct 3→2, saved, waited ~9s for open-meteo refresh, strip cell 08-16 flipped from ×1.03 to ×1.02; restored to 3 and cell went back to ×1.03. (2) Kör Nokta Radarı — Trust Center amber card data-testid='tc-blind-spot' renders exactly '🎯 Kör Nokta Radarı: Motor etkinliği bilmiyor — %100 (1/1 etiketli red)' with recommendation and tc-blind-spot-monthly='2026-08: Motor etkinliği bilmiyor×1'. tc-reason-tags and tc-principles-section still present (regression OK). (3) Gap Analizi PDF — rmsc-gap-pdf-btn ('📄 Gap Analizi PDF') visible next to 'Sunum Modu' in RMS Comparison; page.request.get /api/competitive-gap-pdf returned 200 application/pdf, magic %PDF, size 3896 bytes. Executive PDF regression /api/pms-connect/executive-pdf/default returned 200 application/pdf, size 2825 bytes. Signal strip still renders 14 date cells.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None. Restored sunny_weekend_pct back to 3 (default) after test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Navigation for AI Pricing panel: Revenue Management (sidebar 'revenue-btn') → left panel 'Market Robot' text link → subtab data-testid='market-robot-ai-pricing'. Set branch to Franziskaner by Centra (property 'default') via top BRANCH dropdown ('All Branches' button) before entering, otherwise the panel may load with different property. TrustCenter and RmsComparison are reached via command palette (data-testid='command-palette-trigger', input 'command-palette-input', item testids 'command-palette-item-trust-center' / 'command-palette-item-rms-comparison'). PDF endpoints require session cookies; use page.request.get within a logged-in browser context. Signal config PUT triggers live open-meteo refresh — wait ~8-10s before re-reading strip.",
+  "rca of the issue": "N/A — all features pass."
+}

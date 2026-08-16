@@ -850,3 +850,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Rakip Karşılaştırma PDF: GET /api/competitive-gap-pdf (trust_center.py; 17 kalem G1-G10+ekstralar, 16 VAR/1 KISMI + benzersiz farklar bölümü). UI: RmsComparisonPanel'de 📄 Gap Analizi PDF butonu (rmsc-gap-pdf-btn).
 - Kör Nokta Radarı: rms-acceptance raporuna blind_spot (en yaygın red etiketi + % pay + öneri, BLIND_SPOT_RECS) ve monthly_tags eklendi; TrustCenterPanel'de amber tc-blind-spot kartı; aylık yönetici PDF'ine '4. Kor Nokta Radari' bölümü (son 90 gün).
 - BEKLEYEN: Apaleo Client ID/Secret hâlâ gelmedi (kullanıcı 2 kez 'Evet' dedi ama anahtar yapıştırmadı; DB'de credentials boş — canlı sertifikasyon bloke).
+
+## Güncelleme (2026-08-16, 3 özellik — iter. 557, %100 geçti)
+- Sinyal Etki Raporu: GET /api/demand-signals/{pid}/impact-report?weeks=4 (oda-gece × ADR × (çarpan−1)/çarpan tahmini); AIPricingEnginePanel'de 📊 Etki Raporu toggle'ı, haftalık hücreler + toplam (+18.3 CHF doğrulandı).
+- Radar Bildirimi: workers.check_blind_spot_alert (min 3 etiketli red, pay ≥%50, 7 gün dedupe, notifications'a high priority uyarı) + günlük blind_spot_alert_loop; manuel tetik POST /api/rms-acceptance/{pid}/blind-spot-alert/run.
+- Gap PDF Markalama: /api/competitive-gap-pdf?pid=&customer= — template_settings logo_url (varsa çizilir) + 'X icin hazirlanmistir' altın satır; RmsComparisonPanel'de müşteri adı inputu (rmsc-gap-customer-input).
+- BEKLEYEN: Apaleo Client ID/Secret (4. kez istendi, hâlâ gelmedi — DB'de credentials boş).

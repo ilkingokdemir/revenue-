@@ -52,6 +52,8 @@ const AIPricingEnginePanel = ({ propertyId }) => {
   const [signals, setSignals] = useState(null);
   const [sigCfg, setSigCfg] = useState(null);
   const [showSigCfg, setShowSigCfg] = useState(false);
+  const [impact, setImpact] = useState(null);
+  const [showImpact, setShowImpact] = useState(false);
   const [savingCfg, setSavingCfg] = useState(false);
 
   const curFormatter = useMemo(
@@ -168,6 +170,16 @@ const AIPricingEnginePanel = ({ propertyId }) => {
     } finally {
       setRunning(false);
     }
+  };
+
+  const openImpact = async () => {
+    if (!showImpact && !impact) {
+      try {
+        const r = await axios.get(`${API}/demand-signals/${propertyId}/impact-report?weeks=4`, { headers: authHeaders() });
+        setImpact(r.data);
+      } catch { toast.error("Etki raporu yüklenemedi"); return; }
+    }
+    setShowImpact((s) => !s);
   };
 
   const openSigCfg = async () => {
@@ -381,8 +393,33 @@ const AIPricingEnginePanel = ({ propertyId }) => {
         <div className="bg-white border border-stone-200 rounded-xl p-3" data-testid="ai-pricing-signals-strip">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-[11px] font-bold text-stone-600">🌤 Hava + Resmi Tatil Sinyalleri (14 gün{signals.geo?.resolved_name ? ` · ${signals.geo.resolved_name}` : ""}) — fiyat motoruna çarpan olarak girer</span>
-            <button onClick={openSigCfg} data-testid="ai-pricing-signal-cfg-btn" className="px-2 py-0.5 rounded-lg border border-stone-300 text-stone-500 text-[10px] font-bold hover:border-stone-400">⚙ Ağırlıklar</button>
+            <div className="flex items-center gap-1.5">
+              <button onClick={openImpact} data-testid="ai-pricing-signal-impact-btn" className="px-2 py-0.5 rounded-lg border border-stone-300 text-stone-500 text-[10px] font-bold hover:border-stone-400">📊 Etki Raporu</button>
+              <button onClick={openSigCfg} data-testid="ai-pricing-signal-cfg-btn" className="px-2 py-0.5 rounded-lg border border-stone-300 text-stone-500 text-[10px] font-bold hover:border-stone-400">⚙ Ağırlıklar</button>
+            </div>
           </div>
+          {showImpact && impact && (
+            <div className="mb-2 bg-stone-50 border border-stone-200 rounded-lg p-2" data-testid="ai-pricing-signal-impact">
+              <div className="text-[11px] font-black text-stone-700 mb-1">
+                📊 Sinyal Etki Raporu (son 4 hafta) — toplam tahmini katkı:{" "}
+                <span className={impact.total_est_impact >= 0 ? "text-emerald-700" : "text-rose-600"} data-testid="ai-pricing-impact-total">
+                  {impact.total_est_impact >= 0 ? "+" : ""}{impact.total_est_impact} {impact.currency}
+                </span>{" "}
+                <span className="text-stone-400 font-normal">({impact.total_signal_days} sinyalli gün)</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {impact.weeks.map((wk) => (
+                  <div key={wk.week} className="bg-white border border-stone-200 rounded-lg px-2 py-1" data-testid={`ai-pricing-impact-${wk.week}`}>
+                    <div className="text-[9px] text-stone-400">{wk.week} · {wk.signal_days} gün · {wk.room_nights} og</div>
+                    <div className={`text-[12px] font-black ${wk.est_impact > 0 ? "text-emerald-700" : wk.est_impact < 0 ? "text-rose-600" : "text-stone-400"}`}>
+                      {wk.est_impact > 0 ? "+" : ""}{wk.est_impact} {impact.currency}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[9px] text-stone-400 mt-1">{impact.note}</p>
+            </div>
+          )}
           {showSigCfg && sigCfg && (
             <div className="flex flex-wrap items-end gap-2 mb-2 bg-stone-50 border border-stone-200 rounded-lg p-2" data-testid="ai-pricing-signal-cfg">
               {[["holiday_pct", "Tatil +%"], ["eve_pct", "Arife +%"], ["sunny_weekend_pct", "Güneşli h.sonu +%"], ["bad_weather_pct", "Şiddetli hava −%"]].map(([k, label]) => (

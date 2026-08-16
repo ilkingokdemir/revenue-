@@ -1320,3 +1320,53 @@ async def pilot_lead_reminder_loop(db, interval_seconds: int = 21600, stale_days
         except Exception as e:
             logger.warning(f"pilot_lead_reminder_loop error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+async def check_blind_spot_alert(db, pid: str, min_total: int = 3, threshold: float = 50.0) -> dict:
+    """Son 90 günün red etiketlerinden kör noktayı bulur; eşik aşılırsa yöneticiye bildirim bırakır."""
+    from routes.revenue_ext.trust_center import REJECT_TAG_LABELS, BLIND_SPOT_RECS
+    now = datetime.now(timezone.utc)
+    since90 = (now - timedelta(days=90)).isoformat()
+    tags = {}
+    async for d in db.ai_pricing_decisions.find(
+            {"property_id": pid, "status": "rejected", "reason_tag": {"$ne": None},
+             "decided_at": {"$gte": since90}}, {"_id": 0, "reason_tag": 1}):
+        tags[d["reason_tag"]] = tags.get(d["reason_tag"], 0) + 1
+    total = sum(tags.values())
+    if not tags or total < min_total:
+        return {"alerted": False, "reason": f"etiketli red {total} < {min_total} (yetersiz veri)", "total": total}
+    top, n = max(tags.items(), key=lambda x: x[1])
+    share = round(n / total * 100, 0)
+    if share < threshold:
+        return {"alerted": False, "reason": f"en yüksek pay %{share} < %{threshold:g}", "total": total,
+                "top": top, "share_pct": share}
+    week_ago = (now - timedelta(days=7)).isoformat()
+    dup = await db.notifications.find_one(
+        {"created_by": "Kör Nokta Radarı", "property_id": pid, "blind_spot_tag": top,
+         "created_at": {"$gte": week_ago}}, {"_id": 1})
+    if dup:
+        return {"alerted": False, "reason": "son 7 günde aynı uyarı gönderildi", "top": top, "share_pct": share}
+    label = REJECT_TAG_LABELS.get(top, top)
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()), "type": "warning",
+        "title": f"🎯 Kör Nokta Uyarısı: {label} — %{share:g}",
+        "message": (f"Son 90 günde etiketli redlerin %{share:g}'i ({n}/{total}) '{label}' kaynaklı. "
+                    + BLIND_SPOT_RECS.get(top, "")),
+        "category": "revenue", "target_user": "", "target_role": "manager",
+        "link_to": "trust-center", "priority": "high", "read": False,
+        "property_id": pid, "blind_spot_tag": top,
+        "created_by": "Kör Nokta Radarı", "created_at": now.isoformat()})
+    return {"alerted": True, "top": top, "label": label, "share_pct": share, "count": n, "total": total}
+
+
+async def blind_spot_alert_loop(db, interval_seconds: int = 86400):
+    while True:
+        try:
+            props = await db.properties.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1}).to_list(50)
+            for p in (props or [{"id": "default"}]):
+                r = await check_blind_spot_alert(db, p["id"])
+                if r.get("alerted"):
+                    logger.info(f"blind_spot_alert_loop: {p['id']} → {r['label']} %{r['share_pct']}")
+        except Exception as e:
+            logger.warning(f"blind_spot_alert_loop error: {e}")
+        await asyncio.sleep(interval_seconds)

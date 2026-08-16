@@ -249,10 +249,22 @@ def create_trust_center_router(db, require_roles):
         return {"title": "Uyum İlkeleri Anayasası (D1)", "content": content,
                 "updated_at": datetime.fromtimestamp(os.path.getmtime(path), tz=timezone.utc).isoformat()}
 
+    @router.post("/rms-acceptance/{pid}/blind-spot-alert/run")
+    async def run_blind_spot_alert(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        from workers import check_blind_spot_alert
+        return await check_blind_spot_alert(db, pid)
+
     # ---------- Rakip Karşılaştırma (Gap Analizi) PDF ----------
     @router.get("/competitive-gap-pdf")
-    async def competitive_gap_pdf(_u: dict = Depends(require_roles(*ROLES))):
-        """Rakip gap analizi tablosu — müşteri sunumu için tek sayfalık PDF."""
+    async def competitive_gap_pdf(pid: str = "", customer: str = "",
+                                  _u: dict = Depends(require_roles(*ROLES))):
+        """Rakip gap analizi tablosu — müşteri sunumu için markalı PDF."""
+        ts = {}
+        if pid:
+            ts = await db.template_settings.find_one({"property_id": pid}, {"_id": 0}) or {}
+        logo_url = (ts.get("logo_url") or "").strip()
+        hotel_name = (ts.get("hotel_name") or "").strip()
+        customer = (customer or "").strip()[:60]
         rows = [
             ("G1", "Tek adim +-% limit + gunluk push tavani", "VAR", "Asimetrik adim limiti + cold-start korumasi + gunluk tavan + ihlal logu"),
             ("G2", "Kabul orani + red nedeni taksonomisi", "VAR", "8 haftalik kabul raporu + 7 etiketli red taksonomisi + kor nokta radari"),
@@ -283,14 +295,39 @@ def create_trust_center_router(db, require_roles):
         buf = BytesIO()
         c = pc.Canvas(buf, pagesize=A4)
         w, hh = A4
+        _t = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
         c.setFillColorRGB(0.05, 0.09, 0.16)
         c.rect(0, hh - 30 * mm, w, 30 * mm, fill=1, stroke=0)
+        if logo_url:
+            try:
+                import httpx
+                from reportlab.lib.utils import ImageReader
+                async with httpx.AsyncClient(timeout=10, follow_redirects=True) as cl:
+                    lr = await cl.get(logo_url)
+                if lr.status_code == 200:
+                    img = ImageReader(BytesIO(lr.content))
+                    iw, ih = img.getSize()
+                    lw = 24 * mm
+                    lh = lw * ih / iw
+                    c.drawImage(img, w - lw - 10 * mm, hh - lh - 5 * mm, width=lw, height=lh,
+                                mask="auto", preserveAspectRatio=True)
+            except Exception:
+                pass
         c.setFillColorRGB(1, 1, 1)
         c.setFont("Helvetica-Bold", 16)
-        c.drawString(16 * mm, hh - 13 * mm, "Rakip Gap Analizi - Kapsam Karsilastirmasi")
+        c.drawString(16 * mm, hh - 12 * mm, "Rakip Gap Analizi - Kapsam Karsilastirmasi")
         c.setFont("Helvetica", 9)
-        c.drawString(16 * mm, hh - 21 * mm,
+        c.drawString(16 * mm, hh - 19 * mm,
                      f"MyHotelBox RMS · {datetime.now(timezone.utc).date().isoformat()} · 17 kalemde 16 VAR / 1 KISMI")
+        brand_line = ""
+        if customer:
+            brand_line = f"{customer} icin hazirlanmistir"
+        elif hotel_name:
+            brand_line = f"{hotel_name} icin hazirlanmistir"
+        if brand_line:
+            c.setFont("Helvetica-BoldOblique", 10)
+            c.setFillColorRGB(0.99, 0.85, 0.4)
+            c.drawString(16 * mm, hh - 26 * mm, brand_line.translate(_t))
         y = hh - 40 * mm
         for code, item, st, note in rows:
             if y < 26 * mm:

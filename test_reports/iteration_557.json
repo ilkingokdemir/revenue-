@@ -1,0 +1,16 @@
+{
+  "summary": "Frontend E2E verified all 3 new iteration features on property 'default' (Franziskaner by Centra). (1) Sinyal Etki Raporu — clicked 📊 Etki Raporu (data-testid ai-pricing-signal-impact-btn) in AI Pricing signals strip; panel data-testid ai-pricing-signal-impact opened, ai-pricing-impact-total='+18.3 CHF' (matches expected), 4 weekly cells present: W30/W31/W32 '0 gün · 0 og0 CHF' and W33 '1 gün · 7 og+18.3 CHF'. 2nd click hid the panel (visible=False). Regression ⚙ Ağırlıklar toggle still opens config row (checkbox visible). (2) Gap PDF Markalama — RMS Comparison panel (opened via command palette): input data-testid rmsc-gap-customer-input present with placeholder \"Müşteri adı (PDF'e işlenir)\"; typed 'Test Otel AŞ'; rmsc-gap-pdf-btn href = /api/competitive-gap-pdf?pid=default&customer=Test%20Otel%20A%C5%9E (both customer= and pid= params present); page.request.get returned status 200, content-type application/pdf, 4107 bytes, valid magic. (3) Radar Bildirimi light check — POST /api/rms-acceptance/default/blind-spot-alert/run returned 200 {alerted:false, reason:'etiketli red 1 < 3 (yetersiz veri)', total:1} — correct threshold guard behavior. Regression: signal strip renders, tc-reason-tags present in Trust Center.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None. No tagged rejects created (as instructed to avoid triggering real notifications).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "To switch to Franziskaner (property 'default'): use sidebar Select with data-testid='branch-selector-container' — the Select trigger sometimes exposes only [data-testid=\"branch-selector-container\"] button (not [data-testid=\"property-selector\"] directly, which was intermittently 0-count). Options: [data-testid=\"branch-default\"] etc. Navigation to AI Pricing: revenue-btn → click 'Market Robot' text → [data-testid=\"market-robot-ai-pricing\"]. Impact panel loads via GET /api/demand-signals/default/impact-report?weeks=4 (~2-4s). PDF via /api/competitive-gap-pdf?pid=default&customer=... requires session cookies, so use page.request.get from logged-in context.",
+  "rca of the issue": "N/A — all features pass as designed."
+}

@@ -154,6 +154,45 @@ def create_weather_calendar_router(db, require_roles):
     async def refresh(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         return {"ok": True, **(await refresh_signals(db, pid, 21))}
 
+    @router.get("/{pid}/impact-report")
+    async def impact_report(pid: str, weeks: int = 4, _u: dict = Depends(require_roles(*ROLES))):
+        """Hava/tatil çarpanlarının gelire kattığı tahmini farkı haftalık ölçer."""
+        from routes.revenue_ext.ml_pickup import _stay_counts
+        weeks = max(1, min(8, weeks))
+        today = datetime.now(timezone.utc).date()
+        monday = today - timedelta(days=today.weekday())
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "currency": 1}) or {}
+        out, total_impact, total_days = [], 0.0, 0
+        for w in range(weeks - 1, -1, -1):
+            ws = monday - timedelta(weeks=w)
+            days = [(ws + timedelta(days=i)).isoformat() for i in range(7)]
+            sigs = await db.demand_calendar_signals.find(
+                {"property_id": pid, "date": {"$in": days}, "multiplier": {"$ne": 1.0}},
+                {"_id": 0, "date": 1, "multiplier": 1, "reasons": 1}).to_list(7)
+            week_impact, rn_sum, details = 0.0, 0, []
+            for s in sigs:
+                rn = (await _stay_counts(db, pid, s["date"]))["otb"]
+                bs = await db.bookings.aggregate([
+                    {"$match": {"property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
+                                "check_in": s["date"]}},
+                    {"$group": {"_id": None, "rev": {"$sum": "$total_price"}, "n": {"$sum": 1}}}]).to_list(1)
+                adr = ((bs[0]["rev"] or 0) / max(rn, bs[0]["n"])) if (bs and bs[0]["n"]) else 0.0
+                m = float(s["multiplier"])
+                imp = round(rn * adr * (m - 1) / m, 2) if (rn and adr) else 0.0
+                week_impact += imp
+                rn_sum += rn
+                details.append({"date": s["date"], "mult": m, "room_nights": rn,
+                                "adr": round(adr, 2), "est_impact": imp,
+                                "reasons": s.get("reasons") or []})
+            out.append({"week_start": days[0], "week": ws.strftime("%G-W%V"),
+                        "signal_days": len(sigs), "room_nights": rn_sum,
+                        "est_impact": round(week_impact, 2), "details": details})
+            total_impact += week_impact
+            total_days += len(sigs)
+        return {"property_id": pid, "weeks": out, "currency": prop.get("currency", "GBP"),
+                "total_est_impact": round(total_impact, 2), "total_signal_days": total_days,
+                "note": "Tahmin: sinyal çarpanı uygulanan günlerde satılan oda-gece × ADR × (çarpan−1)/çarpan. Çarpanın öneriye yansıdığı ve önerinin uygulandığı varsayımıyla üst sınır tahminidir."}
+
     @router.get("/{pid}/config")
     async def get_config(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         return {"property_id": pid, **(await get_signal_cfg(db, pid)),

@@ -59,6 +59,17 @@ const AIPricingEnginePanel = ({ propertyId }) => {
   const [compTrigResult, setCompTrigResult] = useState(null);
   const [compTrigRunning, setCompTrigRunning] = useState(false);
   const [compTrigSel, setCompTrigSel] = useState([]);
+  const [compTrigTrend, setCompTrigTrend] = useState(null);
+  const [showTrend, setShowTrend] = useState(false);
+
+  const openTrend = async () => {
+    if (showTrend) { setShowTrend(false); return; }
+    try {
+      const r = await axios.get(`${API}/demand-signals/${propertyId}/comp-trigger/trend?weeks=8`, { headers: authHeaders() });
+      setCompTrigTrend(r.data);
+      setShowTrend(true);
+    } catch { toast.error("Trend yüklenemedi"); }
+  };
 
   const curFormatter = useMemo(
     () => makeCurrencyFormatter(data?.currency || "GBP"),
@@ -119,7 +130,7 @@ const AIPricingEnginePanel = ({ propertyId }) => {
     try {
       const r = await axios.post(`${API}/demand-signals/${propertyId}/comp-trigger/apply`,
         { dates: compTrigSel }, { headers: authHeaders() });
-      toast.success(r.data.applied ? `⚡ ${r.data.applied} güne öneri fiyatı uygulandı — takvimden '↩ Zamları Geri Al' ile geri alınabilir` : "Uygulanacak sapma yok");
+      toast.success(r.data.applied ? `⚡ ${r.data.applied} güne × ${r.data.room_types} oda tipine öneri fiyatı uygulandı — takvimden '↩ Zamları Geri Al' ile geri alınabilir` : "Uygulanacak sapma yok");
       setCompTrigResult(null);
       loadSuggestions();
     } catch { toast.error("Uygulanamadı"); }
@@ -450,11 +461,49 @@ const AIPricingEnginePanel = ({ propertyId }) => {
               <Switch data-testid="ai-pricing-comptrig-enabled" checked={!!compTrig.enabled}
                 onCheckedChange={(v) => saveCompTrig({ enabled: v })} />
             </div>
+            <button onClick={openTrend} data-testid="ai-pricing-comptrig-trend-btn"
+              className={`px-3 py-2 rounded-xl text-xs font-bold border ${showTrend ? "bg-stone-900 text-white border-stone-900" : "border-stone-300 text-stone-600 hover:border-stone-400"}`}>
+              📈 Trend
+            </button>
             <button onClick={runCompTrig} disabled={compTrigRunning} data-testid="ai-pricing-comptrig-run"
               className="px-4 py-2 rounded-xl bg-stone-900 text-white text-xs font-bold hover:bg-stone-700 disabled:opacity-50">
               {compTrigRunning ? "Kontrol ediliyor…" : "Şimdi Kontrol Et"}
             </button>
           </div>
+          {showTrend && compTrigTrend && (
+            <div className="mt-3 bg-stone-50 border border-stone-200 rounded-xl p-3" data-testid="ai-pricing-comptrig-trend">
+              {(compTrigTrend.weeks || []).length === 0 ? (
+                <p className="text-[11px] text-stone-400" data-testid="ai-pricing-comptrig-trend-empty">Trend için pazar tarama verisi yok — Pazar Robotu'ndan tarama başlatın.</p>
+              ) : (() => {
+                const wks = compTrigTrend.weeks;
+                const vals = wks.map((w) => w.avg_dev);
+                const lo = Math.min(...vals, 0), hi = Math.max(...vals, 0);
+                const pad = Math.max((hi - lo) * 0.15, 2);
+                const yMap = (v) => 14 + (1 - (v - (lo - pad)) / ((hi + pad) - (lo - pad))) * 92;
+                const xMap = (i) => 30 + (wks.length > 1 ? (i / (wks.length - 1)) * 540 : 270);
+                const pts = wks.map((w, i) => `${xMap(i)},${yMap(w.avg_dev)}`).join(" ");
+                return (
+                  <>
+                    <div className="text-[11px] font-black text-stone-700 mb-1">📈 Haftalık Sapma Trendi — pazarla makas (ort. %)</div>
+                    <svg viewBox="0 0 600 130" className="w-full" data-testid="ai-pricing-comptrig-trend-chart">
+                      <line x1="30" y1={yMap(0)} x2="570" y2={yMap(0)} stroke="#a8a29e" strokeWidth="1" strokeDasharray="4 3" />
+                      <text x="574" y={yMap(0) + 3} fontSize="9" fill="#78716c">0%</text>
+                      <polyline points={pts} fill="none" stroke="#7c3aed" strokeWidth="2" />
+                      {wks.map((w, i) => (
+                        <g key={w.week}>
+                          <circle cx={xMap(i)} cy={yMap(w.avg_dev)} r="3.5" fill={w.avg_dev >= 0 ? "#e11d48" : "#0284c7"} />
+                          <text x={xMap(i)} y={yMap(w.avg_dev) - 7} fontSize="9" fontWeight="bold"
+                            fill={w.avg_dev >= 0 ? "#be123c" : "#0369a1"} textAnchor="middle">{`${w.avg_dev > 0 ? "+" : ""}${w.avg_dev}%`}</text>
+                          <text x={xMap(i)} y="126" fontSize="8" fill="#78716c" textAnchor="middle">{w.week.slice(5)}</text>
+                        </g>
+                      ))}
+                    </svg>
+                    <p className="text-[9px] text-stone-400 mt-1">{compTrigTrend.note} · nokta: kırmızı=pahalıyız, mavi=ucuzuz · {wks.reduce((a, w) => a + w.days, 0)} gün verisi</p>
+                  </>
+                );
+              })()}
+            </div>
+          )}
           {compTrigResult && (
             <div className="mt-3 bg-stone-50 border border-stone-200 rounded-xl p-2.5" data-testid="ai-pricing-comptrig-result">
               {compTrigResult.deviations?.length > 0 ? (

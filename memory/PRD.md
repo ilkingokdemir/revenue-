@@ -915,3 +915,7 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Türe Göre Geri Al: undo-markups {kind} filtresi (holiday/event/season/occupancy/comp_trigger, kind'sız=tümü); UI'da '↩ Zamları Geri Al ▾' dropdown (rev-cal-undo-menu, 6 seçenek, dış-tık kapanır); markup_history undo loguna tür yazılır.
 - Isı Haritası PDF: GET /{pid}/heatmap-pdf?year&month — reportlab takvim ızgarası (kırmızı/mavi renk tonu, gün başına biz/pazar/%), özet (ort. sapma, en pahalı/ucuz günler), lejant, logo desteği; PDF Merkezi on_demand'e 'heatmap' kartı eklendi (pdf-center-card-heatmap).
 - Ek: branch-selector-btn data-testid'i (SelectTrigger) otomasyon stabilitesi için eklendi.
+
+## Güncelleme (2026-08-17, 2 özellik — iter. 568b, curl + UI self-test doğrulandı)
+- Oda Tipi Bazlı Tetik: apply_comp_trigger artık TÜM oda tiplerine yazar — her oda tipinin fiyatı taban fiyat oranıyla ölçeklenir (ör. öneri 221.24 → Deluxe 327.44); dönüş {applied, room_types, writes}; log '{N} gün × {M} oda tipi'; toast güncellendi.
+- Tetik Geçmiş Grafiği: GET /{pid}/comp-trigger/trend?weeks=8 — konaklama tarihine göre haftalık ort/min/max sapma (ISO hafta bucket'ları, geçmiş 2 hafta + gelecek N hafta); UI'da '📈 Trend' butonu (ai-pricing-comptrig-trend-btn) → SVG çizgi grafik (sıfır çizgisi, kırmızı=pahalı/mavi=ucuz noktalar, hafta etiketleri). Not: SVG text'te çoklu JSX child render sorunu template literal ile çözüldü.

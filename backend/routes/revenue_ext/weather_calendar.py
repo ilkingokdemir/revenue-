@@ -399,13 +399,17 @@ async def _weekly_trend(db, pid: str, weeks: int = 8) -> list:
 
 
 async def check_trend_alert(db, pid: str) -> bool:
-    """Makas (|ort. sapma|) 2 hafta üst üste açılıyorsa bildirim gönderir (haftada 1 dedupe)."""
+    """Makas (|ort. sapma|) üst üste N hafta açılıyorsa bildirim gönderir (haftada 1 dedupe)."""
+    cfg = await db.comp_trigger.find_one({"property_id": pid}, {"_id": 0}) or {}
+    n_weeks = int(cfg.get("trend_weeks", 2))
+    step_pp = float(cfg.get("trend_step_pp", 1.0))
     wks = await _weekly_trend(db, pid, 8)
     hit = None
-    for i in range(len(wks) - 2):
-        a, b, c = abs(wks[i]["avg_dev"]), abs(wks[i + 1]["avg_dev"]), abs(wks[i + 2]["avg_dev"])
-        if b >= a + 1 and c >= b + 1:
-            hit = wks[i:i + 3]
+    for i in range(len(wks) - n_weeks):
+        window = wks[i:i + n_weeks + 1]
+        if all(abs(window[j + 1]["avg_dev"]) >= abs(window[j]["avg_dev"]) + step_pp
+               for j in range(n_weeks)):
+            hit = window
     if not hit:
         return False
     iso = datetime.now(timezone.utc).date().isocalendar()
@@ -417,8 +421,8 @@ async def check_trend_alert(db, pid: str) -> bool:
     lines = [f"{w['week']}: ort. %{w['avg_dev']:+g} (makas %{abs(w['avg_dev']):g})" for w in hit]
     await db.notifications.insert_one({
         "id": str(_uuid.uuid4()), "type": "warning",
-        "title": "📉 Trend Uyarısı: pazarla makas 2 haftadır açılıyor",
-        "message": "Haftalık ortalama sapma üst üste büyüyor — fiyat stratejinizi gözden geçirin:\n"
+        "title": f"📉 Trend Uyarısı: pazarla makas {n_weeks} haftadır açılıyor",
+        "message": f"Haftalık ortalama sapma üst üste (adım ≥{step_pp:g} puan) büyüyor — fiyat stratejinizi gözden geçirin:\n"
                    + "\n".join(lines)
                    + "\nAI Pricing → Rakip Fiyat Tetiği → 📈 Trend'den detayları inceleyebilirsiniz.",
         "category": "revenue", "target_user": "", "target_role": "manager",
@@ -806,7 +810,9 @@ def create_weather_calendar_router(db, require_roles):
     async def get_comp_trigger(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         doc = await db.comp_trigger.find_one({"property_id": pid}, {"_id": 0}) or {}
         return {"property_id": pid, "threshold_pct": float(doc.get("threshold_pct", 10)),
-                "enabled": bool(doc.get("enabled", False))}
+                "enabled": bool(doc.get("enabled", False)),
+                "trend_weeks": int(doc.get("trend_weeks", 2)),
+                "trend_step_pp": float(doc.get("trend_step_pp", 1.0))}
 
     @router.put("/{pid}/comp-trigger")
     async def set_comp_trigger(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
@@ -818,11 +824,42 @@ def create_weather_calendar_router(db, require_roles):
                 pass
         if "enabled" in data:
             upd["enabled"] = bool(data["enabled"])
+        if "trend_weeks" in data:
+            try:
+                upd["trend_weeks"] = max(2, min(6, int(data["trend_weeks"])))
+            except (TypeError, ValueError):
+                pass
+        if "trend_step_pp" in data:
+            try:
+                upd["trend_step_pp"] = max(0.5, min(10.0, float(data["trend_step_pp"])))
+            except (TypeError, ValueError):
+                pass
         await db.comp_trigger.update_one({"property_id": pid},
                                          {"$set": {"property_id": pid, **upd}}, upsert=True)
         doc = await db.comp_trigger.find_one({"property_id": pid}, {"_id": 0})
         return {"ok": True, "threshold_pct": doc.get("threshold_pct", 10),
-                "enabled": doc.get("enabled", False)}
+                "enabled": doc.get("enabled", False),
+                "trend_weeks": int(doc.get("trend_weeks", 2)),
+                "trend_step_pp": float(doc.get("trend_step_pp", 1.0))}
+
+    @router.get("/{pid}/comp-trigger/summary")
+    async def comp_trigger_summary(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Dashboard mini kartı: güncel hafta makası + yön (açılıyor/kapanıyor/stabil)."""
+        wks = await _weekly_trend(db, pid, 6)
+        iso = datetime.now(timezone.utc).date().isocalendar()
+        cur_key = f"{iso[0]}-W{iso[1]:02d}"
+        idx = next((i for i, w in enumerate(wks) if w["week"] >= cur_key), 0) if wks else 0
+        this_w = wks[idx] if wks else None
+        next_w = wks[idx + 1] if len(wks) > idx + 1 else None
+        direction = "stabil"
+        if this_w and next_w:
+            diff = abs(next_w["avg_dev"]) - abs(this_w["avg_dev"])
+            direction = "açılıyor" if diff >= 0.5 else ("kapanıyor" if diff <= -0.5 else "stabil")
+        alert = await db.notifications.find_one(
+            {"created_by": "Trend Uyarısı", "property_id": pid, "week": cur_key}, {"_id": 1})
+        return {"property_id": pid, "this_week": this_w, "next_week": next_w,
+                "direction": direction, "weeks": wks, "alert_active": bool(alert),
+                "note": "Konaklama haftalarına göre pazarla ortalama fiyat makası."}
 
     @router.post("/{pid}/comp-trigger/run")
     async def run_comp_trigger(pid: str, _u: dict = Depends(require_roles(*ROLES))):

@@ -3,6 +3,7 @@ import RobotImpactCard from "./RobotImpactCard";
 import axios from "axios";
 import DeparturesBoard from "./DeparturesBoard";
 import { Pickup24Card } from "./Pickup24Card";
+import { GapSummaryCard } from "./GapSummaryCard";
 import {
   Sparkle,
   ArrowRight,
@@ -391,6 +392,11 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
       {/* 24-Hour Pickup (Pulse) */}
       <div className="mt-5">
         <Pickup24Card propertyId={pickupScope || propertyId} />
+      </div>
+
+      {/* Pazarla Makas Mini Kartı */}
+      <div className="mt-5">
+        <GapSummaryCard propertyId={propertyId} onNavigate={onNavigate} />
       </div>
 
       {/* Robot Başarı Panosu — aylık kâr katkısı */}

@@ -120,7 +120,7 @@ const AIPricingEnginePanel = ({ propertyId }) => {
     try {
       const r = await axios.put(`${API}/demand-signals/${propertyId}/comp-trigger`,
         { threshold_pct: compTrig?.threshold_pct, ...patch }, { headers: authHeaders() });
-      setCompTrig((c) => ({ ...c, threshold_pct: r.data.threshold_pct, enabled: r.data.enabled }));
+      setCompTrig((c) => ({ ...c, ...r.data }));
       toast.success(r.data.enabled ? "Rakip tetiği aktif — robot 6 saatte bir kontrol edecek" : "Rakip tetiği kaydedildi");
     } catch { toast.error("Kaydedilemedi"); }
   };
@@ -458,6 +458,20 @@ const AIPricingEnginePanel = ({ propertyId }) => {
                 onChange={(e) => setCompTrig((c) => ({ ...c, threshold_pct: Number(e.target.value) }))}
                 onBlur={(e) => saveCompTrig({ threshold_pct: Number(e.target.value) })}
                 className="block w-20 mt-0.5 border border-stone-300 rounded-lg px-2 py-1.5 text-sm font-normal" />
+            </label>
+            <label className="text-[10px] text-stone-500 font-bold" title="Trend uyarısı: makas kaç hafta üst üste açılırsa bildirim gönderilsin">
+              Uyarı: hafta
+              <input type="number" min="2" max="6" step="1" value={compTrig.trend_weeks ?? 2} data-testid="ai-pricing-comptrig-trend-weeks"
+                onChange={(e) => setCompTrig((c) => ({ ...c, trend_weeks: Number(e.target.value) }))}
+                onBlur={(e) => saveCompTrig({ trend_weeks: Number(e.target.value) })}
+                className="block w-16 mt-0.5 border border-stone-300 rounded-lg px-2 py-1.5 text-sm font-normal" />
+            </label>
+            <label className="text-[10px] text-stone-500 font-bold" title="Trend uyarısı: her hafta en az kaç puan artış sayılsın">
+              puan artış ≥
+              <input type="number" min="0.5" max="10" step="0.5" value={compTrig.trend_step_pp ?? 1} data-testid="ai-pricing-comptrig-trend-step"
+                onChange={(e) => setCompTrig((c) => ({ ...c, trend_step_pp: Number(e.target.value) }))}
+                onBlur={(e) => saveCompTrig({ trend_step_pp: Number(e.target.value) })}
+                className="block w-16 mt-0.5 border border-stone-300 rounded-lg px-2 py-1.5 text-sm font-normal" />
             </label>
             <div className="flex flex-col items-center gap-1">
               <span className="text-[10px] font-bold text-stone-500">Otomatik</span>

@@ -27,6 +27,46 @@ export const RateCalendarEditable = ({ propertyId }) => {
   const [holidayPrompt, setHolidayPrompt] = useState(null);
   const [eventPrompt, setEventPrompt] = useState(null);
   const [bulkHolidayOpen, setBulkHolidayOpen] = useState(false);
+  const [seasonsOpen, setSeasonsOpen] = useState(false);
+  const [seasons, setSeasons] = useState([]);
+  const [seasonForm, setSeasonForm] = useState({ name: "", start_date: "", end_date: "", adjustment_pct: 10 });
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState([]);
+
+  const openSeasons = async () => {
+    try {
+      const r = await axios.get(`${API}/demand-signals/${propertyId}/season-templates`);
+      setSeasons(r.data.templates);
+      setSeasonsOpen(true);
+    } catch { toast.error("Şablonlar yüklenemedi"); }
+  };
+
+  const applySeason = async (tid) => {
+    try {
+      const r = await axios.post(`${API}/demand-signals/${propertyId}/season-templates/${tid}/apply`, { room_type_id: roomType || cal?.room_type?.id || "" });
+      toast.success(`${r.data.template}: ${r.data.applied} güne %${r.data.pct > 0 ? "+" : ""}${r.data.pct} uygulandı${r.data.skipped_manual ? ` (${r.data.skipped_manual} manuel gün korundu)` : ""}`);
+      setSeasonsOpen(false);
+      load();
+    } catch { toast.error("Uygulanamadı"); }
+  };
+
+  const createSeason = async () => {
+    try {
+      await axios.post(`${API}/demand-signals/${propertyId}/season-templates`, seasonForm);
+      toast.success("Şablon oluşturuldu");
+      setSeasonForm({ name: "", start_date: "", end_date: "", adjustment_pct: 10 });
+      const r = await axios.get(`${API}/demand-signals/${propertyId}/season-templates`);
+      setSeasons(r.data.templates);
+    } catch (e) { toast.error(e.response?.data?.detail || "Oluşturulamadı"); }
+  };
+
+  const openHistory = async () => {
+    try {
+      const r = await axios.get(`${API}/demand-signals/${propertyId}/markup-history`);
+      setHistory(r.data.history);
+      setHistoryOpen(true);
+    } catch { toast.error("Geçmiş yüklenemedi"); }
+  };
 
   useEffect(() => {
     if (!propertyId) return;
@@ -174,6 +214,10 @@ export const RateCalendarEditable = ({ propertyId }) => {
             } catch { toast.error("Geri alınamadı"); }
           }} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-300 text-rose-600 hover:bg-rose-50"
             data-testid="rev-cal-undo-markups-btn">↩ Zamları Geri Al</button>
+          <button onClick={openSeasons} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white"
+            data-testid="rev-cal-seasons-btn">🗂 Sezonlar</button>
+          <button onClick={openHistory} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-stone-300 text-stone-600 hover:bg-stone-100"
+            data-testid="rev-cal-history-btn">🕓 Geçmiş</button>
         </div>
       </div>
 
@@ -338,6 +382,58 @@ export const RateCalendarEditable = ({ propertyId }) => {
           </div>
         ))}
       </div>
+
+      {/* Seasons Modal */}
+      {seasonsOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => setSeasonsOpen(false)}>
+          <div className="bg-white rounded-2xl p-5 w-[460px] max-h-[80vh] overflow-auto shadow-2xl" onClick={e => e.stopPropagation()} data-testid="rev-cal-seasons-modal">
+            <div className="text-sm font-black text-stone-800 mb-2">🗂 Sezon Şablonları</div>
+            <div className="space-y-2 mb-4">
+              {seasons.map(s => (
+                <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2 text-xs" data-testid={`rev-cal-season-${s.id}`}>
+                  <span><b>{s.name}</b> · {s.start_date} → {s.end_date} · <b className={s.adjustment_pct >= 0 ? "text-emerald-700" : "text-rose-600"}>%{s.adjustment_pct > 0 ? "+" : ""}{s.adjustment_pct}</b></span>
+                  <span className="flex gap-1.5">
+                    <button onClick={() => applySeason(s.id)} className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-bold" data-testid={`rev-cal-season-apply-${s.id}`}>Uygula</button>
+                    <button onClick={async () => { await axios.delete(`${API}/demand-signals/${propertyId}/season-templates/${s.id}`); setSeasons(x => x.filter(t => t.id !== s.id)); }}
+                      className="px-2 py-1 rounded-lg border border-rose-200 text-rose-500" data-testid={`rev-cal-season-del-${s.id}`}>✕</button>
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-stone-200 pt-3">
+              <div className="text-[11px] font-bold text-stone-500 mb-2">YENİ ŞABLON</div>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <input value={seasonForm.name} onChange={e => setSeasonForm(f => ({ ...f, name: e.target.value }))} placeholder="Şablon adı" className="border border-stone-300 rounded-lg px-2 py-1.5 text-xs col-span-2" data-testid="rev-cal-season-name" />
+                <input type="date" value={seasonForm.start_date} onChange={e => setSeasonForm(f => ({ ...f, start_date: e.target.value }))} className="border border-stone-300 rounded-lg px-2 py-1.5 text-xs" data-testid="rev-cal-season-start" />
+                <input type="date" value={seasonForm.end_date} onChange={e => setSeasonForm(f => ({ ...f, end_date: e.target.value }))} className="border border-stone-300 rounded-lg px-2 py-1.5 text-xs" data-testid="rev-cal-season-end" />
+                <input type="number" min="-50" max="100" value={seasonForm.adjustment_pct} onChange={e => setSeasonForm(f => ({ ...f, adjustment_pct: Number(e.target.value) }))} placeholder="% ayarlama" className="border border-stone-300 rounded-lg px-2 py-1.5 text-xs" data-testid="rev-cal-season-pct" />
+                <button onClick={createSeason} className="bg-stone-900 text-white rounded-lg text-xs font-bold" data-testid="rev-cal-season-create">+ Oluştur</button>
+              </div>
+              <p className="text-[9px] text-stone-400">Uygulamada manuel fiyatlar korunur; "↩ Zamları Geri Al" ile tüm sezon fiyatları geri alınabilir.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {historyOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => setHistoryOpen(false)}>
+          <div className="bg-white rounded-2xl p-5 w-[480px] max-h-[75vh] overflow-auto shadow-2xl" onClick={e => e.stopPropagation()} data-testid="rev-cal-history-modal">
+            <div className="text-sm font-black text-stone-800 mb-2">🕓 Zam Geçmişi</div>
+            {history.length === 0 ? <p className="text-xs text-stone-400">Henüz kayıt yok.</p> : (
+              <div className="space-y-1.5">
+                {history.map(h => (
+                  <div key={h.id} className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-1.5 text-[11px]" data-testid={`rev-cal-history-${h.id}`}>
+                    <span className={`font-black ${h.action === "undo" ? "text-rose-600" : "text-emerald-700"}`}>{h.action === "undo" ? "↩ GERİ ALINDI" : "✓ UYGULANDI"}</span>
+                    <span className="ml-1.5 text-stone-600">{h.kind === "holiday" ? "🎌" : h.kind === "event" ? "🎪" : h.kind === "season" ? "🗂" : ""} {h.detail}</span>
+                    <div className="text-[9px] text-stone-400">{String(h.at).slice(0, 16).replace("T", " ")} · {h.by}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Bulk Holiday Markup Confirm */}
       {bulkHolidayOpen && (

@@ -1,5 +1,6 @@
 """Hava Durumu + Resmi Tatil Sinyalleri — open-meteo & Nager.Date (anahtarsız), fiyat motoru çarpanı."""
 import logging
+import uuid as _uuid
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -169,6 +170,13 @@ async def compute_impact_report(db, pid: str, weeks: int = 4) -> dict:
             "note": "Tahmin: sinyal çarpanı uygulanan günlerde satılan oda-gece × ADR × (çarpan−1)/çarpan. Çarpanın öneriye yansıdığı ve önerinin uygulandığı varsayımıyla üst sınır tahminidir."}
 
 
+async def _log_markup(db, pid: str, action: str, kind: str, detail: str, by: str = "", count: int = 1):
+    await db.markup_history.insert_one({
+        "id": str(_uuid.uuid4()), "property_id": pid, "action": action, "kind": kind,
+        "detail": detail[:220], "count": count, "by": by or "sistem",
+        "at": datetime.now(timezone.utc).isoformat()})
+
+
 async def send_weekly_signal_digest(db, pid: str, force: bool = False) -> dict:
     """Haftanın tatil/etkinlik/hava sinyallerini pazartesi sabahı yöneticiye özetler."""
     import uuid as _uuid
@@ -210,7 +218,18 @@ async def send_weekly_signal_digest(db, pid: str, force: bool = False) -> dict:
         "link_to": "revenue", "priority": "normal", "read": False,
         "property_id": pid, "week": week_key,
         "created_by": "Sinyal Özeti Robotu", "created_at": now.isoformat()})
-    return {"sent": True, "week": week_key, "signal_lines": len(lines)}
+    email_status = "skipped"
+    try:
+        from routes.revenue_ext.owner_pulse import _send_email
+        mgrs = await db.users.find({"role": {"$in": ["admin", "manager"]}},
+                                   {"_id": 0, "email": 1}).to_list(10)
+        html = "<h3>📅 Haftalık Sinyal Özeti (" + week_key + ")</h3><pre style='font-family:sans-serif'>" + msg + "</pre>"
+        statuses = [await _send_email(m["email"], f"Haftalık Sinyal Özeti ({week_key})", html)
+                    for m in mgrs if m.get("email")]
+        email_status = ",".join(statuses) or "no-recipients"
+    except Exception as e:
+        email_status = f"error: {e}"
+    return {"sent": True, "week": week_key, "signal_lines": len(lines), "email_status": email_status}
 
 
 def create_weather_calendar_router(db, require_roles):
@@ -321,6 +340,10 @@ def create_weather_calendar_router(db, require_roles):
                           "holiday_name": name, "set_by": "Tatil Zam Robotu",
                           "updated_at": now_iso}}, upsert=True)
             applied.append({"date": ds, "name": name, "base": recommended, "new_rate": new_rate})
+        if applied:
+            await _log_markup(db, pid, "apply", "holiday",
+                              f"Toplu tatil zammı %{pct:g} · {len(applied)} gün",
+                              by=str(_u.get("email") or ""), count=len(applied))
         return {"ok": True, "pct": pct, "room_type_id": rt_id,
                 "applied": applied, "skipped": skipped,
                 "note": f"%{pct:g} tatil zammı uygulandı. Manuel override'lı günler atlandı; tatil zamları tekrar çalıştırılırsa güncellenir."}
@@ -350,6 +373,10 @@ def create_weather_calendar_router(db, require_roles):
                       "markup_name": (data.get("name") or "")[:80],
                       "prev_custom_rate": prev, "set_by": "Zam Robotu",
                       "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        await _log_markup(db, pid, "apply", kind,
+                          f"{ds} · {data.get('name') or ''} · yeni {new_rate:g}"
+                          + (f" (önceki {prev:g})" if prev is not None else ""),
+                          by=str(_u.get("email") or ""))
         return {"ok": True, "date": ds, "kind": kind, "new_rate": new_rate, "prev_custom_rate": prev}
 
     @router.post("/{pid}/undo-markups")
@@ -373,8 +400,111 @@ def create_weather_calendar_router(db, require_roles):
             else:
                 await db.rate_overrides.delete_one({"_id": o["_id"]})
                 removed += 1
+        if restored + removed:
+            await _log_markup(db, pid, "undo", "all",
+                              f"{restored} manuel fiyata, {removed} otomatik fiyata döndü",
+                              by=str(_u.get("email") or ""), count=restored + removed)
         return {"ok": True, "restored_manual": restored, "reverted_to_auto": removed,
                 "total": restored + removed}
+
+    @router.get("/{pid}/markup-history")
+    async def markup_history(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        rows = await db.markup_history.find({"property_id": pid}, {"_id": 0}).sort("at", -1).to_list(50)
+        return {"property_id": pid, "history": rows}
+
+    @router.get("/{pid}/season-templates")
+    async def season_templates(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        rows = await db.season_templates.find({"property_id": pid}, {"_id": 0}).to_list(30)
+        if not rows:
+            y = datetime.now(timezone.utc).year
+            prop = await db.properties.find_one({"id": pid}, {"_id": 0, "city": 1}) or {}
+            geo = await _geocode(db, pid, (prop.get("city") or "London").strip())
+            hols = await _holidays(db, (geo or {}).get("country_code", "GB"), [y, y + 1])
+            today = datetime.now(timezone.utc).date().isoformat()
+            nxt = next((d for d in sorted(hols) if d >= today), None)
+            seeds = [
+                {"name": "Yaz Sezonu", "start_date": f"{y}-06-01", "end_date": f"{y}-08-31", "adjustment_pct": 15},
+                {"name": "Kış Sezonu", "start_date": f"{y}-11-01", "end_date": f"{y + 1}-02-28", "adjustment_pct": -10},
+            ]
+            if nxt:
+                d0 = datetime.strptime(nxt, "%Y-%m-%d").date()
+                seeds.append({"name": f"Bayram: {hols[nxt]}", "adjustment_pct": 20,
+                              "start_date": (d0 - timedelta(days=1)).isoformat(),
+                              "end_date": (d0 + timedelta(days=1)).isoformat()})
+            for s in seeds:
+                s.update({"id": str(_uuid.uuid4()), "property_id": pid, "seeded": True,
+                          "created_at": datetime.now(timezone.utc).isoformat()})
+                await db.season_templates.insert_one(dict(s))
+            rows = await db.season_templates.find({"property_id": pid}, {"_id": 0}).to_list(30)
+        return {"templates": rows}
+
+    @router.post("/{pid}/season-templates")
+    async def create_season(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        try:
+            pct = max(-50.0, min(100.0, float(data.get("adjustment_pct"))))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "adjustment_pct gerekli")
+        name = (data.get("name") or "").strip()[:60]
+        sd, ed = (data.get("start_date") or "").strip(), (data.get("end_date") or "").strip()
+        if not name or not sd or not ed or ed < sd:
+            raise HTTPException(400, "name, start_date, end_date gerekli (bitiş ≥ başlangıç)")
+        doc = {"id": str(_uuid.uuid4()), "property_id": pid, "name": name,
+               "start_date": sd, "end_date": ed, "adjustment_pct": pct,
+               "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.season_templates.insert_one(dict(doc))
+        return {"ok": True, "template": doc}
+
+    @router.delete("/{pid}/season-templates/{tid}")
+    async def delete_season(pid: str, tid: str, _u: dict = Depends(require_roles(*ROLES))):
+        await db.season_templates.delete_one({"property_id": pid, "id": tid})
+        return {"ok": True}
+
+    @router.post("/{pid}/season-templates/{tid}/apply")
+    async def apply_season(pid: str, tid: str, data: dict = None,
+                           _u: dict = Depends(require_roles(*ROLES))):
+        tpl = await db.season_templates.find_one({"property_id": pid, "id": tid}, {"_id": 0})
+        if not tpl:
+            raise HTTPException(404, "Şablon bulunamadı")
+        pct = float(tpl["adjustment_pct"])
+        room_type_id = ((data or {}).get("room_type_id") or "").strip()
+        room_types = await db.room_types.find({"property_id": pid}, {"_id": 0}).to_list(20)
+        rt = next((r for r in room_types if r.get("id") == room_type_id), None) or \
+            (room_types[0] if room_types else {"id": "default", "base_rate": 100})
+        rt_id = rt.get("id", "")
+        base_rate = float(rt.get("base_rate", 100) or 100)
+        total_rooms = await db.rooms.count_documents({"property_id": pid}) or 10
+        d0 = max(datetime.strptime(tpl["start_date"], "%Y-%m-%d").date(),
+                 datetime.now(timezone.utc).date())
+        d1 = datetime.strptime(tpl["end_date"], "%Y-%m-%d").date()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        applied, skipped, cursor = 0, 0, d0
+        while cursor <= d1 and applied + skipped < 190:
+            ds = cursor.isoformat()
+            cursor += timedelta(days=1)
+            ovr = await db.rate_overrides.find_one(
+                {"property_id": pid, "date": ds, "room_type_id": rt_id}, {"_id": 0})
+            if ovr and not ovr.get("markup_kind") and not ovr.get("holiday_markup"):
+                skipped += 1
+                continue
+            booked = await db.bookings.count_documents(
+                {"property_id": pid, "check_in": {"$lte": ds}, "check_out": {"$gt": ds},
+                 "status": {"$ne": "cancelled"}})
+            occ = min(100, round(booked / max(total_rooms, 1) * 100))
+            mult = 1.4 if occ >= 90 else 1.2 if occ >= 75 else 1.0 if occ >= 50 else 0.85 if occ >= 25 else 0.7
+            new_rate = round(base_rate * mult * (1 + pct / 100))
+            await db.rate_overrides.update_one(
+                {"property_id": pid, "date": ds, "room_type_id": rt_id},
+                {"$set": {"property_id": pid, "date": ds, "room_type_id": rt_id,
+                          "custom_rate": float(new_rate), "markup_kind": "season",
+                          "markup_name": tpl["name"], "prev_custom_rate": None,
+                          "set_by": "Sezon Şablonu", "updated_at": now_iso}}, upsert=True)
+            applied += 1
+        await _log_markup(db, pid, "apply", "season",
+                          f"{tpl['name']} ({tpl['start_date']}→{tpl['end_date']}, %{pct:+g}) · {applied} gün",
+                          by=str(_u.get("email") or ""), count=applied)
+        return {"ok": True, "template": tpl["name"], "pct": pct,
+                "applied": applied, "skipped_manual": skipped,
+                "note": "Manuel fiyatlar korundu. '↩ Zamları Geri Al' ile tümü geri alınabilir."}
 
     @router.post("/{pid}/weekly-digest/run")
     async def weekly_digest_run(pid: str, _u: dict = Depends(require_roles(*ROLES))):

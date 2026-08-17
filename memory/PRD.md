@@ -884,3 +884,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Zam Geri Alma: POST /api/demand-signals/{pid}/apply-markup (prev_custom_rate saklar, markup_kind/markup_name) + POST /{pid}/undo-markups (manuel fiyat varsa restore, yoksa override silinir); takvim modalları artık apply-markup kullanır; header'da ↩ Zamları Geri Al (rev-cal-undo-markups-btn).
 - Sinyal Özeti Bildirimi: send_weekly_signal_digest (hafta dedupe, refresh + 7 gün tatil/hava/etkinlik satırları) + weekly_signal_digest_loop (Pzt 03-09 UTC) + manuel POST /{pid}/weekly-digest/run. W33 özeti bildirimlerde.
 - Mükerrer Veri Temizliği: YENİ routes/hotel_ops/data_cleanup.py — GET dry-run + POST merge (en çok rezervasyonlu kayıt korunur; bookings/rooms/rate_overrides/pms_rate_mapping remap; data_cleanup_log denetim). Settings → 'Veri Temizliği' (DB temiz: 78 kayıt, 0 grup → yeşil rozet).
+
+## Güncelleme (2026-08-17, 3 özellik — iter. 563, %100 geçti)
+- Sezon Şablonları: db.season_templates (tesis başına seed: Yaz +15 / Kış -10 / Bayram +20 — bayram tarihi tesisin ülkesine göre otomatik); CRUD + apply (max 190 gün, occ-katmanlı base, manuel override korunur, markup_kind=season); RateCalendarEditable 🗂 Sezonlar modalı (listele/uygula/sil/oluştur).
+- Zam Geçmişi: db.markup_history (_log_markup — apply/undo, kind, detay, kullanıcı e-postası); GET /{pid}/markup-history; 🕓 Geçmiş modalı.
+- Digest E-postası: send_weekly_signal_digest artık owner_pulse._send_email ile admin/manager kullanıcılara HTML e-posta gönderiyor — RESEND_API_KEY placeholder olduğundan MOCK modda; gerçek anahtar girilince canlı.
+- Tüm zamlar (tatil/etkinlik/sezon) tek '↩ Zamları Geri Al' ile geri alınabilir.

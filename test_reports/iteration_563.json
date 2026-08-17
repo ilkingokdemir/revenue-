@@ -1,0 +1,24 @@
+{
+  "summary": "Frontend-only validation of 3 new Turkish RMS features on Rate Calendar. All 3 features PASS. (1) Sezon Şablonları: rev-cal-seasons-btn opens rev-cal-seasons-modal listing 3 seeded templates — 'Yaz Sezonu · 2026-06-01→2026-08-31 · %+15', 'Kış Sezonu · 2026-11-01→2027-02-28 · %-10', 'Bayram: Summer Bank Holiday · 2026-08-30→2026-09-01 · %+20', each with 'Uygula' + ✕ delete. Created custom template 'Test Sezon' (2026-10-01→2026-10-03, %+5) via rev-cal-season-name/start/end/pct + rev-cal-season-create → toast 'Şablon oluşturuldu' and it appears in list. Applied it (rev-cal-season-apply-{id}) → toast 'Test Sezon: 0 güne %+5 uygulandı (3 manuel gün korundu)' (all 3 target Oct dates already had manual overrides — correct per task note 'manuel fiyatlar korunur'). Modal closed after apply. (2) Zam Geçmişi: rev-cal-history-btn opens rev-cal-history-modal showing '✓ UYGULANDI 🗂 Test Sezon (2026-10-01→2026-10-03, %+5) · 0 gün' with timestamp '2026-08-17 03:41 · admin@hotelbox.com'. (3) Digest E-postası: POST /api/demand-signals/default/weekly-digest/run → 200 {sent:true, week:'2026-W34', signal_lines:2, email_status:'mock,mock,mock,mock'} — MOCK mode confirmed correct. Regression: '🎌 Tüm Tatillere Zam' visible; '↩ Zamları Geri Al' empty-state click → info toast 'Geri alınacak tatil/etkinlik zammı yok'; holiday modal opens for Aug 31 (rev-cal-holiday-31). CLEANUP COMPLETE: Test Sezon deleted; the 3 seed templates (Yaz/Kış/Bayram) are all present at end of test.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Seasons modal has no explicit close button/backdrop-click-to-close: ESC key does not dismiss rev-cal-seasons-modal, forcing users (and tests) to click outside via mouse to close. Consider adding a visible close ✕ header button and ESC handler for consistency with rev-cal-history-modal.",
+    "'Test Sezon: 0 güne %+5 uygulandı (3 manuel gün korundu)' — when 0 days actually flipped, users may perceive apply as a no-op. Consider highlighting the '(N manuel gün korundu)' with a hint 'manuel fiyatları geçersiz kılmak için önce Zamları Geri Al'.",
+    "Delete confirmation for seed season templates should ideally warn 'This is a system template' — currently seed and user templates delete identically, which enabled accidental removal during automated testing.",
+    "Task-note wording said 'October days 1-3 show amber custom rates' after applying Test Sezon, but the seed had pre-existing manual overrides on those dates so 0 days flipped. Manual-preservation behavior is correct; task description could be clarified to prevent tester confusion."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (backend curl-verified by main agent; UI-driven digest endpoint returned 200 mock)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Temporarily created 'Test Sezon' custom template — DELETED at end. Yaz Sezonu seed template was accidentally removed during test cleanup and was RESTORED (Yaz Sezonu · 2026-06-01→2026-08-31 · %+15). Final state: all 3 seed templates intact, no test artifacts remain.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The Sezonlar modal (rev-cal-seasons-modal) cannot be closed via ESC — click outside (e.g., page.mouse.click(50,50)) to dismiss. When looking up a template's id by matching text, use el.parentElement (immediate row) not el.closest('div') — the latter matches the full modal container and returns the FIRST apply button's id (which is Yaz's), leading to wrong deletion. Season apply may report '0 güne' if target dates already have manual overrides — this is correct behavior. Digest endpoint /api/demand-signals/default/weekly-digest/run returns email_status='mock,mock,mock,mock' with placeholder Resend key."
+}

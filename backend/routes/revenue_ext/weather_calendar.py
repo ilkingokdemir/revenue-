@@ -347,6 +347,7 @@ async def run_competitor_price_trigger(db, pid: str, force: bool = False) -> dic
                                "dev_pct": round(dev, 1),
                                "suggestion": round(mk * (1.02 if dev < 0 else 0.98), 2)})
     deviations.sort(key=lambda x: -abs(x["dev_pct"]))
+    trend_alert = await check_trend_alert(db, pid)
     sent = False
     if deviations:
         day_key = today.isoformat()
@@ -366,20 +367,22 @@ async def run_competitor_price_trigger(db, pid: str, force: bool = False) -> dic
                 "created_by": "Rakip Fiyat Tetiği", "created_at": datetime.now(timezone.utc).isoformat()})
             sent = True
     return {"ran": True, "threshold_pct": threshold, "deviations": deviations[:10],
-            "deviation_days": len(deviations), "notified": sent}
+            "deviation_days": len(deviations), "notified": sent, "trend_alert": trend_alert}
 
 
-async def _month_deviations(db, pid: str, year: int, month: int) -> dict:
-    from calendar import monthrange
-    n = monthrange(year, month)[1]
-    dates = [f"{year:04d}-{month:02d}-{dd:02d}" for dd in range(1, n + 1)]
+async def _weekly_trend(db, pid: str, weeks: int = 8) -> list:
+    """Konaklama tarihine göre haftalık ort/min/max sapma bucket'ları."""
+    weeks = max(2, min(16, weeks))
+    today = datetime.now(timezone.utc).date()
+    start = today - timedelta(days=14)
+    dates = [(start + timedelta(days=i)).isoformat() for i in range(14 + weeks * 7)]
     rt = await db.room_types.find_one({"property_id": pid}, {"_id": 0}) or {"base_rate": 100}
     base_rate = float(rt.get("base_rate", 100) or 100)
     snaps = await db.market_supply.aggregate([
         {"$match": {"property_id": pid, "scan_type": "geo", "date": {"$in": dates}}},
         {"$sort": {"scanned_at": -1}},
-        {"$group": {"_id": "$date", "avg_price": {"$first": "$avg_price"}}}]).to_list(40)
-    out = {}
+        {"$group": {"_id": "$date", "avg_price": {"$first": "$avg_price"}}}]).to_list(200)
+    buckets = {}
     for s in snaps:
         mk = float(s.get("avg_price") or 0)
         if mk <= 0:
@@ -387,6 +390,68 @@ async def _month_deviations(db, pid: str, year: int, month: int) -> dict:
         ovr = await db.rate_overrides.find_one(
             {"property_id": pid, "date": s["_id"]}, {"_id": 0, "custom_rate": 1})
         ours = float(ovr["custom_rate"]) if ovr and ovr.get("custom_rate") else base_rate
+        dev = (ours - mk) / mk * 100
+        iso = datetime.fromisoformat(s["_id"]).date().isocalendar()
+        buckets.setdefault(f"{iso[0]}-W{iso[1]:02d}", []).append(dev)
+    return [{"week": k, "avg_dev": round(sum(v) / len(v), 1), "min_dev": round(min(v), 1),
+             "max_dev": round(max(v), 1), "days": len(v)}
+            for k, v in sorted(buckets.items())]
+
+
+async def check_trend_alert(db, pid: str) -> bool:
+    """Makas (|ort. sapma|) 2 hafta üst üste açılıyorsa bildirim gönderir (haftada 1 dedupe)."""
+    wks = await _weekly_trend(db, pid, 8)
+    hit = None
+    for i in range(len(wks) - 2):
+        a, b, c = abs(wks[i]["avg_dev"]), abs(wks[i + 1]["avg_dev"]), abs(wks[i + 2]["avg_dev"])
+        if b >= a + 1 and c >= b + 1:
+            hit = wks[i:i + 3]
+    if not hit:
+        return False
+    iso = datetime.now(timezone.utc).date().isocalendar()
+    week_key = f"{iso[0]}-W{iso[1]:02d}"
+    dup = await db.notifications.find_one(
+        {"created_by": "Trend Uyarısı", "property_id": pid, "week": week_key}, {"_id": 1})
+    if dup:
+        return False
+    lines = [f"{w['week']}: ort. %{w['avg_dev']:+g} (makas %{abs(w['avg_dev']):g})" for w in hit]
+    await db.notifications.insert_one({
+        "id": str(_uuid.uuid4()), "type": "warning",
+        "title": "📉 Trend Uyarısı: pazarla makas 2 haftadır açılıyor",
+        "message": "Haftalık ortalama sapma üst üste büyüyor — fiyat stratejinizi gözden geçirin:\n"
+                   + "\n".join(lines)
+                   + "\nAI Pricing → Rakip Fiyat Tetiği → 📈 Trend'den detayları inceleyebilirsiniz.",
+        "category": "revenue", "target_user": "", "target_role": "manager",
+        "link_to": "revenue", "priority": "high", "read": False,
+        "property_id": pid, "week": week_key,
+        "created_by": "Trend Uyarısı", "created_at": datetime.now(timezone.utc).isoformat()})
+    return True
+
+
+async def _month_deviations(db, pid: str, year: int, month: int, room_type_id: str = "") -> dict:
+    from calendar import monthrange
+    n = monthrange(year, month)[1]
+    dates = [f"{year:04d}-{month:02d}-{dd:02d}" for dd in range(1, n + 1)]
+    rts = await db.room_types.find({"property_id": pid}, {"_id": 0}).to_list(20)
+    ref = rts[0] if rts else {"id": "", "base_rate": 100}
+    rt = next((r for r in rts if r.get("id") == room_type_id), ref) if room_type_id else ref
+    ref_rate = float(ref.get("base_rate", 100) or 100)
+    rt_rate = float(rt.get("base_rate", 100) or 100)
+    ratio = rt_rate / max(ref_rate, 1)
+    snaps = await db.market_supply.aggregate([
+        {"$match": {"property_id": pid, "scan_type": "geo", "date": {"$in": dates}}},
+        {"$sort": {"scanned_at": -1}},
+        {"$group": {"_id": "$date", "avg_price": {"$first": "$avg_price"}}}]).to_list(40)
+    out = {}
+    for s in snaps:
+        mk = float(s.get("avg_price") or 0) * ratio
+        if mk <= 0:
+            continue
+        q = {"property_id": pid, "date": s["_id"]}
+        if room_type_id:
+            q["room_type_id"] = rt.get("id", "")
+        ovr = await db.rate_overrides.find_one(q, {"_id": 0, "custom_rate": 1})
+        ours = float(ovr["custom_rate"]) if ovr and ovr.get("custom_rate") else rt_rate
         out[s["_id"]] = {"dev_pct": round((ours - mk) / mk * 100, 1),
                          "market": round(mk, 2), "ours": round(ours, 2)}
     return out
@@ -807,42 +872,20 @@ def create_weather_calendar_router(db, require_roles):
     async def comp_trigger_trend(pid: str, weeks: int = 8,
                                  _u: dict = Depends(require_roles(*ROLES))):
         """Haftalık ortalama sapma trendi (konaklama tarihine göre, geçmiş 2 hafta + gelecek N hafta)."""
-        weeks = max(2, min(16, weeks))
-        today = datetime.now(timezone.utc).date()
-        start = today - timedelta(days=14)
-        dates = [(start + timedelta(days=i)).isoformat() for i in range(14 + weeks * 7)]
-        rt = await db.room_types.find_one({"property_id": pid}, {"_id": 0}) or {"base_rate": 100}
-        base_rate = float(rt.get("base_rate", 100) or 100)
-        snaps = await db.market_supply.aggregate([
-            {"$match": {"property_id": pid, "scan_type": "geo", "date": {"$in": dates}}},
-            {"$sort": {"scanned_at": -1}},
-            {"$group": {"_id": "$date", "avg_price": {"$first": "$avg_price"}}}]).to_list(200)
-        buckets = {}
-        for s in snaps:
-            mk = float(s.get("avg_price") or 0)
-            if mk <= 0:
-                continue
-            ovr = await db.rate_overrides.find_one(
-                {"property_id": pid, "date": s["_id"]}, {"_id": 0, "custom_rate": 1})
-            ours = float(ovr["custom_rate"]) if ovr and ovr.get("custom_rate") else base_rate
-            dev = (ours - mk) / mk * 100
-            iso = datetime.fromisoformat(s["_id"]).date().isocalendar()
-            buckets.setdefault(f"{iso[0]}-W{iso[1]:02d}", []).append(dev)
-        out = [{"week": k, "avg_dev": round(sum(v) / len(v), 1), "min_dev": round(min(v), 1),
-                "max_dev": round(max(v), 1), "days": len(v)}
-               for k, v in sorted(buckets.items())]
+        out = await _weekly_trend(db, pid, weeks)
         return {"property_id": pid, "weeks": out,
                 "note": "Konaklama tarihine göre haftalık ortalama sapma — pozitif: pazardan pahalıyız, negatif: ucuzuz. Sıfır çizgisine yakınlık pazarla uyumu gösterir."}
 
     @router.get("/{pid}/comp-deviations")
-    async def comp_deviations(pid: str, year: int, month: int,
+    async def comp_deviations(pid: str, year: int, month: int, room_type_id: str = "",
                               _u: dict = Depends(require_roles(*ROLES))):
-        """Ay bazlı rakip sapma ısı haritası verisi (tüm sapmalar, eşiksiz)."""
-        out = await _month_deviations(db, pid, year, month)
-        return {"property_id": pid, "year": year, "month": month, "deviations": out}
+        """Ay bazlı rakip sapma ısı haritası verisi (tüm sapmalar, eşiksiz, oda tipi seçilebilir)."""
+        out = await _month_deviations(db, pid, year, month, room_type_id)
+        return {"property_id": pid, "year": year, "month": month,
+                "room_type_id": room_type_id, "deviations": out}
 
     @router.get("/{pid}/heatmap-pdf")
-    async def heatmap_pdf(pid: str, year: int = 0, month: int = 0,
+    async def heatmap_pdf(pid: str, year: int = 0, month: int = 0, room_type_id: str = "",
                           _u: dict = Depends(require_roles(*ROLES))):
         """Aylık rakip sapma ısı haritası PDF'i — takvim ızgarası + özet."""
         from calendar import monthrange
@@ -854,7 +897,9 @@ def create_weather_calendar_router(db, require_roles):
         today = datetime.now(timezone.utc).date()
         year = year or today.year
         month = month or today.month
-        devs = await _month_deviations(db, pid, year, month)
+        devs = await _month_deviations(db, pid, year, month, room_type_id)
+        rt_doc = await db.room_types.find_one({"property_id": pid, "id": room_type_id},
+                                              {"_id": 0, "name": 1}) if room_type_id else None
         prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
         _t = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
         months_tr = ["", "Ocak", "Subat", "Mart", "Nisan", "Mayis", "Haziran",
@@ -877,7 +922,8 @@ def create_weather_calendar_router(db, require_roles):
         c.setFont("Helvetica", 10)
         c.drawString(18 * mm, hh - 23 * mm,
                      f"{(prop.get('name') or pid).translate(_t)} · {months_tr[month]} {year} · "
-                     f"{len(devs)} gunde pazar verisi")
+                     + (f"{(rt_doc.get('name') or '').translate(_t)} · " if rt_doc else "")
+                     + f"{len(devs)} gunde pazar verisi")
         n_days = monthrange(year, month)[1]
         first_dow = datetime(year, month, 1).weekday()
         cw = (w - 36 * mm) / 7

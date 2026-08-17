@@ -173,9 +173,10 @@ export const RateCalendarEditable = ({ propertyId }) => {
 
   useEffect(() => {
     if (!heatOn || !propertyId) return;
-    axios.get(`${API}/demand-signals/${propertyId}/comp-deviations?year=${year}&month=${month}`)
+    const rtId = roomType || cal?.room_type?.id || "";
+    axios.get(`${API}/demand-signals/${propertyId}/comp-deviations?year=${year}&month=${month}&room_type_id=${rtId}`)
       .then(r => setHeatMap(r.data.deviations || {})).catch(() => setHeatMap({}));
-  }, [heatOn, propertyId, year, month]);
+  }, [heatOn, propertyId, year, month, roomType]);
 
   const navMonth = (dir) => {
     let nm = month + dir, ny = year;
@@ -338,7 +339,7 @@ export const RateCalendarEditable = ({ propertyId }) => {
       {/* Sapma Isı Haritası Lejantı */}
       {heatOn && (
         <div className="flex items-center gap-3 flex-wrap text-[10px] text-stone-500 bg-white border border-stone-200 rounded-xl px-3 py-2 mb-4" data-testid="rev-cal-heat-legend">
-          <span className="font-bold text-stone-700">🌡 Rakip Sapma Isı Haritası</span>
+          <span className="font-bold text-stone-700">🌡 Rakip Sapma Isı Haritası{(cal?.room_type?.name) ? ` — ${cal.room_type.name}` : ""}</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded inline-block" style={{ backgroundColor: "rgba(244,63,94,0.45)" }}></span> pazardan pahalıyız (▲)</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded inline-block" style={{ backgroundColor: "rgba(14,165,233,0.45)" }}></span> pazardan ucuzuz (▼)</span>
           <span>· renk koyuluğu = sapma büyüklüğü · {Object.keys(heatMap).length} günde pazar verisi var</span>

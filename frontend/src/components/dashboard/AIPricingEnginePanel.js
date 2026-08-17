@@ -143,6 +143,9 @@ const AIPricingEnginePanel = ({ propertyId }) => {
       const r = await axios.post(`${API}/demand-signals/${propertyId}/comp-trigger/run`, {}, { headers: authHeaders() });
       setCompTrigResult(r.data);
       setCompTrigSel((r.data.deviations || []).map((d) => d.date));
+      if (r.data.trend_alert) {
+        toast.warning("📉 Trend uyarısı: pazarla makas 2 haftadır açılıyor — bildirim gönderildi");
+      }
       if (r.data.deviation_days > 0) {
         toast.warning(`${r.data.deviation_days} günde ±%${r.data.threshold_pct} sapma bulundu${r.data.notified ? " — bildirim gönderildi 🔔" : ""}`);
       } else {

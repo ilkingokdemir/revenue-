@@ -1,17 +1,36 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { toast } from "sonner";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}` });
 
 export const GapSummaryCard = ({ propertyId, onNavigate }) => {
   const [s, setS] = useState(null);
+  const [applying, setApplying] = useState(false);
+
+  const loadSummary = () => {
+    axios.get(`${API}/api/demand-signals/${propertyId}/comp-trigger/summary`, { headers: authHeaders() })
+      .then((r) => setS(r.data)).catch(() => {});
+  };
 
   useEffect(() => {
     if (!propertyId) return;
-    axios.get(`${API}/api/demand-signals/${propertyId}/comp-trigger/summary`, { headers: authHeaders() })
-      .then((r) => setS(r.data)).catch(() => {});
+    loadSummary();
   }, [propertyId]);
+
+  const quickApply = async (e) => {
+    e.stopPropagation();
+    setApplying(true);
+    try {
+      const r = await axios.post(`${API}/api/demand-signals/${propertyId}/comp-trigger/apply`, {}, { headers: authHeaders() });
+      toast.success(r.data.applied
+        ? `⚡ ${r.data.applied} güne × ${r.data.room_types} oda tipine öneri fiyatı uygulandı — takvimden '↩ Zamları Geri Al' ile geri alınabilir`
+        : "Uygulanacak sapma yok — fiyatlar eşik içinde ✓");
+      loadSummary();
+    } catch { toast.error("Uygulanamadı"); }
+    finally { setApplying(false); }
+  };
 
   if (!s || !s.this_week) return null;
   const dev = s.this_week.avg_dev;
@@ -45,13 +64,17 @@ export const GapSummaryCard = ({ propertyId, onNavigate }) => {
             fill={w.avg_dev >= 0 ? "#e11d48" : "#0284c7"} />
         ))}
       </svg>
-      <div className="flex flex-col items-end gap-1">
+      <div className="flex flex-col items-end gap-1.5">
         <span className={`text-[11px] font-black px-2.5 py-1 rounded-full border ${dirCfg.cls}`} data-testid="gap-summary-direction">
           {dirCfg.icon} {dirCfg.label}
         </span>
         {s.alert_active && (
           <span className="text-[10px] font-bold text-amber-600" data-testid="gap-summary-alert">📉 trend uyarısı aktif</span>
         )}
+        <button onClick={quickApply} disabled={applying} data-testid="gap-summary-apply"
+          className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 disabled:opacity-50">
+          {applying ? "Uygulanıyor…" : "⚡ Önerileri Uygula"}
+        </button>
       </div>
     </div>
   );

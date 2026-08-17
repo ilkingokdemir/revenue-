@@ -211,6 +211,26 @@ async def send_weekly_signal_digest(db, pid: str, force: bool = False) -> dict:
     msg = ("Bu hafta sinyal yok — nötr talep haftası." if not lines
            else "Bu haftanın talep sinyalleri:\n" + "\n".join(lines[:10])
            + "\n\nFiyat takviminde tatil/etkinlik bantlarından tek tıkla zam uygulayabilirsiniz.")
+    gap_included = False
+    try:
+        wks = await _weekly_trend(db, pid, 4)
+        if wks:
+            iso = now.date().isocalendar()
+            cur_key = f"{iso[0]}-W{iso[1]:02d}"
+            idx = next((i for i, w in enumerate(wks) if w["week"] >= cur_key), 0)
+            this_w = wks[idx]
+            nxt = wks[idx + 1] if len(wks) > idx + 1 else None
+            direction = "stabil →"
+            if nxt:
+                diff = abs(nxt["avg_dev"]) - abs(this_w["avg_dev"])
+                direction = "açılıyor 📈" if diff >= 0.5 else ("kapanıyor 📉" if diff <= -0.5 else "stabil →")
+            msg += (f"\n\n📡 Pazarla Makas Durumu:\nBu hafta ort. %{this_w['avg_dev']:+g} "
+                    f"({'pazardan pahalıyız' if this_w['avg_dev'] >= 0 else 'pazardan ucuzuz'}) · makas {direction}\n"
+                    + " · ".join(f"{w['week'].split('-')[1]}: %{w['avg_dev']:+g}" for w in wks)
+                    + "\nDetay: AI Pricing → Rakip Fiyat Tetiği → 📈 Trend")
+            gap_included = True
+    except Exception:
+        pass
     await db.notifications.insert_one({
         "id": str(_uuid.uuid4()), "type": "info",
         "title": f"📅 Haftalık Sinyal Özeti ({week_key})",
@@ -229,7 +249,8 @@ async def send_weekly_signal_digest(db, pid: str, force: bool = False) -> dict:
         email_status = ",".join(statuses) or "no-recipients"
     except Exception as e:
         email_status = f"error: {e}"
-    return {"sent": True, "week": week_key, "signal_lines": len(lines), "email_status": email_status}
+    return {"sent": True, "week": week_key, "signal_lines": len(lines),
+            "gap_included": gap_included, "email_status": email_status}
 
 
 async def apply_occupancy_rule(db, pid: str, by: str = "", force: bool = False) -> dict:
@@ -378,6 +399,7 @@ async def _weekly_trend(db, pid: str, weeks: int = 8) -> list:
     dates = [(start + timedelta(days=i)).isoformat() for i in range(14 + weeks * 7)]
     rt = await db.room_types.find_one({"property_id": pid}, {"_id": 0}) or {"base_rate": 100}
     base_rate = float(rt.get("base_rate", 100) or 100)
+    rt_id = rt.get("id", "")
     snaps = await db.market_supply.aggregate([
         {"$match": {"property_id": pid, "scan_type": "geo", "date": {"$in": dates}}},
         {"$sort": {"scanned_at": -1}},
@@ -388,7 +410,8 @@ async def _weekly_trend(db, pid: str, weeks: int = 8) -> list:
         if mk <= 0:
             continue
         ovr = await db.rate_overrides.find_one(
-            {"property_id": pid, "date": s["_id"]}, {"_id": 0, "custom_rate": 1})
+            {"property_id": pid, "date": s["_id"], "room_type_id": rt_id},
+            {"_id": 0, "custom_rate": 1})
         ours = float(ovr["custom_rate"]) if ovr and ovr.get("custom_rate") else base_rate
         dev = (ours - mk) / mk * 100
         iso = datetime.fromisoformat(s["_id"]).date().isocalendar()
@@ -451,9 +474,7 @@ async def _month_deviations(db, pid: str, year: int, month: int, room_type_id: s
         mk = float(s.get("avg_price") or 0) * ratio
         if mk <= 0:
             continue
-        q = {"property_id": pid, "date": s["_id"]}
-        if room_type_id:
-            q["room_type_id"] = rt.get("id", "")
+        q = {"property_id": pid, "date": s["_id"], "room_type_id": rt.get("id", "")}
         ovr = await db.rate_overrides.find_one(q, {"_id": 0, "custom_rate": 1})
         ours = float(ovr["custom_rate"]) if ovr and ovr.get("custom_rate") else rt_rate
         out[s["_id"]] = {"dev_pct": round((ours - mk) / mk * 100, 1),

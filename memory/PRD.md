@@ -927,3 +927,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 ## Güncelleme (2026-08-17, 2 özellik — curl + UI self-test doğrulandı)
 - Uyarı Eşiği Ayarı: comp_trigger doc'a trend_weeks (2-6, def 2) + trend_step_pp (0.5-10, def 1.0) eklendi; GET/PUT comp-trigger destekler (clamp'li), check_trend_alert cfg'yi okur (N ardışık hafta, her adım ≥ step puan); UI'da 'Uyarı: hafta' + 'puan artış ≥' inputları (ai-pricing-comptrig-trend-weeks / -trend-step), bildirim başlığı N haftayı gösterir.
 - Sapma Özeti Kartı: GET /{pid}/comp-trigger/summary — bu hafta/gelecek hafta avg_dev, direction (açılıyor/kapanıyor/stabil, ±0.5pp), alert_active, 6 haftalık bucket'lar; yeni GapSummaryCard.js (gap-summary-card) TodayHub'da Pickup24Card altında — büyük % değeri, sparkline SVG, yön rozeti, 'trend uyarısı aktif' etiketi, tıklayınca revenue'ya gider.
+
+## Güncelleme (2026-08-17, 2 özellik — curl + UI self-test doğrulandı)
+- Karttan Hızlı Aksiyon: GapSummaryCard'a '⚡ Önerileri Uygula' butonu (gap-summary-apply, stopPropagation) — dashboard'dan comp-trigger/apply çağırır, toast + kart yenilenir. Doğrulandı: 10 gün × 2 oda tipi uygulandı, makas −%29.5 → +%3.8'e kapandı.
+- Haftalık Makas Raporu: send_weekly_signal_digest'e '📡 Pazarla Makas Durumu' bölümü — bu hafta ort. sapma, yön (açılıyor/kapanıyor/stabil), 4-6 haftalık W-bazlı seri; bildirim + e-postaya (MOCK) girer, dönüşte gap_included alanı.
+- BUG FIX: _weekly_trend ve _month_deviations override sorgusu artık referans oda tipi id'siyle filtreli (önceden Deluxe override'ı Standard referansına karışıp makası +%45 şişiriyordu).

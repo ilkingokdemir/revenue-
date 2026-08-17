@@ -56,7 +56,10 @@ export const RateCalendarEditable = ({ propertyId }) => {
       await axios.put(`${API}/demand-signals/${propertyId}/occupancy-rule`, occRule);
       if (runNow) {
         const r = await axios.post(`${API}/demand-signals/${propertyId}/occupancy-rule/run`);
-        toast.success(r.data.applied > 0 ? `${r.data.applied} yüksek doluluk gününe ek zam uygulandı` : "Eşiği aşan gün bulunamadı — kural kaydedildi");
+        const parts = [];
+        if (r.data.applied) parts.push(`${r.data.applied} güne zam`);
+        if (r.data.discounted) parts.push(`${r.data.discounted} güne indirim`);
+        toast.success(parts.length ? parts.join(", ") + " uygulandı" + (r.data.pms_push?.pushed_days != null ? ` · ${r.data.pms_push.pushed_days} gün-fiyat PMS'e gönderildi (${r.data.pms_push.live} canlı kanal)` : "") : "Eşikleri aşan gün bulunamadı — kural kaydedildi");
         load();
       } else {
         toast.success("Doluluk kuralı kaydedildi" + (occRule.enabled ? " — robot 6 saatte bir çalışacak" : " (pasif)"));
@@ -435,6 +438,30 @@ export const RateCalendarEditable = ({ propertyId }) => {
                   className="block w-full mt-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm font-normal" />
               </label>
             </div>
+            <label className="flex items-center gap-2 text-xs font-bold text-stone-600 mb-2">
+              <input type="checkbox" checked={!!occRule.low_enabled} data-testid="rev-cal-occ-low-enabled"
+                onChange={e => setOccRule(r => ({ ...r, low_enabled: e.target.checked }))} />
+              Düşük doluluk indirimi de uygula
+            </label>
+            {occRule.low_enabled && (
+              <div className="grid grid-cols-2 gap-3 mb-3 bg-sky-50 border border-sky-100 rounded-xl p-2">
+                <label className="text-[11px] font-bold text-stone-500">Düşük eşik % (≤)
+                  <input type="number" min="5" max="80" value={occRule.low_threshold_pct} data-testid="rev-cal-occ-low-threshold"
+                    onChange={e => setOccRule(r => ({ ...r, low_threshold_pct: Number(e.target.value) }))}
+                    className="block w-full mt-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm font-normal" />
+                </label>
+                <label className="text-[11px] font-bold text-stone-500">İndirim %
+                  <input type="number" min="1" max="40" value={occRule.low_discount_pct} data-testid="rev-cal-occ-low-discount"
+                    onChange={e => setOccRule(r => ({ ...r, low_discount_pct: Number(e.target.value) }))}
+                    className="block w-full mt-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm font-normal" />
+                </label>
+              </div>
+            )}
+            <label className="flex items-center gap-2 text-xs font-bold text-stone-600 mb-2">
+              <input type="checkbox" checked={!!occRule.push_to_pms} data-testid="rev-cal-occ-push-pms"
+                onChange={e => setOccRule(r => ({ ...r, push_to_pms: e.target.checked }))} />
+              Zamlanan/indirilen fiyatları otomatik PMS'e (Mews) gönder
+            </label>
             <label className="flex items-center gap-2 text-xs font-bold text-stone-600 mb-4">
               <input type="checkbox" checked={!!occRule.enabled} data-testid="rev-cal-occ-enabled"
                 onChange={e => setOccRule(r => ({ ...r, enabled: e.target.checked }))} />

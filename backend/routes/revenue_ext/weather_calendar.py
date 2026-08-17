@@ -233,13 +233,16 @@ async def send_weekly_signal_digest(db, pid: str, force: bool = False) -> dict:
 
 
 async def apply_occupancy_rule(db, pid: str, by: str = "", force: bool = False) -> dict:
-    """Doluluk eşiğini aşan günlere otomatik ek zam uygular (önümüzdeki 30 gün)."""
+    """Doluluk eşiğini aşan günlere ek zam, düşük doluluk günlerine indirim uygular (30 gün)."""
     rule = await db.occupancy_rules.find_one({"property_id": pid}, {"_id": 0}) or {}
     enabled = bool(rule.get("enabled", False))
     if not enabled and not force:
         return {"ran": False, "reason": "kural pasif"}
     threshold = float(rule.get("threshold_pct", 90))
     extra = float(rule.get("extra_pct", 10))
+    low_enabled = bool(rule.get("low_enabled", False))
+    low_threshold = min(float(rule.get("low_threshold_pct", 40)), threshold - 10)
+    discount = float(rule.get("low_discount_pct", 10))
     room_types = await db.room_types.find({"property_id": pid}, {"_id": 0}).to_list(20)
     rt = room_types[0] if room_types else {"id": "default", "base_rate": 100}
     rt_id = rt.get("id", "")
@@ -247,38 +250,64 @@ async def apply_occupancy_rule(db, pid: str, by: str = "", force: bool = False) 
     total_rooms = await db.rooms.count_documents({"property_id": pid}) or 10
     today = datetime.now(timezone.utc).date()
     now_iso = datetime.now(timezone.utc).isoformat()
-    applied, details = 0, []
+    applied, discounted, details = 0, 0, []
     for i in range(30):
         ds = (today + timedelta(days=i)).isoformat()
         booked = await db.bookings.count_documents(
             {"property_id": pid, "check_in": {"$lte": ds}, "check_out": {"$gt": ds},
              "status": {"$ne": "cancelled"}})
         occ = min(100, round(booked / max(total_rooms, 1) * 100))
-        if occ < threshold:
+        is_high = occ >= threshold
+        is_low = low_enabled and occ <= low_threshold
+        if not is_high and not is_low:
             continue
         ovr = await db.rate_overrides.find_one(
             {"property_id": pid, "date": ds, "room_type_id": rt_id}, {"_id": 0})
         if ovr and not ovr.get("markup_kind") and not ovr.get("holiday_markup"):
             continue
-        mult = 1.4 if occ >= 90 else 1.2
-        new_rate = round(base_rate * mult * (1 + extra / 100))
+        mult = 1.4 if occ >= 90 else 1.2 if occ >= 75 else 1.0 if occ >= 50 else 0.85 if occ >= 25 else 0.7
+        if is_high:
+            new_rate = round(base_rate * mult * (1 + extra / 100))
+            name = f"Doluluk %{occ} ≥ %{threshold:g}"
+        else:
+            new_rate = round(base_rate * mult * (1 - discount / 100))
+            name = f"Düşük doluluk %{occ} ≤ %{low_threshold:g} (−%{discount:g})"
         if ovr and ovr.get("markup_kind") == "occupancy" and ovr.get("custom_rate") == float(new_rate):
             continue
         await db.rate_overrides.update_one(
             {"property_id": pid, "date": ds, "room_type_id": rt_id},
             {"$set": {"property_id": pid, "date": ds, "room_type_id": rt_id,
                       "custom_rate": float(new_rate), "markup_kind": "occupancy",
-                      "markup_name": f"Doluluk %{occ} ≥ %{threshold:g}",
+                      "markup_name": name,
                       "prev_custom_rate": None, "set_by": "Doluluk Kuralı Robotu",
                       "updated_at": now_iso}}, upsert=True)
-        applied += 1
-        details.append({"date": ds, "occ_pct": occ, "new_rate": new_rate})
-    if applied:
+        if is_high:
+            applied += 1
+        else:
+            discounted += 1
+        details.append({"date": ds, "occ_pct": occ, "new_rate": new_rate,
+                        "action": "zam" if is_high else "indirim"})
+    if applied or discounted:
         await _log_markup(db, pid, "apply", "occupancy",
-                          f"Doluluk kuralı (eşik %{threshold:g}, ek %{extra:g}) · {applied} gün",
-                          by=by, count=applied)
+                          f"Doluluk kuralı (eşik %{threshold:g}/+%{extra:g}"
+                          + (f", düşük %{low_threshold:g}/−%{discount:g}" if low_enabled else "")
+                          + f") · {applied} zam, {discounted} indirim",
+                          by=by, count=applied + discounted)
+    pms_push = None
+    if (applied or discounted) and bool(rule.get("push_to_pms", False)):
+        try:
+            from routes.distribution.pms_connect import run_auto_night_push
+            pr = await run_auto_night_push(db, pid)
+            _res = pr.get("results", [])
+            pms_push = {"channels": len(_res),
+                        "pushed_days": sum(r.get("pushed_days", 0) for r in _res),
+                        "live": sum(1 for r in _res if r.get("mode") == "live")}
+        except Exception as e:
+            pms_push = {"error": str(e)[:120]}
     return {"ran": True, "threshold_pct": threshold, "extra_pct": extra,
-            "applied": applied, "days": details, "enabled": enabled}
+            "low_enabled": low_enabled, "low_threshold_pct": low_threshold,
+            "low_discount_pct": discount, "applied": applied, "discounted": discounted,
+            "days": details, "enabled": enabled, "pms_push": pms_push}
 
 
 def create_weather_calendar_router(db, require_roles):
@@ -570,24 +599,32 @@ def create_weather_calendar_router(db, require_roles):
         return {"property_id": pid, "threshold_pct": float(doc.get("threshold_pct", 90)),
                 "extra_pct": float(doc.get("extra_pct", 10)),
                 "enabled": bool(doc.get("enabled", False)),
+                "low_enabled": bool(doc.get("low_enabled", False)),
+                "low_threshold_pct": float(doc.get("low_threshold_pct", 40)),
+                "low_discount_pct": float(doc.get("low_discount_pct", 10)),
+                "push_to_pms": bool(doc.get("push_to_pms", False)),
                 "note": "Aktifken robot her gün önümüzdeki 30 günü tarar; doluluk eşiği aşan günlere otomatik ek zam uygular (manuel fiyatlar korunur)."}
 
     @router.put("/{pid}/occupancy-rule")
     async def set_occupancy_rule(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
         upd = {}
-        for k, lo, hi in (("threshold_pct", 50, 100), ("extra_pct", 1, 50)):
+        for k, lo, hi in (("threshold_pct", 50, 100), ("extra_pct", 1, 50),
+                          ("low_threshold_pct", 5, 80), ("low_discount_pct", 1, 40)):
             if k in data:
                 try:
                     upd[k] = max(lo, min(hi, float(data[k])))
                 except (TypeError, ValueError):
                     pass
-        if "enabled" in data:
-            upd["enabled"] = bool(data["enabled"])
+        for k in ("enabled", "low_enabled", "push_to_pms"):
+            if k in data:
+                upd[k] = bool(data[k])
         upd["updated_at"] = datetime.now(timezone.utc).isoformat()
         await db.occupancy_rules.update_one(
             {"property_id": pid}, {"$set": {"property_id": pid, **upd}}, upsert=True)
         doc = await db.occupancy_rules.find_one({"property_id": pid}, {"_id": 0})
-        return {"ok": True, **{k: doc.get(k) for k in ("threshold_pct", "extra_pct", "enabled")}}
+        return {"ok": True, **{k: doc.get(k) for k in
+                               ("threshold_pct", "extra_pct", "enabled",
+                                "low_enabled", "low_threshold_pct", "low_discount_pct", "push_to_pms")}}
 
     @router.post("/{pid}/occupancy-rule/run")
     async def run_occupancy_rule(pid: str, _u: dict = Depends(require_roles(*ROLES))):

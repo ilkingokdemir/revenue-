@@ -1,0 +1,19 @@
+{
+  "summary": "Frontend E2E test of the two new Doluluk Kuralı features (Düşük Doluluk Kuralı + Kural PMS Push'u) on Franziskaner by Centra branch — ALL PASSED. Both new checkboxes present with correct testids; sky-blue low_threshold=40 & low_discount=10 revealed on toggle; full run produced expected toast '4 güne zam, 1 güne indirim uygulandı · 70 gün-fiyat PMS'e gönderildi (1 canlı kanal)' (arrived quickly, ~7s not 60s — Mews live push worked fast); calendar shows amber days Aug 18/23/24/25 at £193 (zam) + Aug 19 at £126 (low-occ indirim from £150). Cleanup complete: '↩ Zamları Geri Al' → '5 zam geri alındı (0 manuel fiyata, 5 otomatik fiyata döndü)' toast; modal reopened, both new checkboxes UNCHECKED, 'Sadece Kaydet' → 'Doluluk kuralı kaydedildi (pasif)'. Regression clean: 🕓 Geçmiş modal shows new occupancy entries with 'düşük %40/−%10' text; Sezonlar Önizle for Yaz Sezonu (%+15) still shows '8 gün etkilenecek, 7 manuel gün korunacak' with £175→£201/£150→£172/£125→£144 rows.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Post-undo UI: Aug 19 still visually shows £126 with £150 strikethrough after '5 zam geri alındı' toast. Possibly a leftover from prior iterations OR undo doesn't actually revert the low-occupancy discount day (only reverts markups). Backend claim '5 döndü' but UI/data for Aug 19 doesn't reflect revert. Main agent should verify apply_occupancy_rule undo path also unwinds the low-discount day (custom_rate count returned to 28, so a rate WAS removed — could be a different day). Non-blocking; worth a follow-up look.",
+    "RateCalendarEditable.js still >597 lines (approaching 700-line threshold). Consider splitting the Doluluk Kuralı modal, Geçmiş modal, and Sezonlar modal into subcomponents."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (curl-verified by main agent)", "frontend": "100% (5/5 flows)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Applied then undone via 'Zamları Geri Al'. Rule finalized enabled=false, low_enabled=false, push_to_pms=false via 'Sadece Kaydet'. custom_rates count returned to 28 (baseline).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Navigation: Landing → Sign In → login admin@hotelbox.com/HotelAdmin2026! → click 'All Branches' → select 'Franziskaner by Centra' → sidebar [data-testid=revenue-btn] → sub-nav text 'Rate Calendar' → [data-testid=rev-cal-occ-rule-btn]. New testids verified: rev-cal-occ-low-enabled, rev-cal-occ-low-threshold (default 40), rev-cal-occ-low-discount (default 10), rev-cal-occ-push-pms, rev-cal-occ-save-run. Toast for combined run arrived in ~7s (Mews live). History modal now uses format 'Doluluk kuralı (eşik %90/+%10, düşük %40/−%10) · 4 zam, 1 indirim'. Season preview panel testid: rev-cal-season-preview-panel; history: rev-cal-history-modal / rev-cal-history-btn; seasons: rev-cal-seasons-btn.",
+  "rca of the issue": "N/A — all requested flows verified end-to-end."
+}

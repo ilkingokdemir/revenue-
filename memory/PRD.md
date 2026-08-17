@@ -894,3 +894,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 ## Güncelleme (2026-08-17, 2 özellik — iter. 564, %100 geçti)
 - Sezon Önizleme: apply_season dry_run parametresi (yazmadan gün gün eski→yeni fiyat listesi, max 60 satır); Sezonlar modalında Önizle → önizleme paneli + 'Onayla ve Uygula'/Kapat.
 - Doluluk Kuralları: db.occupancy_rules (threshold_pct 50-100 def 90, extra_pct 1-50 def 10, enabled def false); GET/PUT /occupancy-rule + POST /run; apply_occupancy_rule (30 gün tarama, occ≥eşik → base×mult×(1+ek%), markup_kind=occupancy, manuel korunur, idempotent) + occupancy_rule_loop (6 saatte bir enabled kuralları çalıştırır). UI: ⚡ Doluluk Kuralı modalı (Kaydet+Şimdi Çalıştır / Sadece Kaydet). Zam Geçmişi ve ↩ Geri Al occupancy'yi de kapsar.
+
+## Güncelleme (2026-08-17, 2 özellik — iter. 565, %100 geçti)
+- Düşük Doluluk Kuralı: occupancy_rules'a low_enabled/low_threshold_pct(def 40)/low_discount_pct(def 10); apply_occupancy_rule düşük doluluk günlerine indirim uygular (markup_kind=occupancy, ↩ Geri Al kapsar). UI: modalda checkbox + sky-blue inputlar.
+- Kural PMS Push'u: occupancy_rules.push_to_pms; kural uygulandığında run_auto_night_push tetiklenir (70 gün-fiyat, 1 canlı Mews kanalı doğrulandı); toast'ta push özeti.
+- BEKLEYEN: RESEND_API_KEY hâlâ placeholder (re_XXX...) — kullanıcı gerçek anahtarı .env'e/mesaja iletmedi; digest e-postası MOCK. Apaleo Client ID/Secret hâlâ yok.

@@ -909,3 +909,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Tetik Fiyat Uygula: POST /{pid}/comp-trigger/apply — sapan günlerin öneri fiyatlarını (max 10) rate_overrides'a yazar (markup_kind=comp_trigger, prev saklanır, ↩ Geri Al kapsar, markup_history logu). UI: sonuç panelinde yeşil '⚡ Önerileri Takvime Uygula' (ai-pricing-comptrig-apply).
 - Etki Grafiği: Doluluk Kuralı modalında 2+ ay veri varsa aylık net katkı çubuk grafiği (rev-cal-occ-impact-chart, yeşil/kırmızı barlar); tek ayda gizli.
 - Sapma Isı Haritası: GET /{pid}/comp-deviations?year&month (eşiksiz tüm sapmalar); takvimde '🌡 Sapma' toggle (rev-cal-heat-toggle) — kırmızı=pahalıyız/mavi=ucuzuz arka plan tonu (koyuluk=|sapma|), ▲/▼ % rozetleri + lejant (Ağustos 2026'da 31 hücre doğrulandı).
+
+## Güncelleme (2026-08-17, 3 özellik — iter. 568, backend %100 + UI self-test doğrulandı)
+- Seçmeli Uygula: comp-trigger/apply {dates:[...]} filtresi; UI'da sapma satırlarında checkbox (ai-pricing-comptrig-sel-{date}, hepsi seçili başlar), '⚡ Seçili Önerileri Uygula (N gün)' sayaçlı buton (0 seçimde disabled).
+- Türe Göre Geri Al: undo-markups {kind} filtresi (holiday/event/season/occupancy/comp_trigger, kind'sız=tümü); UI'da '↩ Zamları Geri Al ▾' dropdown (rev-cal-undo-menu, 6 seçenek, dış-tık kapanır); markup_history undo loguna tür yazılır.
+- Isı Haritası PDF: GET /{pid}/heatmap-pdf?year&month — reportlab takvim ızgarası (kırmızı/mavi renk tonu, gün başına biz/pazar/%), özet (ort. sapma, en pahalı/ucuz günler), lejant, logo desteği; PDF Merkezi on_demand'e 'heatmap' kartı eklendi (pdf-center-card-heatmap).
+- Ek: branch-selector-btn data-testid'i (SelectTrigger) otomasyon stabilitesi için eklendi.

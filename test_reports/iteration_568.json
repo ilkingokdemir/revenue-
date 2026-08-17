@@ -1,0 +1,32 @@
+{
+  "summary": "Iter 568 — Tested 3 new features: (1) Selective apply (dates filter) on comp-trigger, (2) Per-kind undo-markups filter, (3) Heatmap-PDF endpoint + PDF Center card. Backend 10/10 pytest passed (test_iter568.py). Key results — POST /api/demand-signals/default/comp-trigger/apply with {dates:[<one>]} applied exactly 1 day and days[] returned the same single date; empty body applied all top-10 deviations (capped). POST undo-markups {kind:'comp_trigger'} returned ok, markup_history logged undo with 'comp_trigger' kind reference; kind-less undo also returned ok. GET /api/demand-signals/default/heatmap-pdf?year=2026&month=8 → 200 application/pdf, >2KB, starts with %PDF; parameterless call also 200/PDF; empty month 2020-01 still 200/PDF (verisiz not). GET /api/pms-connect/pdf-center/default now includes 'heatmap' card in on_demand list. Regression endpoints (config, markup-history, comp-deviations, ai-pricing/suggestions) all still return 200. Cleanup — final undo-markups with empty body invoked. Frontend code review confirmed proper wiring: AIPricingEnginePanel checkboxes bound to compTrigSel state, apply button label uses ${compTrigSel.length}, disabled when 0 selected, sends {dates:compTrigSel} body; RateCalendarEditable undo dropdown renders 6 items (all/holiday/event/season/occupancy/comp_trigger) with data-testid rev-cal-undo-<kind> and rev-cal-undo-menu container; undoMarkups(kind) omits body key when kind='' (all).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Playwright branch switch → Revenue module navigation", "issue": "Automated clicks on sidebar branch dropdown item 'Franziskaner by Centra' set the top badge text but the sidebar dropdown label remained 'All Branches' and subsequent sidebar 'Revenue management' clicks failed to route. Manual UI was not re-verified in this iteration; only frontend source-code review confirmed selectors exist and logic matches spec. Iter 567 UI flow succeeded so no confirmed regression.", "affected_selectors": ["button:has-text('All Branches')", "text=Revenue management"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter568.py",
+    "/app/test_reports/pytest/iter568.xml"
+  ],
+  "action_items": [
+    "Main agent may want to add a data-testid to the sidebar branch selector button (e.g., 'branch-selector-btn') and to each dropdown item (e.g., 'branch-option-<pid>') so Playwright can reliably switch branches.",
+    "Consider using 'occupancy_rule' consistently: undo menu uses 'occupancy' key while apply logs use markup_kind 'occupancy' — verify undo actually clears occupancy_rule markups (backend already handles kind filter with 'occupancy' successfully in tests)."
+  ],
+  "critical_code_review_comments": [
+    "AIPricingEnginePanel.js apply-comp-trigger dispatch always sends {dates: compTrigSel} — even when the user has selected all rows. This is fine but note that if compTrigSel gets out of sync with backend deviations (e.g. new devs appear on refresh), the selective list can be stale.",
+    "RateCalendarEditable.js undo dropdown does not close on outside click — only toggles via the button; consider adding onBlur/outside-click handler.",
+    "weather_calendar.py apply_comp_trigger uses only the first room_type; per-room-type application is still missing (already flagged iter 567).",
+    "heatmap_pdf renders even when there are 0 deviations — good UX, but color legend section not tested in this iter."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter568.py"],
+  "success_rate": {"backend": "100%", "frontend": "code-review-only"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (branch: Franziskaner by Centra)",
+  "seed_data_creation": "None. Cleanup via undo-markups (no-kind) at end of test suite.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend endpoints for iter 568 are fully green via /app/backend/tests/test_iter568.py. The 3 new features work as spec'd. Frontend Playwright automation for this app has an intermittent issue where switching the branch via sidebar dropdown does not always propagate the property_id context (visible when Market Robot header still shows 'All Branches' and 'AI Pricing motoru için lütfen bir otel seçin.' appears). Recommend adding data-testid to sidebar branch selector items in future to stabilise UI automation. All frontend selectors for the 3 features (ai-pricing-comptrig-sel-{date}, ai-pricing-comptrig-apply, rev-cal-undo-markups-btn, rev-cal-undo-menu, rev-cal-undo-comp_trigger, rev-cal-undo-all, pdf-center-card-heatmap, pdf-center-dl-heatmap) exist in code and are wired correctly."
+}

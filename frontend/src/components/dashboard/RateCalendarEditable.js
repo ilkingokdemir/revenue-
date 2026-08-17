@@ -38,6 +38,17 @@ export const RateCalendarEditable = ({ propertyId }) => {
   const [occImpact, setOccImpact] = useState(null);
   const [heatOn, setHeatOn] = useState(false);
   const [heatMap, setHeatMap] = useState({});
+  const [undoOpen, setUndoOpen] = useState(false);
+
+  const undoMarkups = async (kind) => {
+    setUndoOpen(false);
+    try {
+      const r = await axios.post(`${API}/demand-signals/${propertyId}/undo-markups`, kind ? { kind } : {});
+      r.data.total === 0 ? toast.info(kind ? "Bu türde geri alınacak zam yok" : "Geri alınacak zam yok")
+        : toast.success(`${r.data.total} zam geri alındı${kind ? ` (${kind})` : ""} — ${r.data.restored_manual} manuel fiyata, ${r.data.reverted_to_auto} otomatik fiyata döndü`);
+      load();
+    } catch { toast.error("Geri alınamadı"); }
+  };
 
   const heatColor = (dev) => {
     const a = Math.min(Math.abs(dev) / 40, 1) * 0.45 + 0.08;
@@ -261,15 +272,24 @@ export const RateCalendarEditable = ({ propertyId }) => {
           <button onClick={() => setBulkHolidayOpen(true)} disabled={Object.keys(holidays).length === 0}
             className="px-3 py-1.5 text-xs font-medium rounded-lg bg-teal-600 text-white disabled:opacity-40"
             data-testid="rev-cal-bulk-holiday-btn">🎌 Tüm Tatillere Zam</button>
-          <button onClick={async () => {
-            try {
-              const r = await axios.post(`${API}/demand-signals/${propertyId}/undo-markups`, {});
-              r.data.total === 0 ? toast.info("Geri alınacak tatil/etkinlik zammı yok")
-                : toast.success(`${r.data.total} zam geri alındı (${r.data.restored_manual} manuel fiyata, ${r.data.reverted_to_auto} otomatik fiyata döndü)`);
-              load();
-            } catch { toast.error("Geri alınamadı"); }
-          }} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-300 text-rose-600 hover:bg-rose-50"
-            data-testid="rev-cal-undo-markups-btn">↩ Zamları Geri Al</button>
+          <div className="relative">
+            <button onClick={() => setUndoOpen(o => !o)}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-300 text-rose-600 hover:bg-rose-50"
+              data-testid="rev-cal-undo-markups-btn">↩ Zamları Geri Al ▾</button>
+            {undoOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setUndoOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-40 bg-white border border-stone-200 rounded-xl shadow-xl py-1 w-44" data-testid="rev-cal-undo-menu">
+                  {[["", "↩ Tümünü Geri Al"], ["holiday", "🎌 Tatil Zamları"], ["event", "🎪 Etkinlik Zamları"],
+                    ["season", "🗂 Sezon Zamları"], ["occupancy", "⚡ Doluluk Kuralı"], ["comp_trigger", "📡 Rakip Tetiği"]].map(([k, label]) => (
+                    <button key={k || "all"} onClick={() => undoMarkups(k)}
+                      className="block w-full text-left px-3 py-1.5 text-xs text-stone-600 hover:bg-rose-50"
+                      data-testid={`rev-cal-undo-${k || "all"}`}>{label}</button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           <button onClick={openSeasons} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white"
             data-testid="rev-cal-seasons-btn">🗂 Sezonlar</button>
           <button onClick={openHistory} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-stone-300 text-stone-600 hover:bg-stone-100"

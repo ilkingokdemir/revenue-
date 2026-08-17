@@ -638,7 +638,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           <div className="mt-3" data-testid="branch-selector-container">
             <label className="text-[9px] uppercase tracking-[0.15em] font-semibold text-stone-600 mb-1 block px-0.5">Branch</label>
             <Select value={activePropertyId} onValueChange={(v) => setActivePropertyId(v)} data-testid="property-selector">
-              <SelectTrigger className="w-full bg-stone-800 border-stone-700 text-stone-200 h-8 text-xs font-medium hover:bg-stone-750 transition-colors">
+              <SelectTrigger data-testid="branch-selector-btn" className="w-full bg-stone-800 border-stone-700 text-stone-200 h-8 text-xs font-medium hover:bg-stone-750 transition-colors">
                 <div className="flex items-center gap-2 truncate">
                   <Buildings size={13} className="text-emerald-500 flex-shrink-0" />
                   <SelectValue placeholder="Select branch" />

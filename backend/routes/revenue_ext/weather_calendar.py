@@ -369,6 +369,29 @@ async def run_competitor_price_trigger(db, pid: str, force: bool = False) -> dic
             "deviation_days": len(deviations), "notified": sent}
 
 
+async def _month_deviations(db, pid: str, year: int, month: int) -> dict:
+    from calendar import monthrange
+    n = monthrange(year, month)[1]
+    dates = [f"{year:04d}-{month:02d}-{dd:02d}" for dd in range(1, n + 1)]
+    rt = await db.room_types.find_one({"property_id": pid}, {"_id": 0}) or {"base_rate": 100}
+    base_rate = float(rt.get("base_rate", 100) or 100)
+    snaps = await db.market_supply.aggregate([
+        {"$match": {"property_id": pid, "scan_type": "geo", "date": {"$in": dates}}},
+        {"$sort": {"scanned_at": -1}},
+        {"$group": {"_id": "$date", "avg_price": {"$first": "$avg_price"}}}]).to_list(40)
+    out = {}
+    for s in snaps:
+        mk = float(s.get("avg_price") or 0)
+        if mk <= 0:
+            continue
+        ovr = await db.rate_overrides.find_one(
+            {"property_id": pid, "date": s["_id"]}, {"_id": 0, "custom_rate": 1})
+        ours = float(ovr["custom_rate"]) if ovr and ovr.get("custom_rate") else base_rate
+        out[s["_id"]] = {"dev_pct": round((ours - mk) / mk * 100, 1),
+                         "market": round(mk, 2), "ours": round(ours, 2)}
+    return out
+
+
 def create_weather_calendar_router(db, require_roles):
     router = APIRouter(prefix="/demand-signals", tags=["demand-signals"])
     ROLES = ("admin", "manager")
@@ -518,9 +541,17 @@ def create_weather_calendar_router(db, require_roles):
 
     @router.post("/{pid}/undo-markups")
     async def undo_markups(pid: str, data: dict = None, _u: dict = Depends(require_roles(*ROLES))):
-        """Tatil/etkinlik zamlarını eski fiyata döndürür (manuel fiyat varsa onu geri yükler)."""
-        q = {"property_id": pid,
-             "$or": [{"markup_kind": {"$exists": True}}, {"holiday_markup": True}]}
+        """Zamları eski fiyata döndürür; 'kind' verilirse sadece o tür geri alınır."""
+        kind = (data or {}).get("kind")
+        if kind == "holiday":
+            q = {"property_id": pid,
+                 "$or": [{"markup_kind": "holiday"}, {"holiday_markup": True}]}
+        elif kind in ("event", "season", "occupancy", "comp_trigger"):
+            q = {"property_id": pid, "markup_kind": kind}
+        else:
+            kind = None
+            q = {"property_id": pid,
+                 "$or": [{"markup_kind": {"$exists": True}}, {"holiday_markup": True}]}
         if data and data.get("date"):
             q["date"] = data["date"]
         restored, removed = 0, 0
@@ -538,10 +569,11 @@ def create_weather_calendar_router(db, require_roles):
                 await db.rate_overrides.delete_one({"_id": o["_id"]})
                 removed += 1
         if restored + removed:
-            await _log_markup(db, pid, "undo", "all",
-                              f"{restored} manuel fiyata, {removed} otomatik fiyata döndü",
+            await _log_markup(db, pid, "undo", kind or "all",
+                              f"{restored} manuel fiyata, {removed} otomatik fiyata döndü"
+                              + (f" (tür: {kind})" if kind else ""),
                               by=str(_u.get("email") or ""), count=restored + removed)
-        return {"ok": True, "restored_manual": restored, "reverted_to_auto": removed,
+        return {"ok": True, "kind": kind, "restored_manual": restored, "reverted_to_auto": removed,
                 "total": restored + removed}
 
     @router.get("/{pid}/markup-history")
@@ -732,14 +764,17 @@ def create_weather_calendar_router(db, require_roles):
         return await run_competitor_price_trigger(db, pid, force=True)
 
     @router.post("/{pid}/comp-trigger/apply")
-    async def apply_comp_trigger(pid: str, _u: dict = Depends(require_roles(*ROLES))):
-        """Rakip tetiği önerilerini (en fazla 10 gün) tek tıkla takvime uygular."""
+    async def apply_comp_trigger(pid: str, data: dict = None,
+                                 _u: dict = Depends(require_roles(*ROLES))):
+        """Rakip tetiği önerilerini takvime uygular; 'dates' verilirse sadece seçili günler."""
         r = await run_competitor_price_trigger(db, pid, force=True)
+        sel = set((data or {}).get("dates") or [])
+        devs = [d for d in r.get("deviations", []) if not sel or d["date"] in sel]
         rt = await db.room_types.find_one({"property_id": pid}, {"_id": 0}) or {}
         rt_id = rt.get("id", "")
         now_iso = datetime.now(timezone.utc).isoformat()
         applied = []
-        for d in r.get("deviations", []):
+        for d in devs:
             existing = await db.rate_overrides.find_one(
                 {"property_id": pid, "date": d["date"], "room_type_id": rt_id}, {"_id": 0})
             prev = None
@@ -764,26 +799,124 @@ def create_weather_calendar_router(db, require_roles):
     async def comp_deviations(pid: str, year: int, month: int,
                               _u: dict = Depends(require_roles(*ROLES))):
         """Ay bazlı rakip sapma ısı haritası verisi (tüm sapmalar, eşiksiz)."""
-        from calendar import monthrange
-        n = monthrange(year, month)[1]
-        dates = [f"{year:04d}-{month:02d}-{dd:02d}" for dd in range(1, n + 1)]
-        rt = await db.room_types.find_one({"property_id": pid}, {"_id": 0}) or {"base_rate": 100}
-        base_rate = float(rt.get("base_rate", 100) or 100)
-        snaps = await db.market_supply.aggregate([
-            {"$match": {"property_id": pid, "scan_type": "geo", "date": {"$in": dates}}},
-            {"$sort": {"scanned_at": -1}},
-            {"$group": {"_id": "$date", "avg_price": {"$first": "$avg_price"}}}]).to_list(40)
-        out = {}
-        for s in snaps:
-            mk = float(s.get("avg_price") or 0)
-            if mk <= 0:
-                continue
-            ovr = await db.rate_overrides.find_one(
-                {"property_id": pid, "date": s["_id"]}, {"_id": 0, "custom_rate": 1})
-            ours = float(ovr["custom_rate"]) if ovr and ovr.get("custom_rate") else base_rate
-            out[s["_id"]] = {"dev_pct": round((ours - mk) / mk * 100, 1),
-                             "market": round(mk, 2), "ours": round(ours, 2)}
+        out = await _month_deviations(db, pid, year, month)
         return {"property_id": pid, "year": year, "month": month, "deviations": out}
+
+    @router.get("/{pid}/heatmap-pdf")
+    async def heatmap_pdf(pid: str, year: int = 0, month: int = 0,
+                          _u: dict = Depends(require_roles(*ROLES))):
+        """Aylık rakip sapma ısı haritası PDF'i — takvim ızgarası + özet."""
+        from calendar import monthrange
+        from io import BytesIO
+        from fastapi.responses import StreamingResponse
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas as pc
+        from reportlab.lib.units import mm
+        today = datetime.now(timezone.utc).date()
+        year = year or today.year
+        month = month or today.month
+        devs = await _month_deviations(db, pid, year, month)
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+        _t = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+        months_tr = ["", "Ocak", "Subat", "Mart", "Nisan", "Mayis", "Haziran",
+                     "Temmuz", "Agustos", "Eylul", "Ekim", "Kasim", "Aralik"]
+        buf = BytesIO()
+        c = pc.Canvas(buf, pagesize=A4)
+        w, hh = A4
+        c.setFillColorRGB(0.05, 0.09, 0.16)
+        c.rect(0, hh - 34 * mm, w, 34 * mm, fill=1, stroke=0)
+        try:
+            from routes.platform_ext.branding import get_logo_reader, draw_logo
+            _logo = await get_logo_reader(db, pid)
+            if _logo:
+                draw_logo(c, _logo, w, hh, mm)
+        except Exception:
+            pass
+        c.setFillColorRGB(1, 1, 1)
+        c.setFont("Helvetica-Bold", 17)
+        c.drawString(18 * mm, hh - 15 * mm, "Rakip Sapma Isi Haritasi")
+        c.setFont("Helvetica", 10)
+        c.drawString(18 * mm, hh - 23 * mm,
+                     f"{(prop.get('name') or pid).translate(_t)} · {months_tr[month]} {year} · "
+                     f"{len(devs)} gunde pazar verisi")
+        n_days = monthrange(year, month)[1]
+        first_dow = datetime(year, month, 1).weekday()
+        cw = (w - 36 * mm) / 7
+        ch = 20 * mm
+        top = hh - 44 * mm
+        c.setFont("Helvetica-Bold", 8)
+        c.setFillColorRGB(0.4, 0.4, 0.4)
+        for i, dn in enumerate(["Pzt", "Sal", "Car", "Per", "Cum", "Cmt", "Paz"]):
+            c.drawCentredString(18 * mm + i * cw + cw / 2, top, dn)
+        top -= 4 * mm
+        for day in range(1, n_days + 1):
+            idx = first_dow + day - 1
+            row, col = idx // 7, idx % 7
+            x = 18 * mm + col * cw
+            y = top - (row + 1) * ch
+            ds = f"{year:04d}-{month:02d}-{day:02d}"
+            d = devs.get(ds)
+            if d:
+                t = min(abs(d["dev_pct"]) / 40, 1.0) * 0.85
+                base = (0.96, 0.25, 0.37) if d["dev_pct"] >= 0 else (0.05, 0.65, 0.91)
+                c.setFillColorRGB(*(1 + (b - 1) * t for b in base))
+            else:
+                c.setFillColorRGB(0.97, 0.97, 0.96)
+            c.rect(x, y, cw - 1, ch - 1, fill=1, stroke=0)
+            c.setFillColorRGB(0.15, 0.15, 0.15)
+            c.setFont("Helvetica-Bold", 8)
+            c.drawString(x + 1.5 * mm, y + ch - 5 * mm, str(day))
+            if d:
+                c.setFont("Helvetica-Bold", 8)
+                c.drawString(x + 1.5 * mm, y + ch - 10 * mm,
+                             f"{'+' if d['dev_pct'] >= 0 else ''}{d['dev_pct']:g}%")
+                c.setFont("Helvetica", 6)
+                c.setFillColorRGB(0.3, 0.3, 0.3)
+                c.drawString(x + 1.5 * mm, y + ch - 14 * mm, f"Biz {d['ours']:g}")
+                c.drawString(x + 1.5 * mm, y + ch - 17.5 * mm, f"Pzr {d['market']:g}")
+        rows_used = (first_dow + n_days + 6) // 7
+        y = top - rows_used * ch - 10 * mm
+        c.setFillColorRGB(0.1, 0.1, 0.1)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(18 * mm, y, "Ozet")
+        y -= 7 * mm
+        c.setFont("Helvetica", 9)
+        c.setFillColorRGB(0.25, 0.25, 0.25)
+        if devs:
+            vals = [d["dev_pct"] for d in devs.values()]
+            avg = round(sum(vals) / len(vals), 1)
+            over = sorted(devs.items(), key=lambda kv: -kv[1]["dev_pct"])[:3]
+            under = sorted(devs.items(), key=lambda kv: kv[1]["dev_pct"])[:3]
+            lines = [
+                f"Ortalama sapma: {'+' if avg >= 0 else ''}{avg}% · "
+                f"{sum(1 for v in vals if v >= 0)} gun pazardan pahali, {sum(1 for v in vals if v < 0)} gun ucuz",
+                "En pahali gunler: " + ", ".join(f"{k} ({v['dev_pct']:+g}%)" for k, v in over if v["dev_pct"] > 0),
+                "En ucuz gunler: " + ", ".join(f"{k} ({v['dev_pct']:+g}%)" for k, v in under if v["dev_pct"] < 0),
+            ]
+        else:
+            lines = ["Bu ay icin pazar tarama verisi yok - Pazar Robotu'ndan tarama baslatabilirsiniz."]
+        for ln in lines:
+            c.drawString(18 * mm, y, ln.translate(_t)[:110])
+            y -= 5.5 * mm
+        y -= 3 * mm
+        c.setFillColorRGB(0.96, 0.25, 0.37)
+        c.rect(18 * mm, y, 4 * mm, 3 * mm, fill=1, stroke=0)
+        c.setFillColorRGB(0.05, 0.65, 0.91)
+        c.rect(60 * mm, y, 4 * mm, 3 * mm, fill=1, stroke=0)
+        c.setFillColorRGB(0.35, 0.35, 0.35)
+        c.setFont("Helvetica", 8)
+        c.drawString(24 * mm, y + 0.5 * mm, "Pazardan pahaliyiz")
+        c.drawString(66 * mm, y + 0.5 * mm, "Pazardan ucuzuz · renk koyulugu = sapma buyuklugu")
+        c.setFillColorRGB(0.6, 0.6, 0.6)
+        c.setFont("Helvetica", 7)
+        c.drawString(18 * mm, 12 * mm,
+                     f"Olusturma: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC · RMS Rapor Merkezi")
+        c.showPage()
+        c.save()
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf",
+                                 headers={"Content-Disposition":
+                                          f'inline; filename="sapma-isi-haritasi-{year}-{month:02d}.pdf"'})
 
     @router.post("/{pid}/weekly-digest/run")
     async def weekly_digest_run(pid: str, _u: dict = Depends(require_roles(*ROLES))):

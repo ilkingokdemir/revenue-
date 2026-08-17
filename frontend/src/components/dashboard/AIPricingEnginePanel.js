@@ -58,6 +58,7 @@ const AIPricingEnginePanel = ({ propertyId }) => {
   const [compTrig, setCompTrig] = useState(null);
   const [compTrigResult, setCompTrigResult] = useState(null);
   const [compTrigRunning, setCompTrigRunning] = useState(false);
+  const [compTrigSel, setCompTrigSel] = useState([]);
 
   const curFormatter = useMemo(
     () => makeCurrencyFormatter(data?.currency || "GBP"),
@@ -116,7 +117,8 @@ const AIPricingEnginePanel = ({ propertyId }) => {
   const applyCompTrig = async () => {
     setCompTrigRunning(true);
     try {
-      const r = await axios.post(`${API}/demand-signals/${propertyId}/comp-trigger/apply`, {}, { headers: authHeaders() });
+      const r = await axios.post(`${API}/demand-signals/${propertyId}/comp-trigger/apply`,
+        { dates: compTrigSel }, { headers: authHeaders() });
       toast.success(r.data.applied ? `⚡ ${r.data.applied} güne öneri fiyatı uygulandı — takvimden '↩ Zamları Geri Al' ile geri alınabilir` : "Uygulanacak sapma yok");
       setCompTrigResult(null);
       loadSuggestions();
@@ -129,6 +131,7 @@ const AIPricingEnginePanel = ({ propertyId }) => {
     try {
       const r = await axios.post(`${API}/demand-signals/${propertyId}/comp-trigger/run`, {}, { headers: authHeaders() });
       setCompTrigResult(r.data);
+      setCompTrigSel((r.data.deviations || []).map((d) => d.date));
       if (r.data.deviation_days > 0) {
         toast.warning(`${r.data.deviation_days} günde ±%${r.data.threshold_pct} sapma bulundu${r.data.notified ? " — bildirim gönderildi 🔔" : ""}`);
       } else {
@@ -460,20 +463,24 @@ const AIPricingEnginePanel = ({ propertyId }) => {
                     <div className="text-[11px] font-black text-stone-700">
                       ⚠ {compTrigResult.deviation_days} günde ±%{compTrigResult.threshold_pct} sapma{compTrigResult.notified ? " — 🔔 bildirim gönderildi" : ""}
                     </div>
-                    <button onClick={applyCompTrig} disabled={compTrigRunning} data-testid="ai-pricing-comptrig-apply"
+                    <button onClick={applyCompTrig} disabled={compTrigRunning || compTrigSel.length === 0} data-testid="ai-pricing-comptrig-apply"
                       className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 disabled:opacity-50">
-                      {compTrigRunning ? "Uygulanıyor…" : `⚡ Önerileri Takvime Uygula (${Math.min(compTrigResult.deviations.length, 10)} gün)`}
+                      {compTrigRunning ? "Uygulanıyor…" : `⚡ Seçili Önerileri Uygula (${compTrigSel.length} gün)`}
                     </button>
                   </div>
                   <div className="space-y-1 max-h-36 overflow-auto">
                     {compTrigResult.deviations.map((d) => (
-                      <div key={d.date} className="flex items-center justify-between text-[10px] bg-white rounded-lg px-2 py-1" data-testid={`ai-pricing-comptrig-dev-${d.date}`}>
-                        <span className="font-bold text-stone-600">{d.date}</span>
+                      <label key={d.date} className="flex items-center justify-between text-[10px] bg-white rounded-lg px-2 py-1 cursor-pointer" data-testid={`ai-pricing-comptrig-dev-${d.date}`}>
+                        <span className="flex items-center gap-1.5">
+                          <input type="checkbox" checked={compTrigSel.includes(d.date)} data-testid={`ai-pricing-comptrig-sel-${d.date}`}
+                            onChange={() => setCompTrigSel((s) => s.includes(d.date) ? s.filter((x) => x !== d.date) : [...s, d.date])} />
+                          <span className="font-bold text-stone-600">{d.date}</span>
+                        </span>
                         <span>biz <b>{cur(d.ours)}</b></span>
                         <span>pazar <b>{cur(d.market)}</b></span>
                         <span className={`font-black ${d.dev_pct > 0 ? "text-rose-600" : "text-sky-700"}`}>%{d.dev_pct > 0 ? "+" : ""}{d.dev_pct}</span>
                         <span className="text-emerald-700 font-bold">öneri {cur(d.suggestion)}</span>
-                      </div>
+                      </label>
                     ))}
                   </div>
                 </>

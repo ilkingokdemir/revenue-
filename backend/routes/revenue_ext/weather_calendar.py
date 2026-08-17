@@ -731,6 +731,60 @@ def create_weather_calendar_router(db, require_roles):
     async def run_comp_trigger(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         return await run_competitor_price_trigger(db, pid, force=True)
 
+    @router.post("/{pid}/comp-trigger/apply")
+    async def apply_comp_trigger(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Rakip tetiği önerilerini (en fazla 10 gün) tek tıkla takvime uygular."""
+        r = await run_competitor_price_trigger(db, pid, force=True)
+        rt = await db.room_types.find_one({"property_id": pid}, {"_id": 0}) or {}
+        rt_id = rt.get("id", "")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        applied = []
+        for d in r.get("deviations", []):
+            existing = await db.rate_overrides.find_one(
+                {"property_id": pid, "date": d["date"], "room_type_id": rt_id}, {"_id": 0})
+            prev = None
+            if existing:
+                prev = existing.get("prev_custom_rate") if existing.get("markup_kind") else existing.get("custom_rate")
+            await db.rate_overrides.update_one(
+                {"property_id": pid, "date": d["date"], "room_type_id": rt_id},
+                {"$set": {"property_id": pid, "date": d["date"], "room_type_id": rt_id,
+                          "custom_rate": float(d["suggestion"]), "markup_kind": "comp_trigger",
+                          "markup_name": f"Rakip tetiği (pazar {d['market']:g}, %{d['dev_pct']:+g})",
+                          "prev_custom_rate": prev, "set_by": "Rakip Fiyat Tetiği",
+                          "updated_at": now_iso}}, upsert=True)
+            applied.append({"date": d["date"], "new_rate": d["suggestion"], "prev": prev})
+        if applied:
+            await _log_markup(db, pid, "apply", "comp_trigger",
+                              f"Rakip tetiği önerileri · {len(applied)} gün takvime uygulandı",
+                              by=str(_u.get("email") or ""), count=len(applied))
+        return {"ok": True, "applied": len(applied), "days": applied,
+                "note": "'↩ Zamları Geri Al' ile geri alınabilir."}
+
+    @router.get("/{pid}/comp-deviations")
+    async def comp_deviations(pid: str, year: int, month: int,
+                              _u: dict = Depends(require_roles(*ROLES))):
+        """Ay bazlı rakip sapma ısı haritası verisi (tüm sapmalar, eşiksiz)."""
+        from calendar import monthrange
+        n = monthrange(year, month)[1]
+        dates = [f"{year:04d}-{month:02d}-{dd:02d}" for dd in range(1, n + 1)]
+        rt = await db.room_types.find_one({"property_id": pid}, {"_id": 0}) or {"base_rate": 100}
+        base_rate = float(rt.get("base_rate", 100) or 100)
+        snaps = await db.market_supply.aggregate([
+            {"$match": {"property_id": pid, "scan_type": "geo", "date": {"$in": dates}}},
+            {"$sort": {"scanned_at": -1}},
+            {"$group": {"_id": "$date", "avg_price": {"$first": "$avg_price"}}}]).to_list(40)
+        out = {}
+        for s in snaps:
+            mk = float(s.get("avg_price") or 0)
+            if mk <= 0:
+                continue
+            ovr = await db.rate_overrides.find_one(
+                {"property_id": pid, "date": s["_id"]}, {"_id": 0, "custom_rate": 1})
+            ours = float(ovr["custom_rate"]) if ovr and ovr.get("custom_rate") else base_rate
+            out[s["_id"]] = {"dev_pct": round((ours - mk) / mk * 100, 1),
+                             "market": round(mk, 2), "ours": round(ours, 2)}
+        return {"property_id": pid, "year": year, "month": month, "deviations": out}
+
     @router.post("/{pid}/weekly-digest/run")
     async def weekly_digest_run(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         return await send_weekly_signal_digest(db, pid, force=True)

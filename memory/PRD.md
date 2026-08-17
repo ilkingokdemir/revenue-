@@ -904,3 +904,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Kural Etki Paneli: db.occupancy_rule_impact (her kural koşusunda ay bazlı zam/indirim gün + delta kaydı); GET /{pid}/occupancy-rule/impact (son 6 ay aggregate, net katkı). UI: Doluluk Kuralı modalında yeşil etki paneli (rev-cal-occ-impact-panel) — ay satırları ↑zam/↓indirim/net; boşsa bilgi metni.
 - Rakip Fiyat Tetiği: db.comp_trigger (threshold_pct 3-50 def 10, enabled); GET/PUT + POST /comp-trigger/run — market_supply geo ortalaması vs bizim fiyat (14 gün), sapma ≥ eşik ise günlük dedupe'lu bildirim (🔔 'Rakip Fiyat Tetiği', öneri fiyatlarıyla) + comp_trigger_loop (6 saatte bir). UI: AI Pricing panelinde kart (ai-pricing-comp-trigger) — eşik input, otomatik switch, 'Şimdi Kontrol Et' + sapma tablosu (biz/pazar/%/öneri).
 - BEKLEYEN: RESEND_API_KEY placeholder (digest e-postası MOCK); Apaleo Client ID/Secret yok.
+
+## Güncelleme (2026-08-17, 3 özellik — iter. 567, %100 geçti)
+- Tetik Fiyat Uygula: POST /{pid}/comp-trigger/apply — sapan günlerin öneri fiyatlarını (max 10) rate_overrides'a yazar (markup_kind=comp_trigger, prev saklanır, ↩ Geri Al kapsar, markup_history logu). UI: sonuç panelinde yeşil '⚡ Önerileri Takvime Uygula' (ai-pricing-comptrig-apply).
+- Etki Grafiği: Doluluk Kuralı modalında 2+ ay veri varsa aylık net katkı çubuk grafiği (rev-cal-occ-impact-chart, yeşil/kırmızı barlar); tek ayda gizli.
+- Sapma Isı Haritası: GET /{pid}/comp-deviations?year&month (eşiksiz tüm sapmalar); takvimde '🌡 Sapma' toggle (rev-cal-heat-toggle) — kırmızı=pahalıyız/mavi=ucuzuz arka plan tonu (koyuluk=|sapma|), ▲/▼ % rozetleri + lejant (Ağustos 2026'da 31 hücre doğrulandı).

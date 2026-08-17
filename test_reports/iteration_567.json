@@ -1,0 +1,22 @@
+{
+  "summary": "Iter 567 — Tested 3 new revenue features: (1) Comp Trigger Apply, (2) Sapma Isı Haritası, (3) Occupancy Rule Impact Chart. Backend pytest 5/5 passed: POST /api/demand-signals/default/comp-trigger/apply → applied 10 days with markup_kind='comp_trigger' + markup_history log; undo-markups reverts; GET /comp-deviations?year=2026&month=8 returned filled deviations map; 2020-01 returned empty {}. Frontend flows all green: Franziskaner branch → Market Robot → AI Pricing tab → 'Şimdi Kontrol Et' → 5 deviation rows + green 'Önerileri Takvime Uygula (10 gün)' button (data-testid ai-pricing-comptrig-apply) → clicked → success toast 'â¡ 10 güne öneri fiyat uygulandı — takvimden ð Zamları Geri Al ile geri alınabilir' + result panel collapsed. Rate Calendar → 'ð¡ Sapma' toggle turns ON → legend visible (pazardan pahalıyız ▲ / ucuzuz ▼, 31 günde pazar verisi var) + 31 heat badges with blue/red shading + ▼/▲ % rozetleri (Aug 2026); toggle OFF → legend hidden. Doluluk Kuralı modal → Kural Etki Paneli shows single-month row (2026-08 ↑4 gün zam £72, ↓0 gün ind, net +£72) WITHOUT bar chart (as expected for tek-ay case). Regression: '↩ Zamları Geri Al' worked, view mode buttons (Prices/Occupancy/Pickup) all switch correctly, AI Pricing suggestions list intact. Cleanup done: undo triggered end-of-test.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter567.py",
+    "/app/test_reports/pytest/iter567.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "weather_calendar.py exceeds 800 lines — split comp-trigger, occupancy-rule, season-templates handlers into submodules for maintainability.",
+    "apply_comp_trigger() uses first room_type only (rt_id may be empty string if no room_types); consider explicit room_type_id param + validation.",
+    "undo-markups deletes rate_overrides docs by _id when prev is None — OK, but note that all markup kinds (holiday, season, occupancy, comp_trigger, event) are cleared together with no filter option — a per-kind undo would be a UX improvement."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter567.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (branch: Franziskaner by Centra)",
+  "seed_data_creation": "None. Used existing Zurich market_supply geo data for Aug 2026.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Feature tested on Franziskaner (pid=default). Aug 2026 has Zurich market_supply geo data → deviations map populated (31 heat cells rendered). occupancy_rule_impact collection has only 2026-08 record → chart hidden but row visible. Apply-comp-trigger caps at 10 deviations per call. After test the undo-markups was invoked from calendar to clean up. Test file: /app/backend/tests/test_iter567.py."
+}

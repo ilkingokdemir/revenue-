@@ -36,6 +36,13 @@ export const RateCalendarEditable = ({ propertyId }) => {
   const [occRule, setOccRule] = useState(null);
   const [occOpen, setOccOpen] = useState(false);
   const [occImpact, setOccImpact] = useState(null);
+  const [heatOn, setHeatOn] = useState(false);
+  const [heatMap, setHeatMap] = useState({});
+
+  const heatColor = (dev) => {
+    const a = Math.min(Math.abs(dev) / 40, 1) * 0.45 + 0.08;
+    return dev >= 0 ? `rgba(244,63,94,${a})` : `rgba(14,165,233,${a})`;
+  };
 
   const previewSeason = async (tid) => {
     try {
@@ -153,6 +160,12 @@ export const RateCalendarEditable = ({ propertyId }) => {
   }, [propertyId, year, month, roomType]);
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (!heatOn || !propertyId) return;
+    axios.get(`${API}/demand-signals/${propertyId}/comp-deviations?year=${year}&month=${month}`)
+      .then(r => setHeatMap(r.data.deviations || {})).catch(() => setHeatMap({}));
+  }, [heatOn, propertyId, year, month]);
+
   const navMonth = (dir) => {
     let nm = month + dir, ny = year;
     if (nm > 12) { nm = 1; ny++; }
@@ -239,6 +252,9 @@ export const RateCalendarEditable = ({ propertyId }) => {
               data-testid={`rev-cal-view-${v}`}>{v}</button>
           ))}
           <div className="w-px h-5 bg-stone-200 mx-1" />
+          <button onClick={() => setHeatOn(h => !h)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg ${heatOn ? "bg-rose-600 text-white" : "text-stone-500 hover:bg-stone-100 border border-stone-200"}`}
+            data-testid="rev-cal-heat-toggle">🌡 Sapma</button>
           <button onClick={() => { setBulkMode(!bulkMode); setBulkDays([]); }}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg ${bulkMode ? "bg-amber-500 text-white" : "text-stone-500 hover:bg-stone-100 border border-stone-200"}`}
             data-testid="rev-cal-bulk">Bulk Edit</button>
@@ -299,6 +315,16 @@ export const RateCalendarEditable = ({ propertyId }) => {
         </div>
       )}
 
+      {/* Sapma Isı Haritası Lejantı */}
+      {heatOn && (
+        <div className="flex items-center gap-3 flex-wrap text-[10px] text-stone-500 bg-white border border-stone-200 rounded-xl px-3 py-2 mb-4" data-testid="rev-cal-heat-legend">
+          <span className="font-bold text-stone-700">🌡 Rakip Sapma Isı Haritası</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded inline-block" style={{ backgroundColor: "rgba(244,63,94,0.45)" }}></span> pazardan pahalıyız (▲)</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded inline-block" style={{ backgroundColor: "rgba(14,165,233,0.45)" }}></span> pazardan ucuzuz (▼)</span>
+          <span>· renk koyuluğu = sapma büyüklüğü · {Object.keys(heatMap).length} günde pazar verisi var</span>
+        </div>
+      )}
+
       {/* Calendar Grid */}
       <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
         <div className="grid grid-cols-7 border-b">
@@ -316,6 +342,7 @@ export const RateCalendarEditable = ({ propertyId }) => {
                   bulkMode && d && bulkDays.includes(d.date) ? "bg-blue-50 ring-2 ring-blue-300 ring-inset" :
                   d ? "bg-white hover:bg-stone-50" : "bg-stone-50"
                 }`}
+                style={heatOn && d && heatMap[d.date] ? { backgroundColor: heatColor(heatMap[d.date].dev_pct) } : undefined}
                 onClick={() => {
                   if (!d) return;
                   if (bulkMode) { toggleBulkDay(d.date); return; }
@@ -388,6 +415,13 @@ export const RateCalendarEditable = ({ propertyId }) => {
                     </>
                   )}
                   {d.is_full && <Badge className="text-[8px] bg-emerald-500 text-white mt-1">Full</Badge>}
+                  {heatOn && heatMap[d.date] && (
+                    <div className={`text-[8px] font-black mt-0.5 ${heatMap[d.date].dev_pct >= 0 ? "text-rose-800" : "text-sky-900"}`}
+                      data-testid={`rev-cal-heat-${d.day}`}
+                      title={`Biz ${cur(heatMap[d.date].ours)} / pazar ${cur(heatMap[d.date].market)}`}>
+                      {heatMap[d.date].dev_pct >= 0 ? "▲" : "▼"} %{Math.abs(heatMap[d.date].dev_pct)}
+                    </div>
+                  )}
                   {(holidays[d.date] || events[d.date]) && (
                     <div className="absolute bottom-0 left-0 right-0 flex flex-col">
                       {events[d.date] && (
@@ -445,6 +479,24 @@ export const RateCalendarEditable = ({ propertyId }) => {
                   ))}
                 </div>
                 <p className="text-[9px] text-emerald-600/70 mt-1">{occImpact.note}</p>
+                {occImpact.months.length > 1 && (() => {
+                  const chron = [...occImpact.months].reverse();
+                  const maxAbs = Math.max(...chron.map(x => Math.abs(x.net)), 1);
+                  return (
+                    <div className="flex items-end gap-2 h-20 mt-2 px-1" data-testid="rev-cal-occ-impact-chart">
+                      {chron.map(m => (
+                        <div key={m.month} className="flex-1 flex flex-col items-center justify-end h-full"
+                          title={`${m.month}: net ${m.net >= 0 ? "+" : "−"}${cur(Math.abs(m.net))}`}
+                          data-testid={`rev-cal-occ-impact-bar-${m.month}`}>
+                          <span className={`text-[8px] font-black ${m.net >= 0 ? "text-emerald-700" : "text-rose-600"}`}>{m.net >= 0 ? "+" : "−"}{cur(Math.abs(m.net))}</span>
+                          <div className={`w-full max-w-[36px] rounded-t ${m.net >= 0 ? "bg-emerald-500" : "bg-rose-500"}`}
+                            style={{ height: Math.max(6, Math.round(Math.abs(m.net) / maxAbs * 48)) }} />
+                          <span className="text-[8px] text-stone-400">{m.month.slice(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             )}
             {occImpact && !occImpact.months?.length && (

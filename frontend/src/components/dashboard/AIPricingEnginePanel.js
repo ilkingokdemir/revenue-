@@ -113,6 +113,17 @@ const AIPricingEnginePanel = ({ propertyId }) => {
     } catch { toast.error("Kaydedilemedi"); }
   };
 
+  const applyCompTrig = async () => {
+    setCompTrigRunning(true);
+    try {
+      const r = await axios.post(`${API}/demand-signals/${propertyId}/comp-trigger/apply`, {}, { headers: authHeaders() });
+      toast.success(r.data.applied ? `⚡ ${r.data.applied} güne öneri fiyatı uygulandı — takvimden '↩ Zamları Geri Al' ile geri alınabilir` : "Uygulanacak sapma yok");
+      setCompTrigResult(null);
+      loadSuggestions();
+    } catch { toast.error("Uygulanamadı"); }
+    finally { setCompTrigRunning(false); }
+  };
+
   const runCompTrig = async () => {
     setCompTrigRunning(true);
     try {
@@ -445,8 +456,14 @@ const AIPricingEnginePanel = ({ propertyId }) => {
             <div className="mt-3 bg-stone-50 border border-stone-200 rounded-xl p-2.5" data-testid="ai-pricing-comptrig-result">
               {compTrigResult.deviations?.length > 0 ? (
                 <>
-                  <div className="text-[11px] font-black text-stone-700 mb-1.5">
-                    ⚠ {compTrigResult.deviation_days} günde ±%{compTrigResult.threshold_pct} sapma{compTrigResult.notified ? " — 🔔 bildirim gönderildi" : ""}
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                    <div className="text-[11px] font-black text-stone-700">
+                      ⚠ {compTrigResult.deviation_days} günde ±%{compTrigResult.threshold_pct} sapma{compTrigResult.notified ? " — 🔔 bildirim gönderildi" : ""}
+                    </div>
+                    <button onClick={applyCompTrig} disabled={compTrigRunning} data-testid="ai-pricing-comptrig-apply"
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 disabled:opacity-50">
+                      {compTrigRunning ? "Uygulanıyor…" : `⚡ Önerileri Takvime Uygula (${Math.min(compTrigResult.deviations.length, 10)} gün)`}
+                    </button>
                   </div>
                   <div className="space-y-1 max-h-36 overflow-auto">
                     {compTrigResult.deviations.map((d) => (

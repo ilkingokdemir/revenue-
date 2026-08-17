@@ -251,6 +251,7 @@ async def apply_occupancy_rule(db, pid: str, by: str = "", force: bool = False) 
     today = datetime.now(timezone.utc).date()
     now_iso = datetime.now(timezone.utc).isoformat()
     applied, discounted, details = 0, 0, []
+    zam_delta, ind_delta = 0, 0
     for i in range(30):
         ds = (today + timedelta(days=i)).isoformat()
         booked = await db.bookings.count_documents(
@@ -283,11 +284,19 @@ async def apply_occupancy_rule(db, pid: str, by: str = "", force: bool = False) 
                       "updated_at": now_iso}}, upsert=True)
         if is_high:
             applied += 1
+            zam_delta += new_rate - round(base_rate * mult)
         else:
             discounted += 1
+            ind_delta += round(base_rate * mult) - new_rate
         details.append({"date": ds, "occ_pct": occ, "new_rate": new_rate,
                         "action": "zam" if is_high else "indirim"})
     if applied or discounted:
+        await db.occupancy_rule_impact.insert_one({
+            "id": str(_uuid.uuid4()), "property_id": pid,
+            "month": datetime.now(timezone.utc).strftime("%Y-%m"),
+            "zam_days": applied, "indirim_days": discounted,
+            "zam_delta_sum": zam_delta, "indirim_delta_sum": ind_delta,
+            "at": now_iso})
         await _log_markup(db, pid, "apply", "occupancy",
                           f"Doluluk kuralı (eşik %{threshold:g}/+%{extra:g}"
                           + (f", düşük %{low_threshold:g}/−%{discount:g}" if low_enabled else "")
@@ -308,6 +317,56 @@ async def apply_occupancy_rule(db, pid: str, by: str = "", force: bool = False) 
             "low_enabled": low_enabled, "low_threshold_pct": low_threshold,
             "low_discount_pct": discount, "applied": applied, "discounted": discounted,
             "days": details, "enabled": enabled, "pms_push": pms_push}
+
+
+async def run_competitor_price_trigger(db, pid: str, force: bool = False) -> dict:
+    """Rakip ortalaması bizden eşik %'den fazla saparsa fiyat önerisi bildirimi bırakır."""
+    cfg = await db.comp_trigger.find_one({"property_id": pid}, {"_id": 0}) or {}
+    if not cfg.get("enabled", False) and not force:
+        return {"ran": False, "reason": "tetik pasif"}
+    threshold = float(cfg.get("threshold_pct", 10))
+    rt = await db.room_types.find_one({"property_id": pid}, {"_id": 0}) or {"base_rate": 100}
+    base_rate = float(rt.get("base_rate", 100) or 100)
+    today = datetime.now(timezone.utc).date()
+    dates = [(today + timedelta(days=i)).isoformat() for i in range(14)]
+    snaps = await db.market_supply.aggregate([
+        {"$match": {"property_id": pid, "scan_type": "geo", "date": {"$in": dates}}},
+        {"$sort": {"scanned_at": -1}},
+        {"$group": {"_id": "$date", "avg_price": {"$first": "$avg_price"}}}]).to_list(20)
+    deviations = []
+    for s in snaps:
+        mk = float(s.get("avg_price") or 0)
+        if mk <= 0:
+            continue
+        ovr = await db.rate_overrides.find_one(
+            {"property_id": pid, "date": s["_id"]}, {"_id": 0, "custom_rate": 1})
+        ours = float(ovr["custom_rate"]) if ovr and ovr.get("custom_rate") else base_rate
+        dev = (ours - mk) / mk * 100
+        if abs(dev) >= threshold:
+            deviations.append({"date": s["_id"], "ours": round(ours, 2), "market": round(mk, 2),
+                               "dev_pct": round(dev, 1),
+                               "suggestion": round(mk * (1.02 if dev < 0 else 0.98), 2)})
+    deviations.sort(key=lambda x: -abs(x["dev_pct"]))
+    sent = False
+    if deviations:
+        day_key = today.isoformat()
+        dup = await db.notifications.find_one(
+            {"created_by": "Rakip Fiyat Tetiği", "property_id": pid, "day": day_key}, {"_id": 1})
+        if not dup or force:
+            top = deviations[:5]
+            lines = [f"{d['date']}: biz {d['ours']:g} / pazar {d['market']:g} (%{d['dev_pct']:+g}) → öneri {d['suggestion']:g}"
+                     for d in top]
+            await db.notifications.insert_one({
+                "id": str(_uuid.uuid4()), "type": "warning",
+                "title": f"📡 Rakip Fiyat Tetiği: {len(deviations)} günde ±%{threshold:g} sapma",
+                "message": "Rakip ortalamasından sapan günler ve fiyat önerileri:\n" + "\n".join(lines),
+                "category": "revenue", "target_user": "", "target_role": "manager",
+                "link_to": "revenue", "priority": "high", "read": False,
+                "property_id": pid, "day": day_key,
+                "created_by": "Rakip Fiyat Tetiği", "created_at": datetime.now(timezone.utc).isoformat()})
+            sent = True
+    return {"ran": True, "threshold_pct": threshold, "deviations": deviations[:10],
+            "deviation_days": len(deviations), "notified": sent}
 
 
 def create_weather_calendar_router(db, require_roles):
@@ -629,6 +688,48 @@ def create_weather_calendar_router(db, require_roles):
     @router.post("/{pid}/occupancy-rule/run")
     async def run_occupancy_rule(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         return await apply_occupancy_rule(db, pid, by=str(_u.get("email") or ""), force=True)
+
+    @router.get("/{pid}/occupancy-rule/impact")
+    async def occupancy_rule_impact(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        rows = await db.occupancy_rule_impact.aggregate([
+            {"$match": {"property_id": pid}},
+            {"$group": {"_id": "$month", "zam_days": {"$sum": "$zam_days"},
+                        "indirim_days": {"$sum": "$indirim_days"},
+                        "zam_delta": {"$sum": "$zam_delta_sum"},
+                        "indirim_delta": {"$sum": "$indirim_delta_sum"},
+                        "runs": {"$sum": 1}}},
+            {"$sort": {"_id": -1}}, {"$limit": 6}]).to_list(6)
+        months = [{"month": r["_id"], "zam_days": r["zam_days"], "indirim_days": r["indirim_days"],
+                   "zam_delta": r["zam_delta"], "indirim_delta": r["indirim_delta"],
+                   "net": r["zam_delta"] - r["indirim_delta"], "runs": r["runs"]} for r in rows]
+        return {"property_id": pid, "months": months,
+                "note": "Delta = kuralın taban fiyata göre oda-gece başına değiştirdiği tutar toplamı (üst sınır tahmini)."}
+
+    @router.get("/{pid}/comp-trigger")
+    async def get_comp_trigger(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        doc = await db.comp_trigger.find_one({"property_id": pid}, {"_id": 0}) or {}
+        return {"property_id": pid, "threshold_pct": float(doc.get("threshold_pct", 10)),
+                "enabled": bool(doc.get("enabled", False))}
+
+    @router.put("/{pid}/comp-trigger")
+    async def set_comp_trigger(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        upd = {"updated_at": datetime.now(timezone.utc).isoformat()}
+        if "threshold_pct" in data:
+            try:
+                upd["threshold_pct"] = max(3.0, min(50.0, float(data["threshold_pct"])))
+            except (TypeError, ValueError):
+                pass
+        if "enabled" in data:
+            upd["enabled"] = bool(data["enabled"])
+        await db.comp_trigger.update_one({"property_id": pid},
+                                         {"$set": {"property_id": pid, **upd}}, upsert=True)
+        doc = await db.comp_trigger.find_one({"property_id": pid}, {"_id": 0})
+        return {"ok": True, "threshold_pct": doc.get("threshold_pct", 10),
+                "enabled": doc.get("enabled", False)}
+
+    @router.post("/{pid}/comp-trigger/run")
+    async def run_comp_trigger(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        return await run_competitor_price_trigger(db, pid, force=True)
 
     @router.post("/{pid}/weekly-digest/run")
     async def weekly_digest_run(pid: str, _u: dict = Depends(require_roles(*ROLES))):

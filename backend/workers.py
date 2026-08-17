@@ -1424,3 +1424,17 @@ async def occupancy_rule_loop(db, interval_seconds: int = 21600):
         except Exception as e:
             logger.warning(f"occupancy_rule_loop error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+async def comp_trigger_loop(db, interval_seconds: int = 21600):
+    """Aktif rakip fiyat tetiklerini her 6 saatte bir çalıştırır."""
+    from routes.revenue_ext.weather_calendar import run_competitor_price_trigger
+    while True:
+        try:
+            async for cfg in db.comp_trigger.find({"enabled": True}, {"_id": 0, "property_id": 1}):
+                r = await run_competitor_price_trigger(db, cfg["property_id"])
+                if r.get("notified"):
+                    logger.info(f"comp_trigger_loop: {cfg['property_id']} {r['deviation_days']} gün sapma bildirildi")
+        except Exception as e:
+            logger.warning(f"comp_trigger_loop error: {e}")
+        await asyncio.sleep(interval_seconds)

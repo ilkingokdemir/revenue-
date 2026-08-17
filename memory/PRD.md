@@ -899,3 +899,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Düşük Doluluk Kuralı: occupancy_rules'a low_enabled/low_threshold_pct(def 40)/low_discount_pct(def 10); apply_occupancy_rule düşük doluluk günlerine indirim uygular (markup_kind=occupancy, ↩ Geri Al kapsar). UI: modalda checkbox + sky-blue inputlar.
 - Kural PMS Push'u: occupancy_rules.push_to_pms; kural uygulandığında run_auto_night_push tetiklenir (70 gün-fiyat, 1 canlı Mews kanalı doğrulandı); toast'ta push özeti.
 - BEKLEYEN: RESEND_API_KEY hâlâ placeholder (re_XXX...) — kullanıcı gerçek anahtarı .env'e/mesaja iletmedi; digest e-postası MOCK. Apaleo Client ID/Secret hâlâ yok.
+
+## Güncelleme (2026-08-17, 2 özellik — iter. 566, %100 geçti)
+- Kural Etki Paneli: db.occupancy_rule_impact (her kural koşusunda ay bazlı zam/indirim gün + delta kaydı); GET /{pid}/occupancy-rule/impact (son 6 ay aggregate, net katkı). UI: Doluluk Kuralı modalında yeşil etki paneli (rev-cal-occ-impact-panel) — ay satırları ↑zam/↓indirim/net; boşsa bilgi metni.
+- Rakip Fiyat Tetiği: db.comp_trigger (threshold_pct 3-50 def 10, enabled); GET/PUT + POST /comp-trigger/run — market_supply geo ortalaması vs bizim fiyat (14 gün), sapma ≥ eşik ise günlük dedupe'lu bildirim (🔔 'Rakip Fiyat Tetiği', öneri fiyatlarıyla) + comp_trigger_loop (6 saatte bir). UI: AI Pricing panelinde kart (ai-pricing-comp-trigger) — eşik input, otomatik switch, 'Şimdi Kontrol Et' + sapma tablosu (biz/pazar/%/öneri).
+- BEKLEYEN: RESEND_API_KEY placeholder (digest e-postası MOCK); Apaleo Client ID/Secret yok.

@@ -55,6 +55,9 @@ const AIPricingEnginePanel = ({ propertyId }) => {
   const [impact, setImpact] = useState(null);
   const [showImpact, setShowImpact] = useState(false);
   const [savingCfg, setSavingCfg] = useState(false);
+  const [compTrig, setCompTrig] = useState(null);
+  const [compTrigResult, setCompTrigResult] = useState(null);
+  const [compTrigRunning, setCompTrigRunning] = useState(false);
 
   const curFormatter = useMemo(
     () => makeCurrencyFormatter(data?.currency || "GBP"),
@@ -97,7 +100,32 @@ const AIPricingEnginePanel = ({ propertyId }) => {
     if (!propertyId || propertyId === "all") return;
     axios.get(`${API}/demand-signals/${propertyId}?days=14`, { headers: authHeaders() })
       .then((r) => setSignals(r.data)).catch(() => {});
+    axios.get(`${API}/demand-signals/${propertyId}/comp-trigger`, { headers: authHeaders() })
+      .then((r) => setCompTrig(r.data)).catch(() => {});
   }, [propertyId]);
+
+  const saveCompTrig = async (patch) => {
+    try {
+      const r = await axios.put(`${API}/demand-signals/${propertyId}/comp-trigger`,
+        { threshold_pct: compTrig?.threshold_pct, ...patch }, { headers: authHeaders() });
+      setCompTrig((c) => ({ ...c, threshold_pct: r.data.threshold_pct, enabled: r.data.enabled }));
+      toast.success(r.data.enabled ? "Rakip tetiği aktif — robot 6 saatte bir kontrol edecek" : "Rakip tetiği kaydedildi");
+    } catch { toast.error("Kaydedilemedi"); }
+  };
+
+  const runCompTrig = async () => {
+    setCompTrigRunning(true);
+    try {
+      const r = await axios.post(`${API}/demand-signals/${propertyId}/comp-trigger/run`, {}, { headers: authHeaders() });
+      setCompTrigResult(r.data);
+      if (r.data.deviation_days > 0) {
+        toast.warning(`${r.data.deviation_days} günde ±%${r.data.threshold_pct} sapma bulundu${r.data.notified ? " — bildirim gönderildi 🔔" : ""}`);
+      } else {
+        toast.success("Sapma yok — fiyatlarınız rakip ortalamasıyla uyumlu ✓");
+      }
+    } catch { toast.error("Kontrol çalıştırılamadı"); }
+    finally { setCompTrigRunning(false); }
+  };
 
   const saveCfg = async (patch) => {
     if (!cfg) return;
@@ -385,6 +413,58 @@ const AIPricingEnginePanel = ({ propertyId }) => {
             className="px-4 py-2 text-xs font-bold rounded-lg bg-amber-600 text-white hover:bg-amber-700">
             Dondurmayı Kaldır
           </button>
+        </div>
+      )}
+
+      {/* RAKİP FİYAT TETİĞİ */}
+      {compTrig && (
+        <div className="bg-white border border-stone-200 rounded-2xl p-4" data-testid="ai-pricing-comp-trigger">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex-1 min-w-[220px]">
+              <div className="text-sm font-black text-stone-800">📡 Rakip Fiyat Tetiği</div>
+              <p className="text-[11px] text-stone-500 mt-0.5">Rakip ortalaması fiyatınızdan eşik %'den fazla saparsa otomatik fiyat önerisi bildirimi (🔔) düşer. Robot 6 saatte bir kontrol eder.</p>
+            </div>
+            <label className="text-[10px] text-stone-500 font-bold">
+              Sapma eşiği ±%
+              <input type="number" min="3" max="50" step="1" value={compTrig.threshold_pct} data-testid="ai-pricing-comptrig-threshold"
+                onChange={(e) => setCompTrig((c) => ({ ...c, threshold_pct: Number(e.target.value) }))}
+                onBlur={(e) => saveCompTrig({ threshold_pct: Number(e.target.value) })}
+                className="block w-20 mt-0.5 border border-stone-300 rounded-lg px-2 py-1.5 text-sm font-normal" />
+            </label>
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] font-bold text-stone-500">Otomatik</span>
+              <Switch data-testid="ai-pricing-comptrig-enabled" checked={!!compTrig.enabled}
+                onCheckedChange={(v) => saveCompTrig({ enabled: v })} />
+            </div>
+            <button onClick={runCompTrig} disabled={compTrigRunning} data-testid="ai-pricing-comptrig-run"
+              className="px-4 py-2 rounded-xl bg-stone-900 text-white text-xs font-bold hover:bg-stone-700 disabled:opacity-50">
+              {compTrigRunning ? "Kontrol ediliyor…" : "Şimdi Kontrol Et"}
+            </button>
+          </div>
+          {compTrigResult && (
+            <div className="mt-3 bg-stone-50 border border-stone-200 rounded-xl p-2.5" data-testid="ai-pricing-comptrig-result">
+              {compTrigResult.deviations?.length > 0 ? (
+                <>
+                  <div className="text-[11px] font-black text-stone-700 mb-1.5">
+                    ⚠ {compTrigResult.deviation_days} günde ±%{compTrigResult.threshold_pct} sapma{compTrigResult.notified ? " — 🔔 bildirim gönderildi" : ""}
+                  </div>
+                  <div className="space-y-1 max-h-36 overflow-auto">
+                    {compTrigResult.deviations.map((d) => (
+                      <div key={d.date} className="flex items-center justify-between text-[10px] bg-white rounded-lg px-2 py-1" data-testid={`ai-pricing-comptrig-dev-${d.date}`}>
+                        <span className="font-bold text-stone-600">{d.date}</span>
+                        <span>biz <b>{cur(d.ours)}</b></span>
+                        <span>pazar <b>{cur(d.market)}</b></span>
+                        <span className={`font-black ${d.dev_pct > 0 ? "text-rose-600" : "text-sky-700"}`}>%{d.dev_pct > 0 ? "+" : ""}{d.dev_pct}</span>
+                        <span className="text-emerald-700 font-bold">öneri {cur(d.suggestion)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="text-[11px] font-bold text-emerald-700" data-testid="ai-pricing-comptrig-no-dev">✓ Sapma yok — fiyatlar rakip ortalamasıyla uyumlu (±%{compTrigResult.threshold_pct})</div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

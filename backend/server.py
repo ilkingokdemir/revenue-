@@ -2144,6 +2144,8 @@ async def startup_event():
     asyncio.create_task(weekly_signal_digest_loop(db))
     from workers import occupancy_rule_loop
     asyncio.create_task(occupancy_rule_loop(db))
+    from workers import comp_trigger_loop
+    asyncio.create_task(comp_trigger_loop(db))
     asyncio.create_task(profit_autopilot_loop(db))
     asyncio.create_task(data_quality_sentinel_loop(db))
     asyncio.create_task(open_pricing_optimizer_loop(db))

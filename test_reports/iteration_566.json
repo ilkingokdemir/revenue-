@@ -1,0 +1,21 @@
+{
+  "summary": "Iteration 566 - Verified 'Kural Etki Paneli' (Occupancy Rule Impact) + 'Rakip Fiyat Tetiği' (Competitor Price Trigger). Backend pytest: 6/6 passed (impact GET, run+impact, comp-trigger GET/PUT clamp 3-50, run + notification, regression). Frontend: Franziskaner branch → Revenue mgmt → Market Robot → AI Pricing: comp-trigger card visible with threshold=10, switch toggles (checked ↔ unchecked persists), 'Şimdi Kontrol Et' returned 12 deviation rows with '🔔 bildirim gönderildi' banner (Zurich market). Rate Calendar → Doluluk Kuralı modal shows Kural Etki Paneli (2026-08 ↑4 zam £72, ↓0 ind, net +£72). No regressions in Motor Ayarları, suggestions, sinyal şerit, freeze banner.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter566.py",
+    "/app/test_reports/pytest/iter566.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "weather_calendar.py is large (~760 lines) — consider splitting comp-trigger and occupancy-rule handlers into their own modules for maintainability.",
+    "Comp trigger PUT clamps threshold silently on invalid input (try/except pass) — consider returning 400 for non-numeric threshold to aid debugging."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter566.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None. Used existing Franziskaner branch + Zurich market_supply data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Comp-trigger enabled=true toggled during test. Property 'default' had impact records after run. UI path: branch switch to specific hotel (All Branches shows 'lütfen bir otel seçin'). Test IDs used: rev-cal-occ-rule-btn, rev-cal-occ-modal, rev-cal-occ-impact-panel, rev-cal-occ-impact-empty, rev-cal-occ-save-run, ai-pricing-comp-trigger, ai-pricing-comptrig-{threshold,enabled,run,result}."
+}

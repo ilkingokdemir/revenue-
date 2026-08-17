@@ -35,6 +35,7 @@ export const RateCalendarEditable = ({ propertyId }) => {
   const [seasonPreview, setSeasonPreview] = useState(null);
   const [occRule, setOccRule] = useState(null);
   const [occOpen, setOccOpen] = useState(false);
+  const [occImpact, setOccImpact] = useState(null);
 
   const previewSeason = async (tid) => {
     try {
@@ -45,8 +46,12 @@ export const RateCalendarEditable = ({ propertyId }) => {
 
   const openOccRule = async () => {
     try {
-      const r = await axios.get(`${API}/demand-signals/${propertyId}/occupancy-rule`);
+      const [r, imp] = await Promise.all([
+        axios.get(`${API}/demand-signals/${propertyId}/occupancy-rule`),
+        axios.get(`${API}/demand-signals/${propertyId}/occupancy-rule/impact`).catch(() => ({ data: null })),
+      ]);
       setOccRule(r.data);
+      setOccImpact(imp.data);
       setOccOpen(true);
     } catch { toast.error("Kural yüklenemedi"); }
   };
@@ -426,6 +431,25 @@ export const RateCalendarEditable = ({ propertyId }) => {
           <div className="bg-white rounded-2xl p-5 w-[400px] shadow-2xl" onClick={e => e.stopPropagation()} data-testid="rev-cal-occ-modal">
             <div className="text-sm font-black text-stone-800 mb-1">⚡ Doluluk Kuralı</div>
             <p className="text-xs text-stone-500 mb-3">{occRule.note}</p>
+            {occImpact?.months?.length > 0 && (
+              <div className="mb-3 bg-emerald-50 border border-emerald-100 rounded-xl p-2.5" data-testid="rev-cal-occ-impact-panel">
+                <div className="text-[11px] font-black text-emerald-800 mb-1.5">📊 Kural Etki Paneli — aylık gelir katkısı</div>
+                <div className="space-y-1 max-h-32 overflow-auto">
+                  {occImpact.months.map(m => (
+                    <div key={m.month} className="flex items-center justify-between text-[10px] bg-white rounded-lg px-2 py-1" data-testid={`rev-cal-occ-impact-${m.month}`}>
+                      <span className="font-bold text-stone-600">{m.month}</span>
+                      <span className="text-emerald-700">↑ {m.zam_days} gün zam ({cur(m.zam_delta)})</span>
+                      <span className="text-sky-700">↓ {m.indirim_days} gün ind. (−{cur(m.indirim_delta)})</span>
+                      <span className={`font-black ${m.net >= 0 ? "text-emerald-700" : "text-rose-600"}`}>net {m.net >= 0 ? "+" : "−"}{cur(Math.abs(m.net))}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[9px] text-emerald-600/70 mt-1">{occImpact.note}</p>
+              </div>
+            )}
+            {occImpact && !occImpact.months?.length && (
+              <p className="text-[10px] text-stone-400 mb-3 bg-stone-50 rounded-lg px-2 py-1.5" data-testid="rev-cal-occ-impact-empty">📊 Kural Etki Paneli: henüz kayıtlı kural koşusu yok — kural çalıştıkça aylık zam/indirim katkısı burada görünecek.</p>
+            )}
             <div className="grid grid-cols-2 gap-3 mb-3">
               <label className="text-[11px] font-bold text-stone-500">Doluluk eşiği %
                 <input type="number" min="50" max="100" value={occRule.threshold_pct} data-testid="rev-cal-occ-threshold"

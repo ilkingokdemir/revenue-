@@ -1,0 +1,19 @@
+{
+  "summary": "Frontend-only test of Rate Calendar 'Sezon Önizleme' (dry-run) and 'Doluluk Kuralı' features on Franziskaner by Centra branch. All 4 targeted flows PASSED end-to-end. Cleanup complete: occupancy rule enabled=false; all markups reverted via '↩ Zamları Geri Al'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "RateCalendarEditable.js at 597 lines is approaching the 700-line threshold — future work should split season/occupancy/history modals into subcomponents.",
+    "History modal (line 511) has no kind icon for 'occupancy' entries (only holiday/event/season icons). Minor UX polish: add a ⚡ icon for occupancy for parity."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (curl-verified by main agent)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None. Applied then immediately undone via 'Zamları Geri Al'. No residual data changes.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sezon Önizleme (rev-cal-season-preview-panel) verified read-only: Yaz Sezonu %+15 shows '8 gün etkilenecek, 7 manuel gün korunacak' with £175→£201, £150→£172, £125→£144 rows and manuel—korunur amber rows; Kapat closes without changes (28 custom rates preserved). Doluluk Kuralı modal defaults (thr=90, extra=10, enabled=false) verified; Kaydet+Şimdi Çalıştır toast '4 yüksek doluluk gününe ek zam uygulandı' and calendar shows £193 amber days (Aug 18/23/24 + one more), then '↩ Zamları Geri Al' toast '4 zam geri alındı (0 manuel fiyata, 4 otomatik fiyata döndü)'. 'Sadece Kaydet' path yields 'Doluluk kuralı kaydedildi (pasif)'. 🕓 Geçmiş modal (rev-cal-history-modal) contains occupancy entries: '✓ UYGULANDI Doluluk kuralı (eşik %90, ek %10) · 4 gün' and '↩ GERİ ALINDI 0 manuel fiyata, 4 otomatik fiyata döndü'. Enabled remained False at end.",
+  "rca of the issue": "N/A — no issues found."
+}

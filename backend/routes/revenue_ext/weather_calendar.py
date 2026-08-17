@@ -232,6 +232,55 @@ async def send_weekly_signal_digest(db, pid: str, force: bool = False) -> dict:
     return {"sent": True, "week": week_key, "signal_lines": len(lines), "email_status": email_status}
 
 
+async def apply_occupancy_rule(db, pid: str, by: str = "", force: bool = False) -> dict:
+    """Doluluk eşiğini aşan günlere otomatik ek zam uygular (önümüzdeki 30 gün)."""
+    rule = await db.occupancy_rules.find_one({"property_id": pid}, {"_id": 0}) or {}
+    enabled = bool(rule.get("enabled", False))
+    if not enabled and not force:
+        return {"ran": False, "reason": "kural pasif"}
+    threshold = float(rule.get("threshold_pct", 90))
+    extra = float(rule.get("extra_pct", 10))
+    room_types = await db.room_types.find({"property_id": pid}, {"_id": 0}).to_list(20)
+    rt = room_types[0] if room_types else {"id": "default", "base_rate": 100}
+    rt_id = rt.get("id", "")
+    base_rate = float(rt.get("base_rate", 100) or 100)
+    total_rooms = await db.rooms.count_documents({"property_id": pid}) or 10
+    today = datetime.now(timezone.utc).date()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    applied, details = 0, []
+    for i in range(30):
+        ds = (today + timedelta(days=i)).isoformat()
+        booked = await db.bookings.count_documents(
+            {"property_id": pid, "check_in": {"$lte": ds}, "check_out": {"$gt": ds},
+             "status": {"$ne": "cancelled"}})
+        occ = min(100, round(booked / max(total_rooms, 1) * 100))
+        if occ < threshold:
+            continue
+        ovr = await db.rate_overrides.find_one(
+            {"property_id": pid, "date": ds, "room_type_id": rt_id}, {"_id": 0})
+        if ovr and not ovr.get("markup_kind") and not ovr.get("holiday_markup"):
+            continue
+        mult = 1.4 if occ >= 90 else 1.2
+        new_rate = round(base_rate * mult * (1 + extra / 100))
+        if ovr and ovr.get("markup_kind") == "occupancy" and ovr.get("custom_rate") == float(new_rate):
+            continue
+        await db.rate_overrides.update_one(
+            {"property_id": pid, "date": ds, "room_type_id": rt_id},
+            {"$set": {"property_id": pid, "date": ds, "room_type_id": rt_id,
+                      "custom_rate": float(new_rate), "markup_kind": "occupancy",
+                      "markup_name": f"Doluluk %{occ} ≥ %{threshold:g}",
+                      "prev_custom_rate": None, "set_by": "Doluluk Kuralı Robotu",
+                      "updated_at": now_iso}}, upsert=True)
+        applied += 1
+        details.append({"date": ds, "occ_pct": occ, "new_rate": new_rate})
+    if applied:
+        await _log_markup(db, pid, "apply", "occupancy",
+                          f"Doluluk kuralı (eşik %{threshold:g}, ek %{extra:g}) · {applied} gün",
+                          by=by, count=applied)
+    return {"ran": True, "threshold_pct": threshold, "extra_pct": extra,
+            "applied": applied, "days": details, "enabled": enabled}
+
+
 def create_weather_calendar_router(db, require_roles):
     router = APIRouter(prefix="/demand-signals", tags=["demand-signals"])
     ROLES = ("admin", "manager")
@@ -465,6 +514,7 @@ def create_weather_calendar_router(db, require_roles):
         tpl = await db.season_templates.find_one({"property_id": pid, "id": tid}, {"_id": 0})
         if not tpl:
             raise HTTPException(404, "Şablon bulunamadı")
+        dry_run = bool((data or {}).get("dry_run"))
         pct = float(tpl["adjustment_pct"])
         room_type_id = ((data or {}).get("room_type_id") or "").strip()
         room_types = await db.room_types.find({"property_id": pid}, {"_id": 0}).to_list(20)
@@ -477,7 +527,7 @@ def create_weather_calendar_router(db, require_roles):
                  datetime.now(timezone.utc).date())
         d1 = datetime.strptime(tpl["end_date"], "%Y-%m-%d").date()
         now_iso = datetime.now(timezone.utc).isoformat()
-        applied, skipped, cursor = 0, 0, d0
+        applied, skipped, cursor, days = 0, 0, d0, []
         while cursor <= d1 and applied + skipped < 190:
             ds = cursor.isoformat()
             cursor += timedelta(days=1)
@@ -485,26 +535,63 @@ def create_weather_calendar_router(db, require_roles):
                 {"property_id": pid, "date": ds, "room_type_id": rt_id}, {"_id": 0})
             if ovr and not ovr.get("markup_kind") and not ovr.get("holiday_markup"):
                 skipped += 1
+                if len(days) < 60:
+                    days.append({"date": ds, "current": ovr.get("custom_rate"),
+                                 "new_rate": None, "skipped": True})
                 continue
             booked = await db.bookings.count_documents(
                 {"property_id": pid, "check_in": {"$lte": ds}, "check_out": {"$gt": ds},
                  "status": {"$ne": "cancelled"}})
             occ = min(100, round(booked / max(total_rooms, 1) * 100))
             mult = 1.4 if occ >= 90 else 1.2 if occ >= 75 else 1.0 if occ >= 50 else 0.85 if occ >= 25 else 0.7
-            new_rate = round(base_rate * mult * (1 + pct / 100))
-            await db.rate_overrides.update_one(
-                {"property_id": pid, "date": ds, "room_type_id": rt_id},
-                {"$set": {"property_id": pid, "date": ds, "room_type_id": rt_id,
-                          "custom_rate": float(new_rate), "markup_kind": "season",
-                          "markup_name": tpl["name"], "prev_custom_rate": None,
-                          "set_by": "Sezon Şablonu", "updated_at": now_iso}}, upsert=True)
+            current = round(base_rate * mult, 2)
+            new_rate = round(current * (1 + pct / 100))
+            if len(days) < 60:
+                days.append({"date": ds, "current": current, "new_rate": new_rate, "skipped": False})
+            if not dry_run:
+                await db.rate_overrides.update_one(
+                    {"property_id": pid, "date": ds, "room_type_id": rt_id},
+                    {"$set": {"property_id": pid, "date": ds, "room_type_id": rt_id,
+                              "custom_rate": float(new_rate), "markup_kind": "season",
+                              "markup_name": tpl["name"], "prev_custom_rate": None,
+                              "set_by": "Sezon Şablonu", "updated_at": now_iso}}, upsert=True)
             applied += 1
-        await _log_markup(db, pid, "apply", "season",
-                          f"{tpl['name']} ({tpl['start_date']}→{tpl['end_date']}, %{pct:+g}) · {applied} gün",
-                          by=str(_u.get("email") or ""), count=applied)
-        return {"ok": True, "template": tpl["name"], "pct": pct,
-                "applied": applied, "skipped_manual": skipped,
+        if not dry_run and applied:
+            await _log_markup(db, pid, "apply", "season",
+                              f"{tpl['name']} ({tpl['start_date']}→{tpl['end_date']}, %{pct:+g}) · {applied} gün",
+                              by=str(_u.get("email") or ""), count=applied)
+        return {"ok": True, "template": tpl["name"], "pct": pct, "dry_run": dry_run,
+                "applied": applied, "skipped_manual": skipped, "days": days,
                 "note": "Manuel fiyatlar korundu. '↩ Zamları Geri Al' ile tümü geri alınabilir."}
+
+    @router.get("/{pid}/occupancy-rule")
+    async def get_occupancy_rule(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        doc = await db.occupancy_rules.find_one({"property_id": pid}, {"_id": 0}) or {}
+        return {"property_id": pid, "threshold_pct": float(doc.get("threshold_pct", 90)),
+                "extra_pct": float(doc.get("extra_pct", 10)),
+                "enabled": bool(doc.get("enabled", False)),
+                "note": "Aktifken robot her gün önümüzdeki 30 günü tarar; doluluk eşiği aşan günlere otomatik ek zam uygular (manuel fiyatlar korunur)."}
+
+    @router.put("/{pid}/occupancy-rule")
+    async def set_occupancy_rule(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        upd = {}
+        for k, lo, hi in (("threshold_pct", 50, 100), ("extra_pct", 1, 50)):
+            if k in data:
+                try:
+                    upd[k] = max(lo, min(hi, float(data[k])))
+                except (TypeError, ValueError):
+                    pass
+        if "enabled" in data:
+            upd["enabled"] = bool(data["enabled"])
+        upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await db.occupancy_rules.update_one(
+            {"property_id": pid}, {"$set": {"property_id": pid, **upd}}, upsert=True)
+        doc = await db.occupancy_rules.find_one({"property_id": pid}, {"_id": 0})
+        return {"ok": True, **{k: doc.get(k) for k in ("threshold_pct", "extra_pct", "enabled")}}
+
+    @router.post("/{pid}/occupancy-rule/run")
+    async def run_occupancy_rule(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        return await apply_occupancy_rule(db, pid, by=str(_u.get("email") or ""), force=True)
 
     @router.post("/{pid}/weekly-digest/run")
     async def weekly_digest_run(pid: str, _u: dict = Depends(require_roles(*ROLES))):

@@ -890,3 +890,7 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Zam Geçmişi: db.markup_history (_log_markup — apply/undo, kind, detay, kullanıcı e-postası); GET /{pid}/markup-history; 🕓 Geçmiş modalı.
 - Digest E-postası: send_weekly_signal_digest artık owner_pulse._send_email ile admin/manager kullanıcılara HTML e-posta gönderiyor — RESEND_API_KEY placeholder olduğundan MOCK modda; gerçek anahtar girilince canlı.
 - Tüm zamlar (tatil/etkinlik/sezon) tek '↩ Zamları Geri Al' ile geri alınabilir.
+
+## Güncelleme (2026-08-17, 2 özellik — iter. 564, %100 geçti)
+- Sezon Önizleme: apply_season dry_run parametresi (yazmadan gün gün eski→yeni fiyat listesi, max 60 satır); Sezonlar modalında Önizle → önizleme paneli + 'Onayla ve Uygula'/Kapat.
+- Doluluk Kuralları: db.occupancy_rules (threshold_pct 50-100 def 90, extra_pct 1-50 def 10, enabled def false); GET/PUT /occupancy-rule + POST /run; apply_occupancy_rule (30 gün tarama, occ≥eşik → base×mult×(1+ek%), markup_kind=occupancy, manuel korunur, idempotent) + occupancy_rule_loop (6 saatte bir enabled kuralları çalıştırır). UI: ⚡ Doluluk Kuralı modalı (Kaydet+Şimdi Çalıştır / Sadece Kaydet). Zam Geçmişi ve ↩ Geri Al occupancy'yi de kapsar.

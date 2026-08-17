@@ -1410,3 +1410,17 @@ async def weekly_signal_digest_loop(db, interval_seconds: int = 21600):
         except Exception as e:
             logger.warning(f"weekly_signal_digest_loop error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+async def occupancy_rule_loop(db, interval_seconds: int = 21600):
+    """Aktif doluluk kurallarını her 6 saatte bir çalıştırır."""
+    from routes.revenue_ext.weather_calendar import apply_occupancy_rule
+    while True:
+        try:
+            async for rule in db.occupancy_rules.find({"enabled": True}, {"_id": 0, "property_id": 1}):
+                r = await apply_occupancy_rule(db, rule["property_id"], by="robot")
+                if r.get("applied"):
+                    logger.info(f"occupancy_rule_loop: {rule['property_id']} {r['applied']} gün zamlandı")
+        except Exception as e:
+            logger.warning(f"occupancy_rule_loop error: {e}")
+        await asyncio.sleep(interval_seconds)

@@ -32,6 +32,38 @@ export const RateCalendarEditable = ({ propertyId }) => {
   const [seasonForm, setSeasonForm] = useState({ name: "", start_date: "", end_date: "", adjustment_pct: 10 });
   const [historyOpen, setHistoryOpen] = useState(false);
   const [history, setHistory] = useState([]);
+  const [seasonPreview, setSeasonPreview] = useState(null);
+  const [occRule, setOccRule] = useState(null);
+  const [occOpen, setOccOpen] = useState(false);
+
+  const previewSeason = async (tid) => {
+    try {
+      const r = await axios.post(`${API}/demand-signals/${propertyId}/season-templates/${tid}/apply`, { room_type_id: roomType || cal?.room_type?.id || "", dry_run: true });
+      setSeasonPreview({ tid, ...r.data });
+    } catch { toast.error("Önizleme alınamadı"); }
+  };
+
+  const openOccRule = async () => {
+    try {
+      const r = await axios.get(`${API}/demand-signals/${propertyId}/occupancy-rule`);
+      setOccRule(r.data);
+      setOccOpen(true);
+    } catch { toast.error("Kural yüklenemedi"); }
+  };
+
+  const saveOccRule = async (runNow = false) => {
+    try {
+      await axios.put(`${API}/demand-signals/${propertyId}/occupancy-rule`, occRule);
+      if (runNow) {
+        const r = await axios.post(`${API}/demand-signals/${propertyId}/occupancy-rule/run`);
+        toast.success(r.data.applied > 0 ? `${r.data.applied} yüksek doluluk gününe ek zam uygulandı` : "Eşiği aşan gün bulunamadı — kural kaydedildi");
+        load();
+      } else {
+        toast.success("Doluluk kuralı kaydedildi" + (occRule.enabled ? " — robot 6 saatte bir çalışacak" : " (pasif)"));
+      }
+      setOccOpen(false);
+    } catch { toast.error("Kaydedilemedi"); }
+  };
 
   const openSeasons = async () => {
     try {
@@ -218,6 +250,8 @@ export const RateCalendarEditable = ({ propertyId }) => {
             data-testid="rev-cal-seasons-btn">🗂 Sezonlar</button>
           <button onClick={openHistory} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-stone-300 text-stone-600 hover:bg-stone-100"
             data-testid="rev-cal-history-btn">🕓 Geçmiş</button>
+          <button onClick={openOccRule} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white"
+            data-testid="rev-cal-occ-rule-btn">⚡ Doluluk Kuralı</button>
         </div>
       </div>
 
@@ -383,16 +417,65 @@ export const RateCalendarEditable = ({ propertyId }) => {
         ))}
       </div>
 
+      {/* Occupancy Rule Modal */}
+      {occOpen && occRule && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => setOccOpen(false)}>
+          <div className="bg-white rounded-2xl p-5 w-[400px] shadow-2xl" onClick={e => e.stopPropagation()} data-testid="rev-cal-occ-modal">
+            <div className="text-sm font-black text-stone-800 mb-1">⚡ Doluluk Kuralı</div>
+            <p className="text-xs text-stone-500 mb-3">{occRule.note}</p>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <label className="text-[11px] font-bold text-stone-500">Doluluk eşiği %
+                <input type="number" min="50" max="100" value={occRule.threshold_pct} data-testid="rev-cal-occ-threshold"
+                  onChange={e => setOccRule(r => ({ ...r, threshold_pct: Number(e.target.value) }))}
+                  className="block w-full mt-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm font-normal" />
+              </label>
+              <label className="text-[11px] font-bold text-stone-500">Ek zam %
+                <input type="number" min="1" max="50" value={occRule.extra_pct} data-testid="rev-cal-occ-extra"
+                  onChange={e => setOccRule(r => ({ ...r, extra_pct: Number(e.target.value) }))}
+                  className="block w-full mt-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm font-normal" />
+              </label>
+            </div>
+            <label className="flex items-center gap-2 text-xs font-bold text-stone-600 mb-4">
+              <input type="checkbox" checked={!!occRule.enabled} data-testid="rev-cal-occ-enabled"
+                onChange={e => setOccRule(r => ({ ...r, enabled: e.target.checked }))} />
+              Robot otomatik çalışsın (6 saatte bir, önümüzdeki 30 gün)
+            </label>
+            <div className="flex gap-2">
+              <button onClick={() => saveOccRule(true)} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold py-2 rounded-xl" data-testid="rev-cal-occ-save-run">Kaydet + Şimdi Çalıştır</button>
+              <button onClick={() => saveOccRule(false)} className="px-3 py-2 border border-stone-300 rounded-xl text-sm text-stone-600" data-testid="rev-cal-occ-save">Sadece Kaydet</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Seasons Modal */}
       {seasonsOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => setSeasonsOpen(false)}>
           <div className="bg-white rounded-2xl p-5 w-[460px] max-h-[80vh] overflow-auto shadow-2xl" onClick={e => e.stopPropagation()} data-testid="rev-cal-seasons-modal">
             <div className="text-sm font-black text-stone-800 mb-2">🗂 Sezon Şablonları</div>
+            {seasonPreview && (
+              <div className="mb-3 bg-stone-50 border border-stone-200 rounded-xl p-3" data-testid="rev-cal-season-preview-panel">
+                <div className="text-[11px] font-black text-stone-700 mb-1">🔍 Önizleme: {seasonPreview.template} (%{seasonPreview.pct > 0 ? "+" : ""}{seasonPreview.pct}) — {seasonPreview.applied} gün etkilenecek{seasonPreview.skipped_manual ? `, ${seasonPreview.skipped_manual} manuel gün korunacak` : ""}</div>
+                <div className="max-h-32 overflow-auto space-y-0.5 mb-2">
+                  {seasonPreview.days.map(d => (
+                    <div key={d.date} className={`text-[10px] flex justify-between px-2 py-0.5 rounded ${d.skipped ? "bg-amber-50 text-amber-600" : "bg-white"}`}>
+                      <span>{d.date}</span>
+                      {d.skipped ? <span>manuel — korunur</span> : <span>{cur(d.current)} → <b className="text-indigo-700">{cur(d.new_rate)}</b></span>}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => { applySeason(seasonPreview.tid); setSeasonPreview(null); }} className="px-3 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-bold" data-testid="rev-cal-preview-confirm">Onayla ve Uygula</button>
+                  <button onClick={() => setSeasonPreview(null)} className="px-3 py-1 rounded-lg border border-stone-300 text-[11px] text-stone-500" data-testid="rev-cal-preview-close">Kapat</button>
+                </div>
+              </div>
+            )}
             <div className="space-y-2 mb-4">
               {seasons.map(s => (
                 <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2 text-xs" data-testid={`rev-cal-season-${s.id}`}>
                   <span><b>{s.name}</b> · {s.start_date} → {s.end_date} · <b className={s.adjustment_pct >= 0 ? "text-emerald-700" : "text-rose-600"}>%{s.adjustment_pct > 0 ? "+" : ""}{s.adjustment_pct}</b></span>
                   <span className="flex gap-1.5">
+                    <button onClick={() => previewSeason(s.id)} className="px-2.5 py-1 rounded-lg border border-indigo-300 text-indigo-600 font-bold" data-testid={`rev-cal-season-preview-${s.id}`}>Önizle</button>
                     <button onClick={() => applySeason(s.id)} className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-bold" data-testid={`rev-cal-season-apply-${s.id}`}>Uygula</button>
                     <button onClick={async () => { await axios.delete(`${API}/demand-signals/${propertyId}/season-templates/${s.id}`); setSeasons(x => x.filter(t => t.id !== s.id)); }}
                       className="px-2 py-1 rounded-lg border border-rose-200 text-rose-500" data-testid={`rev-cal-season-del-${s.id}`}>✕</button>

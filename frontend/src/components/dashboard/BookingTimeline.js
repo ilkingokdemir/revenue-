@@ -2266,7 +2266,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                 <select value={corpForm.company_id} onChange={e => setCorpForm({ ...corpForm, company_id: e.target.value })}
                   className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" data-testid="corp-inv-company">
                   <option value="">— Select company —</option>
-                  {corpCompanies.map(c => <option key={c.id} value={c.id}>{c.name}{c.payment_terms_days ? ` (${c.payment_terms_days}d terms)` : ""}</option>)}
+                  {corpCompanies.map(c => <option key={c.id} value={c.id}>{`${c.name}${c.payment_terms_days ? ` (${c.payment_terms_days}d terms)` : ""}`}</option>)}
                 </select>
                 {corpCompanies.length === 0 && <p className="text-[11px] text-rose-600 mt-1">No active companies. Create one in City Ledger → Companies first.</p>}
               </div>

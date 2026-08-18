@@ -294,7 +294,7 @@ function ConnectTab({ propertyId }) {
           className="px-3 py-2 text-sm border border-stone-200 rounded-md bg-white focus:outline-none focus:border-indigo-400"
         >
           {tokens.map((t) => (
-            <option key={t.id} value={t.id}>{t.name} ({t.token_masked})</option>
+            <option key={t.id} value={t.id}>{`${t.name} (${t.token_masked})`}</option>
           ))}
         </select>
       </div>

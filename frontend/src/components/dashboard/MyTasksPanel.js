@@ -49,6 +49,24 @@ export const MyTasksPanel = ({ user }) => {
     } catch { toast.error("Güncellenemedi"); }
   };
 
+  const [newTask, setNewTask] = useState("");
+  const addPersonal = async () => {
+    if (!newTask.trim()) return;
+    try {
+      await axios.post(`${API}/my-tasks/personal`, { text: newTask.trim() });
+      setNewTask("");
+      toast.success("Görev eklendi ✓");
+      load();
+    } catch { toast.error("Eklenemedi"); }
+  };
+  const donePersonal = async (id) => {
+    try {
+      await axios.put(`${API}/my-tasks/personal/${id}`, { done: true });
+      toast.success("Görev tamamlandı ✓");
+      load();
+    } catch { toast.error("Güncellenemedi"); }
+  };
+
   const s = data?.summary || {};
   const greeting = () => {
     const h = new Date().getHours();
@@ -85,6 +103,32 @@ export const MyTasksPanel = ({ user }) => {
             <div className="text-xs opacity-80 mt-0.5">{c.label}</div>
           </motion.div>
         ))}
+      </div>
+
+      {/* Kişisel Görevler */}
+      <div className="mb-6 bg-white border-2 border-violet-200 rounded-2xl p-5" data-testid="my-personal-tasks-section">
+        <h3 className="font-bold text-stone-800 mb-3">📝 Kişisel Görevlerim ({(data?.personal_tasks || []).length})</h3>
+        <div className="flex gap-2 mb-3">
+          <input value={newTask} onChange={(e) => setNewTask(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addPersonal()}
+            placeholder="Yeni görev yaz ve Enter'a bas…" data-testid="my-tasks-new-input"
+            className="flex-1 px-3 py-2 border border-stone-300 rounded-xl text-sm" />
+          <button onClick={addPersonal} data-testid="my-tasks-add-btn"
+            className="px-4 py-2 bg-violet-600 text-white text-sm font-bold rounded-xl hover:bg-violet-700">+ Yeni Görev</button>
+        </div>
+        {(data?.personal_tasks || []).length === 0 ? (
+          <p className="text-xs text-stone-400" data-testid="my-tasks-empty">Açık kişisel göreviniz yok — yukarıdan ekleyebilirsiniz.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {data.personal_tasks.map((t) => (
+              <label key={t.id} className="flex items-center gap-2.5 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 cursor-pointer hover:bg-stone-100"
+                data-testid={`my-personal-task-${t.id}`}>
+                <input type="checkbox" onChange={() => donePersonal(t.id)} data-testid={`my-personal-done-${t.id}`} />
+                <span className="text-sm text-stone-700">{t.text}</span>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
 
       {(data?.hk_tasks || []).length > 0 && (

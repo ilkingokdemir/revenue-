@@ -1591,7 +1591,7 @@ const StockTab = ({ pid, stock, updateStockCell, lang, setLang, L }) => {
                   const match = stock.find(s => s.item_id === e.target.value);
                   setForm(f => ({ ...f, item_id: e.target.value, name: match?.name || "" }));
                 }} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" data-testid="stock-tx-item">
-                  <option value="">{L?.stockSelectItem || "Select item"}…</option>
+                  <option value="">{`${L?.stockSelectItem || "Select item"}…`}</option>
                   {stock.map(s => <option key={s.item_id} value={s.item_id}>{s.name}</option>)}
                 </select>
               </div>
@@ -1823,7 +1823,7 @@ const DeliveriesTab = ({ pid, dispatches, stock, catalog = [], lang, setLang, L,
                     <label className="text-xs text-stone-500">Select Dispatch</label>
                     <select value={form.dispatch_id} onChange={e => loadFromDispatch(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" data-testid="delivery-dispatch-select">
                       <option value="">None (no comparison)</option>
-                      {dispatches.map(d => <option key={d.id} value={d.id}>{d.vendor} · {d.sent_date} · {d.items?.length || 0} items</option>)}
+                      {dispatches.map(d => <option key={d.id} value={d.id}>{`${d.vendor} · ${d.sent_date} · ${d.items?.length || 0} items`}</option>)}
                     </select>
                   </div>
                   <div>

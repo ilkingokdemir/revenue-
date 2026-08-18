@@ -96,7 +96,7 @@ export default function PreAuthPanel({ propertyId, hotelName = "" }) {
           {["authorized", "captured", "released", "expired"].map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <select value={filter.days} onChange={(e) => setFilter({ ...filter, days: parseInt(e.target.value, 10) })} className="px-2 py-1 rounded bg-stone-800 border border-stone-700 text-stone-100 text-xs">
-          {[7, 14, 30, 90].map((d) => <option key={d} value={d}>{d}d</option>)}
+          {[7, 14, 30, 90].map((d) => <option key={d} value={d}>{`${d}d`}</option>)}
         </select>
         <button data-testid="preauth-refresh-btn" onClick={load} className="text-xs px-2 py-1 rounded bg-stone-800 border border-stone-700 text-stone-300 flex items-center gap-1">
           <RefreshCw className="w-3 h-3" /> Refresh

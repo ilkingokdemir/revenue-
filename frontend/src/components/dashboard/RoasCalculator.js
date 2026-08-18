@@ -139,7 +139,7 @@ export default function RoasCalculator({ propertyId, currency = "GBP" }) {
             onChange={(e) => setDays(parseInt(e.target.value, 10))}
             className="px-2 py-1 rounded bg-stone-800 border border-stone-700 text-stone-100 text-sm"
           >
-            {[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{d}g</option>)}
+            {[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{`${d}g`}</option>)}
           </select>
           <button
             data-testid="roas-refresh"

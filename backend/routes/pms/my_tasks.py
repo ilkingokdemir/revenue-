@@ -70,6 +70,11 @@ def create_my_tasks_router(db, require_roles):
             {"_id": 0}).to_list(50)
         hk_tasks.sort(key=lambda t: (t.get("priority") != "urgent", t.get("created_at", "")))
 
+        # 6.6 Personal to-dos
+        personal = await db.personal_tasks.find(
+            {"user_email": user_email, "done": {"$ne": True}}, {"_id": 0}
+        ).sort("created_at", -1).to_list(30)
+
         # 7. Notifications count
         notif_q = {"read": False, "$or": [{"target_user": user_email}, {"target_user": ""}, {"target_role": user_role}]}
         unread_notifs = await db.notifications.count_documents(notif_q)
@@ -84,6 +89,7 @@ def create_my_tasks_router(db, require_roles):
             "maintenance": maint,
             "compliance": compliance,
             "hk_tasks": hk_tasks,
+            "personal_tasks": personal,
             "unread_notifications": unread_notifs,
             "summary": {
                 "shifts_today": len(shifts),
@@ -96,5 +102,25 @@ def create_my_tasks_router(db, require_roles):
                 "hk_urgent": sum(1 for t in hk_tasks if t.get("priority") == "urgent"),
             }
         }
+
+    @router.post("/my-tasks/personal")
+    async def add_personal_task(data: Dict, current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper", "maintenance"))):
+        text = (data.get("text") or "").strip()
+        if not text:
+            return {"ok": False, "error": "text required"}
+        import uuid
+        doc = {"id": str(uuid.uuid4()), "user_email": current_user.get("email", ""),
+               "text": text[:300], "done": False,
+               "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.personal_tasks.insert_one({**doc})
+        return {"ok": True, "task": doc}
+
+    @router.put("/my-tasks/personal/{task_id}")
+    async def toggle_personal_task(task_id: str, data: Dict, current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper", "maintenance"))):
+        await db.personal_tasks.update_one(
+            {"id": task_id, "user_email": current_user.get("email", "")},
+            {"$set": {"done": bool(data.get("done", True)),
+                      "done_at": datetime.now(timezone.utc).isoformat()}})
+        return {"ok": True}
 
     return router

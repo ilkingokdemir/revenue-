@@ -398,7 +398,7 @@ function RecipeEditor({ menuItem, stockItems, onClose, onSaved }) {
                 className="flex-1 px-2 py-1.5 rounded border border-stone-300 text-sm">
                 <option value="">— Stok seçin —</option>
                 {stockItems.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name} ({s.unit || "adet"})</option>
+                  <option key={s.id} value={s.id}>{`${s.name} (${s.unit || "adet"})`}</option>
                 ))}
               </select>
               <input type="number" value={c.qty} step={0.1} min={0}

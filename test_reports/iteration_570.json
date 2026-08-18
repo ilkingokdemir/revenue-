@@ -1,0 +1,79 @@
+{
+  "summary": "DEEP TEST (iter 570) — Ön Büro + Rezervasyon + Grup grubu. 35 öncelikli modül PRO modda + 'Franziskaner by Centra' şubesi ile test edildi. Her modülde: (a) sidebar tıkla, (b) main panel içeriği yakalandı (heading + karakter sayısı), (c) 'Yeni/Ekle/Add/New/Create' aksiyon butonu tıklandı, (d) açılan modal/form doğrulandı, (e) belirli modüllerde (group-bookings, logbook) tam CRUD E2E akışı: form doldur → Save → toast → liste güncelleme. SONUÇ: 35/35 modül navigasyon çalışıyor, seçilmiş 3 kritik akış (group-bookings New Group, logbook New Entry, promo-codes New Code) uçtan uca doğrulandı. Yalnızca 1 gerçek runtime hatası bulundu (group-rooming DOM hydration) ve 2 minor a11y warning tespit edildi. Kırık modül YOK.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "GroupRoomingImport", "issue": "React hydration error: '<span> cannot be a child of <option>'. Bir <select><option> içine <span> yerleştirilmiş — HTML spec ihlali, hydration hatası fırlatıyor. Görsel olarak sayfa render ediyor ama console error kaydediyor.", "selector": "[data-testid='group-rooming-btn'] → main >> select > option > span", "priority": "MEDIUM"},
+      {"component": "Radix DialogContent (birden fazla modal)", "issue": "'Warning: Missing Description or aria-describedby={undefined} for {DialogContent}'. Tespit edilen dialoglar: New Logbook Entry (logbook-btn), Create Shift Handover (pass-over-btn) ve muhtemelen diğer Radix Dialog kullanan modaller. A11y ihlali, sadece warning düzeyinde.", "selector": "[role='dialog'] (Radix DialogContent)", "priority": "LOW"},
+      {"component": "MyTasks (my-tasks-btn)", "issue": "Main panel içinde 0 görev-oluşturma butonu görünüyor. 'Görevlerim' sayfasının kendi 'Add Task/Yeni Görev' aksiyonu yok gibi. Heading 'Good afternoon, Hotel Admin' → dashboard benzeri bir landing; görev ekleme aksiyonu belirtilmemiş.", "selector": "[data-testid='my-tasks-btn']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "promo-codes", "issues": ["Yeni Kod formu inline açılıyor (modal DEĞİL) → tutarlılık için diğer modüllerdeki modal deneyimi ile hizalanabilir; ancak fonksiyonel sorun yok."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "MEDIUM: group-rooming-btn (Group Rooming List Import) sayfasında <option> içinde <span> kullanımını düzeltin — muhtemelen bir Select bileşeni içinde ikon/label yanlış yerleştirilmiş. Hydration error ana konsolda kayıt tutuyor.",
+    "MEDIUM: my-tasks-btn ('Görevlerim') sayfasında bir 'Yeni Görev' aksiyon butonu yok gibi görünüyor. Kullanıcı 'my-tasks'ta görev ekle/tamamla' senaryosu isteyecek — task oluşturma butonunu ekleyin veya farklı bir modülden ekleniyorsa dokümante edin.",
+    "LOW (a11y): Radix Dialog kullanan tüm modallere `<DialogDescription>` veya `aria-describedby` ekleyin. En az 2 dialog etkileniyor (New Logbook Entry, Create Shift Handover)."
+  ],
+  "critical_code_review_comments": [
+    "Positive: 35/35 modül PRO modda navigasyon başarılı; branch=Franziskaner by Centra seçildikten sonra tüm sayfalar doğru heading ile render ediyor.",
+    "Positive: E2E CRUD akışları test edildi ve çalışıyor — group-bookings 'New Group' → DEEPTEST_Group_9312 oluşturuldu, toast 'Saved' göründü, liste yenilendi. Logbook 'New Entry' formu Save Entry ile başarıyla kapatıldı.",
+    "Consistency: Sayfaların bir kısmında (promo-codes, add-ons, long-stay, booking-engine-v2) 'Yeni' butonu inline form açarken, diğerlerinde (logbook, pass-over, group-bookings) Radix Dialog kullanılıyor. UI/UX tutarlılığı için tercih edilen bir pattern belirlenmeli.",
+    "Sidebar section keys için localStorage nav-open-<label> pattern'i çalışıyor ancak 'Reservations' 'Direct Booking' vb. gibi İngilizce label'lar sabit — TR moda geçilirse pattern kırılabilir. label yerine section.id kullanılabilir.",
+    "auth/me GET her sayfa açılışında 401 dönüp sonra token ile başarılı oluyor — bu 401'lerin sessiz retry değil, ilk request'in Authorization header'sız gitmesinden kaynaklanıyor gibi. Token'in interceptor'a önce eklenmesi ile 401 gürültüsü azaltılabilir (functional impact yok)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend only test)", "frontend": "94% — 35/35 modül navigasyon OK; 3/35 modülde minor UI/UX veya a11y bulgusu (group-rooming hydration, my-tasks missing add, dialog a11y warnings). Kırık modül YOK."},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (branch: Franziskaner by Centra) — çalışıyor.",
+  "seed_data_creation": "1 grup oluşturuldu: 'DEEPTEST_Group_9312' (Group Bookings altında). Temizlemek için: Group Bookings → DEEPTEST_ prefiksli kartlarda Delete.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "DEEP-TEST pattern: (1) Login sonrası PRO'ya tıkla. (2) Branch selector shadcn Select — click trigger, options `[data-testid^='branch-<id>']` (branch-all hariç). (3) localStorage 'nav-open-<Label>'='1' için sabit label'lar: Overview, Reservations, Direct Booking, Guests & Loyalty, Operations, Revenue & rates, Reports & Analytics, Channels & Distribution, Food & events, Finance, Marketing & Messaging (bu label'lar TR/EN modda değişmiyor, English kalıyor). (4) MODAL DETECTION: Bazı modüller Radix Dialog ([role='dialog']) kullanırken bazıları inline form açıyor — 'main button:has-text(Save|Create|Kaydet)' + input sayısı ikisini birden yakalıyor. (5) HARD RESET: Modul geçişleri arasında Escape x3 + dashboard-btn'a dön. (6) Yanlış-testId düzeltmeleri: 'booking-btn'→'booking-engine-btn', 'calendar-btn' YOK (sadece availability-calendar-btn ve demand-calendar-btn var). Sıradaki gruplarda test için: Housekeeping, Bakım, F&B, Etkinlik, Yönetim, Muhasebe, Personel, CRM, Kanal, Raporlar, Ayarlar modülleri henüz DEEP test edilmedi.",
+  "final_broken_suspicious_lists": {
+    "BROKEN": [],
+    "PARTIAL": [
+      {"module_id": "group-rooming-btn", "issue": "Sayfa render ediyor ancak DOM hydration hatası: <option> içinde <span>. Console error kaydediyor.", "impact": "Görsel bozukluk yok; functional impact minimal"},
+      {"module_id": "my-tasks-btn", "issue": "Sayfa render ediyor ama 'Yeni Görev' oluşturma butonu bulunamadı", "impact": "Kullanıcı görev ekleyemez (bu sayfadan)"}
+    ],
+    "OK": [
+      "dashboard-btn (Dashboard)",
+      "availability-calendar-btn (Availability Calendar)",
+      "arrivals-btn (Arrivals cockpit)",
+      "walkin-btn (Walk-in Express Check-in)",
+      "booking-engine-btn (Rooms & Bookings) — 161 button, çoklu tab",
+      "group-bookings-btn — E2E CRUD ✅",
+      "promo-codes-btn — Create Code form ✅",
+      "add-ons-btn (Add-on Services)",
+      "policies-btn (Policies & Facilities)",
+      "logbook-btn — E2E CRUD ✅",
+      "lost-found-btn (Lost & Found)",
+      "unified-inbox-btn",
+      "no-show-btn (No-Show Auto-Charge)",
+      "late-checkout-btn (Late Check-out)",
+      "stay-ext-btn (Stay Extension Wizard)",
+      "rebook-btn (Quick Re-booking CTA)",
+      "reception-report-btn (Reception Report)",
+      "pass-over-btn — Create Shift Handover modal ✅",
+      "group-blocks-btn (Group Blocks)",
+      "group-requests-btn (Group Requests & Allotments)",
+      "group-rooming-wiz-btn (Group Rooming Wizard)",
+      "booking-engine-admin-btn (Booking Engine Manager) — Room Photos, Guest Reviews, Theme, Embed Widget tabs",
+      "booking-engine-v2-btn (Booking Engine v2) — Paketler/Upsell/Bırakılan Sepetler tabs",
+      "long-stay-btn (Long-Stay Discount)",
+      "cancel-insurance-btn (Cancellation Insurance)",
+      "key-figures-btn",
+      "morning-brief-btn",
+      "nightly-recap-btn",
+      "tier1-dashboard-btn (Tier-1 Operations Dashboard)",
+      "custom-dashboard-btn (Custom Dashboards)",
+      "ci-slots-btn (Check-in Time Slots)",
+      "collisions-btn (Collisions) — büyük panel (8837 chars)",
+      "res-quality-btn (Rezervasyon Kalite Kontrolü)"
+    ],
+    "NOT_TESTED": ["Diğer modül grupları (Housekeeping, Maintenance, F&B, Events, Finance, HR/Staff, CRM, Channels, Reports, Settings, Admin) — sonraki iteration için"]
+  },
+  "rca_of_the_issue": "İstenen grup (Ön Büro + Rezervasyon + Grup) modüllerinde 'kırık' modül yok. Kullanıcının olası endişelerine karşılık gelen 3 minor bulgu: (1) group-rooming import sayfasında select DOM yanlış yapılandırılmış — Radix Select veya native select içine ikon eklenmesi <option> içine <span> injection'ına yol açmış. Fix: <option> içinde sadece text olmalı; ikon SelectItem/render level'da olmalı. (2) my-tasks-btn add butonu yok — büyük olasılıkla dashboard-benzeri bir sayfa; task oluşturma başka bir sayfada. UX belirsizliği. (3) Radix DialogContent'e DialogDescription eklenmemiş — a11y compliance için Radix requirement."
+}

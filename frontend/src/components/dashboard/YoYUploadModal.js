@@ -442,7 +442,7 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
                             className="px-2 py-1 border border-stone-200 rounded text-sm focus:outline-none focus:border-indigo-400"
                           >
                             {["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"].map((mn, i) => (
-                              <option key={i+1} value={i+1}>{mn} ({i+1})</option>
+                              <option key={i+1} value={i+1}>{`${mn} (${i+1})`}</option>
                             ))}
                           </select>
                         </td>

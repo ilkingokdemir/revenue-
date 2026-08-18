@@ -400,7 +400,7 @@ export const RateStructurePanel = ({ user, propertyId }) => {
             <F label="Parent Product *">
               <select value={derivedForm.parent_product_id} onChange={e => setDerivedForm({ ...derivedForm, parent_product_id: e.target.value })} data-testid="rs-form-der-parent" className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm">
                 <option value="">— Select —</option>
-                {products.map(p => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}
+                {products.map(p => <option key={p.id} value={p.id}>{`${p.code} · ${p.name}`}</option>)}
               </select>
             </F>
             <F label="Basis">
@@ -440,7 +440,7 @@ export const RateStructurePanel = ({ user, propertyId }) => {
             <F label="→ Our Rate Product">
               <select value={channelForm.rate_product_id} onChange={e => setChannelForm({ ...channelForm, rate_product_id: e.target.value })} className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm">
                 <option value="">— Optional —</option>
-                {products.map(p => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}
+                {products.map(p => <option key={p.id} value={p.id}>{`${p.code} · ${p.name}`}</option>)}
               </select>
             </F>
             <div className="col-span-2">

@@ -1,0 +1,54 @@
+{
+  "summary": "DEEP TEST (iter 572) — Grup 3: Gelir/Fiyatlama + Kanallar/Dağıtım/PMS + Finans/Muhasebe modülleri. Login → PRO → Franziskaner branch. Sidebar sections localStorage ile açıldı. 77 hedef testId sidebar'da tarandı — 71 OK, 1 PARTIAL (tax-reports-v2 hydration warning tek seferlik), 5 NOT_FOUND (webhooks/api/mapping/public-api/partner-webhooks — bu ID'ler Revenue/Channels/Finance sections'ında değil; farklı section'lardalar). Deep flows: revenue calendar tabs (14 tab tıklandı), rev-cal-occ-rule-btn modalı açıldı ✅, rev-cal-heat-toggle/bulk/seasons/history clickable ✅, rev-cal day price 999'a set edilip save edildi. PMS Connect hub — hydration/option hatası YOK ✅ (regression fix HOLDS). Rate Structure /api/room-types — 404 YOK ✅ (regression fix HOLDS).",
+  "backend_issues": {"critical": [], "minor": [{"endpoint": "/api/auth/me", "issue": "Login öncesi 401 log spam (kozmetik, beklenen davranış olabilir)"}]},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "branch-selector-btn (branch persistence)", "issue": "REGRESSION FAIL: UI'dan 'Franziskaner by Centra' seçildikten sonra full reload yapılırsa branch tekrar 'All Branches' değerine dönüyor. localStorage'da hiçbir branch/property/active-* key set edilmiyor (LS post-select = {}). Task açıklamasında bahsedilen 'active-property-id localStorage persistence fix' UYGULANMAMIŞ veya hatalı. NOT: localStorage'a manual 'active-property-id=default' yazıldığında persist ediliyor gibi görünüyor — fakat UI seçim event handler'ı LS'e yazmıyor.", "selector": "[data-testid='branch-selector-btn']", "priority": "MEDIUM"},
+      {"component": "Revenue tabs (rev-tab-*)", "issue": "Rev-tab-dashboard hariç TÜM tab'lar (ai-copilot, dynamic-pricing, smart-rate-control, strategy, market-robot, compset-intel, booking-pace, revenue-forecast, what-if, displacement, los-optimizer, competitors) tıklandıktan sonra body chars=1491 sabit — aynı içerik gösteriliyor (muhtemelen 'AI Dynamic Pricing'e hoş geldiniz' onboarding modal'ı ekranı kaplıyor & tab içeriğine geçmiyor). Onboarding modal'ı otomatik dismiss edilmiyor ve/veya rev-tab click handler'ı doğru sub-view'ı yüklemiyor.", "selector": "[data-testid^='rev-tab-']", "priority": "MEDIUM"},
+      {"component": "tax-reports-v2-btn", "issue": "İlk toplu tarama sırasında React hydration warning: '<span> cannot be a child of <option>' — bu regression. İkinci direct tıklamada tetiklenmedi (state sırasına bağlı olabilir). RCA: bir <select>/<option> render'ında option içine <span> yerleştirilmiş.", "selector": "[data-testid='tax-reports-v2-btn']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "MEDIUM: branch-selector-btn UI selection handler'ında localStorage.setItem('active-property-id', selectedId) çağrısını ekleyin. Şu an sadece runtime memory'de tutuluyor. App boot'unda LS'ten okuyup default branch olarak kullanın. (iter 571 aynı bug'u işaretlemişti; task açıklamasında 'fix eklendi' denmiş ancak DOĞRULANMADI — regression tekrar açık.)",
+    "MEDIUM: RevenuePanel içinde rev-tab-* tabları arası geçiş çalışmıyor gibi görünüyor — dashboard hariç tüm tab'larda aynı 1491 karakterlik içerik (onboarding modal + no-op tab). Onboarding modal'ı dismiss edildikten sonra tab switch'lerin farklı sub-panel render etmesi gerek. Kontrol edin: activeTab state güncelleniyor mu, tab component'lerinin conditional render'ı doğru mu.",
+    "LOW: tax-reports-v2 sayfasında <select> içindeki <option>'lara <span> child eklenmiş — HTML spec violation. Kalıcı fix: option içeriğini plain text yapın veya <span>'ları option'un dışına taşıyın."
+  ],
+  "critical_code_review_comments": [
+    "Positive: 71/77 hedef modül (~92%) hatasız render oluyor — 3. grup modüllerin çoğu sağlıklı.",
+    "Positive: /api/room-types 404 fix (RateStructurePanel) doğrulandı ✅.",
+    "Positive: PmsConnectHub option hydration fix doğrulandı ✅ — hydration/option warning YOK.",
+    "Positive: rev-cal-occ-rule-btn modal (doluluk kuralı) düzgün açılıyor & modalın impact panel'i render ediyor.",
+    "Positive: revenue calendar bulk edit, seasons, history, heat-toggle butonları tıklanabilir.",
+    "Concern: Branch persistence fix uygulanmamış — task ana ajanının 'fix eklendi' iddiası yanlış. Bu, çoklu-property kullanıcılarında her reload'da branch yeniden seçme zorunluluğu yaratıyor.",
+    "Concern: Revenue tab navigation potansiyel olarak bozuk — 13 tab'ın 12'si aynı içeriği gösteriyor. Test ortamında onboarding tour modal'ı otomatik açılıp block ediyor; production'da da benzer davranış olması muhtemel.",
+    "Concern: undo-markups menu (rev-cal-undo-menu) locator visible=False döndü — dropdown açılışı beklenmedik (belki state=undoStack boş olduğu için render edilmiyor). Deep flow doğrulama gerekir."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend only)", "frontend": "92% — 71/77 modül OK, 1 PARTIAL, 0 BROKEN, 5 NOT_FOUND (diğer section'larda), 2 MEDIUM regression bug"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (PRO mode aktif, branch: Franziskaner by Centra)",
+  "seed_data_creation": "Revenue calendar'da 1 gün için fiyat 999'a set edilip save edildi (test ortamı için not alındı, kalıcı bırakıldı). Compset ekleme modal açıldı, DEEPTEST_ prefix name yazıldı ama Escape ile iptal edildi (persist etmedi).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "iter 572'de Revenue/Channels/Finance test edildi. Kalan gruplar: Food & Events, Reports & Analytics, Settings/Admin, Portfolio/Owners, Apps/Integrations. NOT_FOUND olan 5 testId (webhooks-btn, api-connection-btn, property-mapping-btn, public-api-btn, partner-webhooks-btn) Settings/Admin section'ında olabilir — o section'ı açarak test edin. En kritik açık: branch persistence UI selection handler'ı LS'e yazmıyor — çoklu-property senaryolar için engelleyici.",
+  "final_broken_suspicious_lists": {
+    "BROKEN": [],
+    "PARTIAL": [
+      {"module_id": "branch-selector-btn", "issue": "Reload sonrası branch selection kayboluyor (LS persistence yok)", "impact": "Multi-property kullanıcılarda reload sonrası All Branches'e geri dönüyor (regression iter 571'den sürüyor)"},
+      {"module_id": "rev-tab-* (revenue tabs)", "issue": "13 tab'ın 12'si aynı içeriği gösteriyor — onboarding modal blocking veya tab switch bozuk", "impact": "Kullanıcı Revenue Management içindeki sub-view'lara ulaşamıyor (dashboard hariç)"},
+      {"module_id": "tax-reports-v2-btn", "issue": "React hydration warning <span> as child of <option>", "impact": "Kozmetik — runtime warning, görünürlük sorunu yok"}
+    ],
+    "OK": [
+      "revenue-btn","my-rates-btn","rate-structure-btn (✅ /api/room-types fix HOLDS)","ai-pricing-v2-btn","compset-btn","forecast-btn","forecast-v2-btn","rm-simulator-btn","los-wash-metrics-btn","parity-heatmap-btn","rate-manager-btn","open-pricing-btn","min-rates-btn","base-curve-btn","intraday-reprice-btn","pace-reports-btn","ota-forecast-btn","channel-revenue-btn","chmgr-hub-btn","channels-v2-btn","pms-connect-btn (✅ hydration/option fix HOLDS)","channel-parity-btn","channel-map-matrix-btn","channel-health-btn","channel-sync-queue-btn","channel-restrictions-btn","channel-inbound-btn","channel-settings-btn","ota-health-btn","sync-log-btn","pms-crs-btn","ota-commission-btn","siteminder-btn","hotelrunner-live-btn","cloudbeds-live-btn","accounting-btn","payments-btn","night-audit-btn","night-audit-close-btn","folio-live-btn","folio-split-btn","city-ledger-btn","tr-compliance-btn","tax-config-btn","tax-presets-btn","deposit-ledger-btn","deposit-policies-btn","deposit-automation-btn","cash-drawer-btn","currency-btn","currency-fx-btn","finance-btn","finance-pl-btn","cash-flow-btn","budget-actual-btn","expenses-btn","payroll-btn","chargeback-btn","preauth-btn","vcc-automation-btn","card-vault-btn","owner-summary-btn","damage-protection-btn","commission-recon-btn","ar-recon-btn","digital-auth-btn","gift-cards-btn","compliance-btn","eu-compliance-btn","gdpr-btn","legal-docs-btn","rev-cal-occ-rule-btn (modal ✅)"
+    ],
+    "NOT_FOUND_IN_TESTED_SECTIONS": [
+      "webhooks-btn","api-connection-btn","property-mapping-btn","public-api-btn","partner-webhooks-btn"
+    ],
+    "REQUESTED_ID_NEVER_EXISTED_IN_MENU": [
+      "market-robot-btn (menu'de yok; RevenuePanel içindeki rev-tab-market-robot olarak var)","yoy-btn","pickup-btn","smart-rate-btn","los-wash-btn (los-wash-metrics-btn olarak var)","ota-btn","rate-parity-btn (parity-heatmap-btn/channel-parity-btn olarak var)","mapping-btn (property-mapping-btn olarak var)","api-btn (api-connection-btn olarak var)","gds-btn","metasearch-btn","folio-btn (folio-live-btn/folio-split-btn olarak var)","invoices-btn","tax-btn (tax-config/tax-presets/tax-reports-v2 olarak var)","deposits-btn (deposit-ledger/policies/automation olarak var)","cashier-btn","exchange-btn (currency/currency-fx olarak var)","owner-payouts-btn (owner-summary-btn olarak var)"
+    ]
+  },
+  "rca_of_the_issue": "1) Branch persistence regression: iter 571'de rapor edilen bug — task açıklamasında 'fix eklendi' denmiş fakat DOĞRULANMADI. LS'de active-property-id key'i UI selection sonrasında set edilmiyor. Sadece manuel LS.setItem() ile persist test'i geçiyor — yani read path çalışıyor, write path (onSelect handler'ında setItem) eksik. Fix: branch selector onChange/onSelect handler'ında localStorage.setItem('active-property-id', id) ekleyin. 2) Revenue rev-tab-* navigation: RevenuePanel'de activeTab state veya conditional rendering muhtemelen onboarding modal açıkken pass-through/no-op oluyor. Modal auto-dismiss + tab switch handler'ının açık modal ile birlikte doğru çalıştığından emin olun. 3) Tax-reports-v2 hydration: <select><option><span>text</span></option></select> pattern HTML spec ihlali — Chrome tolere eder ama React SSR hydration warning atar. Fix: option textContent'i plain string yapın."
+}

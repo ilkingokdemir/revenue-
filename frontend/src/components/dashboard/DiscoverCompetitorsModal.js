@@ -201,7 +201,7 @@ export default function DiscoverCompetitorsModal({ propertyId, open, onClose, on
             <select value={maxResults} onChange={(e) => setMaxResults(Number(e.target.value))}
                     data-testid="discover-max"
                     className="md:col-span-1 px-3 py-2 bg-stone-900 border border-stone-800 rounded-lg text-sm text-stone-100">
-              {[10, 15, 20, 30, 40, 50].map(n => <option key={n} value={n}>{n} aday · results</option>)}
+              {[10, 15, 20, 30, 40, 50].map(n => <option key={n} value={n}>{`${n} aday · results`}</option>)}
             </select>
             <button onClick={runDiscover} disabled={loading}
                     data-testid="discover-run"

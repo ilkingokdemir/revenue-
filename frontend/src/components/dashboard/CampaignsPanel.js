@@ -262,15 +262,15 @@ export function CampaignsPanel({ properties, activePropertyId }) {
         <DialogContent className="max-w-lg" data-testid="create-campaign-dialog">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Zap size={16} className="text-orange-500" /> Create Campaign</DialogTitle></DialogHeader>
           <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-            <div className="flex gap-2">
-              <div className="flex-1">
+            <div className="grid grid-cols-[1fr_130px] gap-3 items-end">
+              <div>
                 <label className="text-[11px] font-bold text-stone-600 mb-1 block">Campaign Name</label>
                 <Input value={newCampaign.name} onChange={e => setNewCampaign(p => ({...p, name: e.target.value}))} placeholder="e.g. Summer Special Offer" data-testid="campaign-name" />
               </div>
               <div>
                 <label className="text-[11px] font-bold text-stone-600 mb-1 block">Channel</label>
                 <Select value={newCampaign.channel} onValueChange={v => setNewCampaign(p => ({...p, channel: v}))}>
-                  <SelectTrigger className="w-28 h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full h-9 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="email">Email</SelectItem>
                     <SelectItem value="whatsapp">WhatsApp</SelectItem>

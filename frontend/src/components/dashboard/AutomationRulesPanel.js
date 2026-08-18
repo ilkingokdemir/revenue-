@@ -343,7 +343,7 @@ function CreateRuleModal({ catalog, onClose, onCreated }) {
             <div className="text-[11px] uppercase tracking-wider text-stone-500 mb-1.5">⚡ TETİKLEYİCİ</div>
             <select value={form.trigger} onChange={e => setForm(f => ({ ...f, trigger: e.target.value }))}
               className="w-full px-2 py-2 text-xs border border-stone-300 rounded bg-yellow-50" data-testid="auto-input-trigger">
-              {catalog.triggers.map(t => <option key={t.key} value={t.key}>{t.label} ({t.key})</option>)}
+              {catalog.triggers.map(t => <option key={t.key} value={t.key}>{`${t.label} (${t.key})`}</option>)}
             </select>
           </div>
 

@@ -82,7 +82,7 @@ export default function GroupRoomingImportPanel({ propertyId, hotelName = "" }) 
           className="w-full px-3 py-2 rounded bg-stone-800 border border-stone-700 text-stone-100 text-sm">
           <option value="">— Pick a group booking —</option>
           {groups.map((g) => (
-            <option key={g.id} value={g.id}>{g.client_name || g.name} · {g.check_in} → {g.check_out}</option>
+            <option key={g.id} value={g.id}>{`${g.client_name || g.name} · ${g.check_in} → ${g.check_out}`}</option>
           ))}
         </select>
         <div className="flex items-center gap-2">

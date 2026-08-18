@@ -173,7 +173,7 @@ export default function BeachPosPanel({ propertyId }) {
                       data-testid="beach-sunbed-select"
                       className="w-full px-3 py-1.5 text-sm border border-stone-300 rounded-lg mt-1">
                 <option value="">Seçin</option>
-                {sunbeds.map(s => <option key={s.id} value={s.sunbed_number}>#{s.sunbed_number} ({s.zone})</option>)}
+                {sunbeds.map(s => <option key={s.id} value={s.sunbed_number}>{`#${s.sunbed_number} (${s.zone})`}</option>)}
               </select>
             </label>
             <div className="space-y-1.5 mb-3">

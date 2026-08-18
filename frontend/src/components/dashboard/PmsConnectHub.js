@@ -712,7 +712,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
               </table>
               {rateOptions.length > 0 && (
                 <datalist id="pms-rate-options">
-                  {rateOptions.map((o) => <option key={o.id} value={o.id}>{o.name}{o.is_root ? " (root)" : ""}</option>)}
+                  {rateOptions.map((o) => <option key={o.id} value={o.id}>{`${o.name}${o.is_root ? " (root)" : ""}`}</option>)}
                 </datalist>
               )}
             </section>

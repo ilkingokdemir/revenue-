@@ -132,7 +132,7 @@ const SmartRateControlPanel = ({ activePropertyId }) => {
           <div>
             <label className="text-xs font-semibold text-stone-500 uppercase">Rate Plans (optional — all if empty)</label>
             <select multiple value={planIds} onChange={e => setPlanIds(Array.from(e.target.selectedOptions).map(o => o.value))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm h-24" data-testid="src-plan-ids">
-              {plans.map(p => <option key={p.id} value={p.id}>{p.name} · {p.code || p.id.slice(0,6)}</option>)}
+              {plans.map(p => <option key={p.id} value={p.id}>{`${p.name} · ${p.code || p.id.slice(0,6)}`}</option>)}
             </select>
           </div>
           <div>

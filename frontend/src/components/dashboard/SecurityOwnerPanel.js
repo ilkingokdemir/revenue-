@@ -81,7 +81,7 @@ function DoorLockTab({ propertyId }) {
 
       <div className="flex flex-wrap gap-2">
         <select value={filter.days} onChange={(e) => setFilter({ ...filter, days: parseInt(e.target.value, 10) })} className="px-2 py-1 rounded bg-stone-800 border border-stone-700 text-stone-100 text-xs">
-          {[1, 7, 14, 30].map((d) => <option key={d} value={d}>{d}d</option>)}
+          {[1, 7, 14, 30].map((d) => <option key={d} value={d}>{`${d}d`}</option>)}
         </select>
         <input data-testid="lock-filter-room" placeholder="Room #" value={filter.room} onChange={(e) => setFilter({ ...filter, room: e.target.value })} className="px-2 py-1 rounded bg-stone-800 border border-stone-700 text-stone-100 text-xs w-24" />
         <select value={filter.method} onChange={(e) => setFilter({ ...filter, method: e.target.value })} className="px-2 py-1 rounded bg-stone-800 border border-stone-700 text-stone-100 text-xs">

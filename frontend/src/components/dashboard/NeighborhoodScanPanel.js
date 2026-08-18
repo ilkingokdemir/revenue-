@@ -1084,7 +1084,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
           <div>
             <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1.5 tracking-wider">Days Ahead</label>
             <select value={days} onChange={e => setDays(e.target.value)} className="w-full px-3 py-2.5 text-sm bg-stone-950 border border-stone-700 rounded-lg text-stone-100" data-testid="geo-days">
-              {[7,15,30,60,90].map(d => <option key={d} value={d}>{d} days</option>)}
+              {[7,15,30,60,90].map(d => <option key={d} value={d}>{`${d} days`}</option>)}
             </select>
           </div>
           <div>

@@ -332,7 +332,7 @@ function EFaturaBlock({ propertyId }) {
               <option value="">— Rezervasyon seçin —</option>
               {bookings.slice(0, 50).map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.guest_name} · {b.check_in} → {b.check_out} · ₺{b.total_price}
+                  {`${b.guest_name} · ${b.check_in} → ${b.check_out} · ₺${b.total_price}`}
                 </option>
               ))}
             </select>

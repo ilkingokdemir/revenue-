@@ -39,7 +39,7 @@ export default function MultiPropertyRollupPanel({ hotelName = "" }) {
         <div className="flex gap-2">
           <select data-testid="rollup-days" value={days} onChange={(e) => setDays(parseInt(e.target.value, 10))}
             className="px-3 py-2 rounded bg-stone-800 border border-stone-700 text-stone-100 text-sm">
-            {[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{d}d</option>)}
+            {[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{`${d}d`}</option>)}
           </select>
           <button data-testid="rollup-refresh" onClick={load}
             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-sm text-stone-100 border border-stone-700">

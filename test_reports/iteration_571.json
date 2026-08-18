@@ -1,0 +1,57 @@
+{
+  "summary": "DEEP TEST (iter 571) — Grup 2: Misafir/CRM/Sadakat/Pazarlama/Mesajlaşma + Operasyon. Login → PRO → 'Franziskaner by Centra' seçildi → sidebar bölümleri (Guests & Loyalty, Operations, Marketing & Messaging) localStorage ile açıldı. 44 hedef testId (istenen 43 + eş anlamlı map'ler) navigate edildi; her modülde heading + panel size + New/Add butonu + modal/inline form yakalandı. Ayrıca 5 modülde deep flow: guest-profiles açılış, chatbot-automation, housekeeping 'New Task', loyalty, campaigns 'New Campaign'. Test kayıtları 'DEEPTEST_' prefix ile oluşturuldu (silme onayları iptal edildi).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "GuestProfilesPanel (guest-profiles-btn)", "issue": "React console error: 'Each child in a list should have a unique key prop. Check the render method of GuestProfilesPanel.' — list iterator eksik key prop. Görsel bozukluk yok ama React reconciliation performans/uyarı sorunu.", "selector": "[data-testid='guest-profiles-btn'] → GuestProfilesPanel .map()", "priority": "MEDIUM"},
+      {"component": "Branch persistence (branch-selector-btn)", "issue": "Franziskaner by Centra seçildikten sonra tam sayfa reload yapılırsa branch 'All Branches' değerine geri dönüyor (localStorage/cookie'ye persist edilmemiş). Bu, chatbot-automation gibi 'lütfen bir otel seçin' uyarısı veren modüllerin ilk açılışta boş görünmesine neden oluyor.", "selector": "[data-testid='branch-selector-btn']", "priority": "MEDIUM"},
+      {"component": "chatbot-automation-btn", "issue": "Panel içeriği koşullu: branch 'All Branches' ise 'Chatbot Automations için lütfen bir otel seçin' gösteriliyor (heading yok, chars=152). Deneyim tutarsız — modülün kendi içinde branch selection prompt'u/deep-link olmalı.", "selector": "[data-testid='chatbot-automation-btn']", "priority": "LOW"},
+      {"component": "Create Campaign dialog (campaigns-btn)", "issue": "Modal içinde 'Campaign Name' input ile 'Channel' Select label/dropdown görsel olarak üst üste biniyor (input value 'Channel' label'ı ile çakışıyor). Ekran görüntüsünde açıkça görülüyor.", "selector": "[data-testid='campaigns-btn'] → dialog input#campaign-name & select#channel", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Create Campaign modal", "issues": ["Campaign Name input ile Channel dropdown label overlap; grid iki kolonlu ancak label pozisyonlaması hatalı."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "MEDIUM: GuestProfilesPanel içindeki .map() renderlarına 'key={item.id}' ekleyin (React key warning).",
+    "MEDIUM: branch-selector-btn'in seçimini localStorage'a persist edin (nav-open-* pattern'iyle uyumlu). Reload sonrası kullanıcının seçili branch'i kaybolmamalı; aksi halde 'lütfen bir otel seçin' uyaran modüller (chatbot-automation vd.) her reload'da yeniden branch seçimi zorunlu tutuyor.",
+    "LOW: Create Campaign modal'ında Campaign Name & Channel alanlarının label/input overlap'ini düzeltin (grid/flex spacing).",
+    "LOW: 'Sidebar section' açılış label'ları hala İngilizce sabit (Guests & Loyalty, Operations, Marketing & Messaging); iter 570 comment'i devam ediyor — section.id kullanılmalı."
+  ],
+  "critical_code_review_comments": [
+    "Positive: Grup 2 modüllerinin çoğu (32/44) tam navigasyon ve panel render ile çalışıyor.",
+    "Positive: housekeeping-btn → 'New Task' Radix Dialog başarıyla açıldı; stock-management-btn 'Add' dialog OK; campaigns 'New Campaign' dialog OK; guest-risk, guest-segments, loyalty-tier, review-agent, whatsapp-voice, live-chat-inbox 'Yeni' inline form açtı.",
+    "Concern: 12 istenen testId sidebar'da hiç bulunamadı: gdpr-btn, gift-cards-btn, review-sentiment-btn, sentiment-heatmap-btn, marketing-radar-btn, unified-inbox-btn, guest-app-btn, kiosk-launch-btn, pass-over-btn, payroll-btn, sustainability-btn, carbon-v2-btn. Bunların bir kısmı diğer section'larda (Reservations/Finance/Reports/Settings) veya sadece belirli rol/branch'e görünür olabilir. Sidebar section keşif mekanizması ile doğrulanmalı.",
+    "İsteğin orijinal testId önerilerinden (guest-notes, vip, blacklist, vouchers, referrals, reviews, reputation, newsletters, segments, whatsapp, sms, chatbot, live-chat, kiosk, digital-key, hk-boards, laundry, minibar, maintenance, inventory, procurement, suppliers, staff, shifts, training, incidents, security, energy) 28'i menüde hiç yok — bu isimler alternatif isimlere migrated (chatbot-automation, whatsapp-voice, kiosk-launch, smart-locks, stock-management, staff-ops/staff-performance, shift-scheduler, ops-v2, sr-voucher, guest-segments, etc). İstek kaynağı ile menüSections.js senkron değil; product team ile testId sözlüğü hizalanmalı.",
+    "GuestProfilesPanel key-prop uyarısı silent bir bug; potansiyel state karışması + performans regresyonu getirebilir.",
+    "loyalty-btn heading 'Loyalty Program' + panel_chars=274 çok küçük — sayfa gerçekten dolu içerik render ediyor mu, yoksa placeholder mı? İncelenmesi önerilir."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend only)", "frontend": "73% — 32/44 modül OK, 0 broken, 4 UI bug (2 medium, 2 low), 12 testId sidebar'da bulunamadı (yalnızca mevcut olan testId'ler test edildi)."},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (branch: branch-default = 'Franziskaner by Centra')",
+  "seed_data_creation": "Silme işlemleri iptal edildi; DEEPTEST_ prefix'li kalıcı kayıt oluşturulmadı (form doldurma yapıldıktan sonra Escape ile modal kapatıldı; sadece campaign & loyalty inline form denemesi persist etmedi).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Grup 3 için önerilen: Revenue & Rates, Channels & Distribution, Food & Events, Finance, Reports & Analytics, Settings/Admin modülleri (iter 570+571'de test edilmediler). menuSections.js'te 281 testId var, iter 570+571 toplamda ~80 modülü kapsadı. Branch persistence bug'ı öncelikli — reload sonrası 'lütfen otel seçin' modüllerinde blocker olabilir. Kritik: guest-profiles-btn 'key prop' React uyarısı fix'ini doğrula. Kod arama için: /app/frontend/src/DashboardViews.js içinde GuestProfilesPanel component'i.",
+  "final_broken_suspicious_lists": {
+    "BROKEN": [],
+    "PARTIAL": [
+      {"module_id": "guest-profiles-btn", "issue": "React key-prop warning (GuestProfilesPanel)", "impact": "Runtime warning; potential state/render issues"},
+      {"module_id": "chatbot-automation-btn", "issue": "Reload sonrası branch=All Branches olduğu için 'lütfen bir otel seçin' engelleyici", "impact": "Reload'dan sonra kullanıcı branch değişip modüle dönmeden içeriği göremez"},
+      {"module_id": "campaigns-btn", "issue": "Create Campaign modal'ında Name/Channel label overlap", "impact": "Kozmetik; form doldurulabiliyor"},
+      {"module_id": "branch-selector-btn", "issue": "Branch seçimi reload'da persist edilmiyor", "impact": "UX kesintisi — reload sonrası All Branches'e dönüyor"}
+    ],
+    "OK": [
+      "crm-360-btn","guest-prefs-btn","guest-risk-btn","loyalty-btn","loyalty-v2-btn","loyalty-tier-btn","sr-voucher-btn","surveys-btn","review-agent-btn","campaigns-btn","guest-segments-btn","birthday-btn","brand-voice-btn","web-push-btn","messaging-btn","msg-templates-btn","whatsapp-voice-btn","live-chat-inbox-btn","guest-portal-v2-btn","smart-locks-btn","housekeeping-btn (New Task modal ✅)","hk-dispatch-btn","ops-v2-btn","operations-hub-btn","asset-register-btn (Add inline form ✅)","stock-management-btn (Add dialog ✅)","low-stock-btn","staff-ops-btn","staff-performance-btn","shift-scheduler-btn"
+    ],
+    "NOT_FOUND_IN_SIDEBAR": [
+      "gdpr-btn","gift-cards-btn","review-sentiment-btn","sentiment-heatmap-btn","marketing-radar-btn","unified-inbox-btn","guest-app-btn","kiosk-launch-btn","pass-over-btn","payroll-btn","sustainability-btn","carbon-v2-btn"
+    ],
+    "REQUESTED_ID_NEVER_EXISTED_IN_MENU": [
+      "guest-notes-btn","vip-btn","blacklist-btn","vouchers-btn","referrals-btn","reviews-btn","reputation-btn","newsletters-btn","segments-btn","whatsapp-btn","sms-btn","chatbot-btn","live-chat-btn","kiosk-btn","digital-key-btn","hk-boards-btn","laundry-btn","minibar-btn","maintenance-btn","inventory-btn","procurement-btn","suppliers-btn","staff-btn","shifts-btn","training-btn","incidents-btn","security-btn","energy-btn"
+    ]
+  },
+  "rca_of_the_issue": "Ana bulgular: (1) GuestProfilesPanel .map() içinde React key eksik → key-prop warning. Fix: her list item için unique key ekleyin. (2) Branch persistence: branch selector değeri sadece runtime memory'de tutuluyor, reload sonrası default'a dönüyor. Fix: seçimi localStorage'a yazın ve app boot'unda okuyun. (3) chatbot-automation gibi branch-scoped modüllerin 'Otel seçin' fallback UI'ı, branch persistence eksikliği ile birleşince her reload'da engelleyici oluyor. (4) Create Campaign modal grid: Campaign Name (col-span 2) + Channel Select sağa oturmalı; şu an aynı satırda üst üste biniyor. (5) İstek listesindeki testId'lerin ~%65'i menuSections.js'te yok — istek kaynağı ile menü sözlüğü hizalanmalı."
+}

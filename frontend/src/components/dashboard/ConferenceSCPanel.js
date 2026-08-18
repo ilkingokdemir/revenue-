@@ -589,14 +589,14 @@ function InquiryDetail({ propertyId, inqId, onBack }) {
             <select onChange={(e) => { const s = spaces.find((x) => x.id === e.target.value); if (s) addSpace(s); e.target.value = ""; }}
                     data-testid="sc-add-space" className="px-2.5 py-1 text-xs border border-stone-200 rounded-md bg-white">
               <option value="">+ Mekan Ekle…</option>
-              {spaces.map((s) => <option key={s.id} value={s.id}>{s.name} · £{s.full_day_rate}/gün</option>)}
+              {spaces.map((s) => <option key={s.id} value={s.id}>{`${s.name} · £${s.full_day_rate}/gün`}</option>)}
             </select>
           )}
           {catering.length > 0 && (
             <select onChange={(e) => { const c = catering.find((x) => x.id === e.target.value); if (c) addCatering(c); e.target.value = ""; }}
                     data-testid="sc-add-catering" className="px-2.5 py-1 text-xs border border-stone-200 rounded-md bg-white">
               <option value="">+ Catering Ekle…</option>
-              {catering.map((c) => <option key={c.id} value={c.id}>{c.name} · £{c.per_person_price}/kişi</option>)}
+              {catering.map((c) => <option key={c.id} value={c.id}>{`${c.name} · £${c.per_person_price}/kişi`}</option>)}
             </select>
           )}
           <button onClick={addRoomBlock} data-testid="sc-add-room-block" className="px-2.5 py-1 text-xs border border-stone-200 text-stone-700 rounded-md hover:bg-stone-50">+ Oda Bloku</button>

@@ -50,7 +50,7 @@ export default function Tier1DashboardPanel({ propertyId, hotelName = "" }) {
         </div>
         <div className="flex gap-2">
           <select value={days} onChange={(e) => setDays(parseInt(e.target.value, 10))} className="px-2 py-1 rounded bg-stone-800 border border-stone-700 text-stone-100 text-xs">
-            {[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{d} days</option>)}
+            {[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{`${d} days`}</option>)}
           </select>
           <button data-testid="t1-refresh-btn" onClick={refresh} className="text-sm px-3 py-1 rounded bg-stone-800 border border-stone-700 text-stone-300 flex items-center gap-2">
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Refresh

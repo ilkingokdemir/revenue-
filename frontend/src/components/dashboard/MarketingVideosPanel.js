@@ -86,7 +86,7 @@ export default function MarketingVideosPanel() {
                 <select value={form.size} onChange={e => setForm({...form, size:e.target.value})}
                         data-testid="mv-size"
                         className="w-full px-2 py-1.5 text-xs border border-stone-300 rounded-lg mt-1">
-                  {config?.sizes.map(s => <option key={s} value={s}>{s}{s==="1024x1792"?" (IG/TikTok)":""}</option>)}
+                  {config?.sizes.map(s => <option key={s} value={s}>{`${s}${s==="1024x1792"?" (IG/TikTok)":""}`}</option>)}
                 </select>
               </label>
               <label className="block">
@@ -94,14 +94,14 @@ export default function MarketingVideosPanel() {
                 <select value={form.duration} onChange={e => setForm({...form, duration:parseInt(e.target.value)})}
                         data-testid="mv-duration"
                         className="w-full px-2 py-1.5 text-xs border border-stone-300 rounded-lg mt-1">
-                  {config?.durations.map(d => <option key={d} value={d}>{d} sn</option>)}
+                  {config?.durations.map(d => <option key={d} value={d}>{`${d} sn`}</option>)}
                 </select>
               </label>
               <label className="block col-span-2">
                 <span className="text-xs text-stone-700">Model</span>
                 <select value={form.model} onChange={e => setForm({...form, model:e.target.value})}
                         className="w-full px-2 py-1.5 text-xs border border-stone-300 rounded-lg mt-1">
-                  {config?.models.map(m => <option key={m} value={m}>{m}{m==="sora-2-pro"?" (yüksek kalite, yavaş)":""}</option>)}
+                  {config?.models.map(m => <option key={m} value={m}>{`${m}${m==="sora-2-pro"?" (yüksek kalite, yavaş)":""}`}</option>)}
                 </select>
               </label>
             </div>

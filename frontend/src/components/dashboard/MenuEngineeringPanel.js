@@ -70,7 +70,7 @@ export default function MenuEngineeringPanel({ propertyId, hotelName = "" }) {
 
       <div className="flex flex-wrap gap-2">
         <select value={days} onChange={(e) => setDays(parseInt(e.target.value, 10))} className="px-2 py-1 rounded bg-stone-800 border border-stone-700 text-stone-100 text-xs">
-          {[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{d} days</option>)}
+          {[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{`${d} days`}</option>)}
         </select>
         <select value={filter} onChange={(e) => setFilter(e.target.value)} className="px-2 py-1 rounded bg-stone-800 border border-stone-700 text-stone-100 text-xs" data-testid="me-quad-filter">
           <option value="">All quadrants</option>

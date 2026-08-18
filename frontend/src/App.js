@@ -245,7 +245,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
   const [branding, setBranding] = useState(null);
   const [templateTextToApply, setTemplateTextToApply] = useState(null);
   const [properties, setProperties] = useState([]);
-  const [activePropertyId, setActivePropertyId] = useState("all");
+  const [activePropertyId, setActivePropertyIdState] = useState(() => localStorage.getItem("active-property-id") || "all");
+  const setActivePropertyId = (v) => {
+    setActivePropertyIdState(v);
+    try { localStorage.setItem("active-property-id", v); } catch { /* ignore */ }
+  };
   const [filters, setFilters] = useState({
     platform: "all",
     status: "all"

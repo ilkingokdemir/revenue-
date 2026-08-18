@@ -268,7 +268,7 @@ export default function RecipeCogsPanel({ propertyId = "default" }) {
                     const next = [...editing.lines]; next[idx] = { ...next[idx], ingredient_id: e.target.value }; setEditing({ ...editing, lines: next });
                   }} data-testid={`r-line-ing-${idx}`}>
                   <option value="">— Malzeme seç —</option>
-                  {ingredients.map((i) => <option key={i.id} value={i.id}>{i.name} ({i.unit}, {i.cost_per_unit})</option>)}
+                  {ingredients.map((i) => <option key={i.id} value={i.id}>{`${i.name} (${i.unit}, ${i.cost_per_unit})`}</option>)}
                 </select>
                 <input type="number" className="col-span-3 text-sm border border-stone-200 rounded px-2 py-1" value={l.qty} placeholder="qty"
                   onChange={(e) => {

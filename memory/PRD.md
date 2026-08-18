@@ -932,3 +932,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Karttan Hızlı Aksiyon: GapSummaryCard'a '⚡ Önerileri Uygula' butonu (gap-summary-apply, stopPropagation) — dashboard'dan comp-trigger/apply çağırır, toast + kart yenilenir. Doğrulandı: 10 gün × 2 oda tipi uygulandı, makas −%29.5 → +%3.8'e kapandı.
 - Haftalık Makas Raporu: send_weekly_signal_digest'e '📡 Pazarla Makas Durumu' bölümü — bu hafta ort. sapma, yön (açılıyor/kapanıyor/stabil), 4-6 haftalık W-bazlı seri; bildirim + e-postaya (MOCK) girer, dönüşte gap_included alanı.
 - BUG FIX: _weekly_trend ve _month_deviations override sorgusu artık referans oda tipi id'siyle filtreli (önceden Deluxe override'ı Standard referansına karışıp makası +%45 şişiriyordu).
+
+## Güncelleme (2026-08-17, TAM MODÜL DENETİMİ — iter. 569)
+- Kullanıcı '%30 modül çalışmıyor' iddiasıyla tam denetim istedi. testing_agent 280/280 sidebar modülünü (menuSections.js) tek tek tıklayıp doğruladı: HEPSİ RENDER EDİYOR ve çalışıyor (%98.6 tamamen temiz). İddia doğrulanmadı.
+- KÖK NEDEN (muhtemel): BASIT mod varsayılan — sidebar'da sadece ~30 core modül görünür, 250'si gizli; kullanıcı göremediklerini 'kırık' sanmış olabilir. PRO moda geçince hepsi erişilebilir.
+- DÜZELTİLEN: RateStructurePanel.js /admin/room-types (404) → /room-types (200). Error Sentinel'deki 5 eski hata kaydı (loadRev, measureElasticity, showTgt, toLocaleString, React child obj — hepsi 15 Ağustos, kodda çoktan düzeltilmiş, taramada tekrarlanmadı) resolved işaretlendi.

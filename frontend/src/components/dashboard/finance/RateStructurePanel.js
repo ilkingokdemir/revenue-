@@ -51,7 +51,7 @@ export const RateStructurePanel = ({ user, propertyId }) => {
         axios.get(`${API}/rate-structure/derived${qs}`),
         axios.get(`${API}/rate-structure/channel-codes${qs}`),
         axios.get(`${API}/rate-structure/promo-codes${qs}`),
-        axios.get(`${API}/admin/room-types${qs ? `?property_id=${pid}` : ""}`).catch(() => ({ data: [] })),
+        axios.get(`${API}/room-types${qs}`).catch(() => ({ data: [] })),
       ]);
       setProducts(p.data || []);
       setDerived(d.data || []);

@@ -821,8 +821,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           {navMode === "simple" && (
             <button onClick={() => setNavModePersist("pro")}
               data-testid="simple-mode-hint"
-              className="w-full mt-2 px-4 py-2.5 text-left text-[11px] text-stone-500 hover:text-stone-300 transition-colors">
-              Aradığınız ekran yok mu? <span className="text-indigo-400 font-bold">Pro moda geçin</span> veya ⌘K ile arayın.
+              className="w-full mt-3 mx-0 px-3 py-3 text-left rounded-xl bg-gradient-to-r from-indigo-950 to-stone-900 border border-indigo-800/50 hover:border-indigo-500 transition-colors group">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🔓</span>
+                <div>
+                  <div className="text-[11px] font-black text-indigo-300 group-hover:text-indigo-200">250+ modül için PRO'ya geçin</div>
+                  <div className="text-[10px] text-stone-500 mt-0.5">Gelir, kanal, finans, raporlar ve daha fazlası — hepsi tek tık uzağınızda. ⌘K ile de arayabilirsiniz.</div>
+                </div>
+              </div>
             </button>
           )}
         </nav>

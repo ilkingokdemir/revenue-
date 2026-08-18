@@ -1797,6 +1797,10 @@ api_router.include_router(create_booking_com_router(db, require_roles))
 from routes.pms.pms_pro import create_pms_pro_router, journey_engine_loop as _journey_engine_loop
 api_router.include_router(create_pms_pro_router(db, require_roles))
 
+# ===== Sağlık Nöbetçisi — gece modül API taraması =====
+from routes.platform_ext.health_sentinel import create_health_sentinel_router
+api_router.include_router(create_health_sentinel_router(db, require_roles))
+
 @app.on_event("startup")
 async def _start_journey_engine():
     import asyncio as _asyncio
@@ -2146,6 +2150,8 @@ async def startup_event():
     asyncio.create_task(occupancy_rule_loop(db))
     from workers import comp_trigger_loop
     asyncio.create_task(comp_trigger_loop(db))
+    from routes.platform_ext.health_sentinel import health_sentinel_loop
+    asyncio.create_task(health_sentinel_loop(db))
     asyncio.create_task(profit_autopilot_loop(db))
     asyncio.create_task(data_quality_sentinel_loop(db))
     asyncio.create_task(open_pricing_optimizer_loop(db))

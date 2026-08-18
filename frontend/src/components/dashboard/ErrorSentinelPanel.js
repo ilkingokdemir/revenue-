@@ -8,6 +8,29 @@ const API = process.env.REACT_APP_BACKEND_URL;
 export default function ErrorSentinelPanel() {
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [health, setHealth] = useState(null);
+  const [scanning, setScanning] = useState(false);
+
+  const loadHealth = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/api/health-sentinel/status`, { withCredentials: true });
+      setHealth(r.data);
+    } catch { /* silent */ }
+  }, []);
+
+  const runScan = async () => {
+    setScanning(true);
+    try {
+      const r = await axios.post(`${API}/api/health-sentinel/run`, {}, { withCredentials: true });
+      r.data.fail_count > 0
+        ? toast.warning(`🩺 ${r.data.fail_count} modül API'sinde sorun bulundu — bildirim gönderildi`)
+        : toast.success(`🩺 ${r.data.ok_count} modül API'sinin tamamı sağlıklı ✓`);
+      loadHealth();
+    } catch { toast.error("Tarama çalıştırılamadı"); }
+    finally { setScanning(false); }
+  };
+
+  useEffect(() => { loadHealth(); }, [loadHealth]);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -41,6 +64,41 @@ export default function ErrorSentinelPanel() {
           className="px-3 py-2 text-xs rounded-md bg-stone-900 text-white hover:bg-stone-700 inline-flex items-center gap-1.5 font-medium">
           <ArrowsClockwise size={13} className={busy ? "animate-spin" : ""} /> Yenile
         </button>
+      </div>
+
+      {/* Sağlık Nöbetçisi */}
+      <div className="bg-white border-2 border-emerald-200 rounded-xl p-5 mb-5" data-testid="health-sentinel-card">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-black text-stone-800">🩺 Sağlık Nöbetçisi</h2>
+            <p className="text-xs text-stone-500 mt-0.5">Her gece {health?.endpoints || 29} modül API'sini yoklar — sorun bulursa zil bildirimine düşer.</p>
+            {health?.last_run ? (
+              <div className="flex items-center gap-3 mt-2 text-xs" data-testid="health-sentinel-last">
+                <span className={`font-black px-2 py-0.5 rounded-full ${health.last_run.fail_count > 0 ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
+                  {health.last_run.fail_count > 0 ? `${health.last_run.fail_count} sorun` : "Tümü sağlıklı ✓"}
+                </span>
+                <span className="text-stone-400">{health.last_run.ok_count}/{health.last_run.ok_count + health.last_run.fail_count} OK · son tarama {new Date(health.last_run.at).toLocaleString("tr-TR")} · {health.last_run.duration_ms}ms</span>
+              </div>
+            ) : (
+              <p className="text-[11px] text-stone-400 mt-2" data-testid="health-sentinel-none">Henüz tarama yapılmadı — robot gece çalışacak veya şimdi başlatabilirsiniz.</p>
+            )}
+          </div>
+          <button onClick={runScan} disabled={scanning} data-testid="health-sentinel-run-btn"
+            className="px-4 py-2 text-xs rounded-md bg-emerald-600 text-white hover:bg-emerald-700 font-bold disabled:opacity-50">
+            {scanning ? "Taranıyor…" : "🩺 Şimdi Tara"}
+          </button>
+        </div>
+        {health?.last_run?.failures?.length > 0 && (
+          <div className="mt-3 space-y-1" data-testid="health-sentinel-failures">
+            {health.last_run.failures.map((f) => (
+              <div key={f.path} className="flex items-center justify-between text-[11px] bg-rose-50 border border-rose-100 rounded-lg px-3 py-1.5">
+                <span className="font-bold text-rose-800">{f.module}</span>
+                <span className="text-rose-500 font-mono">{f.path}</span>
+                <span className="font-black text-rose-600">{f.status || "zaman aşımı"}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {items.length === 0 ? (

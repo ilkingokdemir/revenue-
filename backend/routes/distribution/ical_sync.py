@@ -56,6 +56,9 @@ async def sync_ical_source(db, src: dict) -> dict:
         return {"source_id": src["id"], "status": "error", "error": str(e)[:200]}
 
     await db.oos_blocks.delete_many({"ical_source_id": src["id"]})
+    ignored = {(i["start"], i["end"]) for i in await db.ical_ignored_events.find(
+        {"source_id": src["id"]}, {"_id": 0, "start": 1, "end": 1}).to_list(500)}
+    events = [ev for ev in events if (ev["start"], ev["end"]) not in ignored]
     count = 0
     for ev in events:
         if ev["end"] <= ev["start"]:
@@ -227,5 +230,78 @@ def create_ical_router(db, require_roles):
         await db.ical_settings.update_one({"property_id": pid},
                                           {"$set": {"export_token": tok, "rotated_at": now_iso()}}, upsert=True)
         return {"ok": True, "export_token": tok}
+
+    # ---------------- ÇAKIŞMA ÇÖZÜM SİHİRBAZI ----------------
+    @router.get("/{pid}/conflicts/{cid}/options")
+    async def conflict_options(pid: str, cid: str, _u: dict = Depends(require_roles(*ROLES))):
+        _check_scope(_u, pid)
+        c = await db.ical_conflicts.find_one({"id": cid, "property_id": pid}, {"_id": 0})
+        if not c:
+            raise HTTPException(404, "Çakışma bulunamadı")
+        bk = await db.bookings.find_one({"id": c["booking_id"]}, {"_id": 0, "room_type_id": 1, "check_in": 1, "check_out": 1})
+        ci, co = c["check_in"], c["check_out"]
+        rooms = await db.rooms.find({"property_id": pid, "id": {"$ne": c["room_id"]}},
+                                    {"_id": 0, "id": 1, "name": 1, "room_type_id": 1}).to_list(200)
+        options = []
+        for r in rooms:
+            clash = await db.bookings.find_one(
+                {"property_id": pid, "room_id": r["id"], "status": {"$nin": ["cancelled", "no_show"]},
+                 "check_in": {"$lt": co}, "check_out": {"$gt": ci}}, {"_id": 1})
+            if clash:
+                continue
+            blocked = await db.oos_blocks.find_one(
+                {"room_id": r["id"], "start": {"$lt": co}, "end": {"$gt": ci}}, {"_id": 1})
+            if blocked:
+                continue
+            options.append({"room_id": r["id"], "name": r["name"],
+                            "same_type": r.get("room_type_id") == (bk or {}).get("room_type_id")})
+        options.sort(key=lambda x: (not x["same_type"], x["name"]))
+        return {"conflict": c, "options": options}
+
+    @router.post("/{pid}/conflicts/{cid}/resolve")
+    async def resolve_conflict(pid: str, cid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        _check_scope(_u, pid)
+        c = await db.ical_conflicts.find_one({"id": cid, "property_id": pid, "status": "open"}, {"_id": 0})
+        if not c:
+            raise HTTPException(404, "Açık çakışma bulunamadı")
+        action = data.get("action")
+        if action == "move_booking":
+            target = data.get("target_room_id")
+            room = await db.rooms.find_one({"id": target, "property_id": pid}, {"_id": 0, "name": 1})
+            if not room:
+                raise HTTPException(404, "Hedef oda bulunamadı")
+            clash = await db.bookings.find_one(
+                {"property_id": pid, "room_id": target, "status": {"$nin": ["cancelled", "no_show"]},
+                 "check_in": {"$lt": c["check_out"]}, "check_out": {"$gt": c["check_in"]}}, {"_id": 1})
+            if clash:
+                raise HTTPException(409, "Hedef oda bu tarihlerde artık müsait değil")
+            await db.bookings.update_one({"id": c["booking_id"]},
+                                         {"$set": {"room_id": target, "updated_at": now_iso(),
+                                                   "move_reason": f"iCal çakışma çözümü ({c.get('channel_name')})"}})
+            # Bu rezervasyonun eski odadaki tüm açık çakışmaları çözüldü
+            await db.ical_conflicts.update_many(
+                {"property_id": pid, "booking_id": c["booking_id"], "status": "open"},
+                {"$set": {"status": "resolved", "resolution": "moved_booking",
+                          "moved_to": target, "resolved_by": _u.get("name", ""), "resolved_at": now_iso()}})
+            return {"ok": True, "action": "move_booking", "moved_to": target,
+                    "room_name": room["name"],
+                    "message": f"{c.get('guest_name', 'Misafir')} → {room['name']} odasına taşındı"}
+        if action == "close_channel":
+            removed = await db.oos_blocks.delete_many(
+                {"ical_source_id": c["source_id"], "room_id": c["room_id"],
+                 "start": c["block_start"], "end": c["block_end"]})
+            await db.ical_conflicts.update_many(
+                {"property_id": pid, "source_id": c["source_id"], "status": "open",
+                 "block_start": c["block_start"], "block_end": c["block_end"]},
+                {"$set": {"status": "resolved", "resolution": "channel_closed",
+                          "resolved_by": _u.get("name", ""), "resolved_at": now_iso()}})
+            await db.ical_ignored_events.update_one(
+                {"source_id": c["source_id"], "start": c["block_start"], "end": c["block_end"]},
+                {"$set": {"source_id": c["source_id"], "start": c["block_start"],
+                          "end": c["block_end"], "created_at": now_iso()}}, upsert=True)
+            return {"ok": True, "action": "close_channel", "blocks_removed": removed.deleted_count,
+                    "message": f"{c.get('channel_name', 'Kanal')} bloğu yok sayıldı — içerideki rezervasyon geçerli. "
+                               f"Lütfen {c.get('channel_name', 'kanal')} tarafındaki rezervasyonu da iptal edin/kapatın."}
+        raise HTTPException(422, "action: move_booking|close_channel")
 
     return router

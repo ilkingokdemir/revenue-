@@ -14,6 +14,25 @@ export default function IcalSyncPanel({ activePropertyId, properties }) {
   const [token, setToken] = useState("");
   const [form, setForm] = useState({ room_id: "", channel_name: "Airbnb", url: "" });
   const [busy, setBusy] = useState(false);
+  const [resolver, setResolver] = useState(null); // { conflict, options, target }
+
+  const openResolver = async (c) => {
+    try {
+      const { data } = await axios.get(`${API}/ical/${pid}/conflicts/${c.id}/options`);
+      setResolver({ conflict: c, options: data.options, target: data.options[0]?.room_id || "" });
+      if (data.options.length === 0) toast.warning("Bu tarihlerde boş oda yok — 'Kanalı Kapat' seçeneğini kullanın");
+    } catch { toast.error("Seçenekler yüklenemedi"); }
+  };
+
+  const resolve = async (c, action, target) => {
+    try {
+      const { data } = await axios.post(`${API}/ical/${pid}/conflicts/${c.id}/resolve`,
+        action === "move_booking" ? { action, target_room_id: target } : { action });
+      toast.success(data.message);
+      setResolver(null);
+      load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Çözülemedi"); }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -97,11 +116,42 @@ export default function IcalSyncPanel({ activePropertyId, properties }) {
           <p className="text-[11px] text-red-600 mb-3">iCal takvim blokları içerideki rezervasyonlarla çakışıyor. Kanallardan birini kapatın veya misafiri taşıyın.</p>
           <div className="space-y-1.5">
             {conflicts.map((c) => (
-              <div key={c.key} className="flex items-center gap-2 text-xs bg-white rounded-lg px-3 py-2 border border-red-200" data-testid={`ical-conflict-${c.booking_id}`}>
-                <span className="font-bold text-stone-800">{c.room_name}</span>
-                <span className="text-red-600 font-semibold">{c.channel_name}: {c.block_start} → {c.block_end}</span>
-                <span className="text-stone-400">×</span>
-                <span className="flex-1 text-stone-700 truncate">Rezervasyon: {c.guest_name || c.booking_id} ({c.check_in} → {c.check_out})</span>
+              <div key={c.key} className="bg-white rounded-lg px-3 py-2 border border-red-200" data-testid={`ical-conflict-${c.booking_id}`}>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="font-bold text-stone-800">{c.room_name}</span>
+                  <span className="text-red-600 font-semibold">{c.channel_name}: {c.block_start} → {c.block_end}</span>
+                  <span className="text-stone-400">×</span>
+                  <span className="flex-1 text-stone-700 truncate">Rezervasyon: {c.guest_name || c.booking_id} ({c.check_in} → {c.check_out})</span>
+                  <button onClick={() => openResolver(c)} data-testid={`conflict-move-btn-${c.id}`}
+                    className="px-2.5 py-1 rounded bg-stone-900 text-white text-[10px] font-bold hover:bg-stone-700 flex-shrink-0">
+                    Odaya Taşı
+                  </button>
+                  <button onClick={() => resolve(c, "close_channel")} data-testid={`conflict-close-btn-${c.id}`}
+                    className="px-2.5 py-1 rounded bg-red-600 text-white text-[10px] font-bold hover:bg-red-700 flex-shrink-0">
+                    Kanalı Kapat
+                  </button>
+                </div>
+                {resolver?.conflict?.id === c.id && (
+                  <div className="mt-2 flex items-center gap-2" data-testid={`conflict-resolver-${c.id}`}>
+                    {resolver.options.length > 0 ? (
+                      <>
+                        <select value={resolver.target} onChange={(e) => setResolver({ ...resolver, target: e.target.value })}
+                          className="rounded border border-stone-200 px-2 py-1 text-xs" data-testid={`conflict-room-select-${c.id}`}>
+                          {resolver.options.map((o) => (
+                            <option key={o.room_id} value={o.room_id}>{o.name}{o.same_type ? " (aynı tip)" : ""}</option>
+                          ))}
+                        </select>
+                        <button onClick={() => resolve(c, "move_booking", resolver.target)} data-testid={`conflict-move-confirm-${c.id}`}
+                          className="px-2.5 py-1 rounded bg-emerald-600 text-white text-[10px] font-bold hover:bg-emerald-700">
+                          Taşımayı Onayla
+                        </button>
+                        <button onClick={() => setResolver(null)} className="text-[10px] text-stone-500 hover:text-stone-700">Vazgeç</button>
+                      </>
+                    ) : (
+                      <span className="text-[10px] text-red-600 font-semibold">Bu tarihlerde boş oda yok — "Kanalı Kapat" kullanın</span>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

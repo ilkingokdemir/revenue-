@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import TrialConversionPanel from "./TrialConversionPanel";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const cfg = { withCredentials: true };
@@ -88,6 +89,8 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
   return (
     <div className="p-5 max-w-[1200px] mx-auto space-y-4" data-testid="platform-admin-panel">
       <h1 className="text-2xl font-semibold text-stone-900">👑 Platform Yönetimi</h1>
+
+      <TrialConversionPanel />
 
       <Card title="🏨 Müşteri Otelleri — plan, sağlık skoru, askıya alma" tid="pa-tenants">
         <div className="space-y-1.5 max-h-72 overflow-auto">

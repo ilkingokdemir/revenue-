@@ -5,7 +5,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,23 @@ async def run_trial_email_check(db) -> dict:
     return {"checked": len(props), "sent": sent, "skipped": skipped}
 
 
+async def load_email_settings(db):
+    """DB'deki Resend ayarlarını env'e uygular (UI'dan girilen anahtar tüm modüllerde geçerli olsun)."""
+    s = await db.platform_settings.find_one({"id": "email"}, {"_id": 0})
+    if s and s.get("resend_api_key"):
+        os.environ["RESEND_API_KEY"] = s["resend_api_key"]
+        if s.get("sender_email"):
+            os.environ["SENDER_EMAIL"] = s["sender_email"]
+            os.environ["RESEND_FROM"] = s["sender_email"]
+            os.environ["FROM_EMAIL"] = s["sender_email"]
+    return s
+
+
 async def trial_email_loop(db, interval_seconds: int = 3600):
+    try:
+        await load_email_settings(db)
+    except Exception as e:
+        logger.warning(f"load_email_settings error: {e}")
     while True:
         try:
             r = await run_trial_email_check(db)
@@ -130,5 +146,128 @@ def create_trial_emails_router(db, require_roles):
             {"kind": {"$in": ["trial_reminder", "trial_upgrade"]}},
             {"_id": 0, "html": 0}).sort("created_at", -1).to_list(50)
         return {"items": items}
+
+    # ---- Deneme Dönüşüm Paneli ----
+    @router.get("/trial-conversion/summary")
+    async def trial_summary(user=Depends(require_roles("admin"))):
+        now = datetime.now(timezone.utc)
+        props = await db.properties.find(
+            {"signup_source": "self_signup"}, {"_id": 0}).sort("created_at", -1).to_list(500)
+        rows = []
+        for p in props:
+            days_left = None
+            try:
+                ends = datetime.fromisoformat(p["trial_ends_at"])
+                if ends.tzinfo is None:
+                    ends = ends.replace(tzinfo=timezone.utc)
+                days_left = round((ends - now).total_seconds() / 86400, 1)
+            except Exception:
+                pass
+            user_doc = await db.users.find_one(
+                {"property_ids": p["id"], "signup_source": "self_signup"}, {"_id": 0, "email": 1, "name": 1})
+            converted = bool(p.get("converted_at"))
+            status = "converted" if converted else ("expired" if (days_left is not None and days_left <= 0) else "active")
+            rows.append({"property_id": p["id"], "name": p.get("name"), "plan": p.get("plan"),
+                         "signup_at": p.get("trial_started_at") or p.get("created_at"),
+                         "trial_ends_at": p.get("trial_ends_at"), "days_left": days_left,
+                         "emails_sent": p.get("trial_emails_sent") or [],
+                         "owner_email": (user_doc or {}).get("email"), "owner_name": (user_doc or {}).get("name"),
+                         "status": status, "converted_at": p.get("converted_at"), "converted_plan": p.get("converted_plan")})
+        total = len(rows)
+        converted_n = sum(1 for r in rows if r["status"] == "converted")
+        return {"metrics": {"total": total, "active": sum(1 for r in rows if r["status"] == "active"),
+                            "expired": sum(1 for r in rows if r["status"] == "expired"),
+                            "converted": converted_n,
+                            "conversion_rate": round(converted_n * 100 / total, 1) if total else 0.0},
+                "trials": rows}
+
+    @router.post("/trial-conversion/{pid}/convert")
+    async def mark_converted(pid: str, body: dict, user=Depends(require_roles("admin"))):
+        plan = body.get("plan") or "pro"
+        if plan not in ("basic", "rms", "cm", "pro", "full"):
+            raise HTTPException(status_code=422, detail="plan: basic|rms|cm|pro|full")
+        p = await db.properties.find_one({"id": pid, "signup_source": "self_signup"}, {"_id": 0})
+        if not p:
+            raise HTTPException(status_code=404, detail="Deneme tesisi bulunamadı")
+        await db.properties.update_one({"id": pid}, {"$set": {
+            "plan": plan, "modules_enabled": "all" if plan == "full" else plan,
+            "converted_at": datetime.now(timezone.utc).isoformat(), "converted_plan": plan}})
+        return {"ok": True, "property_id": pid, "plan": plan}
+
+    @router.post("/trial-conversion/{pid}/send-upgrade-email")
+    async def send_upgrade_now(pid: str, user=Depends(require_roles("admin"))):
+        from routes.platform_ext.mailer import send_email
+        p = await db.properties.find_one({"id": pid, "signup_source": "self_signup"}, {"_id": 0})
+        if not p:
+            raise HTTPException(status_code=404, detail="Deneme tesisi bulunamadı")
+        u = await db.users.find_one({"property_ids": pid, "signup_source": "self_signup"}, {"_id": 0}) or \
+            await db.users.find_one({"property_ids": pid, "role": "manager"}, {"_id": 0})
+        if not u or not u.get("email"):
+            raise HTTPException(status_code=404, detail="Tesise bağlı kullanıcı e-postası yok")
+        upgrade_url = f"{_base_url()}/?upgrade=1&property={pid}"
+        subj, html = trial_email_html(p.get("name", "Oteliniz"), u.get("name", ""), "expired", 0, upgrade_url)
+        status = await send_email(db, u["email"], subj, html, kind="trial_upgrade",
+                                  meta={"property_id": pid, "stage": "manual"})
+        return {"ok": True, "to": u["email"], "status": status}
+
+    # ---- Resend E-posta Ayarları ----
+    @router.get("/email-settings")
+    async def get_email_settings(user=Depends(require_roles("admin"))):
+        s = await db.platform_settings.find_one({"id": "email"}, {"_id": 0}) or {}
+        key = s.get("resend_api_key") or ""
+        env_key = os.environ.get("RESEND_API_KEY", "")
+        env_active = bool(env_key and not env_key.startswith("re_1234") and env_key != "your_key_here")
+        return {"key_set": bool(key), "key_masked": (key[:6] + "•••" + key[-4:]) if key else None,
+                "sender_email": s.get("sender_email") or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev"),
+                "verified": s.get("verified", False), "live": env_active,
+                "updated_at": s.get("updated_at")}
+
+    @router.post("/email-settings")
+    async def save_email_settings(body: dict, user=Depends(require_roles("admin"))):
+        key = (body.get("resend_api_key") or "").strip()
+        sender = (body.get("sender_email") or "").strip()
+        if not key.startswith("re_") or len(key) < 12:
+            raise HTTPException(status_code=422, detail="Geçersiz anahtar — Resend anahtarları re_ ile başlar")
+        verified = False
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=12) as client:
+                r = await client.get("https://api.resend.com/domains",
+                                     headers={"Authorization": f"Bearer {key}"})
+            if r.status_code == 200:
+                verified = True
+            elif r.status_code in (400, 401, 403):
+                raise HTTPException(status_code=400, detail="Resend anahtarı geçersiz/reddedildi — anahtarı kontrol edin")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"resend verify unreachable: {e}")
+        doc = {"id": "email", "resend_api_key": key, "sender_email": sender,
+               "verified": verified, "updated_at": datetime.now(timezone.utc).isoformat()}
+        await db.platform_settings.update_one({"id": "email"}, {"$set": doc}, upsert=True)
+        await load_email_settings(db)
+        return {"ok": True, "verified": verified,
+                "message": "Anahtar doğrulandı — e-postalar artık CANLI gönderilecek ✅" if verified
+                else "Anahtar kaydedildi (Resend API'ye ulaşılamadı, gönderimde denenecek)"}
+
+    @router.delete("/email-settings")
+    async def delete_email_settings(user=Depends(require_roles("admin"))):
+        await db.platform_settings.delete_one({"id": "email"})
+        os.environ["RESEND_API_KEY"] = ""
+        return {"ok": True}
+
+    @router.post("/email-settings/test")
+    async def send_test_email(body: dict, user=Depends(require_roles("admin"))):
+        from routes.platform_ext.mailer import send_email
+        to = (body.get("to") or "").strip()
+        if "@" not in to:
+            raise HTTPException(status_code=422, detail="Geçerli bir e-posta adresi girin")
+        status = await send_email(db, to, "MyHotelBox — Test E-postası ✅",
+                                  "<p>Bu bir test e-postasıdır. Resend entegrasyonunuz çalışıyor! 🎉</p>",
+                                  kind="settings_test")
+        return {"ok": True, "status": status,
+                "message": "Gönderildi ✅" if status == "sent"
+                else ("Gönderim başarısız — anahtarı kontrol edin" if status == "failed"
+                      else "Anahtar yok/placeholder — MOCK olarak kaydedildi")}
 
     return router

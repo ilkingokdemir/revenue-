@@ -540,6 +540,18 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Süresi dolan deneme hesabı yazma denediğinde (403 trial_expired) yükseltme penceresi aç
+  useEffect(() => {
+    const iid = axios.interceptors.response.use(undefined, (err) => {
+      if (err?.response?.status === 403 && err?.response?.data?.code === "trial_expired") {
+        setUpsellFor({ name: "Deneme süreniz doldu — hesap salt-okunur modda", required: "pro" });
+      }
+      return Promise.reject(err);
+    });
+    return () => axios.interceptors.response.eject(iid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   // Sidebar permission gating map extracted to navigation/permMap.js (iter 386)
 

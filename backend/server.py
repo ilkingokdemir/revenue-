@@ -1859,6 +1859,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------- DENEME SÜRESİ SALT-OKUNUR KİLİDİ ----------
+from starlette.responses import JSONResponse as _TrialJSONResponse
+from routes.platform_ext.trial_emails import get_expired_trial_pids as _get_expired_trial_pids
+
+_TRIAL_WRITE_WHITELIST = ("/api/auth", "/api/platform/auth", "/api/trial-conversion", "/api/trial-emails",
+                          "/api/email-settings", "/api/payments", "/api/public", "/api/webhook",
+                          "/api/site-builder/public")
+
+
+@app.middleware("http")
+async def trial_readonly_guard(request, call_next):
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        path = request.url.path
+        if path.startswith("/api") and not path.startswith(_TRIAL_WRITE_WHITELIST):
+            try:
+                expired = await _get_expired_trial_pids(db)
+            except Exception:
+                expired = frozenset()
+            if expired:
+                segments = set(path.split("/")) | set(request.query_params.values())
+                hit = segments & expired
+                if hit:
+                    return _TrialJSONResponse(status_code=403, content={
+                        "detail": "Deneme süreniz doldu — hesap salt-okunur modda. Devam etmek için planınızı yükseltin.",
+                        "code": "trial_expired", "property_id": next(iter(hit))})
+    return await call_next(request)
+
 # ---------- PRODUCTION HARDENING (health, request-id, error handler, env validation) ----------
 from hardening import install_hardening
 install_hardening(app, db)

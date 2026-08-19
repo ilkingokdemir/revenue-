@@ -109,6 +109,62 @@ export const TrialConversionPanel = () => {
             </div>
           ))}
         </div>
+
+        {/* Dönüşüm hunisi + haftalık kohort */}
+        {data.funnel && (
+          <div className="grid md:grid-cols-2 gap-3 mb-4">
+            <div className="bg-stone-50 border border-stone-200 rounded-xl p-3" data-testid="trial-funnel">
+              <div className="text-[11px] font-black text-stone-600 uppercase mb-2">🔻 Dönüşüm Hunisi — kayıp nerede?</div>
+              <div className="space-y-1.5">
+                {data.funnel.map((f, i) => {
+                  const base = data.funnel[0].count || 1;
+                  const pct = Math.round((f.count / base) * 100);
+                  const prev = i > 0 ? data.funnel[i - 1].count : null;
+                  const loss = prev !== null && prev > 0 ? prev - f.count : 0;
+                  const colors = ["bg-stone-700", "bg-sky-500", "bg-amber-500", "bg-rose-400", "bg-emerald-500"];
+                  return (
+                    <div key={f.step} data-testid={`funnel-step-${i}`}>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-stone-700">{f.step}</span>
+                        <span className="text-stone-500">{f.count} <span className="font-black">%{pct}</span>
+                          {loss > 0 && <span className="text-rose-500 font-bold ml-1">−{loss} kayıp</span>}
+                        </span>
+                      </div>
+                      <div className="h-3 bg-stone-200 rounded-full overflow-hidden mt-0.5">
+                        <div className={`h-full rounded-full ${colors[i] || "bg-stone-500"} transition-all`} style={{ width: `${Math.max(pct, 2)}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="bg-stone-50 border border-stone-200 rounded-xl p-3" data-testid="trial-weekly">
+              <div className="text-[11px] font-black text-stone-600 uppercase mb-2">📅 Son 8 Hafta — kayıt vs dönüşüm (kohort)</div>
+              {(() => {
+                const maxV = Math.max(1, ...data.weekly.map((w) => w.signups));
+                return (
+                  <div className="flex items-end gap-1.5 h-28">
+                    {data.weekly.map((w) => (
+                      <div key={w.week} className="flex-1 flex flex-col items-center gap-0.5" data-testid={`week-${w.week}`}
+                        title={`${w.week}: ${w.signups} kayıt · ${w.conversions} dönüşüm`}>
+                        <span className="text-[9px] font-black text-stone-500">{w.signups > 0 ? w.signups : ""}</span>
+                        <div className="w-full flex items-end justify-center gap-0.5" style={{ height: "70px" }}>
+                          <div className="w-2/5 bg-sky-400 rounded-t" style={{ height: `${(w.signups / maxV) * 100}%`, minHeight: w.signups ? 3 : 0 }} />
+                          <div className="w-2/5 bg-emerald-500 rounded-t" style={{ height: `${(w.conversions / maxV) * 100}%`, minHeight: w.conversions ? 3 : 0 }} />
+                        </div>
+                        <span className="text-[8px] text-stone-400 whitespace-nowrap">{w.week}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+              <div className="flex gap-3 mt-1.5 text-[10px] text-stone-500">
+                <span><span className="inline-block w-2 h-2 bg-sky-400 rounded-sm mr-1" />Kayıt</span>
+                <span><span className="inline-block w-2 h-2 bg-emerald-500 rounded-sm mr-1" />Dönüşüm</span>
+              </div>
+            </div>
+          </div>
+        )}
         {data.trials.length === 0 ? (
           <p className="text-xs text-stone-400" data-testid="trial-empty">Henüz self-signup deneme hesabı yok.</p>
         ) : (

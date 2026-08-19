@@ -3,7 +3,7 @@ import os
 import uuid
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -13,6 +13,26 @@ STAGES = {
     "t3": {"days_max": 3, "kind": "trial_reminder"},
     "expired": {"days_max": 0, "kind": "trial_upgrade"},
 }
+
+_expired_cache = {"pids": frozenset(), "ts": 0.0}
+
+
+def invalidate_trial_cache():
+    _expired_cache["ts"] = 0.0
+
+
+async def get_expired_trial_pids(db) -> frozenset:
+    """Süresi dolmuş + dönüşmemiş self-signup tesis id'leri (30 sn cache)."""
+    import time
+    if time.time() - _expired_cache["ts"] < 30:
+        return _expired_cache["pids"]
+    now_iso = datetime.now(timezone.utc).isoformat()
+    docs = await db.properties.find(
+        {"signup_source": "self_signup", "converted_at": {"$exists": False},
+         "trial_ends_at": {"$lt": now_iso}}, {"_id": 0, "id": 1}).to_list(500)
+    _expired_cache["pids"] = frozenset(d["id"] for d in docs)
+    _expired_cache["ts"] = time.time()
+    return _expired_cache["pids"]
 
 
 def _base_url() -> str:
@@ -175,10 +195,43 @@ def create_trial_emails_router(db, require_roles):
                          "status": status, "converted_at": p.get("converted_at"), "converted_plan": p.get("converted_plan")})
         total = len(rows)
         converted_n = sum(1 for r in rows if r["status"] == "converted")
+        # Huni: Kayıt → Kuruluma Başladı → Hatırlatma Aldı → Süre Doldu → Dönüştü
+        pids = [r["property_id"] for r in rows]
+        setup_pids = set()
+        for coll in (db.rms_setup, db.room_types):
+            async for d in coll.find({"property_id": {"$in": pids}}, {"_id": 0, "property_id": 1}):
+                setup_pids.add(d["property_id"])
+        expired_reached = sum(1 for r in rows if r["days_left"] is not None and r["days_left"] <= 0)
+        funnel = [
+            {"step": "Kayıt", "count": total},
+            {"step": "Kuruluma Başladı", "count": sum(1 for r in rows if r["property_id"] in setup_pids)},
+            {"step": "Hatırlatma E-postası Aldı", "count": sum(1 for r in rows if r["emails_sent"])},
+            {"step": "Süre Doldu", "count": expired_reached},
+            {"step": "Dönüştü", "count": converted_n},
+        ]
+        # Son 8 hafta kohortu (kayıt haftasına göre: kayıt sayısı + o kohorttan dönüşenler)
+        weeks = []
+        monday = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        for i in range(7, -1, -1):
+            ws = monday - timedelta(weeks=i)
+            we = ws + timedelta(weeks=1)
+            cohort = []
+            for r in rows:
+                try:
+                    su = datetime.fromisoformat(r["signup_at"])
+                    if su.tzinfo is None:
+                        su = su.replace(tzinfo=timezone.utc)
+                except Exception:
+                    continue
+                if ws <= su < we:
+                    cohort.append(r)
+            weeks.append({"week": ws.strftime("%d %b"), "signups": len(cohort),
+                          "conversions": sum(1 for r in cohort if r["status"] == "converted")})
         return {"metrics": {"total": total, "active": sum(1 for r in rows if r["status"] == "active"),
                             "expired": sum(1 for r in rows if r["status"] == "expired"),
                             "converted": converted_n,
                             "conversion_rate": round(converted_n * 100 / total, 1) if total else 0.0},
+                "funnel": funnel, "weekly": weeks,
                 "trials": rows}
 
     @router.post("/trial-conversion/{pid}/convert")
@@ -192,6 +245,7 @@ def create_trial_emails_router(db, require_roles):
         await db.properties.update_one({"id": pid}, {"$set": {
             "plan": plan, "modules_enabled": "all" if plan == "full" else plan,
             "converted_at": datetime.now(timezone.utc).isoformat(), "converted_plan": plan}})
+        invalidate_trial_cache()
         return {"ok": True, "property_id": pid, "plan": plan}
 
     @router.post("/trial-conversion/{pid}/send-upgrade-email")

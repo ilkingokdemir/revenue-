@@ -169,10 +169,13 @@ def create_data_quality_router(db, require_roles):
     router = APIRouter(prefix="/data-quality", tags=["data-quality"])
 
     @router.get("/summary/all")
-    async def summary_all(_: dict = Depends(require_roles("admin", "manager"))):
+    async def summary_all(u: dict = Depends(require_roles("admin", "manager"))):
         """Nöbetçi özeti: tüm tesislerin son tarama skoru (dashboard sağlık şeridi)."""
-        props = await db.properties.find(
-            {"is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1}).to_list(50)
+        q = {"is_active": {"$ne": False}}
+        scoped = u.get("property_ids")
+        if scoped and u.get("role") != "admin":
+            q["id"] = {"$in": scoped}
+        props = await db.properties.find(q, {"_id": 0, "id": 1, "name": 1}).to_list(50)
         out = []
         for p in props:
             scan = await db.data_quality_scans.find_one(

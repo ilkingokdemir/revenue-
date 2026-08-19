@@ -271,6 +271,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     try {
       const { data } = await axios.get(`${API}/properties`);
       setProperties(data);
+      if (Array.isArray(data) && data.length === 1) {
+        setActivePropertyId(data[0].id);
+      }
     } catch (e) {
       console.error("Error fetching properties:", e);
     }
@@ -684,6 +687,26 @@ const Dashboard = ({ user, onLogout, permissions }) => {
               </SelectContent>
             </Select>
           </div>
+          {/* Deneme süresi rozeti (self-signup hesaplar) */}
+          {(() => {
+            const ap = properties.find((p) => p.id === activePropertyId);
+            if (!ap?.trial_ends_at) return null;
+            const days = Math.ceil((new Date(ap.trial_ends_at) - Date.now()) / 86400000);
+            const expired = days <= 0;
+            const warn = days <= 3;
+            return (
+              <button
+                data-testid="trial-badge"
+                onClick={() => setUpsellFor({ name: expired ? "Deneme süreniz doldu" : "14 Günlük Deneme", required: "pro" })}
+                className={`mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors ${
+                  expired ? "bg-red-600/20 text-red-400 border border-red-500/40 hover:bg-red-600/30"
+                  : warn ? "bg-amber-500/15 text-amber-400 border border-amber-500/40 hover:bg-amber-500/25"
+                  : "bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/20"}`}>
+                <Lightning size={11} weight="fill" />
+                {expired ? "Süre doldu — Yükseltin" : `Deneme: ${days} gün kaldı`}
+              </button>
+            );
+          })()}
         </div>
 
         {/* Navigation */}

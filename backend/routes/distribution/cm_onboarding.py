@@ -27,8 +27,14 @@ def create_cm_onboarding_router(db, require_roles):
     async def _setup(pid: str) -> dict:
         return await db.cm_setup.find_one({"property_id": pid}, {"_id": 0}) or {"property_id": pid}
 
+    def _check_scope(u: dict, pid: str):
+        scoped = u.get("property_ids")
+        if scoped and u.get("role") != "admin" and pid not in scoped:
+            raise HTTPException(403, "Bu tesise erişim yetkiniz yok")
+
     @router.get("/setup/{pid}")
     async def get_setup(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        _check_scope(_u, pid)
         q = {"property_id": pid} if pid != "default" else {"property_id": {"$in": [pid, "all"]}}
         conns = await db.channel_connections.find(q, {"_id": 0}).to_list(30)
         rts = await db.room_types.find({"property_id": pid}, {"_id": 0, "id": 1, "name": 1}).to_list(50)
@@ -39,6 +45,7 @@ def create_cm_onboarding_router(db, require_roles):
 
     @router.post("/setup/{pid}/channels")
     async def save_channels(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        _check_scope(_u, pid)
         ids = data.get("channel_ids") or []
         if not ids:
             raise HTTPException(400, "channel_ids zorunlu")
@@ -62,6 +69,7 @@ def create_cm_onboarding_router(db, require_roles):
 
     @router.post("/setup/{pid}/mapping")
     async def save_mapping(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        _check_scope(_u, pid)
         rows = data.get("mappings") or []
         saved = 0
         for m in rows:
@@ -80,6 +88,7 @@ def create_cm_onboarding_router(db, require_roles):
 
     @router.post("/setup/{pid}/sync-settings")
     async def save_sync(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        _check_scope(_u, pid)
         scope = data.get("ari_scope", "full")
         if scope not in ("full", "custom"):
             raise HTTPException(422, "ari_scope: full|custom")
@@ -93,6 +102,7 @@ def create_cm_onboarding_router(db, require_roles):
     @router.post("/test-push/{pid}")
     async def test_push(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         """Bağlı tüm kanallara mock ARI test push'u (gerçek OTA anahtarları gelince canlı)."""
+        _check_scope(_u, pid)
         conns = await db.channel_connections.find(
             {"property_id": pid, "connected": True}, {"_id": 0, "channel_id": 1, "name": 1}).to_list(30)
         if not conns:
@@ -114,6 +124,7 @@ def create_cm_onboarding_router(db, require_roles):
 
     @router.get("/golive/{pid}")
     async def golive(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        _check_scope(_u, pid)
         setup = await _setup(pid)
         rts = await db.room_types.count_documents({"property_id": pid})
         conns = await db.channel_connections.count_documents({"property_id": pid, "connected": True})
@@ -131,5 +142,59 @@ def create_cm_onboarding_router(db, require_roles):
         score = round(sum(1 for c in checks if c["ok"]) / len(checks) * 100)
         return {"score": score, "ready": score >= 80, "checks": checks,
                 "channels_connected": conns, "mapping_coverage_pct": coverage}
+
+    # ---------------- EXPRESS CONNECT: KANAL LISTING AÇMA ----------------
+    @router.get("/listings/{pid}")
+    async def get_listings(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        _check_scope(_u, pid)
+        rows = await db.channel_listings.find({"property_id": pid}, {"_id": 0}).sort("created_at", -1).to_list(50)
+        # Mock ilerleme: incelemedeki başvurular 60 sn sonra canlıya geçer
+        now = datetime.now(timezone.utc)
+        for r in rows:
+            if r.get("status") == "in_review" and r.get("submitted_at"):
+                try:
+                    sub = datetime.fromisoformat(r["submitted_at"])
+                    if (now - sub).total_seconds() > 60:
+                        tl = r.get("timeline", []) + [{"step": "live", "at": now_iso(),
+                                                       "note": "Listing yayında (MOCK — canlı OTA anahtarı gelince gerçek)"}]
+                        await db.channel_listings.update_one({"id": r["id"]},
+                                                             {"$set": {"status": "live", "timeline": tl}})
+                        r["status"], r["timeline"] = "live", tl
+                except Exception:
+                    pass
+        return {"listings": rows, "catalog": CHANNEL_CATALOG}
+
+    @router.post("/listings/{pid}")
+    async def create_listing(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        _check_scope(_u, pid)
+        cid = data.get("channel_id")
+        cat = {c["channel_id"]: c for c in CHANNEL_CATALOG}
+        if cid not in cat:
+            raise HTTPException(422, "Geçersiz kanal")
+        content = data.get("content") or {}
+        if not (content.get("description") or "").strip():
+            raise HTTPException(400, "Tesis açıklaması zorunlu")
+        doc = {"id": str(uuid.uuid4()), "property_id": pid, "channel_id": cid,
+               "channel_name": cat[cid]["name"], "content": content, "status": "draft",
+               "timeline": [{"step": "draft", "at": now_iso(), "note": "Taslak oluşturuldu"}],
+               "created_by": _u.get("name", ""), "created_at": now_iso()}
+        await db.channel_listings.insert_one({**doc})
+        doc.pop("_id", None)
+        return {"ok": True, "listing": doc}
+
+    @router.post("/listings/{pid}/{lid}/submit")
+    async def submit_listing(pid: str, lid: str, _u: dict = Depends(require_roles(*ROLES))):
+        _check_scope(_u, pid)
+        r = await db.channel_listings.find_one({"id": lid, "property_id": pid}, {"_id": 0})
+        if not r:
+            raise HTTPException(404, "Listing bulunamadı")
+        if r.get("status") not in ("draft", "rejected"):
+            raise HTTPException(400, "Sadece taslak başvurular gönderilebilir")
+        tl = r.get("timeline", []) + [
+            {"step": "submitted", "at": now_iso(), "note": f"{r['channel_name']} başvurusu gönderildi (MOCK)"},
+            {"step": "in_review", "at": now_iso(), "note": "Kanal tarafında incelemede — ~1 dk sürer (MOCK)"}]
+        await db.channel_listings.update_one({"id": lid},
+                                             {"$set": {"status": "in_review", "submitted_at": now_iso(), "timeline": tl}})
+        return {"ok": True, "status": "in_review", "mocked": True}
 
     return router

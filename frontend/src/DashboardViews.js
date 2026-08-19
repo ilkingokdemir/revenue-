@@ -212,6 +212,7 @@ import {
   RmsComparisonPanel,
   RmsSetupWizard,
   CmSetupWizard,
+  ChannelListingPanel,
   PriceGuardsPanel,
   MarketingRadarPanel,
   BIChatPanel,
@@ -811,6 +812,9 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         )}
         {activeView === "cm-setup" && (
           <CmSetupWizard activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "channel-listings" && (
+          <ChannelListingPanel activePropertyId={activePropertyId} properties={properties} />
         )}
         {activeView === "price-guards" && (
           <PriceGuardsPanel activePropertyId={activePropertyId} properties={properties} />

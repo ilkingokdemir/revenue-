@@ -334,6 +334,7 @@ export function buildMenuSections(t, user) {
       items: [
         { id: "chmgr-hub", icon: Lightning, name: "Channel manager hub", testId: "chmgr-hub-btn", core: true },
         { id: "cm-setup", icon: MagicWand, name: "CM Hızlı Kurulum", testId: "cm-setup-btn", core: true },
+        { id: "channel-listings", icon: Storefront, name: "Kanal Listing Açma", testId: "channel-listings-btn", core: true },
         { id: "channels-v2", icon: CloudArrowUp, name: "Channel Manager v2", testId: "channels-v2-btn" },
         { id: "channel-settings", icon: Gear, name: t("nav.channel_settings"), testId: "channel-settings-btn" },
         { id: "channel-map-matrix", icon: Buildings, name: "Channel mappings", testId: "channel-map-matrix-btn" },

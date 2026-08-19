@@ -87,15 +87,18 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
 
         slug = _re.sub(r"[^a-z0-9]+", "-", hotel_name.lower()).strip("-")[:24] or "hotel"
         pid = f"{slug}-{str(_uuid.uuid4())[:6]}"
+        trial_ends = (datetime.now(timezone.utc) + timedelta(days=14)).isoformat()
         await db.properties.insert_one({
             "id": pid, "name": hotel_name, "address": "", "city": "", "country": "",
             "property_type": "hotel", "is_active": True, "plan": plan,
             "modules_enabled": "all" if plan == "full" else plan, "signup_source": "self_signup",
+            "trial_started_at": datetime.now(timezone.utc).isoformat(), "trial_ends_at": trial_ends,
             "created_at": datetime.now(timezone.utc).isoformat()})
         from routes.platform_ext.provisioning import provision_property
         await provision_property(db, pid, hotel_name)
         await db.properties.update_one({"id": pid}, {"$set": {"plan": plan,
-                                                              "modules_enabled": "all" if plan == "full" else plan}})
+                                                              "modules_enabled": "all" if plan == "full" else plan,
+                                                              "trial_ends_at": trial_ends}})
 
         new_user = {
             "id": str(_uuid.uuid4()), "email": email, "password_hash": hash_password(password),
@@ -105,6 +108,15 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
         result = await db.users.insert_one(new_user)
         await db.signup_log.insert_one({"ip": client_ip, "email": email, "property_id": pid,
                                         "created_at": datetime.now(timezone.utc).isoformat()})
+
+        # Karşılama e-postası (Resend anahtarı yoksa mock)
+        try:
+            from routes.platform_ext.mailer import send_email, welcome_email_html
+            subj, html = welcome_email_html(hotel_name, name, plan)
+            await send_email(db, email, subj, html, kind="welcome",
+                             meta={"property_id": pid, "plan": plan})
+        except Exception:
+            pass
 
         user_id = str(result.inserted_id)
         access_token = create_access_token(user_id, email)

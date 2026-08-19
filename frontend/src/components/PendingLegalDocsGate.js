@@ -150,10 +150,10 @@ export const PendingLegalDocsGate = ({ user }) => {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-black" data-testid="gate-title">{doc.title}</h2>
-              <p className="text-[11px] opacity-75 mt-0.5">
+              <div className="text-[11px] opacity-75 mt-0.5 flex items-center">
                 <Badge className="bg-white/10 text-white border-white/20 text-[9px] mr-1">v{doc.version}</Badge>
                 <code className="opacity-70">{doc.code}</code>
-              </p>
+              </div>
             </div>
             <Scale className="w-6 h-6 opacity-50 flex-shrink-0" />
           </div>

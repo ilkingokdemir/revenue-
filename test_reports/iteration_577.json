@@ -1,0 +1,32 @@
+{
+  "summary": "Iter 577 confirmation + regression + cleanup for: (1) 'Kanal Listing Açma' Express-Connect style listings (mocked draft→submitted→in_review→live after 60s), (2) welcome email via Resend (placeholder key -> mocked in email_outbox), (3) 14-day trial counter with sidebar badge + upsell modal, (4) tenant isolation on /api/data-quality/summary/all. Backend: 12/12 pytest PASSED (test_iter577_listings_welcome_trial.py). Frontend: full E2E green — signup user login → 6/6 legal docs accepted (auto with consent checkbox + signature) → single-property auto-selected in branch selector (tenant isolation confirmed visually) → trial-badge shows 'Deneme: 14 gün kaldı' → click opens plan-upsell-modal → sidebar Kanal Listing Açma opens ChannelListingPanel → filled desc + 'Taslak Oluştur' produced draft card (Booking.com by default) → 'Başvuruyu Gönder' produced toast 'Başvuru gönderildi — inceleme ~1 dk sürer (mock)' + timeline chips Taslak→Gönderildi→İncelemede + MOCK badge visible + 'Canlı' next step rendered. Cleanup complete.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PendingLegalDocsGate", "issue": "React hydration warning persists: <div> cannot be a descendant of <p> (Badge rendered inside <p> in header at line 153). Non-blocking. Same as iter576.", "selector": "[data-testid='legal-gate'] p > .badge", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter577_listings_welcome_trial.py",
+    "/app/test_reports/pytest/iter577.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: fix hydration warning in PendingLegalDocsGate.js line 153 (wrap Badge in <span> instead of putting it inside <p>). Same finding as iter576."
+  ],
+  "critical_code_review_comments": [
+    "POSITIVE: cm_onboarding.py listings endpoints are compact and correct — draft creation validates content.description (400) and channel_id (422); submit guards against non-draft/rejected (400); GET auto-advances in_review→live after 60s in a single pass with proper timeline append (idempotent because condition requires status==in_review).",
+    "POSITIVE: mailer.py cleanly treats placeholder key 're_123456789' as absent -> status='mocked' path; email_outbox insert is unconditional so audit trail exists in both paths.",
+    "POSITIVE: /auth/signup provisions property with plan-aware modules_enabled, sets trial_started_at + trial_ends_at (14 days), inserts users with property_ids=[pid] enabling tenant isolation downstream. welcome email failure is swallowed in try/except so signup never fails due to mailer issues.",
+    "POSITIVE: /properties listing uses property_ids filter for non-admins (line 267-269) — verified in both backend test and UI (branch selector shows only 1 hotel for signup user).",
+    "MINOR: /api/cm/listings/{pid} does not enforce that the user belongs to pid (no property_id membership check) — a signup user could pass an arbitrary pid string. Same pattern as other cm_onboarding endpoints, so consistent, but a tenant-scope guard on pid would be tighter. Not a new regression."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter577_listings_welcome_trial.py"],
+  "success_rate": {"backend": "100% (12/12 pytest)", "frontend": "100% for all listed FE flows"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! unchanged. Ephemeral signup users iter577_*, iter577fe_*, iter577fex_* all deleted.",
+  "seed_data_creation": "Created and CLEANED UP 3 self-signup test tenants (iter577-otel-832bc9-*, iter577fe-4d892a-*, iter577fex-78db53-*). Also purged pre-existing 'trial-test-otel-263ce8' and 'mock-mail-otel-d23868' per request. Default property preserved with plan='full'.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 4 features (Express Connect listings, welcome email mock, 14-day trial badge, /data-quality/summary/all tenant isolation) are fully working end-to-end. Signup rate limit is strict: 3 successful signups per IP per 10 min — test plans must budget accordingly (this run used all 3). Legal gate now requires: check 'I consent to data processing' checkbox + type signature into 'Type your full name as signature' input + click 'Accept & Continue' — automated 6-doc acceptance loop works reliably (see test_iter577_listings_welcome_trial.py peer FE script pattern above). Only lingering low-prio issue is the hydration warning in PendingLegalDocsGate.js:153 (div inside p, Badge component)."
+}

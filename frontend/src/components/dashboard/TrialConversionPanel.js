@@ -56,6 +56,13 @@ export const TrialConversionPanel = () => {
     } catch (e) { toast.error(e.response?.data?.detail || "İşlem başarısız"); }
   };
 
+  const extendTrial = async (pid) => {
+    try {
+      const r = await axios.post(`${API}/api/trial-conversion/${pid}/extend`, {}, cfg);
+      toast.success(`Deneme 7 gün uzatıldı → yeni bitiş: ${new Date(r.data.trial_ends_at).toLocaleDateString("tr-TR")}`); load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Uzatılamadı"); }
+  };
+
   const sendUpgrade = async (pid) => {
     try {
       const r = await axios.post(`${API}/api/trial-conversion/${pid}/send-upgrade-email`, {}, cfg);
@@ -189,6 +196,9 @@ export const TrialConversionPanel = () => {
                   </div>
                   {t.status !== "converted" && (
                     <>
+                      <button onClick={() => extendTrial(t.property_id)} data-testid={`trial-extend-${t.property_id}`}
+                        title="Denemeyi 7 gün uzat — süresi dolmuşsa kilit anında açılır"
+                        className="px-2 py-1 rounded-lg border border-indigo-300 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50">+7 gün</button>
                       <button onClick={() => sendUpgrade(t.property_id)} data-testid={`trial-send-email-${t.property_id}`}
                         className="px-2 py-1 rounded-lg border border-stone-300 text-[10px] font-bold text-stone-600 hover:bg-stone-100">✉ Yükseltme Maili</button>
                       <select value={convertPlan[t.property_id] || "pro"} data-testid={`trial-plan-select-${t.property_id}`}

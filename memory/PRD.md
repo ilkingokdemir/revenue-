@@ -1101,3 +1101,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 ## Güncelleme (2026-08-19, SALT-OKUNUR BANNER + CLOUDBEDS MOCK SERTİFİKASYON — e2e PASS)
 - BANNER: App.js <main> başında sticky kırmızı şerit (trial-readonly-banner) — properties içinde signup_source=self_signup + trial_ends_at geçmiş + converted_at yok olan (aktif şube veya All Branches) tesis varsa görünür; "Planı Yükselt →" (trial-readonly-upgrade-btn) PlanUpsellModal'i açar. Screenshot ile doğrulandı (banner + modal), test tesisi temizlendi.
 - CLOUDBEDS SERTİFİKASYON (MOCK e2e): POST /api/cloudbeds/certify/default → passed:true mode:mocked (test push MOCK + geri okuma doğrulaması eşleşti), push-preview ve push-from-rms mock akışları çalışıyor. Kullanıcı API anahtarını CloudbedsPanel'den girince aynı akış CANLI modda tekrarlanacak (anahtar hâlâ bekleniyor).
+
+## Güncelleme (2026-08-19, DENEME UZATMA BUTONU — e2e PASS)
+- POST /api/trial-conversion/{pid}/extend (admin): trial_ends_at = max(şimdi, mevcut bitiş) + 7 gün; trial_emails_sent'ten t3/expired $pull edilir (hatırlatmalar yeni döneme göre yeniden kurulur); invalidate_trial_cache() ile salt-okunur kilit ANINDA açılır.
+- UI: TrialConversionPanel satırlarında "+7 gün" butonu (trial-extend-{pid}), toast'ta yeni bitiş tarihi.
+- Test: süresi dolmuş tesiste yazma 403 → extend → yazma 200 + status active + days_left 7 + emails_sent [] (curl); UI buton + toast screenshot PASS. Test verisi temizlendi.
+- BACKLOG'DAN KALDIRILDI: Cloudbeds Canlı Sertifikasyon — kullanıcının Cloudbeds hesabı/anahtarı yok (mock akış hazır ve test edildi, anahtar gelirse CloudbedsPanel'den girilir).

@@ -248,6 +248,25 @@ def create_trial_emails_router(db, require_roles):
         invalidate_trial_cache()
         return {"ok": True, "property_id": pid, "plan": plan}
 
+    @router.post("/trial-conversion/{pid}/extend")
+    async def extend_trial(pid: str, user=Depends(require_roles("admin"))):
+        p = await db.properties.find_one({"id": pid, "signup_source": "self_signup"}, {"_id": 0})
+        if not p:
+            raise HTTPException(status_code=404, detail="Deneme tesisi bulunamadı")
+        now = datetime.now(timezone.utc)
+        try:
+            cur = datetime.fromisoformat(p["trial_ends_at"])
+            if cur.tzinfo is None:
+                cur = cur.replace(tzinfo=timezone.utc)
+        except Exception:
+            cur = now
+        new_end = (max(now, cur) + timedelta(days=7)).isoformat()
+        await db.properties.update_one({"id": pid}, {
+            "$set": {"trial_ends_at": new_end},
+            "$pull": {"trial_emails_sent": {"$in": ["t3", "expired"]}}})
+        invalidate_trial_cache()
+        return {"ok": True, "property_id": pid, "trial_ends_at": new_end}
+
     @router.post("/trial-conversion/{pid}/send-upgrade-email")
     async def send_upgrade_now(pid: str, user=Depends(require_roles("admin"))):
         from routes.platform_ext.mailer import send_email

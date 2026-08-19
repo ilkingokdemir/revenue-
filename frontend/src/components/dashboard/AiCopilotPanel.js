@@ -18,11 +18,16 @@ const MODULES = [
 export default function AiCopilotPanel({ activePropertyId, properties, onNavigate }) {
   const pid = activePropertyId && activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default");
   const [stats, setStats] = useState({});
+  const [today, setToday] = useState([]);
 
   const load = useCallback(async () => {
     try {
-      const { data } = await axios.get(`${API}/ai-copilot/summary/${pid}`);
-      setStats(data);
+      const [{ data: s }, { data: t }] = await Promise.all([
+        axios.get(`${API}/ai-copilot/summary/${pid}`),
+        axios.get(`${API}/ai-copilot/today/${pid}`),
+      ]);
+      setStats(s);
+      setToday(t.tasks || []);
     } catch { /* silent */ }
   }, [pid]);
 
@@ -47,6 +52,26 @@ export default function AiCopilotPanel({ activePropertyId, properties, onNavigat
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Bugün ne yapmalıyım */}
+      <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm mb-6" data-testid="copilot-today-card">
+        <h3 className="text-sm font-black text-stone-800 mb-3">📋 Bugün ne yapmalıyım?</h3>
+        <div className="space-y-2">
+          {today.map((t, i) => (
+            <button key={i} onClick={() => onNavigate && onNavigate(t.view)} data-testid={`copilot-task-${i}`}
+              className="w-full text-left flex items-start gap-3 rounded-xl border border-stone-100 px-3 py-2.5 hover:border-indigo-300 hover:bg-indigo-50/40 transition-colors">
+              <span className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${
+                t.severity === "high" ? "bg-red-500" : t.severity === "medium" ? "bg-amber-500"
+                : t.severity === "ok" ? "bg-emerald-500" : "bg-stone-300"}`} />
+              <span className="flex-1">
+                <span className="block text-xs font-bold text-stone-800">{t.title}</span>
+                <span className="block text-[10px] text-stone-500">{t.detail}</span>
+              </span>
+              <ArrowRight size={13} className="mt-1 text-stone-300" />
+            </button>
+          ))}
         </div>
       </div>
 

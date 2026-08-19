@@ -30,14 +30,18 @@ export default function HotelSitePage({ propertyId }) {
     ? rawAm.map((x) => String(x).trim()).filter(Boolean)
     : String(rawAm || "").split(",").map((x) => x.trim()).filter(Boolean);
   const heroDark = data.site.template !== "boutique";
+  const cover = (data.photos || []).find((p) => p.kind === "cover");
+  const gallery = (data.photos || []).filter((p) => p.kind === "gallery");
+  const apiBase = process.env.REACT_APP_BACKEND_URL;
 
   return (
     <div className={`min-h-screen ${t.bg} ${t.text}`} data-testid="hotel-site-page">
-      <div className={`${t.hero} px-6 py-24 text-center`}>
-        <h1 className={`text-4xl sm:text-5xl lg:text-6xl font-black ${heroDark ? "text-white" : "text-stone-900"}`} data-testid="site-hero-title">{name}</h1>
-        {c.headline && <p className={`mt-4 text-base md:text-lg ${heroDark ? "text-white/80" : "text-stone-600"}`}>{c.headline}</p>}
+      <div className={`${t.hero} px-6 py-24 text-center relative overflow-hidden`}
+        style={cover ? { backgroundImage: `linear-gradient(rgba(0,0,0,.45), rgba(0,0,0,.55)), url(${apiBase}${cover.url})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
+        <h1 className={`relative text-4xl sm:text-5xl lg:text-6xl font-black ${heroDark || cover ? "text-white" : "text-stone-900"}`} data-testid="site-hero-title">{name}</h1>
+        {c.headline && <p className={`relative mt-4 text-base md:text-lg ${heroDark || cover ? "text-white/80" : "text-stone-600"}`}>{c.headline}</p>}
         <a href={`/book/${propertyId}`} data-testid="site-book-cta"
-          className={`inline-block mt-8 px-8 py-3 rounded-full text-sm font-black text-white ${t.accent} transition-colors`}>
+          className={`relative inline-block mt-8 px-8 py-3 rounded-full text-sm font-black text-white ${t.accent} transition-colors`}>
           Rezervasyon Yap
         </a>
       </div>
@@ -55,6 +59,16 @@ export default function HotelSitePage({ propertyId }) {
             <div className="flex flex-wrap gap-2">
               {amenities.map((a) => (
                 <span key={a} className={`text-xs px-3 py-1.5 rounded-full ${t.card}`}>{a}</span>
+              ))}
+            </div>
+          </section>
+        )}
+        {gallery.length > 0 && (
+          <section data-testid="site-gallery">
+            <h2 className="text-lg font-bold mb-3">Galeri</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {gallery.map((p) => (
+                <img key={p.id} src={`${apiBase}${p.url}`} alt="galeri" className="w-full h-40 object-cover rounded-xl" loading="lazy" />
               ))}
             </div>
           </section>

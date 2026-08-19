@@ -46,6 +46,7 @@ export default function TerminalPanel({ activePropertyId, properties }) {
       const { data } = await axios.post(`${API}/terminal/${pid}/charge`,
         { amount: parseFloat(amount), reader_id: selReader, booking_id: bookingId });
       toast.success(`Ödeme ${data.payment.status === "succeeded" ? "TAMAMLANDI ✅" : `cihaza gönderildi (${data.payment.status})`} — £${amount}`);
+      if (data.folio_posted) toast.success("Folyoya otomatik işlendi — çift kayıt gerekmez");
       setAmount(""); load();
     } catch (e) { toast.error(e.response?.data?.detail || "Ödeme başarısız"); }
     setBusy(false);

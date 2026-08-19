@@ -78,7 +78,28 @@ def create_terminal_router(db, require_roles):
                    "created_by": _u.get("name", ""), "created_at": now_iso()}
             await db.terminal_payments.insert_one({**doc})
             doc.pop("_id", None)
-            return {"ok": True, "payment": doc}
+            # Folyoya otomatik işle — resepsiyon çift kayıt yapmasın
+            folio_posted = False
+            bid = (data.get("booking_id") or "").strip()
+            if bid and pi.status == "succeeded":
+                booking = await db.bookings.find_one({"id": bid}, {"_id": 0, "currency": 1, "total_price": 1})
+                if booking:
+                    await db.folio_items.insert_one({
+                        "id": str(uuid.uuid4()), "booking_id": bid, "type": "payment",
+                        "category": "card", "payment_method": "card", "channel": "",
+                        "description": f"Terminal ödemesi · {reader_id[-6:]}",
+                        "quantity": 1, "unit_price": amount, "amount": amount,
+                        "currency": booking.get("currency", "GBP"), "reference": pi.id,
+                        "sub_folio_id": None, "created_at": now_iso(),
+                        "created_by": _u.get("name", "terminal")})
+                    items = await db.folio_items.find({"booking_id": bid}, {"_id": 0, "type": 1, "amount": 1}).to_list(500)
+                    charges = sum(float(i.get("amount", 0)) for i in items if i.get("type") == "charge")
+                    pays = sum(float(i.get("amount", 0)) for i in items if i.get("type") == "payment")
+                    gross = charges if charges > 0 else float(booking.get("total_price") or 0)
+                    status = "paid" if gross - pays <= 0 else ("partial" if pays > 0 else "pending")
+                    await db.bookings.update_one({"id": bid}, {"$set": {"payment_status": status}})
+                    folio_posted = True
+            return {"ok": True, "payment": doc, "folio_posted": folio_posted}
         except HTTPException:
             raise
         except Exception as e:

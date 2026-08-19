@@ -11,7 +11,24 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
   const [tpl, setTpl] = useState("classic");
   const [published, setPublished] = useState(false);
   const [content, setContent] = useState({ headline: "", about: "", amenities: "", phone: "", email: "", address: "" });
+  const [photos, setPhotos] = useState([]);
   const [busy, setBusy] = useState(false);
+
+  const uploadPhoto = async (kind, file) => {
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      await axios.post(`${API}/site-builder/${pid}/photos?kind=${kind}`, fd);
+      toast.success(kind === "cover" ? "Kapak fotoğrafı yüklendi" : "Galeriye eklendi");
+      load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Yüklenemedi"); }
+  };
+
+  const deletePhoto = async (photoId) => {
+    try { await axios.delete(`${API}/site-builder/${pid}/photos/${photoId}`); load(); }
+    catch { toast.error("Silinemedi"); }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -21,6 +38,7 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
       setTpl(s.template || "classic");
       setPublished(!!s.published);
       setContent({ headline: "", about: "", amenities: "", phone: "", email: "", address: "", ...(s.content || {}) });
+      setPhotos(data.photos || []);
     } catch { toast.error("Yüklenemedi"); }
   }, [pid]);
 
@@ -76,6 +94,42 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
           <input value={content.phone} onChange={(e) => setContent({ ...content, phone: e.target.value })} placeholder="Telefon" className={inputCls} data-testid="site-phone-input" />
           <input value={content.email} onChange={(e) => setContent({ ...content, email: e.target.value })} placeholder="E-posta" className={inputCls} data-testid="site-email-input" />
           <input value={content.address} onChange={(e) => setContent({ ...content, address: e.target.value })} placeholder="Adres" className={inputCls} data-testid="site-address-input" />
+        </div>
+
+        {/* Fotoğraflar */}
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <div className="rounded-xl border border-dashed border-stone-300 p-3">
+            <div className="text-[10px] font-bold uppercase text-stone-500 mb-2">Kapak Fotoğrafı (hero)</div>
+            {photos.filter((p) => p.kind === "cover").map((p) => (
+              <div key={p.id} className="relative inline-block mr-2 mb-2">
+                <img src={p.url} alt="kapak" className="h-20 w-32 object-cover rounded-lg" data-testid={`site-photo-${p.id}`} />
+                <button onClick={() => deletePhoto(p.id)} data-testid={`site-photo-del-${p.id}`}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white text-[10px] font-bold">×</button>
+              </div>
+            ))}
+            <label className="block">
+              <input type="file" accept="image/*" className="hidden" data-testid="site-cover-upload"
+                onChange={(e) => { uploadPhoto("cover", e.target.files?.[0]); e.target.value = ""; }} />
+              <span className="inline-block cursor-pointer text-[10px] font-bold px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700">+ Kapak Yükle</span>
+            </label>
+          </div>
+          <div className="rounded-xl border border-dashed border-stone-300 p-3">
+            <div className="text-[10px] font-bold uppercase text-stone-500 mb-2">Galeri ({photos.filter((p) => p.kind === "gallery").length})</div>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {photos.filter((p) => p.kind === "gallery").map((p) => (
+                <div key={p.id} className="relative">
+                  <img src={p.url} alt="galeri" className="h-14 w-20 object-cover rounded-lg" data-testid={`site-photo-${p.id}`} />
+                  <button onClick={() => deletePhoto(p.id)} data-testid={`site-photo-del-${p.id}`}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white text-[10px] font-bold">×</button>
+                </div>
+              ))}
+            </div>
+            <label className="block">
+              <input type="file" accept="image/*" className="hidden" data-testid="site-gallery-upload"
+                onChange={(e) => { uploadPhoto("gallery", e.target.files?.[0]); e.target.value = ""; }} />
+              <span className="inline-block cursor-pointer text-[10px] font-bold px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700">+ Galeriye Ekle</span>
+            </label>
+          </div>
         </div>
         <div className="flex gap-2 pt-1">
           <button onClick={() => save(false)} disabled={busy} data-testid="site-save-draft-btn"

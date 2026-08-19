@@ -32,6 +32,10 @@ export const RmsSetupWizard = L(() => import("./components/dashboard/RmsSetupWiz
 export const CmSetupWizard = L(() => import("./components/dashboard/CmSetupWizard"));
 export const ChannelListingPanel = L(() => import("./components/dashboard/ChannelListingPanel"));
 export const IcalSyncPanel = L(() => import("./components/dashboard/IcalSyncPanel"));
+export const SiteBuilderPanel = L(() => import("./components/dashboard/SiteBuilderPanel"));
+export const TerminalPanel = L(() => import("./components/dashboard/TerminalPanel"));
+export const AiCopilotPanel = L(() => import("./components/dashboard/AiCopilotPanel"));
+export const PresetsPanel = L(() => import("./components/dashboard/PresetsPanel"));
 export const PriceGuardsPanel = L(() => import("./components/dashboard/PriceGuardsPanel"));
 export const MarketingRadarPanel = L(() => import("./components/dashboard/MarketingRadarPanel"));
 export const BIChatPanel = L(() => import("./components/dashboard/BIChatPanel"));

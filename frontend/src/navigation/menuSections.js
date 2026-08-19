@@ -103,6 +103,7 @@ export function buildMenuSections(t, user) {
       color: "text-stone-500",
       items: [
         { id: "dashboard", icon: House, name: t("nav.dashboard"), testId: "dashboard-btn", core: true },
+        { id: "ai-copilot", icon: Brain, name: "AI Copilot", testId: "ai-copilot-btn", core: true },
         { id: "my-tasks", icon: Target, name: "My tasks", testId: "my-tasks-btn", core: true },
         { id: "calendar", icon: CalendarBlank, name: "Calendar", testId: "sidebar-calendar", core: true },
         { id: "availability-calendar", icon: CalendarBlank, name: "Müsaitlik Takvimi", testId: "availability-calendar-btn", core: true },
@@ -149,6 +150,7 @@ export function buildMenuSections(t, user) {
       items: [
         { id: "booking", icon: Bed, name: t("nav.booking"), testId: "booking-engine-btn", core: true },
         { id: "booking-engine-admin", icon: Globe, name: "Booking engine setup", testId: "booking-engine-admin-btn" },
+        { id: "site-builder", icon: Globe, name: "Web Sitesi Oluşturucu", testId: "site-builder-btn", core: true },
         { id: "booking-engine-v2", icon: Package, name: "Booking engine v2 (paket & upsell)", testId: "booking-engine-v2-btn" },
         { id: "promo-codes", icon: Tag, name: t("nav.promo_codes"), testId: "promo-codes-btn" },
         { id: "add-ons", icon: Package, name: t("nav.add_ons"), testId: "add-ons-btn" },
@@ -381,6 +383,7 @@ export function buildMenuSections(t, user) {
       color: "text-stone-500",
       items: [
         { divider: true, label: "Accounting" },
+        { id: "payment-terminal", icon: CreditCard, name: "Ödeme Terminali", testId: "payment-terminal-btn", core: true },
         { id: "accounting", icon: Wallet, name: t("nav.accounting"), testId: "accounting-btn" },
         { id: "finance", icon: Wallet, name: "Finance overview", testId: "finance-btn", core: true },
         { id: "finance-pl", icon: ChartLine, name: "Profit & loss", testId: "finance-pl-btn" },
@@ -504,6 +507,7 @@ export function buildMenuSections(t, user) {
       color: "text-stone-500",
       items: [
         { divider: true, label: "Setup" },
+        { id: "property-presets", icon: Buildings, name: "Tesis Tipi Şablonları", testId: "property-presets-btn", core: true },
         { id: "setup-wizard", icon: Gear, name: t("nav.setup_wizard"), testId: "setup-wizard-btn" },
         { id: "onboarding", icon: MagicWand, name: "First-run wizard", testId: "onboarding-btn" },
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },

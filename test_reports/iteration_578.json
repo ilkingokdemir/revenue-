@@ -1,0 +1,38 @@
+{
+  "summary": "Tested new 4-feature batch: Site Builder, Stripe Terminal (simulated), Property Presets, AI Copilot. Backend: 13/13 pytest cases pass. Frontend: sidebar renders, AI Copilot panel (gradient header, 3 stats, 8 module cards, price-guards navigation works), Site Builder saves draft + publishes modern template, Terminal adds simulated reader + charges £15 with succeeded log entry, Presets panel shows 5 cards, My tasks item present, Regression OK. Public /site/default renders correctly with modern template and CTA to /book/default. Left site PUBLISHED with template='modern' and headline='Şehrin kalbinde konfor' as required.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/site-builder/{pid}", "issue": "No validation of content field types (accepts amenities as list or string). Frontend HotelSitePage.js calls .split() on amenities so a non-string breaks the public page. Recommend coercing to string or validating shape."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "HotelSitePage.js", "issue": "(c.amenities || \"\").split(...) throws 'split is not a function' if amenities stored as non-string (array). Reproduced with amenities: [] payload — public page shows generic error boundary. Add Array.isArray branch or coerce.", "selector": "[data-testid=\"hotel-site-page\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_batch_site_terminal_presets_copilot.py",
+    "/app/test_reports/pytest/batch_results.xml"
+  ],
+  "action_items": [
+    "HotelSitePage.js: make amenities parsing tolerant of both string and array (typeof === 'string' ? split : Array.isArray ? use directly). Same for backend content validation with Pydantic model."
+  ],
+  "critical_code_review_comments": [
+    "Site builder saves free-form dict — no Pydantic model, so type drift possible. Add strict schema.",
+    "Terminal charge relies on reader_id.startswith('tmr_') to detect simulated; brittle. Query reader from Stripe or track in DB.",
+    "AI Copilot summary counts collections queried with property_id filter but some collections may not have property_id — verify indexes exist for perf."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_batch_site_terminal_presets_copilot.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (from /app/memory/test_credentials.md convention)",
+  "seed_data_creation": "Test creates & cleans up TEST_scratch_* property + room_types + rms_setup for preset apply test. Also leaves /site/default published with template='modern' + headline='Şehrin kalbinde konfor' as required by test spec.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Site is currently published (modern template). Simulated Stripe reader(s) exist under /api/terminal/default/readers. If future tests need clean state, unpublish site or delete tmr_* readers. Amenities in stored content is a comma-separated string.",
+  "rca of the issue": "Frontend crash on /site/{pid} reproduced when content.amenities is stored as an array by any client (e.g., via API/curl). Root cause: HotelSitePage.js line 28 does '(c.amenities || \"\").split(\",\")' — .split is undefined on arrays. Mitigation: `const amenities = Array.isArray(c.amenities) ? c.amenities : (c.amenities || \"\").split(\",\").map(s=>s.trim()).filter(Boolean);` — or normalize in backend."
+}

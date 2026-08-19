@@ -1036,3 +1036,19 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Kullanıcının paylaştığı cloudbeds.com + mews.com menü ekran görüntüleri madde madde kod tabanıyla denetlendi → /app/memory/GAP_ANALYSIS_CLOUDBEDS_MEWS_MENUS_2026.md
 - SONUÇ: ~30 menü kaleminin %80'i tam VAR, %13 kısmi, gerçek eksikler: P1 Web Sitesi Oluşturucu (Cloudbeds Websites), P1 Stripe Terminal (Mews Terminals), P2 reklam entegrasyonu, P2 AI marka çatısı, P2 tesis tipi/role preset'leri, P2 esnek finansman, P2 marketplace ölçeği.
 - Üstün alanlar: RMS derinliği, Grup Satış OS, iCal çakışma çözümü, self-signup+deneme, Health Sentinel, profit-first pricing, ABS.
+
+## MVP BACKLOG KAYDI (2026-08-19, Cloudbeds/Mews karşılaştırmasından)
+- P1-1 Web Sitesi Oluşturucu (Cloudbeds Websites paritesi) → UYGULANIYOR
+- P1-2 Stripe Terminal fiziksel ödeme (Mews Terminals paritesi) → UYGULANIYOR (test modunda simüle cihaz)
+- P2-1 AI Copilot çatısı (Signals AI paritesi) → UYGULANIYOR
+- P2-2 Tesis Tipi Preset'leri (hostel/apart/extended-stay/şehir/resort) → UYGULANIYOR
+- P2 (bekleyen): Google/Meta reklam API, YouLend tarzı finansman, marketplace ölçeği
+
+## Güncelleme (2026-08-19, P1/P2 GAP PAKETİ TAMAMLANDI — iter 578: backend 13/13, frontend %95→bulgu fixlendi)
+- WEB SİTESİ OLUŞTURUCU: routes/pms/site_builder.py (/api/site-builder/{pid} GET/POST + /public/site/{pid} public; şablon classic|modern|boutique, 422 validasyon, amenities tip toleransı) + SiteBuilderPanel.js (Direct Booking > "Web Sitesi Oluşturucu": şablon kartları, içerik formu, Taslak/Yayınla/Yayından Kaldır) + HotelSitePage.js public /site/{pid} rotası (3 tema, hero + odalar + olanaklar + iletişim + /book/{pid} CTA). db.hotel_sites. default oteli 'modern' temayla YAYINDA bırakıldı.
+- STRIPE TERMINAL: routes/finance_ext/terminal.py (/api/terminal/{pid}: readers list/register [simulated-wpe test cihazı GERÇEK Stripe test-mode], charge [PI card_present + process_payment_intent + TestHelpers.present → succeeded], payments log; Location otomatik) + TerminalPanel.js (Finance > "Ödeme Terminali"). Gerçek cihaz için ekrandaki kayıt kodu girilir. db.terminal_settings, db.terminal_payments.
+- AI COPILOT ÇATISI: routes/ai/ai_copilot.py (/api/ai-copilot/summary/{pid}: 6 metrik) + AiCopilotPanel.js (Overview > "AI Copilot", dashboard'ın hemen altı: ReveniQ AI Copilot markalı gradient başlık + canlı istatistik + 8 AI modül kartı, tıklayınca navigate). 
+- TESİS TİPİ PRESET'LERİ: routes/platform_ext/presets.py (/api/property-presets GET katalog + /apply/{pid}: 5 preset [city_hotel/resort/hostel/apart/extended_stay], oda tipleri sadece boşsa oluşturulur, rms_setup varsayılanları + property_type set) + PresetsPanel.js (Settings & Admin > "Tesis Tipi Şablonları").
+- Fix: menuSections duplicate import (Globe/CreditCard) derleme hatası; HotelSitePage amenities array/string toleransı + backend coercion (iter578 bulgusu).
+- Test: iter_578 backend 13/13, frontend regression dahil geçti; amenities fix'i curl ile doğrulandı.
+- BEKLEYEN P2: Google/Meta reklam API, YouLend finansman, marketplace ölçeği, deneme bitiş e-postası, skor e-postası (Resend anahtarı).

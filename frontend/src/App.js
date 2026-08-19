@@ -63,6 +63,7 @@ import { buildMenuSections } from "./navigation/menuSections";
 import { isModuleAllowed, requiredPlanFor } from "./navigation/planGate";
 import PlanUpsellModal from "@/components/dashboard/PlanUpsellModal";
 import SignupPage from "@/components/dashboard/SignupPage";
+import HotelSitePage from "./HotelSitePage";
 import { SIDEBAR_PERM_MAP } from "./navigation/permMap";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
@@ -1397,6 +1398,10 @@ function App() {
   if (window.location.pathname.startsWith("/offer/")) {
     const token = window.location.pathname.split("/offer/")[1];
     return <UpsellOfferPage token={token} />;
+  }
+  if (window.location.pathname.startsWith("/site/")) {
+    const sitePid = window.location.pathname.split("/site/")[1];
+    return <HotelSitePage propertyId={sitePid} />;
   }
   if (window.location.pathname.startsWith("/book/")) {
     const propertyId = window.location.pathname.split("/book/")[1];

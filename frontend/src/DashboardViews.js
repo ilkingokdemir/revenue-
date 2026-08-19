@@ -214,6 +214,10 @@ import {
   CmSetupWizard,
   ChannelListingPanel,
   IcalSyncPanel,
+  SiteBuilderPanel,
+  TerminalPanel,
+  AiCopilotPanel,
+  PresetsPanel,
   PriceGuardsPanel,
   MarketingRadarPanel,
   BIChatPanel,
@@ -819,6 +823,18 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         )}
         {activeView === "ical-sync" && (
           <IcalSyncPanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "site-builder" && (
+          <SiteBuilderPanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "payment-terminal" && (
+          <TerminalPanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "ai-copilot" && (
+          <AiCopilotPanel activePropertyId={activePropertyId} properties={properties} onNavigate={navigate} />
+        )}
+        {activeView === "property-presets" && (
+          <PresetsPanel activePropertyId={activePropertyId} properties={properties} />
         )}
         {activeView === "price-guards" && (
           <PriceGuardsPanel activePropertyId={activePropertyId} properties={properties} />

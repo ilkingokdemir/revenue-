@@ -581,6 +581,34 @@ def create_pms_connect_router(db, require_roles):
             raise HTTPException(502, f"{PROVIDERS[provider]['name']} bağlantısı başarısız: {body}")
         return {"ok": True, "detail": body}
 
+    @router.get("/{provider}/push-preview/{pid}")
+    async def push_preview(provider: str, pid: str, days: int = 14,
+                           _u: dict = Depends(require_roles(*ROLES))):
+        """Push öncesi önizleme: hangi güne hangi fiyat gidecek (eşleme çarpanlarıyla) — göndermez."""
+        if provider not in PROVIDERS:
+            raise HTTPException(404, "Bilinmeyen sağlayıcı")
+        days = max(1, min(90, int(days)))
+        rows = await _rms_rows(db, pid, days)
+        if not rows:
+            return {"rooms": [], "table": [], "total_prices": 0,
+                    "message": "Gönderilecek RMS fiyatı yok."}
+        mp = await db.pms_rate_mapping.find_one(
+            {"property_id": pid, "provider": provider}, {"_id": 0})
+        mappings = [m for m in (mp or {}).get("mappings", []) if m.get("channel_rate_code")]
+        if not mappings:
+            mappings = [{"room_type_name": "Varsayılan", "channel_rate_code": "RMS-RATE", "multiplier": 1.0}]
+        table = []
+        for r in rows:
+            cells = {}
+            for m in mappings:
+                mult = float(m.get("multiplier", 1.0) or 1.0)
+                cells[m.get("room_type_name", "?")] = {"rate": round(r["rate"] * mult, 2)}
+            table.append({"date": r["date"], "cells": cells})
+        return {"provider": provider,
+                "rooms": [{"room_type": m.get("room_type_name", "?"),
+                           "rateID": m["channel_rate_code"]} for m in mappings],
+                "table": table, "total_prices": len(rows) * len(mappings)}
+
     @router.post("/{provider}/push-from-rms/{pid}")
     async def push_from_rms(provider: str, pid: str, data: dict = None,
                             _u: dict = Depends(require_roles(*ROLES))):

@@ -70,6 +70,18 @@ def create_connector_catalog_router(db, require_roles):
                            "connected": sum(1 for o in out if o["status"] == "connected")},
                 "note": "Hazır olanlar panelinden bağlanır; diğerleri için 'Talep Et' — öncelik sırasına alınır."}
 
+    @router.get("/requests/summary/all")
+    async def requests_summary(_u: dict = Depends(require_roles("admin", "manager"))):
+        """Admin: konnektör taleplerini oy sayısıyla sıralar — geliştirme önceliği."""
+        agg = await db.connector_requests.aggregate([
+            {"$group": {"_id": "$key", "votes": {"$sum": 1},
+                        "last_at": {"$max": "$requested_at"}}},
+            {"$sort": {"votes": -1, "last_at": -1}}]).to_list(50)
+        names = {c["key"]: c["name"] for c in CATALOG}
+        return {"requests": [{"key": a["_id"], "name": names.get(a["_id"], a["_id"]),
+                              "votes": a["votes"], "last_at": a["last_at"]} for a in agg],
+                "note": "Her tesis bir konnektörü 1 kez talep edebilir — oy = kaç tesisin istediği."}
+
     @router.post("/{pid}/request")
     async def request_connector(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
         key = str(data.get("key", "")).strip()

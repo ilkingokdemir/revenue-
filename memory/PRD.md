@@ -960,3 +960,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Push Önizleme: GET /api/cloudbeds/push-preview/{pid}?days → tarih×oda tipi fiyat+müsaitlik tablosu (göndermez, build_push_preview). UI: '👁 Önizle & Gönder' (cb-preview-btn) → modal (cb-preview-modal, tablo, Vazgeç/Onayla ve Gönder). Doğrulandı: 14 satır, £/oda gösterimi, onay→push.
 - Müsaitlik Push: _availability(total_rooms − aktif bookings); do_push_rates(include_availability) → canlıda putRoomBlocks'a ikinci payload, MOCK'ta cb_push_log kind=availability_push. push-from-rms body {include_availability}, auto-push cfg push_availability. UI: '🛏 Müsaitliği de gönder' toggle (cb-avail-toggle). Doğrulandı: 10 gün fiyat + 10 gün müsaitlik MOCK. _build_rate_blocks base_price fallback eklendi.
 - NOT: Cloudbeds canlı müsaitlik endpoint'i putRoomBlocks (Nexla doc referansı); kesin doğrulama kullanıcı API key'i gelince yapılacak.
+
+## Güncelleme (2026-08-19, Talep Sıralaması + Stop-Sell + Mews Önizlemeli Push — curl + UI doğrulandı)
+- Talep Sıralaması: GET /api/connector-catalog/requests/summary/all (aggregate oy sayısı, sıralı); ConnectorCatalogPanel'de '🗳 Talep Sıralaması' kartı (catalog-request-ranking, #sıra + oy). Doğrulandı: Booking Factory 1 oy.
+- Stop-Sell: cloudbeds availability payload'ında roomsAvailable<=0 olan günlere stopSell:true; response'ta stop_sell_days. Doğrulandı: suite total_rooms=0 senaryosunda 3 gün stopSell:true (test sonrası total_rooms=2 restore edildi, geçici rate_map eşlemesi kaldırıldı).
+- Mews Önizlemeli Push: GET /api/pms-connect/{provider}/push-preview/{pid}?days (eşleme çarpanlı tarih×oda tablosu, TÜM sağlayıcılar için çalışır: mews/apaleo/siteminder/eviivo/elektraweb); PmsConnectHub'da '👁 Önizle & Gönder' butonu + modal (pms-preview-btn/modal/confirm). Doğrulandı: Mews 14 satır tablo → Onayla → push.
+- Cloudbeds API key HÂLÂ kullanıcıdan gelmedi — canlı push/müsaitlik/stop-sell testi bekliyor.

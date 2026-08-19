@@ -95,13 +95,17 @@ async def do_push_rates(db, pid: str, days: int = 14, rate_id_override: str = ""
     avail_payload, avail_days = None, 0
     if include_availability:
         rts = {r["id"]: r for r in await db.room_types.find({"property_id": pid}, {"_id": 0}).to_list(20)}
-        avail_blocks = []
+        avail_blocks, stop_sell_days = [], 0
         for b in blocks:
             rt = rts.get(b["room_type_id"], {})
             ivs = []
             for iv in b["interval"]:
-                ivs.append({"startDate": iv["startDate"], "endDate": iv["endDate"],
-                            "roomsAvailable": await _availability(db, pid, rt, iv["startDate"])})
+                av = await _availability(db, pid, rt, iv["startDate"])
+                cell = {"startDate": iv["startDate"], "endDate": iv["endDate"], "roomsAvailable": av}
+                if av <= 0:
+                    cell["stopSell"] = True
+                    stop_sell_days += 1
+                ivs.append(cell)
             if ivs:
                 avail_blocks.append({"roomTypeID": b["rateID"], "interval": ivs})
                 avail_days += len(ivs)
@@ -124,7 +128,8 @@ async def do_push_rates(db, pid: str, days: int = 14, rate_id_override: str = ""
                 "result": {"mocked": True, "would_send": avail_days},
                 "created_at": datetime.now(timezone.utc).isoformat()})
         return {"pushed_days": total_days, "rooms": len(blocks), "per_room": summary,
-                "availability_days": avail_days if include_availability else None, **result}
+                "availability_days": avail_days if include_availability else None,
+                "stop_sell_days": stop_sell_days if include_availability else None, **result}
     cert = cfg.get("certification") or {}
     if not (cert.get("passed") and cert.get("mode") == "live"):
         return {"error": 428, "detail": "Cloudbeds sertifikasyonu geçilmedi — canlı push bloklandı. "
@@ -152,6 +157,7 @@ async def do_push_rates(db, pid: str, days: int = 14, rate_id_override: str = ""
             "created_at": datetime.now(timezone.utc).isoformat()})
     return {"pushed_days": total_days, "rooms": len(blocks), "per_room": summary, "mocked": False,
             "availability_days": avail_days if include_availability else None,
+            "stop_sell_days": stop_sell_days if include_availability else None,
             "availability_result": avail_result,
             "job_reference_id": (result or {}).get("jobReferenceID"),
             "note": "putRate asenkrondur — Cloudbeds aldığı fiyatı Booking.com ve bağlı kanallara kendi dağıtır."}

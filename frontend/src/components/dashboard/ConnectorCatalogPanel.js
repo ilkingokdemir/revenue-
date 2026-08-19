@@ -18,11 +18,16 @@ export default function ConnectorCatalogPanel({ activePropertyId, properties = [
   const pid = activePropertyId && activePropertyId !== "all" ? activePropertyId : properties[0]?.id || "default";
   const [data, setData] = useState(null);
   const [cat, setCat] = useState("Tümü");
+  const [reqSummary, setReqSummary] = useState([]);
 
   const load = useCallback(async () => {
     try {
-      const r = await axios.get(`${API}/api/connector-catalog/${pid}`, { withCredentials: true });
+      const [r, rs] = await Promise.all([
+        axios.get(`${API}/api/connector-catalog/${pid}`, { withCredentials: true }),
+        axios.get(`${API}/api/connector-catalog/requests/summary/all`, { withCredentials: true }).catch(() => ({ data: { requests: [] } })),
+      ]);
       setData(r.data);
+      setReqSummary(rs.data.requests || []);
     } catch { toast.error("Katalog yüklenemedi"); }
   }, [pid]);
 
@@ -54,6 +59,19 @@ export default function ConnectorCatalogPanel({ activePropertyId, properties = [
           </div>
         )}
       </div>
+
+      {reqSummary.length > 0 && (
+        <div className="bg-white border-2 border-amber-200 rounded-2xl p-4 mb-4" data-testid="catalog-request-ranking">
+          <div className="text-sm font-black text-stone-800 mb-2">🗳 Talep Sıralaması — geliştirme önceliği</div>
+          <div className="flex flex-wrap gap-2">
+            {reqSummary.map((r, i) => (
+              <span key={r.key} className="text-[11px] font-bold bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5" data-testid={`catalog-rank-${r.key}`}>
+                #{i + 1} {r.name} · <b className="text-amber-700">{r.votes} oy</b>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-2 mb-4 flex-wrap">
         {CATS.map((c) => (

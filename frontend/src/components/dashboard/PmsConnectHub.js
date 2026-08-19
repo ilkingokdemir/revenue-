@@ -301,6 +301,17 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
     } catch (e) { toast.error(e.response?.data?.detail || "Bağlantı başarısız"); } finally { setBusy(false); }
   };
 
+  const [pushPreview, setPushPreview] = useState(null);
+
+  const openPushPreview = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.get(`${API}/api/pms-connect/${sel.id}/push-preview/${pid}?days=${+days}`, { withCredentials: true });
+      if (!r.data.table?.length) { toast.info(r.data.message || "Önizlenecek fiyat yok"); return; }
+      setPushPreview(r.data);
+    } catch (e) { toast.error(e.response?.data?.detail || "Önizleme yüklenemedi"); } finally { setBusy(false); }
+  };
+
   const pushRms = async () => {
     setBusy(true);
     try {
@@ -781,7 +792,39 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
                 <input type="number" min={1} max={90} value={days} onChange={(e) => setDays(e.target.value)} data-testid="pms-days-input" className="block w-28 border border-stone-300 rounded-lg px-2 py-2 text-sm mt-0.5" />
               </label>
               <div className="flex gap-2">
+                <button onClick={openPushPreview} disabled={busy} data-testid="pms-preview-btn" className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold disabled:opacity-50">👁 Önizle & Gönder</button>
                 <button onClick={pushRms} disabled={busy} data-testid="pms-push-btn" className="px-3 py-2 rounded-lg bg-stone-900 text-white text-sm font-bold disabled:opacity-50 flex items-center gap-1.5"><PaperPlaneTilt size={14} /> Fiyat Push</button>
+                {pushPreview && (
+                  <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setPushPreview(null)} data-testid="pms-preview-modal">
+                    <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[80vh] flex flex-col p-5" onClick={(e) => e.stopPropagation()}>
+                      <h3 className="text-base font-black text-stone-800 mb-1">👁 {sel.name} Push Önizleme</h3>
+                      <p className="text-[11px] text-stone-500 mb-3">{pushPreview.rooms.map((r) => `${r.room_type} → ${r.rateID}`).join(" · ")} · toplam {pushPreview.total_prices} fiyat</p>
+                      <div className="overflow-auto flex-1 border border-stone-200 rounded-xl">
+                        <table className="w-full text-[12px]">
+                          <thead className="bg-stone-50 sticky top-0"><tr>
+                            <th className="text-left px-3 py-2 font-black text-stone-600">Tarih</th>
+                            {pushPreview.rooms.map((r) => <th key={r.rateID} className="text-right px-3 py-2 font-black text-stone-600">{r.room_type}</th>)}
+                          </tr></thead>
+                          <tbody>
+                            {pushPreview.table.map((row) => (
+                              <tr key={row.date} className="border-t border-stone-100" data-testid={`pms-preview-row-${row.date}`}>
+                                <td className="px-3 py-1.5 font-bold text-stone-700">{row.date}</td>
+                                {pushPreview.rooms.map((r) => {
+                                  const c = row.cells[r.room_type];
+                                  return <td key={r.rateID} className="px-3 py-1.5 text-right">{c ? `£${c.rate}` : "—"}</td>;
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="flex justify-end gap-2 mt-4">
+                        <button onClick={() => setPushPreview(null)} data-testid="pms-preview-cancel" className="px-4 py-2 rounded-lg border border-stone-300 text-stone-600 text-sm font-bold">Vazgeç</button>
+                        <button onClick={() => { setPushPreview(null); pushRms(); }} data-testid="pms-preview-confirm" className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700">✓ Onayla ve Gönder</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <button onClick={pullRes} disabled={busy} data-testid="pms-pull-btn" className="px-3 py-2 rounded-lg border border-stone-300 text-stone-700 text-sm font-bold disabled:opacity-50 flex items-center gap-1.5"><DownloadSimple size={14} /> Rezervasyon Çek</button>
               </div>
               {lastPush && (

@@ -246,6 +246,8 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [collisionCluster, setCollisionCluster] = useState(null); // { room, cluster } for "+N more" pill modal
   const [showResolver, setShowResolver] = useState(false); // overbooking auto-suggest resolver modal
   const [quickPay, setQuickPay] = useState(null); // { booking } when the flashing balance chip is clicked
+  const [payLink, setPayLink] = useState(null);
+  const [payLinkBusy, setPayLinkBusy] = useState(false);
   const scrollRef = useRef(null);
   const obNotifiedRef = useRef(false);
 
@@ -295,6 +297,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
     setSelectedBooking(bookingId);
     setDetailTab("info");
     setFolio(null);
+    setPayLink(null);
     setShowAddCharge(false);
     setUpsells(null);
     try {
@@ -431,6 +434,38 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
       await axios.post(`${API}/guest-checkin/send-link/${selectedBooking}`);
       toast.success("Check-in link sent to guest");
     } catch { toast.error("Failed"); }
+  };
+
+  // Stripe pay-by-link — resepsiyon tek tıkla ödeme linki üretir
+  const generatePayLink = async () => {
+    if (!selectedBooking || !folio) return;
+    setPayLinkBusy(true);
+    try {
+      const { data } = await axios.post(`${API}/payments/checkout`, {
+        amount: folio.totals.balance_due,
+        currency: "gbp",
+        property_id: detailData?.property_id || (pid !== "all" ? pid : "default"),
+        booking_id: selectedBooking,
+        description: `Konaklama ödemesi — ${detailData?.guest_name || selectedBooking}`,
+        origin_url: window.location.origin,
+      });
+      setPayLink(data.checkout_url);
+      try { await navigator.clipboard.writeText(data.checkout_url); toast.success("Ödeme linki üretildi ve panoya kopyalandı"); }
+      catch { toast.success("Ödeme linki üretildi"); }
+    } catch (e) { toast.error(e.response?.data?.detail || "Ödeme linki üretilemedi"); }
+    setPayLinkBusy(false);
+  };
+
+  const emailPayLink = async () => {
+    if (!payLink) return;
+    const to = detailData?.guest_email;
+    if (!to) { toast.error("Misafirin e-posta adresi yok"); return; }
+    try {
+      await axios.post(`${API}/payments/email-link`, {
+        to, link: payLink, booking_id: selectedBooking, amount: folio?.totals?.balance_due,
+      });
+      toast.success(`Ödeme linki ${to} adresine gönderildi`);
+    } catch { toast.error("E-posta gönderilemedi"); }
   };
 
   // Download a PDF (respects auth header from axios defaults) and open it in a new tab.
@@ -2084,6 +2119,41 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                         </button>
                       </div>
                       <p className="text-[10px] text-stone-400 text-center">Tip: click the flashing balance chip on the calendar for a partial-payment flow with amount picker.</p>
+
+                      {/* Stripe Pay-by-Link — tek tıkla ödeme linki */}
+                      <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-2.5 space-y-2" data-testid="stripe-paylink-box">
+                        <div className="text-[10px] font-bold uppercase text-indigo-300">Stripe Ödeme Linki (pay-by-link)</div>
+                        {!payLink ? (
+                          <button onClick={generatePayLink} disabled={payLinkBusy} data-testid="generate-paylink-btn"
+                            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#635BFF] hover:bg-[#5349f0] text-white text-[11px] font-bold disabled:opacity-50">
+                            <CreditCard className="w-3.5 h-3.5" />
+                            {payLinkBusy ? "Üretiliyor..." : `Ödeme Linki Üret · ${cur(folio.totals.balance_due)}`}
+                          </button>
+                        ) : (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <input readOnly value={payLink} data-testid="paylink-url-input"
+                                className="flex-1 min-w-0 rounded bg-stone-900 border border-stone-700 px-2 py-1.5 text-[10px] text-stone-300 font-mono truncate" />
+                              <button onClick={async () => {
+                                try { await navigator.clipboard.writeText(payLink); toast.success("Kopyalandı"); }
+                                catch { toast.error("Pano erişimi engellendi — linki elle seçip kopyalayın"); }
+                              }}
+                                data-testid="paylink-copy-btn"
+                                className="p-1.5 rounded bg-stone-700 hover:bg-stone-600 text-white"><Copy className="w-3.5 h-3.5" /></button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <button onClick={emailPayLink} data-testid="paylink-email-btn"
+                                className="flex items-center justify-center gap-1 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold">
+                                <Mail className="w-3 h-3" /> E-posta Gönder
+                              </button>
+                              <button onClick={() => setPayLink(null)} data-testid="paylink-new-btn"
+                                className="py-1.5 rounded bg-stone-700 hover:bg-stone-600 text-stone-300 text-[10px] font-bold">
+                                Yeni Link
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </>) : (

@@ -261,6 +261,7 @@ export function buildMenuSections(t, user) {
       color: "text-stone-500",
       items: [
         { divider: true, label: "Pricing" },
+        { id: "rms-setup", icon: MagicWand, name: "RMS Hızlı Kurulum (30 dk)", testId: "rms-setup-btn", core: true },
         { id: "my-rates", icon: ChartLine, name: "My Rates (Daily Grid)", testId: "my-rates-btn", core: true },
         { id: "revenue", icon: ChartLine, name: "Revenue management", testId: "revenue-btn", core: true },
         { id: "profit-os", icon: Target, name: "Profit OS", testId: "profit-os-btn" },

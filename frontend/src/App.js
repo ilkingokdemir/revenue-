@@ -60,6 +60,8 @@ import { StarRating, PlatformBadge, StatsCard, ReviewCard } from "@/components/d
 import { AIResponsePanel, TemplatesManager, ApprovalQueuePanel } from "@/panels/ReviewToolsPanels";
 import { UserManagementPanel, ApiConnectionPanel, WebhooksPanel, } from "@/panels/SystemToolsPanels";
 import { buildMenuSections } from "./navigation/menuSections";
+import { isModuleAllowed, requiredPlanFor } from "./navigation/planGate";
+import PlanUpsellModal from "@/components/dashboard/PlanUpsellModal";
 import { SIDEBAR_PERM_MAP } from "./navigation/permMap";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
@@ -504,6 +506,12 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
   const menuSections = buildMenuSections(t, user);
 
+  // Plan kilitleri — aktif otelin planına göre modül erişimi
+  const activePlan = activePropertyId === "all"
+    ? "full"
+    : (properties.find((p) => p.id === activePropertyId)?.plan || "full");
+  const [upsellFor, setUpsellFor] = useState(null);
+
 
   // Sidebar permission gating map extracted to navigation/permMap.js (iter 386)
 
@@ -777,6 +785,23 @@ const Dashboard = ({ user, onLogout, permissions }) => {
                       >
                         {item.label}
                       </div>
+                    );
+                  }
+                  if (!isModuleAllowed(item, section.label, activePlan)) {
+                    const req = requiredPlanFor(item);
+                    return (
+                      <button key={item.id}
+                        onClick={() => {
+                          toast.info(`"${tNav(item)}" ${req.toUpperCase()} planda — yükseltin`);
+                          setUpsellFor({ name: tNav(item), required: req });
+                        }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-[13px] text-stone-600 hover:text-stone-400 hover:bg-stone-800/30 border-l-2 border-transparent"
+                        data-testid={`locked-${item.testId}`}
+                        title={`${req.toUpperCase()} planında — yükseltmek için tıklayın`}>
+                        <item.icon size={16} weight="regular" className="opacity-50" />
+                        <span className="flex-1 truncate opacity-60">{tNav(item)}</span>
+                        <Lock size={12} weight="fill" className="text-amber-500/80" />
+                      </button>
                     );
                   }
                   return (
@@ -1081,6 +1106,15 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
       {/* Global "Report Maintenance Issue" FAB — available to ALL departments */}
       <GlobalReportIssueFAB propertyId={activePropertyId} currentUser={user} properties={properties} />
+
+      {/* Plan kilidi upsell modali */}
+      <PlanUpsellModal
+        upsell={upsellFor}
+        currentPlan={activePlan}
+        isAdmin={user?.role === "admin"}
+        onClose={() => setUpsellFor(null)}
+        onUpgrade={() => { setUpsellFor(null); navigate("super-admin"); }}
+      />
 
       {/* Global Revenue Action Feed — live pricing events drawer (single-branch only) */}
       <ActionFeedPanel propertyId={activePropertyId} />

@@ -1,0 +1,42 @@
+{
+  "summary": "Iter 575 — Batch test: RMS Onboarding Wizard (rooms/guardrails/compset/data-source/mode/go-live/copilot generate+approve), Plan Locks + Upsell Modal (aldgate-flats set to 'rms' plan then restored to 'full'), Stripe pay-by-link on Booking Timeline folio. Backend: 23/23 pytest PASSED. Frontend: sidebar renders 17 locked items on rms plan (expected ~19), upsell modal opens with 4 plan rows and closes cleanly, wizard walks all 6 tabs and Go-Live reports %100 (7/7 checks), generate produced 12 recs (11 auto-applied after approve), paylink generated a REAL checkout.stripe.com URL and copy toast fired. Property 'default' plan restored to 'full', aldgate-flats restored to 'full'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/super-admin/tenants", "issue": "Response is MISSING the 'plans' map key (route conflict — older handler in another module wins). p0_pack.py builder returns {tenants, plans} but the endpoint returns only {tenants,total}. Not fatal because /plan setter still uses the new PLAN_MODULES map; but the plan-picker UI that reads d.plans may render empty. Confirmed same class of conflict already noted in iter574."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BookingTimeline paylink-copy-btn (folio tab)", "issue": "navigator.clipboard.writeText() throws NotAllowedError in headless / permissionless contexts and the promise rejection is UNCAUGHT — CRA dev overlay pops with 'Uncaught runtime errors: Failed to execute writeText on Clipboard'. Toast 'Kopyalandı' is still shown so user thinks it copied. Wrap in try/catch and fall back to execCommand or show a proper error toast.", "selector": "[data-testid=paylink-copy-btn]", "priority": "MEDIUM"},
+      {"component": "Sidebar locked items count", "issue": "Main agent context said '19 locked items on rms plan'; observed 17 (only Reservations section expanded). Non-blocking but worth double-checking planGate coverage.", "selector": "[data-testid^=locked-]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter575_rms_wizard.py",
+    "/app/test_reports/pytest/iter575.xml"
+  ],
+  "action_items": [
+    "MINOR (main agent): In BookingTimeline.js copyPayLink handler, wrap navigator.clipboard.writeText in try/catch (async) and show an error toast on rejection instead of leaking an unhandled promise error to the dev overlay.",
+    "MINOR (main agent): Resolve the /api/super-admin/tenants route-conflict so the PLAN_MODULES map is returned to the client (see iter574 minor#2 — same root cause).",
+    "OPTIONAL: In rms_onboarding save_compset() the caller-side dedup only checks against DB, not against payload duplicates in the SAME request. e.g. names=['A','A'] inserts 'A' once because we filter existing after each insert — but not while iterating the payload list. Passed our test by coincidence; recommend also deduping the payload list before insert (see test_06 payload contained duplicate names but 'added' was still >=1)."
+  ],
+  "critical_code_review_comments": [
+    "POSITIVE: rms_onboarding.py is compact (215 lines), consistent {_id:0} projections, no ObjectId leaks, all routes async, guardrails validation + mode/data-source enum validation return 400/422 correctly.",
+    "POSITIVE: /rms/setup/{pid}/mode syncs pricing_autopilot collection atomically — good separation of intent (mode) vs execution flag (auto_apply).",
+    "POSITIVE: golive endpoint returns computed score 0-100 with granular checks list — UI-friendly.",
+    "POSITIVE: /rms/copilot/generate applies rate_overrides only in autopilot mode; copilot goes to pending queue. Correct.",
+    "CONCERN: /rms/copilot/queue/{pid}/decide upserts rate_override with room_type_id='' (property-wide). If per-room-type overrides exist for the same date, they may be shadowed silently. Consider matching the wizard's per-room-type offsets on approve.",
+    "CONCERN: PlanUpsellModal shows all 4 plans always; on 'rms' plan the current row was correctly marked 'MEVCUT'. Verified.",
+    "CONCERN (medium): copyPayLink in BookingTimeline.js triggers uncaught NotAllowedError from Clipboard API. Non-secure contexts and headless browsers will always fail. Wrap in try/catch."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter575_rms_wizard.py"],
+  "success_rate": {"backend": "100% (23/23 pytest)", "frontend": "95% (email button not verified cleanly due to dev-overlay from clipboard rejection)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "RMS setup written for property 'default' (base_price=120, guardrails 60/280, compset entries QA_Comp_*, data_source=pms, mode=copilot pushes_per_day=4), 14-day copilot recs generated then most approved, aldgate-flats plan cycled (rms -> basic -> pro -> full) and RESTORED to full. Default plan RESTORED to full.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "RMS onboarding APIs and wizard UI fully working end-to-end. Plan Locks + Upsell modal functional. Paylink generation returns real Stripe checkout URLs (test key configured). One frontend defect worth fixing: paylink-copy-btn's clipboard.writeText is not wrapped in try/catch → CRA runtime error overlay appears in headless. Route conflict on /api/super-admin/tenants (missing 'plans' key in response) is a lingering issue from iter574."
+}

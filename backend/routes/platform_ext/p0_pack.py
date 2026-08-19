@@ -73,6 +73,22 @@ def create_p0_router(db, require_roles):
         return {"checkout_url": session.url, "session_id": session.id,
                 "note": "Bu linki misafire gönderin (pay-by-link) veya yönlendirin."}
 
+    @router.post("/payments/email-link")
+    async def email_payment_link(data: dict,
+                                 _u: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Ödeme linkini misafire e-postayla gönder (Resend anahtarı gelene kadar MOCK)."""
+        to = (data.get("to") or "").strip()
+        link = (data.get("link") or "").strip()
+        if not to or not link:
+            raise HTTPException(400, "to ve link zorunlu")
+        await db.email_outbox.insert_one({
+            "id": str(uuid.uuid4()), "to": to, "link": link,
+            "booking_id": data.get("booking_id") or "", "amount": data.get("amount"),
+            "subject": "Konaklama ödeme linkiniz", "kind": "payment_link",
+            "status": "mocked", "created_by": str(_u.get("email") or ""), "created_at": now_iso()})
+        return {"ok": True, "mocked": True, "to": to,
+                "note": "Resend API anahtarı eklenince gerçek gönderim aktif olacak."}
+
     @router.get("/payments/tx-log/{pid}")
     async def list_transactions(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         rows = await db.payment_transactions.find({"property_id": pid}, {"_id": 0}).sort(
@@ -181,6 +197,11 @@ def create_p0_router(db, require_roles):
         return doc
 
     # ================= 3) SÜPER ADMİN KONSOLU =================
+    PLAN_MODULES = {"basic": "Ön büro + rezervasyon + takvim (çekirdek ~30 modül)",
+                    "rms": "Sadece Gelir Yönetimi — fiyatlama, forecast, compset, raporlar",
+                    "pro": "Basic + gelir yönetimi + kanallar + raporlar (~150 modül)",
+                    "full": "Tüm 280+ modül + Public API + süper admin"}
+
     @router.get("/super-admin/tenants")
     async def tenants(_u: dict = Depends(require_roles("admin"))):
         props = await db.properties.find({}, {"_id": 0, "id": 1, "name": 1, "plan": 1,
@@ -194,7 +215,7 @@ def create_p0_router(db, require_roles):
                         "room_types": await db.room_types.count_documents({"property_id": pid}),
                         "payments": await db.payment_transactions.count_documents({"property_id": pid}),
                         "api_keys": await db.public_api_keys.count_documents({"property_id": pid})})
-        return {"tenants": out, "total": len(out)}
+        return {"tenants": out, "total": len(out), "plans": PLAN_MODULES}
 
     @router.post("/super-admin/tenants/{pid}/suspend")
     async def suspend(pid: str, data: dict, _u: dict = Depends(require_roles("admin"))):
@@ -204,10 +225,6 @@ def create_p0_router(db, require_roles):
         return {"ok": True, "property_id": pid, "suspended": sus}
 
     # ================= 3b) SAĞLIK SKORU + PLAN + ONBOARDING =================
-    PLAN_MODULES = {"basic": "Ön büro + rezervasyon + takvim (çekirdek ~30 modül)",
-                    "pro": "Basic + gelir yönetimi + kanallar + raporlar (~150 modül)",
-                    "full": "Tüm 280+ modül + Public API + süper admin"}
-
     async def _health_steps(pid: str) -> list:
         rts = await db.room_types.find({"property_id": pid}, {"_id": 0, "base_rate": 1, "base_price": 1}).to_list(20)
         has_rates = any(float(r.get("base_rate") or r.get("base_price") or 0) > 0 for r in rts) or \
@@ -250,7 +267,7 @@ def create_p0_router(db, require_roles):
     async def set_plan(pid: str, data: dict, _u: dict = Depends(require_roles("admin"))):
         plan = str(data.get("plan", "full"))
         if plan not in PLAN_MODULES:
-            raise HTTPException(422, "plan: basic|pro|full")
+            raise HTTPException(422, "plan: basic|rms|pro|full")
         await db.properties.update_one({"id": pid}, {"$set": {
             "plan": plan, "modules_enabled": "all" if plan == "full" else plan,
             "plan_changed_at": now_iso()}})

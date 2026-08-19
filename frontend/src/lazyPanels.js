@@ -28,6 +28,7 @@ export const EUCompliancePanel = L(() => import("./components/dashboard/EUCompli
 export const AIPredictionsPanel = L(() => import("./components/dashboard/AIPredictionsPanel"));
 export const ChannelRevenuePanel = L(() => import("./components/dashboard/ChannelRevenuePanel"));
 export const RmsComparisonPanel = L(() => import("./components/dashboard/RmsComparisonPanel"));
+export const RmsSetupWizard = L(() => import("./components/dashboard/RmsSetupWizard"));
 export const MarketingRadarPanel = L(() => import("./components/dashboard/MarketingRadarPanel"));
 export const BIChatPanel = L(() => import("./components/dashboard/BIChatPanel"));
 export const ParkingRmsPanel = L(() => import("./components/dashboard/ParkingRmsPanel"));

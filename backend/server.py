@@ -78,6 +78,7 @@ from routes.revenue_ext.market_robot import create_market_robot_router
 from routes.revenue_ext.ai_pricing_engine import create_ai_pricing_router
 from routes.chatbot_automation import create_chatbot_router
 from routes.revenue_ext.dynamic_pricing import create_dynamic_pricing_router
+from routes.revenue_ext.rms_onboarding import create_rms_onboarding_router
 from routes.hotel_ops.event_intelligence import create_event_intelligence_router
 from routes.revenue_ext.parity_analysis import create_parity_analysis_router
 from routes.distribution.channel_manager import create_channel_manager_router
@@ -1590,6 +1591,7 @@ api_router.include_router(create_budget_router(db, require_roles))
 
 from routes.revenue_ext.compset import create_compset_router
 api_router.include_router(create_compset_router(db, require_roles))
+api_router.include_router(create_rms_onboarding_router(db, require_roles))
 
 from routes.integrations_pkg.webhooks_api_keys import create_webhooks_api_keys_router
 api_router.include_router(create_webhooks_api_keys_router(db, require_roles))

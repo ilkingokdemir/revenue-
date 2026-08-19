@@ -213,6 +213,7 @@ import {
   RmsSetupWizard,
   CmSetupWizard,
   ChannelListingPanel,
+  IcalSyncPanel,
   PriceGuardsPanel,
   MarketingRadarPanel,
   BIChatPanel,
@@ -815,6 +816,9 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         )}
         {activeView === "channel-listings" && (
           <ChannelListingPanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "ical-sync" && (
+          <IcalSyncPanel activePropertyId={activePropertyId} properties={properties} />
         )}
         {activeView === "price-guards" && (
           <PriceGuardsPanel activePropertyId={activePropertyId} properties={properties} />

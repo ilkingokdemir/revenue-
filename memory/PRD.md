@@ -1013,3 +1013,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - TENANT İZOLASYONU SIKILAŞTIRMA: /api/data-quality/summary/all artık property_ids scoping yapar (sağlık şeridi sızıntısı kapandı); tüm /api/cm/* endpoint'lerine _check_scope (403) eklendi ve doğrulandı. PendingLegalDocsGate hydration uyarısı (p>div) düzeltildi.
 - Test: iter_577 backend 12/12 + frontend %100; ek self-test: scoped kullanıcı → cm/setup/default 403 OK. Test tenantları temizlendi, default plan=full.
 - BEKLEYEN: Resend gerçek anahtarı, canlı OTA/PMS anahtarları, iCal import/export (P1), haftalık skor e-postası (P1).
+
+## Güncelleme (2026-08-19, iCal SENKRONU — self-test: backend curl e2e + UI screenshot PASS)
+- iCal SENKRONU: /app/backend/routes/distribution/ical_sync.py (/api/ical/*). DIŞA: GET /api/ical/export/{pid}.ics?token=...&room_type_id= (public, token'lı; rezervasyonlardan VEVENT feed; yanlış token 403; rotate-token var). İÇE: kaynak ekle (oda + kanal adı + URL, gerçek HTTP fetch + regex VEVENT parser DATE/DATE-TIME) → dolu tarihler oos_blocks olarak yazılır (reason "iCal: Airbnb — ...", ical_source_id ile; re-sync'te kaynak blokları yenilenir; kaynak silinince blokları da silinir). GERÇEK entegrasyon — mock değil. workers.py ical_sync_loop 4 saatte bir. Tenant scope 403 korumalı.
+- UI: IcalSyncPanel.js (Channels & Distribution > "iCal Senkronu (Airbnb)", ical-sync) — export URL + oda tipi feed kopyalama çipleri, içe aktarma formu, kaynak listesi (durum/blok sayısı/son senkron/sil), "Şimdi Senkronla".
+- Test: kendi export feed'imizle gerçek e2e (324 blok içe aktarıldı, hata/validasyon durumları OK), test kaynakları + blokları temizlendi. UI screenshot doğrulandı.

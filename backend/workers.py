@@ -1459,3 +1459,20 @@ async def price_guard_loop(db, interval_seconds: int = 3600):
         except Exception as e:
             logger.warning(f"price_guard_loop error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+async def ical_sync_loop(db, interval_seconds: int = 14400):
+    """iCal kaynaklarını 4 saatte bir yeniler."""
+    from routes.distribution.ical_sync import sync_ical_source
+    await asyncio.sleep(180)
+    while True:
+        try:
+            sources = await db.ical_sources.find({}, {"_id": 0}).to_list(500)
+            for s in sources:
+                try:
+                    await sync_ical_source(db, s)
+                except Exception as e:
+                    logger.warning(f"ical_sync_loop {s.get('id')} error: {e}")
+        except Exception as e:
+            logger.warning(f"ical_sync_loop error: {e}")
+        await asyncio.sleep(interval_seconds)

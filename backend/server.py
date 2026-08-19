@@ -81,6 +81,7 @@ from routes.revenue_ext.dynamic_pricing import create_dynamic_pricing_router
 from routes.revenue_ext.rms_onboarding import create_rms_onboarding_router
 from routes.revenue_ext.price_guards import create_price_guards_router
 from routes.distribution.cm_onboarding import create_cm_onboarding_router
+from routes.distribution.ical_sync import create_ical_router
 from routes.hotel_ops.event_intelligence import create_event_intelligence_router
 from routes.revenue_ext.parity_analysis import create_parity_analysis_router
 from routes.distribution.channel_manager import create_channel_manager_router
@@ -1596,6 +1597,7 @@ api_router.include_router(create_compset_router(db, require_roles))
 api_router.include_router(create_rms_onboarding_router(db, require_roles))
 api_router.include_router(create_price_guards_router(db, require_roles))
 api_router.include_router(create_cm_onboarding_router(db, require_roles))
+api_router.include_router(create_ical_router(db, require_roles))
 
 from routes.integrations_pkg.webhooks_api_keys import create_webhooks_api_keys_router
 api_router.include_router(create_webhooks_api_keys_router(db, require_roles))
@@ -2138,6 +2140,8 @@ async def startup_event():
     asyncio.create_task(otb_snapshot_loop(db))
     from workers import price_guard_loop
     asyncio.create_task(price_guard_loop(db))
+    from workers import ical_sync_loop
+    asyncio.create_task(ical_sync_loop(db))
     asyncio.create_task(str_scan_loop(db))
     asyncio.create_task(revenue_brain_loop(db))
     from workers import weekly_brief_loop, weekly_exec_report_loop, marketing_radar_loop

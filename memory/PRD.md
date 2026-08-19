@@ -1031,3 +1031,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - ical_sync.py: GET /api/ical/{pid}/conflicts/{cid}/options (tarih aralığında boş odalar: rezervasyon + oos blok kontrolü, aynı tip önce) ve POST /resolve — action move_booking (hedef oda müsaitlik yeniden kontrolü 409, booking.room_id taşınır + move_reason, o rezervasyonun tüm açık çakışmaları resolved) | action close_channel (ilgili oos bloğu silinir, çakışma channel_closed, db.ical_ignored_events'e eklenir → sonraki senkron o bloğu yeniden İTHAL ETMEZ; kullanıcıya "kanal tarafında da iptal edin" mesajı).
 - UI: IcalSyncPanel çakışma satırlarında "Odaya Taşı" (boş oda dropdown + Taşımayı Onayla; boş oda yoksa uyarı) ve "Kanalı Kapat" butonları (conflict-move-btn-{id}, conflict-close-btn-{id}, conflict-room-select-{id}).
 - Test: iki yol da curl ile e2e doğrulandı (taşıma: booking taşındı+resolved; kapama: blok silindi+ignored kaydı), UI resolver ekran görüntüsüyle onaylandı, tüm test verisi temizlendi/geri alındı.
+
+## Güncelleme (2026-08-19, CLOUDBEDS/MEWS MENÜ KARŞILAŞTIRMA RAPORU)
+- Kullanıcının paylaştığı cloudbeds.com + mews.com menü ekran görüntüleri madde madde kod tabanıyla denetlendi → /app/memory/GAP_ANALYSIS_CLOUDBEDS_MEWS_MENUS_2026.md
+- SONUÇ: ~30 menü kaleminin %80'i tam VAR, %13 kısmi, gerçek eksikler: P1 Web Sitesi Oluşturucu (Cloudbeds Websites), P1 Stripe Terminal (Mews Terminals), P2 reklam entegrasyonu, P2 AI marka çatısı, P2 tesis tipi/role preset'leri, P2 esnek finansman, P2 marketplace ölçeği.
+- Üstün alanlar: RMS derinliği, Grup Satış OS, iCal çakışma çözümü, self-signup+deneme, Health Sentinel, profit-first pricing, ABS.

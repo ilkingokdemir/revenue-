@@ -8,6 +8,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 export default function IcalSyncPanel({ activePropertyId, properties }) {
   const pid = activePropertyId && activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default");
   const [sources, setSources] = useState([]);
+  const [conflicts, setConflicts] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [roomTypes, setRoomTypes] = useState([]);
   const [token, setToken] = useState("");
@@ -18,6 +19,7 @@ export default function IcalSyncPanel({ activePropertyId, properties }) {
     try {
       const { data } = await axios.get(`${API}/ical/${pid}`);
       setSources(data.sources || []);
+      setConflicts(data.conflicts || []);
       setRooms(data.rooms || []);
       setRoomTypes(data.room_types || []);
       setToken(data.export_token || "");
@@ -41,6 +43,7 @@ export default function IcalSyncPanel({ activePropertyId, properties }) {
     try {
       const { data } = await axios.post(`${API}/ical/${pid}/sources`, form);
       const fs = data.first_sync;
+      if (fs.conflicts > 0) toast.warning(`⚠️ ${fs.conflicts} çifte rezervasyon çakışması bulundu!`);
       toast.success(fs.status === "ok" ? `Bağlandı — ${fs.blocks} blok içe aktarıldı` : `Kaynak eklendi, ilk senkron hatası: ${fs.error}`);
       setForm({ ...form, url: "" });
       load();
@@ -53,6 +56,8 @@ export default function IcalSyncPanel({ activePropertyId, properties }) {
     try {
       const { data } = await axios.post(`${API}/ical/${pid}/sync`);
       const ok = data.results.filter((r) => r.status === "ok").length;
+      const conf = data.results.reduce((s, r) => s + (r.conflicts || 0), 0);
+      if (conf > 0) toast.warning(`⚠️ ${conf} çifte rezervasyon çakışması tespit edildi!`);
       toast.success(`${ok}/${data.results.length} kaynak senkronlandı`);
       load();
     } catch (e) { toast.error(e.response?.data?.detail || "Senkron başarısız"); }
@@ -81,6 +86,27 @@ export default function IcalSyncPanel({ activePropertyId, properties }) {
           <ArrowsClockwise size={13} /> Şimdi Senkronla
         </button>
       </div>
+
+      {/* ÇİFTE REZERVASYON ALARMI */}
+      {conflicts.length > 0 && (
+        <div className="bg-red-50 rounded-2xl border-2 border-red-300 p-5 mb-5" data-testid="ical-conflicts-card">
+          <div className="flex items-center gap-2 mb-2">
+            <WarningCircle size={18} weight="fill" className="text-red-600" />
+            <h3 className="text-sm font-black text-red-700">Çifte Rezervasyon Alarmı — {conflicts.length} çakışma</h3>
+          </div>
+          <p className="text-[11px] text-red-600 mb-3">iCal takvim blokları içerideki rezervasyonlarla çakışıyor. Kanallardan birini kapatın veya misafiri taşıyın.</p>
+          <div className="space-y-1.5">
+            {conflicts.map((c) => (
+              <div key={c.key} className="flex items-center gap-2 text-xs bg-white rounded-lg px-3 py-2 border border-red-200" data-testid={`ical-conflict-${c.booking_id}`}>
+                <span className="font-bold text-stone-800">{c.room_name}</span>
+                <span className="text-red-600 font-semibold">{c.channel_name}: {c.block_start} → {c.block_end}</span>
+                <span className="text-stone-400">×</span>
+                <span className="flex-1 text-stone-700 truncate">Rezervasyon: {c.guest_name || c.booking_id} ({c.check_in} → {c.check_out})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* DIŞA AKTAR */}
       <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm mb-5" data-testid="ical-export-card">

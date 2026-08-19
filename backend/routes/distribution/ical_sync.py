@@ -69,7 +69,62 @@ async def sync_ical_source(db, src: dict) -> dict:
         count += 1
     await db.ical_sources.update_one({"id": src["id"]}, {"$set": {
         "last_sync": now_iso(), "last_status": "ok", "last_error": None, "blocks_count": count}})
-    return {"source_id": src["id"], "status": "ok", "blocks": count}
+
+    # --- Çifte rezervasyon alarmı: iCal bloğu ↔ içerideki rezervasyon çakışması ---
+    conflicts_found = 0
+    try:
+        bookings = await db.bookings.find(
+            {"property_id": src["property_id"], "room_id": src["room_id"],
+             "status": {"$nin": ["cancelled", "no_show"]}},
+            {"_id": 0, "id": 1, "guest_name": 1, "check_in": 1, "check_out": 1}).to_list(2000)
+        seen_keys = []
+        new_conflicts = []
+        for ev in events:
+            for b in bookings:
+                ci, co = str(b.get("check_in") or ""), str(b.get("check_out") or "")
+                if not ci or not co:
+                    continue
+                if ci < ev["end"] and co > ev["start"]:
+                    key = f"{src['id']}:{b['id']}:{ev['start']}:{ev['end']}"
+                    seen_keys.append(key)
+                    existing = await db.ical_conflicts.find_one({"key": key}, {"_id": 1})
+                    await db.ical_conflicts.update_one({"key": key}, {"$set": {
+                        "key": key, "property_id": src["property_id"], "room_id": src["room_id"],
+                        "room_name": src.get("room_name", ""), "source_id": src["id"],
+                        "channel_name": src.get("channel_name", "iCal"), "booking_id": b["id"],
+                        "guest_name": b.get("guest_name", ""), "check_in": ci, "check_out": co,
+                        "block_start": ev["start"], "block_end": ev["end"],
+                        "status": "open", "last_seen": now_iso()},
+                        "$setOnInsert": {"id": str(uuid.uuid4()), "first_seen": now_iso()}}, upsert=True)
+                    conflicts_found += 1
+                    if not existing:
+                        new_conflicts.append((ev, b, ci, co))
+        # Bildirim: ilk 3 yeni çakışma tekil, kalanı tek özet (bildirim patlamasını önle)
+        for ev, b, ci, co in new_conflicts[:3]:
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()), "property_id": src["property_id"],
+                "type": "ical_conflict",
+                "title": f"⚠️ Çifte rezervasyon riski: {src.get('room_name', '')}",
+                "message": f"{src.get('channel_name', 'iCal')} takvim bloğu ({ev['start']} → {ev['end']}) "
+                           f"içerideki rezervasyonla çakışıyor: {b.get('guest_name', '')} ({ci} → {co}). "
+                           f"Kanallardan birini kapatın!",
+                "read": False, "created_at": now_iso()})
+        if len(new_conflicts) > 3:
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()), "property_id": src["property_id"],
+                "type": "ical_conflict",
+                "title": f"⚠️ {len(new_conflicts)} çifte rezervasyon çakışması: {src.get('room_name', '')}",
+                "message": f"{src.get('channel_name', 'iCal')} senkronunda {len(new_conflicts)} çakışma bulundu. "
+                           f"Detaylar iCal Senkronu panelinde.",
+                "read": False, "created_at": now_iso()})
+        # Bu kaynağın artık görülmeyen çakışmalarını çözüldü işaretle
+        await db.ical_conflicts.update_many(
+            {"source_id": src["id"], "status": "open", "key": {"$nin": seen_keys}},
+            {"$set": {"status": "resolved", "resolved_at": now_iso()}})
+    except Exception as e:
+        logger.warning(f"ical conflict check error: {e}")
+
+    return {"source_id": src["id"], "status": "ok", "blocks": count, "conflicts": conflicts_found}
 
 
 def create_ical_router(db, require_roles):
@@ -120,7 +175,10 @@ def create_ical_router(db, require_roles):
         sources = await db.ical_sources.find({"property_id": pid}, {"_id": 0}).sort("created_at", -1).to_list(50)
         rooms = await db.rooms.find({"property_id": pid}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
         rts = await db.room_types.find({"property_id": pid}, {"_id": 0, "id": 1, "name": 1}).to_list(50)
-        return {"sources": sources, "rooms": rooms, "room_types": rts, "export_token": await _token(pid)}
+        conflicts = await db.ical_conflicts.find({"property_id": pid, "status": "open"},
+                                                 {"_id": 0}).sort("last_seen", -1).to_list(50)
+        return {"sources": sources, "rooms": rooms, "room_types": rts,
+                "conflicts": conflicts, "export_token": await _token(pid)}
 
     @router.post("/{pid}/sources")
     async def add_source(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
@@ -150,6 +208,7 @@ def create_ical_router(db, require_roles):
         if r.deleted_count == 0:
             raise HTTPException(404, "Kaynak bulunamadı")
         blocks = await db.oos_blocks.delete_many({"ical_source_id": sid})
+        await db.ical_conflicts.delete_many({"source_id": sid})
         return {"ok": True, "blocks_removed": blocks.deleted_count}
 
     @router.post("/{pid}/sync")

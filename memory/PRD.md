@@ -1021,3 +1021,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 
 ## Güncelleme (2026-08-19, TAKVİMDE iCAL ROZETİ — screenshot PASS)
 - BookingTimeline.js oos blok render'ı: ical_source_id/created_by=ical_sync bloklar Airbnb kırmızısı (#FF385C) çizgili, Airbnb bélo SVG logosu (kanal adı airbnb içeriyorsa; değilse CalendarDays ikonu) + kanal etiketi (testid ical-block-{id}). Elle silinemez — tıklayınca "iCal Senkronu panelinden yönetilir" toast'ı. Normal OOS blokları gri çizgili kalır.
+
+## Güncelleme (2026-08-19, ÇİFTE REZERVASYON ALARMI — e2e curl + UI screenshot PASS)
+- ical_sync.py sync_ical_source: her senkron sonrası içe aktarılan blokları odanın aktif rezervasyonlarıyla çakışma taraması. Çakışmalar db.ical_conflicts'e key (source:booking:aralık) ile dedupe upsert; kaybolanlar "resolved". Bildirim patlaması koruması: senkron başına ilk 3 yeni çakışma tekil bildirim + kalanı tek özet bildirimi (db.notifications, type ical_conflict). Kaynak silinince çakışmaları da silinir. Sync sonucu conflicts sayısı döner.
+- UI: IcalSyncPanel — kırmızı "Çifte Rezervasyon Alarmı — N çakışma" kartı (ical-conflicts-card; oda, kanal blok aralığı × rezervasyon misafir/tarih satırları) + senkron/kaynak ekleme toast'larında çakışma uyarısı.
+- Test: kendi feed'imizle 526 unique çakışma üretildi → bildirim 4'te sınırlandı (3+özet), GET 50 döndü, UI kartı doğrulandı, tüm test verisi temizlendi.

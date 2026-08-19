@@ -211,4 +211,39 @@ def create_site_builder_router(db, require_roles):
             raise HTTPException(404, "Alan adı eşleşmedi")
         return {"property_id": cfg["property_id"]}
 
+    # ---------------- ZİYARET İSTATİSTİĞİ ----------------
+    @router.post("/public/track")
+    async def track(data: dict):
+        pid = (data.get("property_id") or "").strip()
+        event = data.get("event")
+        if not pid or event not in ("view", "cta_click"):
+            raise HTTPException(422, "property_id ve event (view|cta_click) zorunlu")
+        now = datetime.now(timezone.utc)
+        await db.site_visits.insert_one({
+            "id": str(uuid.uuid4()), "property_id": pid, "event": event,
+            "visitor_id": (data.get("visitor_id") or "")[:64],
+            "date": now.date().isoformat(), "created_at": now.isoformat()})
+        return {"ok": True}
+
+    @router.get("/{pid}/stats")
+    async def site_stats(pid: str, days: int = 30, _u: dict = Depends(require_roles(*ROLES))):
+        from datetime import timedelta
+        since_dt = datetime.now(timezone.utc) - timedelta(days=max(1, min(90, days)))
+        since = since_dt.isoformat()
+        q = {"property_id": pid, "created_at": {"$gte": since}}
+        views = await db.site_visits.count_documents({**q, "event": "view"})
+        clicks = await db.site_visits.count_documents({**q, "event": "cta_click"})
+        uniques = len(await db.site_visits.distinct("visitor_id", {**q, "event": "view", "visitor_id": {"$ne": ""}}))
+        bookings = await db.bookings.count_documents(
+            {"property_id": pid, "source": "website_widget", "created_at": {"$gte": since}})
+        daily = {}
+        async for v in db.site_visits.find({**q, "event": "view"}, {"_id": 0, "date": 1}):
+            daily[v["date"]] = daily.get(v["date"], 0) + 1
+        series = sorted(daily.items())[-14:]
+        return {"days": days, "views": views, "unique_visitors": uniques, "cta_clicks": clicks,
+                "bookings": bookings,
+                "click_rate_pct": round(min(clicks / views * 100, 100), 1) if views else 0,
+                "conversion_pct": round(min(bookings / views * 100, 100), 1) if views else 0,
+                "daily": [{"date": d, "views": c} for d, c in series]}
+
     return router

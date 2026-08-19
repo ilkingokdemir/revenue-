@@ -1068,3 +1068,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Builder: SiteBuilderPanel "SEO Ayarları" kartı — seo_title (60 kr sayaç), seo_description (160 kr sayaç) + gerçekçi Google Önizlemesi (yeşil URL, mavi başlık, gri açıklama; doğrulanmış özel alan adı da gösterilir). Backend content coercion listesine seo_* alanları eklendi.
 - Public site (HotelSitePage): runtime SEO enjeksiyonu — document.title, meta description/keywords, OG title/desc/type/image (kapak fotoğrafı), JSON-LD schema.org Hotel (ad, açıklama, adres, telefon, görsel). Screenshot + evaluate ile doğrulandı (title/meta/jsonld hepsi sayfada).
 - NOT: SPA olduğu için SSR yok; Google JS render'lı sayfaları indeksler, ancak tam SEO için ileride prerender/SSR düşünülebilir (backlog P2).
+
+## Güncelleme (2026-08-19, SİTE ZİYARET İSTATİSTİĞİ — e2e PASS)
+- Backend (site_builder.py): POST /api/site-builder/public/track (public; event view|cta_click 422 validasyonlu, visitor_id, db.site_visits) + GET /api/site-builder/{pid}/stats?days=30 (görüntülenme, distinct tekil ziyaretçi, cta tıkları, source=website_widget rezervasyonlar, tık oranı + dönüşüm % [100 cap], son 14 gün günlük seri).
+- Frontend: HotelSitePage mount'ta view track (localStorage mhb_visitor_id) + tüm rezervasyon CTA'larında cta_click track. SiteBuilderPanel "Ziyaret İstatistikleri" kartı: 5 metrik karosu + günlük mini bar grafik (site-stats-card, site-stat-*).
+- Test: curl (track/validasyon/stats) + gerçek tarayıcı akışı (view+CTA→/book yönlendirme→sayaç artışı) screenshot ile doğrulandı.

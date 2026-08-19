@@ -35,6 +35,24 @@ export default function HotelSitePage({ propertyId }) {
       .catch(() => setErr(true));
   }, [propertyId]);
 
+  // Ziyaret takibi
+  useEffect(() => {
+    if (!data) return;
+    let vid = "";
+    try {
+      vid = localStorage.getItem("mhb_visitor_id") || "";
+      if (!vid) { vid = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem("mhb_visitor_id", vid); }
+    } catch { /* ignore */ }
+    axios.post(`${API}/site-builder/public/track`, { property_id: propertyId, event: "view", visitor_id: vid }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data ? 1 : 0]);
+
+  const trackCta = () => {
+    let vid = "";
+    try { vid = localStorage.getItem("mhb_visitor_id") || ""; } catch { /* ignore */ }
+    axios.post(`${API}/site-builder/public/track`, { property_id: propertyId, event: "cta_click", visitor_id: vid }).catch(() => {});
+  };
+
   // SEO: title + meta + OG + JSON-LD (schema.org Hotel)
   useEffect(() => {
     if (!data) return;
@@ -87,7 +105,7 @@ export default function HotelSitePage({ propertyId }) {
         style={cover ? { backgroundImage: `linear-gradient(rgba(0,0,0,.45), rgba(0,0,0,.55)), url(${apiBase}${cover.url})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
         <h1 className={`relative text-4xl sm:text-5xl lg:text-6xl font-black ${heroDark || cover ? "text-white" : "text-stone-900"}`} data-testid="site-hero-title">{name}</h1>
         {c.headline && <p className={`relative mt-4 text-base md:text-lg ${heroDark || cover ? "text-white/80" : "text-stone-600"}`}>{c.headline}</p>}
-        <a href={`/book/${propertyId}`} data-testid="site-book-cta"
+        <a href={`/book/${propertyId}`} data-testid="site-book-cta" onClick={trackCta}
           className={`relative inline-block mt-8 px-8 py-3 rounded-full text-sm font-black text-white ${t.accent} transition-colors`}>
           Rezervasyon Yap
         </a>
@@ -128,7 +146,7 @@ export default function HotelSitePage({ propertyId }) {
                 <div key={r.id} className={`rounded-xl p-4 ${t.card}`} data-testid={`site-room-${r.id}`}>
                   <div className="text-sm font-bold">{r.name}</div>
                   <div className="text-xs opacity-70 mt-1">£{r.base_rate || r.base_price || "-"} / gece'den itibaren</div>
-                  <a href={`/book/${propertyId}`} className="inline-block mt-3 text-xs font-bold underline">Müsaitliğe bak →</a>
+                  <a href={`/book/${propertyId}`} onClick={trackCta} className="inline-block mt-3 text-xs font-bold underline">Müsaitliğe bak →</a>
                 </div>
               ))}
             </div>

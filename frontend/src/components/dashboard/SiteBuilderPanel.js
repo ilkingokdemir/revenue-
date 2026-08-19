@@ -14,6 +14,7 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
   const [photos, setPhotos] = useState([]);
   const [domain, setDomain] = useState("");
   const [domainStatus, setDomainStatus] = useState(null);
+  const [stats, setStats] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const saveDomain = async () => {
@@ -68,6 +69,10 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
       setContent({ headline: "", about: "", amenities: "", phone: "", email: "", address: "", seo_title: "", seo_description: "", ...(s.content || {}) });
       setPhotos(data.photos || []);
       if (s.custom_domain) { setDomain(s.custom_domain); setDomainStatus(s.domain_status || "pending"); }
+      try {
+        const { data: st } = await axios.get(`${API}/site-builder/${pid}/stats`);
+        setStats(st);
+      } catch { /* silent */ }
     } catch { toast.error("Yüklenemedi"); }
   }, [pid]);
 
@@ -111,6 +116,36 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
           </button>
         ))}
       </div>
+
+      {/* Ziyaret istatistikleri */}
+      {stats && (
+        <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm mb-5" data-testid="site-stats-card">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-stone-800">Ziyaret İstatistikleri · son {stats.days} gün</h3>
+            <span className="text-[10px] text-stone-400">Dönüşüm = rezervasyon / görüntülenme</span>
+          </div>
+          <div className="grid grid-cols-5 gap-2 mb-3">
+            {[["views", "Görüntülenme"], ["unique_visitors", "Tekil Ziyaretçi"], ["cta_clicks", "Rezervasyon Tıkı"], ["bookings", "Site Rezervasyonu"], ["conversion_pct", "Dönüşüm %"]].map(([k, l]) => (
+              <div key={k} className="rounded-xl bg-stone-50 p-3 text-center" data-testid={`site-stat-${k}`}>
+                <div className="text-xl font-black text-stone-800">{k === "conversion_pct" ? `%${stats[k]}` : stats[k]}</div>
+                <div className="text-[9px] uppercase tracking-wide text-stone-400 mt-0.5">{l}</div>
+              </div>
+            ))}
+          </div>
+          {stats.daily?.length > 0 && (
+            <div className="flex items-end gap-1 h-14" data-testid="site-stats-chart">
+              {stats.daily.map((d) => {
+                const max = Math.max(...stats.daily.map((x) => x.views), 1);
+                return (
+                  <div key={d.date} className="flex-1 bg-indigo-500/80 rounded-t hover:bg-indigo-600"
+                    style={{ height: `${Math.max((d.views / max) * 100, 6)}%` }}
+                    title={`${d.date}: ${d.views} görüntülenme`} />
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm space-y-3">
         <input value={content.headline} onChange={(e) => setContent({ ...content, headline: e.target.value })}

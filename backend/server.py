@@ -1809,6 +1809,10 @@ api_router.include_router(create_connector_catalog_router(db, require_roles))
 from routes.platform_ext.provisioning import create_provisioning_router
 api_router.include_router(create_provisioning_router(db, require_roles))
 
+# ===== P0 Paketi: Stripe, Public API, Süper Admin, Migration =====
+from routes.platform_ext.p0_pack import create_p0_router
+api_router.include_router(create_p0_router(db, require_roles))
+
 @app.on_event("startup")
 async def _start_journey_engine():
     import asyncio as _asyncio

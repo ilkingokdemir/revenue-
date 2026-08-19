@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def create_payments_router(db, require_roles):
     router = APIRouter()
-    stripe_api_key = os.environ.get("STRIPE_API_KEY", "")
+    stripe_api_key = os.environ.get("STRIPE_SECRET_KEY") or os.environ.get("STRIPE_API_KEY", "")
 
     # ==================== BOOKING CHECKOUT ====================
 
@@ -159,7 +159,17 @@ def create_payments_router(db, require_roles):
         stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url=webhook_url)
 
         try:
-            status = await stripe_checkout.get_checkout_status(session_id)
+            import stripe as _stripe
+            _stripe.api_key = stripe_api_key
+            _s = _stripe.checkout.Session.retrieve(session_id)
+            class _St: pass
+            status = _St()
+            status.payment_status = _s.payment_status
+            status.status = _s.status
+            status.amount_total = _s.amount_total
+            status.currency = getattr(_s, "currency", "gbp")
+            m = _s.metadata
+            status.metadata = m.to_dict() if hasattr(m, "to_dict") else {}
         except Exception as e:
             logger.error(f"Stripe status check error: {e}")
             return {"status": "error", "payment_status": "unknown", "error": str(e)[:200]}

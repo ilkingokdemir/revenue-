@@ -971,3 +971,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - /app/backend/routes/platform_ext/provisioning.py: provision_property(db,pid,name) idempotent seed — plan=full/modules_enabled=all, örnek oda tipi (yoksa), comp_trigger + occupancy_rules + cloudbeds_config + template_settings varsayılanları, hoş geldin bildirimi. Routes: GET /api/provisioning/status, POST /api/provisioning/apply-all (admin).
 - UYGULANDI: 13/13 aktif otel plan=full oldu (apply-all koştu). auth_routes.py POST /properties artık her YENİ oteli otomatik provizyonlar (doğrulandı: test oteli 7 öğeyle açıldı, sonra temizlendi).
 - Gelecek müşteri otelleri: hesap açıldığında 280+ modülün tamamı + varsayılan konfigürasyonlarla hazır başlar.
+
+## Güncelleme (2026-08-19, P0 PAKETİ — Mews/Cloudbeds gap kapama, iter 574: 30/30 geçti)
+- GAP ANALİZİ: /app/memory/GAP_ANALYSIS_MEWS_CLOUDBEDS.md (P0/P1/P2 + güçlü yönler). Kullanıcı TÜM P0'ları onayladı.
+- STRIPE ÖDEMELERİ: sandbox provizyonlandı (acct_1TxnuLE62dFDeRxE, keyler backend/.env'de STRIPE_SECRET_KEY vb.). POST /api/payments/checkout (dinamik tutar, pay-by-link, price_data), payment_transactions koleksiyonu, /api/stripe/webhook (imza doğrulamalı), GET /api/payments/tx-log/{pid}. Eski finance_ext/payments.py status handler'ı raw stripe SDK'ya çevrildi (StripeObject metadata .to_dict() fix). NOT: /api/payments/status + /transactions eski finance_ext handler'larında (p0_pack duplicate'leri kaldırıldı).
+- PUBLIC API v1: POST/GET /api/public-keys/{pid} (hbx_ key, maskeli liste, kullanım sayacı); X-API-Key auth ile GET /api/public/v1/{bookings,rates,guests} + POST /public/v1/bookings (booking.created webhook emit). Bilinen sınırlar: pagination/rate-limit yok (P1 backlog).
+- GİDEN WEBHOOKS: db.webhook_subscriptions + emit_webhook() (teslimat logu webhook_deliveries); events: booking.created, payment.completed, rate.updated, *.
+- SÜPER ADMİN: GET /api/super-admin/tenants (kullanım sayaçlarıyla), POST /{pid}/suspend.
+- VERİ GÖÇÜ: GET /api/migration/template/{kind}, POST /api/migration/import/{pid}/{kind} (bookings/guests/room_types, CSV, tarih validasyonu fromisoformat + co>ci, hata satır raporu, migration_log).
+- Test: iter 574 30/30 pytest + route çakışması/tarih validasyonu düzeltmeleri sonrası curl doğrulaması. UI henüz YOK (backend-first) — panel entegrasyonu sonraki adım.

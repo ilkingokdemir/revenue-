@@ -1,0 +1,42 @@
+{
+  "summary": "Iter 574 — P0 Pack backend deep test: Stripe checkout/status/transactions, Public API v1 (keys, bookings/rates/guests, auth), Outbound webhooks (sub + delivery attempt), Super Admin tenants + suspend/restore, CSV Migration (guests/bookings/kinds), Regression (provisioning/health-sentinel/cloudbeds mock). 30/30 pytest tests PASSED. Cleanup executed (QA- bookings, QA- migrated guests/bookings, httpbin webhook sub, suspend reverted). Two ROUTE-CONFLICT findings documented for main agent.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/payments/status/{session_id}", "issue": "ROUTE CONFLICT: older handler in /app/backend/routes/finance_ext/payments.py (line 149) is registered BEFORE p0_pack.py handler and wins. Older handler returns 200 with {\"status\":\"error\",\"payment_status\":\"unknown\",\"error\":\"...\"} for invalid session IDs instead of the 404 defined in p0_pack.py line 80. Also older handler does NOT persist status transitions consistently (uses live Stripe fetch each time). Note: For valid unpaid sessions it still returns payment_status=unpaid + status=open as expected."},
+      {"endpoint": "GET /api/payments/transactions/{property_id}", "issue": "ROUTE CONFLICT: older handler in finance_ext/payments.py (line 319) shadows p0_pack.py handler (line 98). Older returns a BARE LIST while p0_pack wraps in {\"transactions\": [...]}. Response shape inconsistency — external consumers relying on the newer shape will break."},
+      {"endpoint": "POST /api/payments/checkout (p0_pack)", "issue": "Currency default is 'gbp' hardcoded — consider deriving from property config (multi-currency setups)."},
+      {"endpoint": "POST /api/migration/import/{pid}/bookings", "issue": "Bad date strings (e.g. 'notadate') are stored as-is; only float() failures produce error rows. Consider stricter date validation (fromisoformat)."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter574_p0_pack.py",
+    "/app/test_reports/pytest/iter574.xml"
+  ],
+  "action_items": [
+    "MINOR: Remove or gate the duplicate /payments/status/{session_id} and /payments/transactions/{property_id} handlers in /app/backend/routes/finance_ext/payments.py OR drop the duplicates from p0_pack.py. Two active handlers with different response shapes will confuse SDK consumers.",
+    "MINOR: Migration bookings importer should validate check_in/check_out via datetime.fromisoformat and add row to errors on failure (currently silently accepts garbage dates).",
+    "OPTIONAL: emit_webhook() has retry=1 in the docstring but the code actually attempts only once. Either implement retry (exponential backoff) or fix the docstring.",
+    "OPTIONAL: /public/v1/bookings limit is capped at 200 but no offset/pagination — will not scale beyond 200 bookings per property."
+  ],
+  "critical_code_review_comments": [
+    "POSITIVE: p0_pack.py is compact, well-factored, uses raw stripe SDK correctly (no ObjectId leaks — projections use {_id:0} everywhere).",
+    "POSITIVE: API key masking on list endpoint (r['key'][:12]+'•••') is done server-side. Full key never re-exposed after creation — good.",
+    "POSITIVE: emit_webhook() persists a delivery record for every attempt (ok=true/false) — auditable.",
+    "POSITIVE: Super Admin tenants endpoint aggregates counts in a single request; 13 tenants complete in <1s.",
+    "CONCERN (HIGH): stripe.error import in try/except at p0_pack.py line 93 — newer stripe SDK versions moved this to stripe.StripeError. Should verify SDK version compatibility (current tests pass, but future upgrade risk).",
+    "CONCERN: /public/v1/bookings does NOT filter by check_in/check_out date range — returns ALL bookings for the property (sorted desc, limit 200). Large tenants will hit the cap silently.",
+    "CONCERN: POST /public/v1/bookings does not validate that check_out > check_in; also stores dates as raw strings without ISO parsing.",
+    "CONCERN: No rate limiting on public API — any leaked hbx_ key can be brute-forced or abused. Consider per-key RPS limits.",
+    "CONCERN: Route conflict on /payments/status and /payments/transactions (see minor issues) is a real bug — p0_pack.py duplicates handlers that already exist in finance_ext/payments.py and are never invoked. Dead code."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter574_p0_pack.py"],
+  "success_rate": {"backend": "100% (30/30 pytest)", "frontend": "N/A"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Created 1 QA public API key (hbx_...), 2 QA public-API bookings (source:public_api), 2 QA migration guests, 3 QA migration bookings, 1 httpbin webhook subscription, 1 Stripe checkout session (payment_transactions log kept intentionally). ALL cleaned up by test_zz_cleanup (except payment_transactions log per instructions). Suspend on whitechapel-grand REVERTED to false.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "P0 pack (Stripe / Public API v1 / Webhooks / Super Admin / Migration) is fully functional end-to-end from backend. Route conflict on /payments/status and /payments/transactions is dead-code (p0_pack duplicates are shadowed by finance_ext/payments.py) — pick one implementation and delete the other. Public API v1 lacks pagination + rate limiting + date-range filter. Migration importer needs stricter date validation. Webhook delivery to httpbin succeeded (ok=true observed in recent_deliveries).",
+  "rca_of_the_issue": "Route registration order in server.py causes finance_ext/payments.py routes to be added before p0_pack.py routes. FastAPI matches on first-registered handler, so p0_pack duplicates never execute. This is why test_status_not_found returned 200 (from old handler) instead of 404 (from p0_pack). Fix: consolidate to one handler per path. Recommend keeping the older finance_ext handlers (they have booking/income integration) and removing lines 76-102 from p0_pack.py, OR moving p0_pack registration earlier."
+}

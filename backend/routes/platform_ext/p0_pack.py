@@ -1,0 +1,267 @@
+"""P0 Paketi: Stripe Ödemeleri, Public API v1 + Giden Webhooks, Süper Admin, Veri Göçü."""
+import os
+import csv
+import io
+import uuid
+import secrets
+from datetime import datetime, timezone
+
+import httpx
+import stripe
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
+WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+now_iso = lambda: datetime.now(timezone.utc).isoformat()
+
+
+async def emit_webhook(db, pid: str, event: str, data: dict):
+    """Giden webhook: abone URL'lere event POST'lar (tek deneme, teslimat loglanır)."""
+    subs = await db.webhook_subscriptions.find(
+        {"property_id": {"$in": [pid, "*"]}, "active": {"$ne": False},
+         "$or": [{"events": event}, {"events": "*"}]}, {"_id": 0}).to_list(20)
+    if not subs:
+        return 0
+    payload = {"id": str(uuid.uuid4()), "event": event, "property_id": pid,
+               "created_at": now_iso(), "data": data}
+    sent = 0
+    async with httpx.AsyncClient(timeout=8) as client:
+        for s in subs:
+            try:
+                r = await client.post(s["url"], json=payload,
+                                      headers={"X-Webhook-Secret": s.get("secret", "")})
+                ok = r.status_code < 300
+            except Exception:
+                ok = False
+            sent += 1 if ok else 0
+            await db.webhook_deliveries.insert_one({
+                "id": str(uuid.uuid4()), "subscription_id": s.get("id"), "event": event,
+                "url": s["url"], "ok": ok, "property_id": pid, "at": now_iso()})
+    return sent
+
+
+def create_p0_router(db, require_roles):
+    router = APIRouter(tags=["p0"])
+    ROLES = ("admin", "manager")
+
+    # ================= 1) STRIPE ÖDEMELERİ =================
+    @router.post("/payments/checkout")
+    async def create_checkout(data: dict, request: Request,
+                              _u: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Pay-by-link / tahsilat: booking için dinamik tutarlı Stripe Checkout üretir."""
+        amount = float(data.get("amount") or 0)
+        if amount <= 0 or amount > 100000:
+            raise HTTPException(400, "Geçersiz tutar")
+        currency = (data.get("currency") or "gbp").lower()
+        pid = data.get("property_id") or "default"
+        booking_id = data.get("booking_id") or ""
+        desc = (data.get("description") or f"Konaklama ödemesi {booking_id}")[:120]
+        origin = data.get("origin_url") or str(request.base_url).rstrip("/")
+        session = stripe.checkout.Session.create(
+            line_items=[{"price_data": {"currency": currency, "unit_amount": int(round(amount * 100)),
+                                        "product_data": {"name": desc}}, "quantity": 1}],
+            mode="payment",
+            success_url=f"{origin}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{origin}/payment/cancel",
+            metadata={"property_id": pid, "booking_id": booking_id, "kind": data.get("kind", "payment")})
+        await db.payment_transactions.insert_one({
+            "id": str(uuid.uuid4()), "session_id": session.id, "property_id": pid,
+            "booking_id": booking_id, "amount": amount, "currency": currency,
+            "description": desc, "kind": data.get("kind", "payment"),
+            "status": "initiated", "payment_status": "pending",
+            "created_by": str(_u.get("email") or ""), "created_at": now_iso(), "updated_at": now_iso()})
+        return {"checkout_url": session.url, "session_id": session.id,
+                "note": "Bu linki misafire gönderin (pay-by-link) veya yönlendirin."}
+
+    @router.get("/payments/tx-log/{pid}")
+    async def list_transactions(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        rows = await db.payment_transactions.find({"property_id": pid}, {"_id": 0}).sort(
+            "created_at", -1).to_list(50)
+        return {"transactions": rows}
+
+    @router.post("/stripe/webhook")
+    async def stripe_webhook(request: Request):
+        payload = await request.body()
+        sig = request.headers.get("stripe-signature", "")
+        try:
+            event = stripe.Webhook.construct_event(payload, sig, WEBHOOK_SECRET)
+        except Exception:
+            raise HTTPException(400, "Invalid signature")
+        obj, t = event["data"]["object"], event["type"]
+        if t == "checkout.session.completed":
+            await db.payment_transactions.update_one(
+                {"session_id": obj["id"], "payment_status": {"$ne": "paid"}},
+                {"$set": {"status": "completed", "payment_status": obj.get("payment_status", "paid"),
+                          "stripe_payment_intent_id": obj.get("payment_intent"), "updated_at": now_iso()}})
+        elif t == "charge.refunded":
+            await db.payment_transactions.update_one(
+                {"stripe_payment_intent_id": obj.get("payment_intent")},
+                {"$set": {"status": "refunded", "payment_status": "refunded", "updated_at": now_iso()}})
+        return {"status": "ok"}
+
+    # ================= 2) PUBLIC API v1 (dış sistemler bize bağlanır) =================
+    async def api_key_auth(request: Request) -> dict:
+        key = request.headers.get("X-API-Key", "")
+        doc = await db.public_api_keys.find_one({"key": key, "active": {"$ne": False}}, {"_id": 0})
+        if not doc:
+            raise HTTPException(401, "Geçersiz API anahtarı — X-API-Key header gerekli")
+        await db.public_api_keys.update_one({"key": key}, {"$inc": {"calls": 1},
+                                                           "$set": {"last_used": now_iso()}})
+        return doc
+
+    @router.post("/public-keys/{pid}")
+    async def create_api_key(pid: str, data: dict = None, _u: dict = Depends(require_roles("admin"))):
+        doc = {"id": str(uuid.uuid4()), "key": f"hbx_{secrets.token_urlsafe(24)}",
+               "property_id": pid, "name": (data or {}).get("name", "default"),
+               "active": True, "calls": 0, "created_at": now_iso()}
+        await db.public_api_keys.insert_one({**doc})
+        return doc
+
+    @router.get("/public-keys/{pid}")
+    async def list_api_keys(pid: str, _u: dict = Depends(require_roles("admin"))):
+        rows = await db.public_api_keys.find({"property_id": pid}, {"_id": 0}).to_list(20)
+        for r in rows:
+            r["key"] = r["key"][:12] + "•••"
+        return {"keys": rows}
+
+    @router.get("/public/v1/bookings")
+    async def pub_bookings(request: Request, limit: int = 50):
+        k = await api_key_auth(request)
+        rows = await db.bookings.find({"property_id": k["property_id"]}, {"_id": 0}).sort(
+            "created_at", -1).to_list(min(limit, 200))
+        return {"bookings": rows}
+
+    @router.get("/public/v1/rates")
+    async def pub_rates(request: Request, days: int = 14):
+        k = await api_key_auth(request)
+        from routes.distribution.cloudbeds_adapter import _build_rate_blocks
+        cfg = await db.cloudbeds_config.find_one({"property_id": k["property_id"]}, {"_id": 0}) or {}
+        blocks = await _build_rate_blocks(db, k["property_id"], min(days, 30), cfg)
+        return {"rates": blocks}
+
+    @router.get("/public/v1/guests")
+    async def pub_guests(request: Request, limit: int = 50):
+        k = await api_key_auth(request)
+        rows = await db.guests.find({"property_id": k["property_id"]},
+                                    {"_id": 0}).to_list(min(limit, 200))
+        return {"guests": rows}
+
+    @router.post("/public/v1/bookings")
+    async def pub_create_booking(request: Request, data: dict):
+        k = await api_key_auth(request)
+        doc = {"id": str(uuid.uuid4()), "property_id": k["property_id"],
+               "guest_name": str(data.get("guest_name", ""))[:100],
+               "check_in": data.get("check_in"), "check_out": data.get("check_out"),
+               "room_type_id": data.get("room_type_id", ""), "status": "confirmed",
+               "total_price": float(data.get("total_price") or 0),
+               "source": "public_api", "created_at": now_iso()}
+        if not (doc["guest_name"] and doc["check_in"] and doc["check_out"]):
+            raise HTTPException(422, "guest_name, check_in, check_out zorunlu")
+        await db.bookings.insert_one({**doc})
+        await emit_webhook(db, k["property_id"], "booking.created", doc)
+        return doc
+
+    # -------- Giden webhook abonelikleri --------
+    @router.get("/webhook-subs/{pid}")
+    async def list_subs(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        rows = await db.webhook_subscriptions.find({"property_id": pid}, {"_id": 0}).to_list(20)
+        deliveries = await db.webhook_deliveries.find({"property_id": pid}, {"_id": 0}).sort(
+            "at", -1).to_list(10)
+        return {"subscriptions": rows, "recent_deliveries": deliveries,
+                "events": ["booking.created", "payment.completed", "rate.updated", "*"]}
+
+    @router.post("/webhook-subs/{pid}")
+    async def add_sub(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        doc = {"id": str(uuid.uuid4()), "property_id": pid, "url": str(data.get("url", ""))[:300],
+               "events": data.get("events") or ["*"], "secret": secrets.token_urlsafe(16),
+               "active": True, "created_at": now_iso()}
+        if not doc["url"].startswith("http"):
+            raise HTTPException(422, "Geçerli URL gerekli")
+        await db.webhook_subscriptions.insert_one({**doc})
+        return doc
+
+    # ================= 3) SÜPER ADMİN KONSOLU =================
+    @router.get("/super-admin/tenants")
+    async def tenants(_u: dict = Depends(require_roles("admin"))):
+        props = await db.properties.find({}, {"_id": 0, "id": 1, "name": 1, "plan": 1,
+                                              "is_active": 1, "suspended": 1,
+                                              "provisioned_at": 1}).to_list(100)
+        out = []
+        for p in props:
+            pid = p["id"]
+            out.append({**p,
+                        "bookings": await db.bookings.count_documents({"property_id": pid}),
+                        "room_types": await db.room_types.count_documents({"property_id": pid}),
+                        "payments": await db.payment_transactions.count_documents({"property_id": pid}),
+                        "api_keys": await db.public_api_keys.count_documents({"property_id": pid})})
+        return {"tenants": out, "total": len(out)}
+
+    @router.post("/super-admin/tenants/{pid}/suspend")
+    async def suspend(pid: str, data: dict, _u: dict = Depends(require_roles("admin"))):
+        sus = bool(data.get("suspended", True))
+        await db.properties.update_one({"id": pid}, {"$set": {"suspended": sus,
+                                                              "suspended_at": now_iso() if sus else None}})
+        return {"ok": True, "property_id": pid, "suspended": sus}
+
+    # ================= 4) VERİ GÖÇÜ (CSV IMPORT) =================
+    @router.get("/migration/template/{kind}")
+    async def template(kind: str, _u: dict = Depends(require_roles(*ROLES))):
+        cols = {"bookings": "guest_name,check_in,check_out,room_type_name,total_price,status",
+                "guests": "name,email,phone,country,notes",
+                "room_types": "name,base_rate,total_rooms,max_guests"}
+        if kind not in cols:
+            raise HTTPException(404, "kind: bookings|guests|room_types")
+        return {"kind": kind, "csv_header": cols[kind]}
+
+    @router.post("/migration/import/{pid}/{kind}")
+    async def import_csv(pid: str, kind: str, file: UploadFile = File(...),
+                         _u: dict = Depends(require_roles(*ROLES))):
+        """CSV import: bookings/guests/room_types — eski PMS'ten veri göçü."""
+        if kind not in ("bookings", "guests", "room_types"):
+            raise HTTPException(404, "kind: bookings|guests|room_types")
+        text = (await file.read()).decode("utf-8-sig", errors="ignore")
+        rows = list(csv.DictReader(io.StringIO(text)))
+        if not rows:
+            raise HTTPException(422, "CSV boş veya başlık satırı eksik")
+        imported, errors = 0, []
+        rt_by_name = {r["name"].lower(): r["id"] for r in
+                      await db.room_types.find({"property_id": pid}, {"_id": 0, "id": 1, "name": 1}).to_list(50)}
+        for i, r in enumerate(rows[:2000]):
+            try:
+                if kind == "room_types":
+                    await db.room_types.insert_one({
+                        "id": str(uuid.uuid4()), "property_id": pid, "name": r["name"].strip(),
+                        "base_rate": float(r.get("base_rate") or 100),
+                        "total_rooms": int(r.get("total_rooms") or 1),
+                        "max_guests": int(r.get("max_guests") or 2),
+                        "is_active": True, "source": "migration", "created_at": now_iso()})
+                elif kind == "guests":
+                    await db.guests.insert_one({
+                        "id": str(uuid.uuid4()), "property_id": pid, "name": r["name"].strip(),
+                        "email": r.get("email", ""), "phone": r.get("phone", ""),
+                        "country": r.get("country", ""), "notes": r.get("notes", ""),
+                        "source": "migration", "created_at": now_iso()})
+                else:
+                    ci, co = r["check_in"].strip(), r["check_out"].strip()
+                    datetime.fromisoformat(ci); datetime.fromisoformat(co)
+                    if co <= ci:
+                        raise ValueError("check_out check_in'den sonra olmalı")
+                    await db.bookings.insert_one({
+                        "id": str(uuid.uuid4()), "property_id": pid,
+                        "guest_name": r["guest_name"].strip(),
+                        "check_in": ci, "check_out": co,
+                        "room_type_id": rt_by_name.get((r.get("room_type_name") or "").lower(), ""),
+                        "total_price": float(r.get("total_price") or 0),
+                        "status": r.get("status", "confirmed") or "confirmed",
+                        "source": "migration", "created_at": now_iso()})
+                imported += 1
+            except Exception as e:
+                errors.append({"row": i + 2, "error": str(e)[:80]})
+        await db.migration_log.insert_one({
+            "id": str(uuid.uuid4()), "property_id": pid, "kind": kind, "file": file.filename,
+            "imported": imported, "errors": len(errors), "by": str(_u.get("email") or ""),
+            "at": now_iso()})
+        return {"ok": True, "kind": kind, "imported": imported, "errors": errors[:10],
+                "total_rows": len(rows)}
+
+    return router

@@ -219,6 +219,7 @@ import {
   FunctionSpacePanel,
   HotelRunnerPanel,
   CloudbedsPanel,
+  ConnectorCatalogPanel,
   PmsConnectHub,
   MorningReportPanel,
   TrustCenterPanel,
@@ -837,6 +838,9 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         )}
         {activeView === "cloudbeds-live" && (
           <CloudbedsPanel activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "connector-catalog" && (
+          <ConnectorCatalogPanel activePropertyId={activePropertyId} properties={properties} onNavigate={navigate} />
         )}
         {activeView === "pms-connect" && (
           <PmsConnectHub activePropertyId={activePropertyId} properties={properties} />

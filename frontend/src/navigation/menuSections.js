@@ -302,6 +302,7 @@ export function buildMenuSections(t, user) {
         { id: "channel-revenue", icon: Lightning, name: "Kanal yield yönetimi", testId: "channel-revenue-btn" },
         { id: "hotelrunner-live", icon: Lightning, name: "HotelRunner Canlı Bağlantı (ARI)", testId: "hotelrunner-live-btn" },
         { id: "cloudbeds-live", icon: Lightning, name: "Cloudbeds Bağlantısı (PMS)", testId: "cloudbeds-live-btn" },
+        { id: "connector-catalog", icon: Lightning, name: "Bağlantı Kataloğu (PMS/CM/OTA)", testId: "connector-catalog-btn", core: true },
         { id: "pms-connect", icon: Lightning, name: "PMS Bağlantı Merkezi (Mews · SiteMinder · eviivo…)", testId: "pms-connect-btn" },
         { id: "rms-comparison", icon: Trophy, name: "Rakip Karşılaştırma (RMS)", testId: "rms-comparison-btn" },
 

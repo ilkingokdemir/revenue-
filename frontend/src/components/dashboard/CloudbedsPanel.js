@@ -19,6 +19,22 @@ export default function CloudbedsPanel({ activePropertyId, properties = [] }) {
   const [rateMap, setRateMap] = useState({});
   const [autoPush, setAutoPush] = useState(false);
   const [autoDays, setAutoDays] = useState(14);
+  const [pushAvail, setPushAvail] = useState(false);
+  const [preview, setPreview] = useState(null);
+
+  const openPreview = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.get(`${API}/api/cloudbeds/push-preview/${pid}?days=${+days}`, { withCredentials: true });
+      if (!r.data.table?.length) { toast.info("Önizlenecek fiyat yok — oda tipi eşlemesi ve fiyat gerekli"); return; }
+      setPreview(r.data);
+    } catch { toast.error("Önizleme yüklenemedi"); } finally { setBusy(false); }
+  };
+
+  const confirmPush = async () => {
+    setPreview(null);
+    await pushRms();
+  };
 
   const load = useCallback(async () => {
     try {
@@ -57,9 +73,9 @@ export default function CloudbedsPanel({ activePropertyId, properties = [] }) {
   const pushRms = async () => {
     setBusy(true);
     try {
-      const r = await axios.post(`${API}/api/cloudbeds/push-from-rms/${pid}`, { days: +days, rate_id: rateId }, { withCredentials: true });
+      const r = await axios.post(`${API}/api/cloudbeds/push-from-rms/${pid}`, { days: +days, rate_id: rateId, include_availability: pushAvail }, { withCredentials: true });
       setLastPush(r.data);
-      toast.success(r.data.mocked ? `MOCK push simüle edildi (${r.data.pushed_days} gün)` : r.data.pushed_days > 0 ? `${r.data.pushed_days} günlük fiyat Cloudbeds'e gönderildi` : r.data.message);
+      toast.success(r.data.mocked ? `MOCK push simüle edildi (${r.data.pushed_days} gün${r.data.availability_days ? ` + ${r.data.availability_days} gün müsaitlik` : ""})` : r.data.pushed_days > 0 ? `${r.data.pushed_days} günlük fiyat${r.data.availability_days ? ` + müsaitlik` : ""} Cloudbeds'e gönderildi` : r.data.message);
       load();
     } catch (e) { toast.error(e.response?.data?.detail || "Push başarısız"); } finally { setBusy(false); }
   };
@@ -93,7 +109,7 @@ export default function CloudbedsPanel({ activePropertyId, properties = [] }) {
 
   const saveAutoPush = async (enabled) => {
     try {
-      const r = await axios.post(`${API}/api/cloudbeds/auto-push/${pid}`, { enabled, days: +autoDays }, { withCredentials: true });
+      const r = await axios.post(`${API}/api/cloudbeds/auto-push/${pid}`, { enabled, days: +autoDays, push_availability: pushAvail }, { withCredentials: true });
       setAutoPush(r.data.auto_push);
       toast.success(r.data.auto_push ? "🌙 Otomatik gece push AÇIK — robot her gece fiyatları Cloudbeds'e basacak" : "Otomatik push kapatıldı");
     } catch { toast.error("Kaydedilemedi"); }
@@ -142,9 +158,14 @@ export default function CloudbedsPanel({ activePropertyId, properties = [] }) {
               <input value={rateId} onChange={(e) => setRateId(e.target.value)} data-testid="cb-rateid-input" className="block w-full border border-stone-300 rounded-lg px-2 py-2 text-sm mt-0.5" />
             </label>
           </div>
-          <div className="flex gap-2">
-            <button onClick={pushRms} disabled={busy} data-testid="cb-push-btn" className="px-3 py-2 rounded-lg bg-stone-900 text-white text-sm font-bold disabled:opacity-50 flex items-center gap-1.5"><PaperPlaneTilt size={14} /> Fiyat Push</button>
+          <div className="flex gap-2 flex-wrap items-center">
+            <button onClick={openPreview} disabled={busy} data-testid="cb-preview-btn" className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold disabled:opacity-50">👁 Önizle & Gönder</button>
+            <button onClick={pushRms} disabled={busy} data-testid="cb-push-btn" className="px-3 py-2 rounded-lg bg-stone-900 text-white text-sm font-bold disabled:opacity-50 flex items-center gap-1.5"><PaperPlaneTilt size={14} /> Direkt Push</button>
             <button onClick={pullRes} disabled={busy} data-testid="cb-pull-btn" className="px-3 py-2 rounded-lg border border-stone-300 text-stone-700 text-sm font-bold disabled:opacity-50 flex items-center gap-1.5"><DownloadSimple size={14} /> Rezervasyon Çek</button>
+            <label className="text-[11px] font-bold text-stone-600 flex items-center gap-1.5 ml-1">
+              <input type="checkbox" checked={pushAvail} onChange={(e) => setPushAvail(e.target.checked)} data-testid="cb-avail-toggle" />
+              🛏 Müsaitliği de gönder
+            </label>
           </div>
           {lastPush && (
             <div className="text-[12px] bg-stone-50 border border-stone-200 rounded-lg p-2" data-testid="cb-last-push">
@@ -162,6 +183,41 @@ export default function CloudbedsPanel({ activePropertyId, properties = [] }) {
           )}
         </div>
       </section>
+
+      {/* Push Önizleme Modalı */}
+      {preview && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setPreview(null)} data-testid="cb-preview-modal">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[80vh] flex flex-col p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-black text-stone-800 mb-1">👁 Push Önizleme — gönderilecek fiyatlar</h3>
+            <p className="text-[11px] text-stone-500 mb-3">{preview.rooms.map((r) => `${r.room_type} → ${r.rateID}`).join(" · ")} · toplam {preview.total_prices} fiyat</p>
+            <div className="overflow-auto flex-1 border border-stone-200 rounded-xl">
+              <table className="w-full text-[12px]">
+                <thead className="bg-stone-50 sticky top-0">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-black text-stone-600">Tarih</th>
+                    {preview.rooms.map((r) => <th key={r.rateID} className="text-right px-3 py-2 font-black text-stone-600">{r.room_type}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.table.map((row) => (
+                    <tr key={row.date} className="border-t border-stone-100" data-testid={`cb-preview-row-${row.date}`}>
+                      <td className="px-3 py-1.5 font-bold text-stone-700">{row.date}</td>
+                      {preview.rooms.map((r) => {
+                        const c = row.cells[r.room_type];
+                        return <td key={r.rateID} className="px-3 py-1.5 text-right">{c ? <span>£{c.rate} <span className="text-stone-400">· {c.avail} oda</span></span> : "—"}</td>;
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setPreview(null)} data-testid="cb-preview-cancel" className="px-4 py-2 rounded-lg border border-stone-300 text-stone-600 text-sm font-bold">Vazgeç</button>
+              <button onClick={confirmPush} data-testid="cb-preview-confirm" className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700">✓ Onayla ve Gönder</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Oda Tipi Eşleme + Otomatik Push */}
       <section className="bg-white border-2 border-sky-200 rounded-xl p-4" data-testid="cb-ratemap-section">

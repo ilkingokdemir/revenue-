@@ -7,6 +7,37 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
+async def _availability(db, pid: str, rt: dict, ds: str) -> int:
+    total = int(rt.get("total_rooms") or 0)
+    if total <= 0:
+        return 0
+    booked = await db.bookings.count_documents({
+        "property_id": pid, "room_type_id": rt.get("id", ""),
+        "status": {"$nin": ["cancelled", "no_show"]},
+        "check_in": {"$lte": ds}, "check_out": {"$gt": ds}})
+    return max(0, total - booked)
+
+
+async def build_push_preview(db, pid: str, days: int, cfg: dict,
+                             include_availability: bool = True) -> dict:
+    """Önizleme: gönderilecek tarih × oda tipi fiyat (+müsaitlik) tablosu — göndermez."""
+    days = max(1, min(30, int(days)))
+    blocks = await _build_rate_blocks(db, pid, days, cfg)
+    rts = {r["id"]: r for r in await db.room_types.find({"property_id": pid}, {"_id": 0}).to_list(20)}
+    rows = {}
+    for b in blocks:
+        rt = rts.get(b["room_type_id"], {})
+        for iv in b["interval"]:
+            cell = {"rate": iv["rate"]}
+            if include_availability:
+                cell["avail"] = await _availability(db, pid, rt, iv["startDate"])
+            rows.setdefault(iv["startDate"], {})[b["room_type"]] = cell
+    return {"property_id": pid, "days": days,
+            "rooms": [{"room_type": b["room_type"], "rateID": b["rateID"]} for b in blocks],
+            "table": [{"date": d, "cells": rows[d]} for d in sorted(rows)],
+            "total_prices": sum(len(b["interval"]) for b in blocks)}
+
+
 CB_URL = "https://api.cloudbeds.com/api/v1.3"
 
 
@@ -27,7 +58,7 @@ async def _build_rate_blocks(db, pid: str, days: int, cfg: dict, rate_id_overrid
                 cb_rate_id = default_rate_id
             else:
                 continue
-        base = float(rt.get("base_rate") or 0)
+        base = float(rt.get("base_rate") or rt.get("base_price") or 0)
         intervals = []
         for i in range(days):
             ds = (today + timedelta(days=i)).isoformat()
@@ -52,7 +83,7 @@ async def _build_rate_blocks(db, pid: str, days: int, cfg: dict, rate_id_overrid
 
 
 async def do_push_rates(db, pid: str, days: int = 14, rate_id_override: str = "",
-                        source: str = "manual") -> dict:
+                        source: str = "manual", include_availability: bool = False) -> dict:
     """RMS fiyatlarını Cloudbeds'e basar (oda tipi bazlı). Loop ve route ortak kullanır."""
     days = max(1, min(30, int(days)))
     cfg = await db.cloudbeds_config.find_one({"property_id": pid}, {"_id": 0}) or {}
@@ -61,6 +92,21 @@ async def do_push_rates(db, pid: str, days: int = 14, rate_id_override: str = ""
         return {"pushed_days": 0, "rooms": 0, "mocked": None,
                 "message": "Gönderilecek RMS fiyatı yok — takvimde fiyat veya oda taban fiyatı tanımlayın."}
     payload = {"rates": [{"rateID": b["rateID"], "interval": b["interval"]} for b in blocks]}
+    avail_payload, avail_days = None, 0
+    if include_availability:
+        rts = {r["id"]: r for r in await db.room_types.find({"property_id": pid}, {"_id": 0}).to_list(20)}
+        avail_blocks = []
+        for b in blocks:
+            rt = rts.get(b["room_type_id"], {})
+            ivs = []
+            for iv in b["interval"]:
+                ivs.append({"startDate": iv["startDate"], "endDate": iv["endDate"],
+                            "roomsAvailable": await _availability(db, pid, rt, iv["startDate"])})
+            if ivs:
+                avail_blocks.append({"roomTypeID": b["rateID"], "interval": ivs})
+                avail_days += len(ivs)
+        if avail_blocks:
+            avail_payload = {"rooms": avail_blocks}
     total_days = sum(len(b["interval"]) for b in blocks)
     summary = [{"room_type": b["room_type"], "rateID": b["rateID"], "days": len(b["interval"]),
                 "sample": b["interval"][:2]} for b in blocks]
@@ -71,7 +117,14 @@ async def do_push_rates(db, pid: str, days: int = 14, rate_id_override: str = ""
         result = {"mocked": True, "would_send": total_days,
                   "message": "MOCK — API key girilmediği için gerçek push yapılmadı."}
         await db.cb_push_log.insert_one({**log_entry, "mode": "mocked", "result": result})
-        return {"pushed_days": total_days, "rooms": len(blocks), "per_room": summary, **result}
+        if avail_payload:
+            await db.cb_push_log.insert_one({
+                "id": str(uuid.uuid4()), "property_id": pid, "kind": "availability_push",
+                "source": source, "mode": "mocked", "payload": avail_payload,
+                "result": {"mocked": True, "would_send": avail_days},
+                "created_at": datetime.now(timezone.utc).isoformat()})
+        return {"pushed_days": total_days, "rooms": len(blocks), "per_room": summary,
+                "availability_days": avail_days if include_availability else None, **result}
     cert = cfg.get("certification") or {}
     if not (cert.get("passed") and cert.get("mode") == "live"):
         return {"error": 428, "detail": "Cloudbeds sertifikasyonu geçilmedi — canlı push bloklandı. "
@@ -85,7 +138,21 @@ async def do_push_rates(db, pid: str, days: int = 14, rate_id_override: str = ""
     await db.cb_push_log.insert_one({**log_entry, "mode": "live", "result": result})
     if r.status_code != 200:
         return {"error": 502, "detail": f"Cloudbeds push hatası: {result}"}
+    avail_result = None
+    if avail_payload:
+        async with httpx.AsyncClient(timeout=30) as client:
+            ar = await client.put(f"{CB_URL}/putRoomBlocks",
+                                  headers={"x-api-key": cfg["api_key"],
+                                           "content-type": "application/x-www-form-urlencoded"},
+                                  content=urlencode(_flatten(avail_payload)))
+        avail_result = ar.json() if ar.status_code == 200 else {"status_code": ar.status_code, "body": ar.text[:200]}
+        await db.cb_push_log.insert_one({
+            "id": str(uuid.uuid4()), "property_id": pid, "kind": "availability_push",
+            "source": source, "mode": "live", "payload": avail_payload, "result": avail_result,
+            "created_at": datetime.now(timezone.utc).isoformat()})
     return {"pushed_days": total_days, "rooms": len(blocks), "per_room": summary, "mocked": False,
+            "availability_days": avail_days if include_availability else None,
+            "availability_result": avail_result,
             "job_reference_id": (result or {}).get("jobReferenceID"),
             "note": "putRate asenkrondur — Cloudbeds aldığı fiyatı Booking.com ve bağlı kanallara kendi dağıtır."}
 
@@ -100,7 +167,8 @@ async def cloudbeds_autopush_loop(db, interval_seconds: int = 24 * 3600):
             for cfg in cfgs:
                 pid = cfg.get("property_id")
                 try:
-                    r = await do_push_rates(db, pid, days=int(cfg.get("auto_push_days", 14)), source="auto")
+                    r = await do_push_rates(db, pid, days=int(cfg.get("auto_push_days", 14)), source="auto",
+                                            include_availability=bool(cfg.get("push_availability")))
                     failed = bool(r.get("error"))
                     day = datetime.now(timezone.utc).date().isoformat()
                     dup = await db.notifications.find_one(
@@ -202,10 +270,17 @@ def create_cloudbeds_router(db, require_roles):
         """RMS fiyatlarını oda tipi bazlı Cloudbeds'e gönderir — Cloudbeds kanallara dağıtır."""
         d = data or {}
         r = await do_push_rates(db, pid, days=int(d.get("days", 14)),
-                                rate_id_override=(d.get("rate_id") or ""), source="manual")
+                                rate_id_override=(d.get("rate_id") or ""), source="manual",
+                                include_availability=bool(d.get("include_availability")))
         if r.get("error"):
             raise HTTPException(int(r["error"]), r["detail"])
         return r
+
+    @router.get("/push-preview/{pid}")
+    async def push_preview(pid: str, days: int = 14, _u: dict = Depends(require_roles(*ROLES))):
+        """Push öncesi önizleme: hangi güne hangi fiyat + müsaitlik gidecek — göndermez."""
+        cfg = await _cfg(pid)
+        return await build_push_preview(db, pid, days, cfg, include_availability=True)
 
     @router.get("/rate-map/{pid}")
     async def get_rate_map(pid: str, _u: dict = Depends(require_roles(*ROLES))):
@@ -230,6 +305,7 @@ def create_cloudbeds_router(db, require_roles):
     async def set_auto_push(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
         upd = {"property_id": pid, "auto_push": bool(data.get("enabled")),
                "auto_push_days": max(1, min(30, int(data.get("days", 14)))),
+               "push_availability": bool(data.get("push_availability")),
                "updated_at": datetime.now(timezone.utc).isoformat()}
         await db.cloudbeds_config.update_one({"property_id": pid}, {"$set": upd}, upsert=True)
         return {"ok": True, "auto_push": upd["auto_push"], "auto_push_days": upd["auto_push_days"],

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import RobotImpactCard from "./RobotImpactCard";
 import axios from "axios";
+import { toast } from "sonner";
 import DeparturesBoard from "./DeparturesBoard";
 import { Pickup24Card } from "./Pickup24Card";
 import { GapSummaryCard } from "./GapSummaryCard";
@@ -45,6 +46,35 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
   const [brief, setBrief] = useState(null);
   const [tier1, setTier1] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [demo, setDemo] = useState(null);
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (!propertyId) return;
+    axios.get(`${API}/api/demo-seeder/status/${propertyId}`)
+      .then(({ data }) => setDemo(data)).catch(() => {});
+  }, [propertyId, refreshKey]);
+
+  const seedDemo = async () => {
+    setDemoBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/demo-seeder/seed/${propertyId}?count=25`);
+      toast.success(`${r.data.created} gerçekçi demo rezervasyon oluşturuldu 🎬`);
+      setRefreshKey((k) => k + 1);
+    } catch (e) { toast.error(e.response?.data?.detail || "Demo verisi oluşturulamadı"); }
+    finally { setDemoBusy(false); }
+  };
+
+  const clearDemo = async () => {
+    setDemoBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/demo-seeder/clear/${propertyId}`);
+      toast.success(`${r.data.deleted} demo kaydı temizlendi`);
+      setRefreshKey((k) => k + 1);
+    } catch (e) { toast.error(e.response?.data?.detail || "Temizlenemedi"); }
+    finally { setDemoBusy(false); }
+  };
 
   useEffect(() => {
     if (!propertyId) return;
@@ -63,7 +93,7 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
     return () => {
       abort = true;
     };
-  }, [propertyId]);
+  }, [propertyId, refreshKey]);
 
   useEffect(() => {
     if (!propertyId) return;
@@ -289,6 +319,36 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
         <Tile label="ADR" value={fmtCurrency(adr, brief?.currency || "GBP")} icon={TrendUp} />
         <Tile label="RevPAR" value={fmtCurrency(revpar, brief?.currency || "GBP")} icon={TrendUp} />
       </div>
+
+      {/* Demo Veri Modu — panel boşsa tek tıkla doldur / aktifse temizle */}
+      {demo?.demo_booking_count > 0 ? (
+        <div data-testid="demo-mode-active-strip"
+          className="flex flex-wrap items-center gap-2 p-3 rounded-2xl bg-emerald-50 border border-emerald-200">
+          <span className="text-sm">🎬</span>
+          <span className="flex-1 min-w-[200px] text-xs font-bold text-emerald-800">
+            Demo Veri Modu aktif — {demo.demo_booking_count} örnek rezervasyon gösteriliyor. Gerçek verinizle karışmaz, tek tıkla silinir.
+          </span>
+          <button onClick={clearDemo} disabled={demoBusy} data-testid="demo-clear-btn"
+            className="px-3 py-1.5 rounded-lg border border-emerald-300 text-xs font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
+            Demo Verisini Temizle
+          </button>
+        </div>
+      ) : (!loading && occPct === 0 && revToday === 0 && inHouse === 0 && (
+        <div data-testid="demo-mode-card"
+          className="flex flex-wrap items-center gap-3 p-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md">
+          <span className="text-2xl">🎬</span>
+          <div className="flex-1 min-w-[240px]">
+            <div className="text-sm font-black">Panel boş görünüyor — Demo Veri Modu'nu dene</div>
+            <div className="text-[11px] text-indigo-100 mt-0.5">
+              Tek tıkla 25 gerçekçi örnek rezervasyon (geçmiş + gelecek 45 gün) oluşturulur; doluluk, gelir, ADR ve takvim anında dolar. İstediğin an tek tıkla temizlenir.
+            </div>
+          </div>
+          <button onClick={seedDemo} disabled={demoBusy} data-testid="demo-seed-btn"
+            className="px-4 py-2 rounded-xl bg-white text-indigo-700 text-xs font-black hover:bg-indigo-50 disabled:opacity-50 transition-colors">
+            {demoBusy ? "Oluşturuluyor..." : "Demo Verisi Doldur →"}
+          </button>
+        </div>
+      ))}
 
       {/* HIGHLIGHTS + ALERTS row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

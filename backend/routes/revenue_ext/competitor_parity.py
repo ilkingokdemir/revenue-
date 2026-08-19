@@ -14,7 +14,7 @@ Competitor parity & morning brief — Tier-1 features missing from typical PMS U
    `pricing_autopilot`. Scheduler tick is wired in `routes/scheduler.py`.
 """
 from fastapi import APIRouter, Depends
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from typing import Dict, Optional
 import logging
 
@@ -256,10 +256,38 @@ def create_competitor_parity_router(db, require_roles):
             "allotment_rooms_released_24h": allot_released,
         }
 
+        # Bugünkü doluluk / gelir / ADR / RevPAR (in-house rezervasyonların gecelik payı)
+        total_rooms_today = await db.rooms.count_documents({"property_id": property_id})
+        if not total_rooms_today:
+            async for d in db.room_types.aggregate([
+                    {"$match": {"property_id": property_id}},
+                    {"$group": {"_id": None, "t": {"$sum": {"$ifNull": ["$total_rooms", 0]}}}}]):
+                total_rooms_today = int(d.get("t") or 0)
+        rev_today = 0.0
+        inhouse_docs = await db.bookings.find(
+            {"property_id": property_id, "check_in": {"$lte": today_iso},
+             "check_out": {"$gt": today_iso}, "status": {"$nin": ["cancelled"]}},
+            {"_id": 0, "total_price": 1, "check_in": 1, "check_out": 1}).to_list(1000)
+        for b in inhouse_docs:
+            try:
+                nights = max(1, (date.fromisoformat(b["check_out"]) - date.fromisoformat(b["check_in"])).days)
+                rev_today += float(b.get("total_price") or 0) / nights
+            except Exception:
+                pass
+        no_shows = await db.bookings.count_documents(
+            {"property_id": property_id, "status": "no_show", "check_in": today_iso})
+        prop_doc = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1})
+
         return {
             "property_id": property_id,
             "as_of": datetime.now(timezone.utc).isoformat(),
-            "today": {"date": today_iso, "arrivals": arrivals, "departures": departures, "in_house": in_house},
+            "currency": (prop_doc or {}).get("currency", "GBP"),
+            "today": {"date": today_iso, "arrivals": arrivals, "departures": departures, "in_house": in_house,
+                      "no_shows": no_shows,
+                      "occupancy_pct": round(in_house * 100 / total_rooms_today, 1) if total_rooms_today else 0,
+                      "revenue": round(rev_today, 2),
+                      "adr": round(rev_today / in_house, 2) if in_house else 0,
+                      "revpar": round(rev_today / total_rooms_today, 2) if total_rooms_today else 0},
             "pickup_7d": pickup,
             "pickup_24h": pickup_24h,
             "stly_7d": {"ty_rooms": ty_rooms, "ly_rooms": ly_rooms,

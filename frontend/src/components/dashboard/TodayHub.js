@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import RobotImpactCard from "./RobotImpactCard";
 import axios from "axios";
 import { toast } from "sonner";
+import DemoTour from "./DemoTour";
 import DeparturesBoard from "./DeparturesBoard";
 import { Pickup24Card } from "./Pickup24Card";
 import { GapSummaryCard } from "./GapSummaryCard";
@@ -49,6 +50,7 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
   const [demo, setDemo] = useState(null);
   const [demoBusy, setDemoBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showTour, setShowTour] = useState(false);
 
   useEffect(() => {
     if (!propertyId) return;
@@ -62,6 +64,9 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
       const r = await axios.post(`${API}/api/demo-seeder/seed/${propertyId}?count=25`);
       toast.success(`${r.data.created} gerçekçi demo rezervasyon oluşturuldu 🎬`);
       setRefreshKey((k) => k + 1);
+      let done = false;
+      try { done = localStorage.getItem("mhb_demo_tour_done") === "1"; } catch { /* ignore */ }
+      if (!done) setTimeout(() => setShowTour(true), 1200);
     } catch (e) { toast.error(e.response?.data?.detail || "Demo verisi oluşturulamadı"); }
     finally { setDemoBusy(false); }
   };
@@ -196,6 +201,7 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
 
   return (
     <div className="p-5 lg:p-7 max-w-[1480px] mx-auto" data-testid="today-hub">
+      {showTour && <DemoTour onClose={() => setShowTour(false)} />}
       <OnboardingBanner propertyId={propertyId} onResume={() => onNavigate && onNavigate("onboarding")} />
       {/* HERO */}
       <div className="mb-6">
@@ -305,7 +311,7 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
       )}
 
       {/* LIVE KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-7">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-7" data-testid="today-kpi-row">
         <Tile label="Doluluk" value={`${occPct}%`} icon={Bed} />
         <Tile label="In-house" value={inHouse} icon={Bed} />
         <Tile label="Giriş" value={arrivals} icon={SignIn} accent="emerald" />
@@ -328,6 +334,10 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
           <span className="flex-1 min-w-[200px] text-xs font-bold text-emerald-800">
             Demo Veri Modu aktif — {demo.demo_booking_count} örnek rezervasyon gösteriliyor. Gerçek verinizle karışmaz, tek tıkla silinir.
           </span>
+          <button onClick={() => setShowTour(true)} data-testid="demo-tour-start-btn"
+            className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">
+            🧭 Tanıtım Turu
+          </button>
           <button onClick={clearDemo} disabled={demoBusy} data-testid="demo-clear-btn"
             className="px-3 py-1.5 rounded-lg border border-emerald-300 text-xs font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
             Demo Verisini Temizle

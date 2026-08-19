@@ -15,14 +15,21 @@ export default function CloudbedsPanel({ activePropertyId, properties = [] }) {
   const [days, setDays] = useState(14);
   const [busy, setBusy] = useState(false);
   const [lastPush, setLastPush] = useState(null);
+  const [rateMapData, setRateMapData] = useState(null);
+  const [rateMap, setRateMap] = useState({});
+  const [autoPush, setAutoPush] = useState(false);
+  const [autoDays, setAutoDays] = useState(14);
 
   const load = useCallback(async () => {
     try {
-      const [s, l] = await Promise.all([
+      const [s, l, rm] = await Promise.all([
         axios.get(`${API}/api/cloudbeds/status/${pid}`, { withCredentials: true }),
         axios.get(`${API}/api/cloudbeds/log/${pid}`, { withCredentials: true }),
+        axios.get(`${API}/api/cloudbeds/rate-map/${pid}`, { withCredentials: true }),
       ]);
       setStatus(s.data); setLog(l.data.log || []);
+      setRateMapData(rm.data); setRateMap(rm.data.rate_map || {});
+      setAutoPush(!!rm.data.auto_push); setAutoDays(rm.data.auto_push_days || 14);
     } catch { toast.error("Cloudbeds durumu yüklenemedi"); }
   }, [pid]);
 
@@ -75,6 +82,23 @@ export default function CloudbedsPanel({ activePropertyId, properties = [] }) {
     } catch (e) { toast.error(e.response?.data?.detail || "Sertifikasyon çalıştırılamadı"); } finally { setBusy(false); }
   };
 
+  const saveRateMap = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/cloudbeds/rate-map/${pid}`, { rate_map: rateMap }, { withCredentials: true });
+      toast.success(`${r.data.mapped} oda tipi eşlemesi kaydedildi`);
+      load();
+    } catch { toast.error("Eşleme kaydedilemedi"); } finally { setBusy(false); }
+  };
+
+  const saveAutoPush = async (enabled) => {
+    try {
+      const r = await axios.post(`${API}/api/cloudbeds/auto-push/${pid}`, { enabled, days: +autoDays }, { withCredentials: true });
+      setAutoPush(r.data.auto_push);
+      toast.success(r.data.auto_push ? "🌙 Otomatik gece push AÇIK — robot her gece fiyatları Cloudbeds'e basacak" : "Otomatik push kapatıldı");
+    } catch { toast.error("Kaydedilemedi"); }
+  };
+
   const live = status?.mode === "live";
   const cert = status?.certification;
 
@@ -124,10 +148,52 @@ export default function CloudbedsPanel({ activePropertyId, properties = [] }) {
           </div>
           {lastPush && (
             <div className="text-[12px] bg-stone-50 border border-stone-200 rounded-lg p-2" data-testid="cb-last-push">
-              {lastPush.mocked ? "🟡 MOCK" : lastPush.mocked === false ? "🟢 CANLI" : "ℹ"} · {lastPush.pushed_days ?? 0} gün{lastPush.sample ? ` · örnek: ${lastPush.sample.map((s) => `${s.startDate}: ₺${s.rate}`).join(" · ")}` : ""}{lastPush.message ? ` · ${lastPush.message}` : ""}
+              {lastPush.mocked ? "🟡 MOCK" : lastPush.mocked === false ? "🟢 CANLI" : "ℹ"} · {lastPush.rooms ? `${lastPush.rooms} oda tipi · ` : ""}{lastPush.pushed_days ?? 0} gün{lastPush.message ? ` · ${lastPush.message}` : ""}
+              {lastPush.per_room && (
+                <div className="mt-1.5 space-y-0.5">
+                  {lastPush.per_room.map((r) => (
+                    <div key={r.rateID} className="text-[11px] text-stone-500" data-testid={`cb-push-room-${r.rateID}`}>
+                      • {r.room_type || "Varsayılan"} → rateID <b>{r.rateID}</b> · {r.days} gün{r.sample?.[0] ? ` · örn. ${r.sample[0].startDate}: £${r.sample[0].rate}` : ""}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
+      </section>
+
+      {/* Oda Tipi Eşleme + Otomatik Push */}
+      <section className="bg-white border-2 border-sky-200 rounded-xl p-4" data-testid="cb-ratemap-section">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <div>
+            <h2 className="text-base font-bold text-stone-800">🗺 Oda Tipi → Cloudbeds rateID Eşleme</h2>
+            <p className="text-[12px] text-stone-500 mt-0.5">Her odanın fiyatı kendi Cloudbeds rate planına basılır — Cloudbeds aldığı fiyatı Booking.com ve diğer kanallara dağıtır.</p>
+          </div>
+          <div className="flex items-center gap-3 text-[12px]">
+            <label className="font-bold text-stone-600 flex items-center gap-1.5">
+              <input type="checkbox" checked={autoPush} onChange={(e) => saveAutoPush(e.target.checked)} data-testid="cb-autopush-toggle" />
+              🌙 Otomatik gece push
+            </label>
+            <label className="font-bold text-stone-500">gün:
+              <input type="number" min={1} max={30} value={autoDays} onChange={(e) => setAutoDays(e.target.value)}
+                onBlur={() => autoPush && saveAutoPush(true)} data-testid="cb-autopush-days"
+                className="w-14 ml-1 border border-stone-300 rounded-lg px-1.5 py-1 text-sm font-normal" />
+            </label>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          {(rateMapData?.room_types || []).map((rt) => (
+            <div key={rt.id} className="flex items-center gap-3 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" data-testid={`cb-ratemap-row-${rt.id}`}>
+              <span className="flex-1 text-sm font-bold text-stone-700">{rt.name}{rt.base_rate ? <span className="text-stone-400 font-normal"> · taban £{rt.base_rate}</span> : null}</span>
+              <input value={rateMap[rt.id] || ""} onChange={(e) => setRateMap((m) => ({ ...m, [rt.id]: e.target.value }))}
+                placeholder="Cloudbeds rateID" data-testid={`cb-ratemap-input-${rt.id}`}
+                className="w-48 border border-stone-300 rounded-lg px-2 py-1.5 text-sm" />
+            </div>
+          ))}
+        </div>
+        <button onClick={saveRateMap} disabled={busy} data-testid="cb-ratemap-save-btn"
+          className="mt-3 px-3 py-2 rounded-lg bg-sky-600 text-white text-sm font-bold disabled:opacity-50">Eşlemeyi Kaydet</button>
       </section>
 
       <section className="bg-white border border-stone-200 rounded-xl p-4" data-testid="cb-cert-section">

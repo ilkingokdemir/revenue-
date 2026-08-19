@@ -2152,6 +2152,8 @@ async def startup_event():
     asyncio.create_task(comp_trigger_loop(db))
     from routes.platform_ext.health_sentinel import health_sentinel_loop
     asyncio.create_task(health_sentinel_loop(db))
+    from routes.distribution.cloudbeds_adapter import cloudbeds_autopush_loop
+    asyncio.create_task(cloudbeds_autopush_loop(db))
     asyncio.create_task(profit_autopilot_loop(db))
     asyncio.create_task(data_quality_sentinel_loop(db))
     asyncio.create_task(open_pricing_optimizer_loop(db))

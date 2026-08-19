@@ -10,6 +10,122 @@ from fastapi import APIRouter, Depends, HTTPException
 CB_URL = "https://api.cloudbeds.com/api/v1.3"
 
 
+async def _build_rate_blocks(db, pid: str, days: int, cfg: dict, rate_id_override: str = "") -> list:
+    """Oda tipi bazlı fiyat blokları: override → base_rate fallback; rate_map ile CB rateID eşleme."""
+    from datetime import date as _date
+    today = datetime.now(timezone.utc).date()
+    rate_map = cfg.get("rate_map") or {}
+    rts = await db.room_types.find({"property_id": pid}, {"_id": 0}).to_list(20)
+    if not rts:
+        rts = [{"id": "", "name": "Default", "base_rate": 0}]
+    default_rate_id = (rate_id_override or cfg.get("rate_id") or "RMS-RATE").strip()
+    blocks = []
+    for idx, rt in enumerate(rts):
+        cb_rate_id = rate_map.get(rt.get("id", ""))
+        if not cb_rate_id:
+            if idx == 0 and not rate_map:
+                cb_rate_id = default_rate_id
+            else:
+                continue
+        base = float(rt.get("base_rate") or 0)
+        intervals = []
+        for i in range(days):
+            ds = (today + timedelta(days=i)).isoformat()
+            ov = await db.rate_overrides.find_one(
+                {"property_id": pid, "date": ds, "room_type_id": rt.get("id", "")},
+                {"_id": 0, "rate": 1, "custom_rate": 1})
+            if not ov:
+                ov = await db.rate_overrides.find_one(
+                    {"property_id": pid, "date": ds, "room_type_id": {"$in": ["", None]}},
+                    {"_id": 0, "rate": 1, "custom_rate": 1})
+            rate = None
+            if ov and (ov.get("custom_rate") or ov.get("rate")):
+                rate = float(ov.get("custom_rate") or ov["rate"])
+            elif base > 0:
+                rate = base
+            if rate:
+                intervals.append({"startDate": ds, "endDate": ds, "rate": round(rate, 2)})
+        if intervals:
+            blocks.append({"room_type": rt.get("name", ""), "room_type_id": rt.get("id", ""),
+                           "rateID": str(cb_rate_id), "interval": intervals})
+    return blocks
+
+
+async def do_push_rates(db, pid: str, days: int = 14, rate_id_override: str = "",
+                        source: str = "manual") -> dict:
+    """RMS fiyatlarını Cloudbeds'e basar (oda tipi bazlı). Loop ve route ortak kullanır."""
+    days = max(1, min(30, int(days)))
+    cfg = await db.cloudbeds_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+    blocks = await _build_rate_blocks(db, pid, days, cfg, rate_id_override)
+    if not blocks:
+        return {"pushed_days": 0, "rooms": 0, "mocked": None,
+                "message": "Gönderilecek RMS fiyatı yok — takvimde fiyat veya oda taban fiyatı tanımlayın."}
+    payload = {"rates": [{"rateID": b["rateID"], "interval": b["interval"]} for b in blocks]}
+    total_days = sum(len(b["interval"]) for b in blocks)
+    summary = [{"room_type": b["room_type"], "rateID": b["rateID"], "days": len(b["interval"]),
+                "sample": b["interval"][:2]} for b in blocks]
+    log_entry = {"id": str(uuid.uuid4()), "property_id": pid, "kind": "rate_push",
+                 "source": source, "payload": payload,
+                 "created_at": datetime.now(timezone.utc).isoformat()}
+    if not cfg.get("api_key"):
+        result = {"mocked": True, "would_send": total_days,
+                  "message": "MOCK — API key girilmediği için gerçek push yapılmadı."}
+        await db.cb_push_log.insert_one({**log_entry, "mode": "mocked", "result": result})
+        return {"pushed_days": total_days, "rooms": len(blocks), "per_room": summary, **result}
+    cert = cfg.get("certification") or {}
+    if not (cert.get("passed") and cert.get("mode") == "live"):
+        return {"error": 428, "detail": "Cloudbeds sertifikasyonu geçilmedi — canlı push bloklandı. "
+                                        "Önce 'Sertifikasyonu Çalıştır' ile CANLI modda geçin."}
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(f"{CB_URL}/putRate",
+                              headers={"x-api-key": cfg["api_key"],
+                                       "content-type": "application/x-www-form-urlencoded"},
+                              content=urlencode(_flatten(payload)))
+    result = r.json() if r.status_code == 200 else {"status_code": r.status_code, "body": r.text[:300]}
+    await db.cb_push_log.insert_one({**log_entry, "mode": "live", "result": result})
+    if r.status_code != 200:
+        return {"error": 502, "detail": f"Cloudbeds push hatası: {result}"}
+    return {"pushed_days": total_days, "rooms": len(blocks), "per_room": summary, "mocked": False,
+            "job_reference_id": (result or {}).get("jobReferenceID"),
+            "note": "putRate asenkrondur — Cloudbeds aldığı fiyatı Booking.com ve bağlı kanallara kendi dağıtır."}
+
+
+async def cloudbeds_autopush_loop(db, interval_seconds: int = 24 * 3600):
+    """Her gece auto_push açık property'lerin RMS fiyatlarını Cloudbeds'e basar."""
+    import asyncio
+    await asyncio.sleep(300)
+    while True:
+        try:
+            cfgs = await db.cloudbeds_config.find({"auto_push": True}, {"_id": 0}).to_list(50)
+            for cfg in cfgs:
+                pid = cfg.get("property_id")
+                try:
+                    r = await do_push_rates(db, pid, days=int(cfg.get("auto_push_days", 14)), source="auto")
+                    failed = bool(r.get("error"))
+                    day = datetime.now(timezone.utc).date().isoformat()
+                    dup = await db.notifications.find_one(
+                        {"created_by": "Cloudbeds Robotu", "property_id": pid, "day": day}, {"_id": 1})
+                    if not dup:
+                        await db.notifications.insert_one({
+                            "id": str(uuid.uuid4()),
+                            "type": "error" if failed else "success",
+                            "title": ("⚠️ Cloudbeds otomatik push başarısız"
+                                      if failed else "☁️ Cloudbeds otomatik push tamam"),
+                            "message": (str(r.get("detail", ""))[:300] if failed else
+                                        f"{r.get('rooms', 0)} oda tipi × {r.get('pushed_days', 0)} gün fiyat Cloudbeds'e gönderildi"
+                                        + (" (MOCK)" if r.get("mocked") else " — Cloudbeds kanallara dağıtacak")),
+                            "category": "distribution", "target_role": "manager",
+                            "link_to": "cloudbeds-live", "priority": "high" if failed else "normal",
+                            "read": False, "day": day, "property_id": pid,
+                            "created_by": "Cloudbeds Robotu",
+                            "created_at": datetime.now(timezone.utc).isoformat()})
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        await asyncio.sleep(interval_seconds)
+
+
 def _flatten(value, prefix=""):
     out = []
     if isinstance(value, dict):
@@ -83,44 +199,41 @@ def create_cloudbeds_router(db, require_roles):
 
     @router.post("/push-from-rms/{pid}")
     async def push_from_rms(pid: str, data: dict = None, _u: dict = Depends(require_roles(*ROLES))):
-        """RMS fiyatlarını önümüzdeki N gün için Cloudbeds'e gönderir (putRate, maks 30 aralık)."""
+        """RMS fiyatlarını oda tipi bazlı Cloudbeds'e gönderir — Cloudbeds kanallara dağıtır."""
         d = data or {}
-        days = max(1, min(30, int(d.get("days", 14))))
+        r = await do_push_rates(db, pid, days=int(d.get("days", 14)),
+                                rate_id_override=(d.get("rate_id") or ""), source="manual")
+        if r.get("error"):
+            raise HTTPException(int(r["error"]), r["detail"])
+        return r
+
+    @router.get("/rate-map/{pid}")
+    async def get_rate_map(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         cfg = await _cfg(pid)
-        rate_id = (d.get("rate_id") or cfg.get("rate_id") or "RMS-RATE").strip()
-        today = datetime.now(timezone.utc).date()
-        intervals = []
-        for i in range(days):
-            ds = (today + timedelta(days=i)).isoformat()
-            ov = await db.rate_overrides.find_one({"property_id": pid, "date": ds},
-                                                  {"_id": 0, "rate": 1, "custom_rate": 1})
-            if ov and (ov.get("custom_rate") or ov.get("rate")):
-                intervals.append({"startDate": ds, "endDate": ds,
-                                  "rate": round(float(ov.get("custom_rate") or ov["rate"]), 2)})
-        if not intervals:
-            return {"pushed_days": 0, "mocked": None, "message": "Gönderilecek RMS fiyatı yok — önce fiyat oluşturun."}
-        payload = {"rates": [{"rateID": rate_id, "interval": intervals}]}
-        if not cfg.get("api_key"):
-            result = {"mocked": True, "would_send": len(intervals),
-                      "message": "MOCK — API key girilmediği için gerçek push yapılmadı."}
-            await _log(pid, "rate_push", "mocked", payload, result)
-            return {"pushed_days": len(intervals), "sample": intervals[:3], **result}
-        cert = cfg.get("certification") or {}
-        if not (cert.get("passed") and cert.get("mode") == "live"):
-            raise HTTPException(428, "Cloudbeds sertifikasyonu geçilmedi — canlı push bloklandı. "
-                                     "Önce 'Sertifikasyonu Çalıştır' ile test push + geri okuma doğrulamasını CANLI modda geçin.")
-        async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.post(f"{CB_URL}/putRate",
-                                  headers={"x-api-key": cfg["api_key"],
-                                           "content-type": "application/x-www-form-urlencoded"},
-                                  content=urlencode(_flatten(payload)))
-        result = r.json() if r.status_code == 200 else {"status_code": r.status_code, "body": r.text[:300]}
-        await _log(pid, "rate_push", "live", payload, result)
-        if r.status_code != 200:
-            raise HTTPException(502, f"Cloudbeds push hatası: {result}")
-        return {"pushed_days": len(intervals), "sample": intervals[:3], "mocked": False,
-                "job_reference_id": (result or {}).get("jobReferenceID"),
-                "note": "putRate asenkrondur — jobReferenceID ile Cloudbeds tarafında tamamlanma doğrulanmalı."}
+        rts = await db.room_types.find({"property_id": pid},
+                                       {"_id": 0, "id": 1, "name": 1, "base_rate": 1}).to_list(20)
+        return {"property_id": pid, "room_types": rts, "rate_map": cfg.get("rate_map") or {},
+                "auto_push": bool(cfg.get("auto_push")), "auto_push_days": int(cfg.get("auto_push_days", 14)),
+                "note": "Her RMS oda tipini Cloudbeds rateID'sine eşleyin — eşlenmeyen odalar gönderilmez "
+                        "(hiç eşleme yoksa ilk oda tipi varsayılan rateID ile gider)."}
+
+    @router.post("/rate-map/{pid}")
+    async def save_rate_map(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        rm = {str(k): str(v).strip() for k, v in (data.get("rate_map") or {}).items() if str(v).strip()}
+        await db.cloudbeds_config.update_one(
+            {"property_id": pid},
+            {"$set": {"property_id": pid, "rate_map": rm,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        return {"ok": True, "mapped": len(rm)}
+
+    @router.post("/auto-push/{pid}")
+    async def set_auto_push(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        upd = {"property_id": pid, "auto_push": bool(data.get("enabled")),
+               "auto_push_days": max(1, min(30, int(data.get("days", 14)))),
+               "updated_at": datetime.now(timezone.utc).isoformat()}
+        await db.cloudbeds_config.update_one({"property_id": pid}, {"$set": upd}, upsert=True)
+        return {"ok": True, "auto_push": upd["auto_push"], "auto_push_days": upd["auto_push_days"],
+                "note": "Robot her gece RMS fiyatlarını Cloudbeds'e basar; Cloudbeds kanallara dağıtır."}
 
     @router.post("/pull-reservations/{pid}")
     async def pull_reservations(pid: str, _u: dict = Depends(require_roles(*ROLES))):

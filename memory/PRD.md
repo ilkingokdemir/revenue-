@@ -1107,3 +1107,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - UI: TrialConversionPanel satırlarında "+7 gün" butonu (trial-extend-{pid}), toast'ta yeni bitiş tarihi.
 - Test: süresi dolmuş tesiste yazma 403 → extend → yazma 200 + status active + days_left 7 + emails_sent [] (curl); UI buton + toast screenshot PASS. Test verisi temizlendi.
 - BACKLOG'DAN KALDIRILDI: Cloudbeds Canlı Sertifikasyon — kullanıcının Cloudbeds hesabı/anahtarı yok (mock akış hazır ve test edildi, anahtar gelirse CloudbedsPanel'den girilir).
+
+## Güncelleme (2026-08-19, MİMARİ TEMİZLİK + WORKER SHUTDOWN STABİLİZASYONU — e2e PASS)
+- TEST ARTIK TEMİZLİĞİ: 8 test tesisi silindi (3× TEST_ITER486 uuid, trial-test-otel-263ce8, mock-mail-otel-d23868, 3× iter577*) — 667 koleksiyonun tamamında property_id eşleşmeli 1.191 doküman + 11 rastgele-sufiksli test kullanıcısı (test_receptionist/housekeeper/manager/perm/del_[hex8]) temizlendi. Kalan: 10 gerçek tesis, 5 kullanıcı (admin, ali@hotel.com, sarah@hotel.test, testrecep/testhk@hotelbox.com). UI şube çubuğu doğrulandı (Veri Nöbetçisi 90.8'e çıktı).
+- WORKER SHUTDOWN FIX: server.py'de 49 `asyncio.create_task(...)` çağrısı `_spawn(...)` kayıt fonksiyonuna çevrildi (_bg_tasks listesi); shutdown handler'ı tüm arka plan görevlerini cancel + gather ile kapatıyor. Hot reload artık takılmıyor (touch ile test edildi: WatchFiles → clean shutdown → startup complete, login 200 ~20 sn). NOT: loop'lardaki `except Exception` CancelledError'ı yutmaz (py3.11 BaseException).
+- Regresyon: 6 kritik endpoint 200, frontend screenshot temiz.
+- KALAN TEKNİK BORÇ (P1/P2): market_robot.py 9.024 satır bölünmeli; NeighborhoodScanPanel/BookingTimeline 2.6k+ satır; SPA prerender (SEO) backlog'da.

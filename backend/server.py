@@ -225,6 +225,16 @@ Login via `POST /api/auth/login` to receive a JWT token. Use the token as:
     openapi_url="/api/openapi.json"
 )
 
+# ---- Arka plan robot görev kaydı: reload/shutdown'da hepsi düzgün iptal edilir ----
+_bg_tasks = []
+
+def _spawn(coro):
+    import asyncio as _a
+    t = _a.create_task(coro)
+    _bg_tasks.append(t)
+    return t
+
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
@@ -577,8 +587,8 @@ api_router.include_router(owner_pulse_router)
 @app.on_event("startup")
 async def _start_owner_pulse_digest():
     import asyncio as _asyncio
-    _asyncio.create_task(owner_pulse_router.digest_loop())
-    _asyncio.create_task(owner_pulse_router.autopilot_loop())
+    _spawn(owner_pulse_router.digest_loop())
+    _spawn(owner_pulse_router.autopilot_loop())
 price_alerts_router = create_price_alerts_router(db, require_roles)
 api_router.include_router(price_alerts_router)
 booking_timeline_router = create_booking_timeline_router(db, require_roles)
@@ -641,7 +651,7 @@ api_router.include_router(intraday_reprice_router)
 @app.on_event("startup")
 async def _start_intraday_reprice():
     import asyncio as _asyncio
-    _asyncio.create_task(intraday_reprice_loop(db, _idr_auto_fn))
+    _spawn(intraday_reprice_loop(db, _idr_auto_fn))
 
 from routes.revenue_ext.restriction_advisor import create_restriction_advisor_router
 restriction_advisor_router = create_restriction_advisor_router(db, require_roles)
@@ -878,19 +888,19 @@ api_router.include_router(create_scheduler_router(db, require_roles, JOB_HANDLER
 @app.on_event("startup")
 async def _start_scheduler():
     import asyncio as _asyncio
-    _asyncio.create_task(scheduler_loop(db, JOB_HANDLERS))
+    _spawn(scheduler_loop(db, JOB_HANDLERS))
     # Market Robot auto-scan loop (Iter 167.1)
     _mr_loop = getattr(market_robot_router, "auto_scan_loop", None)
     if _mr_loop:
-        _asyncio.create_task(_mr_loop())
+        _spawn(_mr_loop())
     # Self check-in auto-trigger loop
     _sca_loop = getattr(self_checkin_auto_router, "auto_trigger_loop", None)
     if _sca_loop:
-        _asyncio.create_task(_sca_loop())
+        _spawn(_sca_loop())
     # RMS Pro Autopilot daily loop (Iter 305)
     _ap_loop = getattr(rms_pro_router, "autopilot_loop", None)
     if _ap_loop:
-        _asyncio.create_task(_ap_loop())
+        _spawn(_ap_loop())
 
 # Iter 160 — Channel Manager MVP (restrictions + inbound + parity)
 from routes.distribution.channel_restrictions import create_channel_restrictions_router
@@ -1834,7 +1844,7 @@ api_router.include_router(create_p0_router(db, require_roles))
 @app.on_event("startup")
 async def _start_journey_engine():
     import asyncio as _asyncio
-    _asyncio.create_task(_journey_engine_loop(db, interval_seconds=60))
+    _spawn(_journey_engine_loop(db, interval_seconds=60))
 
 # ===== Nightly Insights cron (Iter 376) — gece fiyat pattern analizi + bildirim =====
 from routes.revenue_ext.rates_grid import nightly_insights_loop as _nightly_insights_loop
@@ -1842,7 +1852,7 @@ from routes.revenue_ext.rates_grid import nightly_insights_loop as _nightly_insi
 @app.on_event("startup")
 async def _start_nightly_insights():
     import asyncio as _asyncio
-    _asyncio.create_task(_nightly_insights_loop(db))
+    _spawn(_nightly_insights_loop(db))
 
 app.include_router(api_router)
 
@@ -2172,67 +2182,72 @@ async def startup_event():
     # tick workers (workers.py — ROADMAP P1 refactor)
     import asyncio
     from workers import scheduled_checkout_loop, reports_loop, otb_snapshot_loop, str_scan_loop, revenue_brain_loop, complaint_task_sync_loop, complaint_sla_loop, rating_trend_alert_loop, winback_reminder_loop, publish_day_alert_loop, praise_hunter_loop, profit_autopilot_loop, data_quality_sentinel_loop, open_pricing_optimizer_loop
-    asyncio.create_task(scheduled_checkout_loop(db))
-    asyncio.create_task(reports_loop(db))
-    asyncio.create_task(otb_snapshot_loop(db))
+    _spawn(scheduled_checkout_loop(db))
+    _spawn(reports_loop(db))
+    _spawn(otb_snapshot_loop(db))
     from workers import price_guard_loop
-    asyncio.create_task(price_guard_loop(db))
+    _spawn(price_guard_loop(db))
     from workers import ical_sync_loop
-    asyncio.create_task(ical_sync_loop(db))
-    asyncio.create_task(str_scan_loop(db))
-    asyncio.create_task(revenue_brain_loop(db))
+    _spawn(ical_sync_loop(db))
+    _spawn(str_scan_loop(db))
+    _spawn(revenue_brain_loop(db))
     from workers import weekly_brief_loop, weekly_exec_report_loop, marketing_radar_loop
-    asyncio.create_task(weekly_brief_loop(db))
-    asyncio.create_task(weekly_exec_report_loop(db))
-    asyncio.create_task(marketing_radar_loop(db))
+    _spawn(weekly_brief_loop(db))
+    _spawn(weekly_exec_report_loop(db))
+    _spawn(marketing_radar_loop(db))
     from workers import group_wash_alert_loop
-    asyncio.create_task(group_wash_alert_loop(db))
+    _spawn(group_wash_alert_loop(db))
     from workers import proposal_reminder_loop
-    asyncio.create_task(proposal_reminder_loop(db))
+    _spawn(proposal_reminder_loop(db))
     from workers import night_audit_loop, drift_autopush_loop
-    asyncio.create_task(night_audit_loop(db))
-    asyncio.create_task(drift_autopush_loop(db))
+    _spawn(night_audit_loop(db))
+    _spawn(drift_autopush_loop(db))
     from workers import shadow_mode_loop
-    asyncio.create_task(shadow_mode_loop(db))
+    _spawn(shadow_mode_loop(db))
     from workers import outcome_ledger_loop
-    asyncio.create_task(outcome_ledger_loop(db))
+    _spawn(outcome_ledger_loop(db))
     from workers import calibration_loop
-    asyncio.create_task(calibration_loop(db))
+    _spawn(calibration_loop(db))
     from workers import killswitch_drill_loop, pilot_lead_reminder_loop
-    asyncio.create_task(killswitch_drill_loop(db))
-    asyncio.create_task(pilot_lead_reminder_loop(db))
+    _spawn(killswitch_drill_loop(db))
+    _spawn(pilot_lead_reminder_loop(db))
     from workers import blind_spot_alert_loop
-    asyncio.create_task(blind_spot_alert_loop(db))
+    _spawn(blind_spot_alert_loop(db))
     from workers import pdf_archive_loop
-    asyncio.create_task(pdf_archive_loop(db))
+    _spawn(pdf_archive_loop(db))
     from workers import weekly_signal_digest_loop
-    asyncio.create_task(weekly_signal_digest_loop(db))
+    _spawn(weekly_signal_digest_loop(db))
     from workers import occupancy_rule_loop
-    asyncio.create_task(occupancy_rule_loop(db))
+    _spawn(occupancy_rule_loop(db))
     from workers import comp_trigger_loop
-    asyncio.create_task(comp_trigger_loop(db))
+    _spawn(comp_trigger_loop(db))
     from routes.platform_ext.health_sentinel import health_sentinel_loop
-    asyncio.create_task(health_sentinel_loop(db))
+    _spawn(health_sentinel_loop(db))
     from routes.distribution.cloudbeds_adapter import cloudbeds_autopush_loop
-    asyncio.create_task(cloudbeds_autopush_loop(db))
-    asyncio.create_task(trial_email_loop(db))
-    asyncio.create_task(profit_autopilot_loop(db))
-    asyncio.create_task(data_quality_sentinel_loop(db))
-    asyncio.create_task(open_pricing_optimizer_loop(db))
-    asyncio.create_task(complaint_task_sync_loop(db))
-    asyncio.create_task(complaint_sla_loop(db))
-    asyncio.create_task(rating_trend_alert_loop(db))
-    asyncio.create_task(winback_reminder_loop(db))
-    asyncio.create_task(publish_day_alert_loop(db))
-    asyncio.create_task(praise_hunter_loop(db))
+    _spawn(cloudbeds_autopush_loop(db))
+    _spawn(trial_email_loop(db))
+    _spawn(profit_autopilot_loop(db))
+    _spawn(data_quality_sentinel_loop(db))
+    _spawn(open_pricing_optimizer_loop(db))
+    _spawn(complaint_task_sync_loop(db))
+    _spawn(complaint_sla_loop(db))
+    _spawn(rating_trend_alert_loop(db))
+    _spawn(winback_reminder_loop(db))
+    _spawn(publish_day_alert_loop(db))
+    _spawn(praise_hunter_loop(db))
     from workers import winning_topic_loop, social_report_loop, photo_contest_loop, email_dispatch_loop
-    asyncio.create_task(winning_topic_loop(db))
-    asyncio.create_task(social_report_loop(db))
-    asyncio.create_task(photo_contest_loop(db))
-    asyncio.create_task(email_dispatch_loop(db))
+    _spawn(winning_topic_loop(db))
+    _spawn(social_report_loop(db))
+    _spawn(photo_contest_loop(db))
+    _spawn(email_dispatch_loop(db))
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    import asyncio as _a
+    for t in _bg_tasks:
+        t.cancel()
+    if _bg_tasks:
+        await _a.gather(*_bg_tasks, return_exceptions=True)
     client.close()
 
 ("Admin user seeded and indexes created")

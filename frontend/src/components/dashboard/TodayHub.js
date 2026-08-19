@@ -4,6 +4,7 @@ import axios from "axios";
 import DeparturesBoard from "./DeparturesBoard";
 import { Pickup24Card } from "./Pickup24Card";
 import { GapSummaryCard } from "./GapSummaryCard";
+import { OnboardingBanner } from "./OnboardingBanner";
 import {
   Sparkle,
   ArrowRight,
@@ -165,6 +166,7 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
 
   return (
     <div className="p-5 lg:p-7 max-w-[1480px] mx-auto" data-testid="today-hub">
+      <OnboardingBanner propertyId={propertyId} onResume={() => onNavigate && onNavigate("onboarding")} />
       {/* HERO */}
       <div className="mb-6">
         <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-stone-500 mb-2">

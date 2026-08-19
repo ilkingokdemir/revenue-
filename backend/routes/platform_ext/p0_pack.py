@@ -203,6 +203,59 @@ def create_p0_router(db, require_roles):
                                                               "suspended_at": now_iso() if sus else None}})
         return {"ok": True, "property_id": pid, "suspended": sus}
 
+    # ================= 3b) SAĞLIK SKORU + PLAN + ONBOARDING =================
+    PLAN_MODULES = {"basic": "Ön büro + rezervasyon + takvim (çekirdek ~30 modül)",
+                    "pro": "Basic + gelir yönetimi + kanallar + raporlar (~150 modül)",
+                    "full": "Tüm 280+ modül + Public API + süper admin"}
+
+    async def _health_steps(pid: str) -> list:
+        rts = await db.room_types.find({"property_id": pid}, {"_id": 0, "base_rate": 1, "base_price": 1}).to_list(20)
+        has_rates = any(float(r.get("base_rate") or r.get("base_price") or 0) > 0 for r in rts) or \
+            await db.rate_overrides.count_documents({"property_id": pid}) > 0
+        cb = await db.cloudbeds_config.find_one({"property_id": pid}, {"_id": 0, "api_key": 1, "rate_map": 1}) or {}
+        return [
+            {"key": "rooms", "label": "Oda tipleri tanımlı", "done": len(rts) > 0, "link": "settings"},
+            {"key": "rates", "label": "Fiyatlar girilmiş", "done": bool(has_rates), "link": "revenue"},
+            {"key": "channel", "label": "Kanal bağlantısı (Cloudbeds/PMS eşleme)",
+             "done": bool(cb.get("api_key") or cb.get("rate_map")), "link": "cloudbeds-live"},
+            {"key": "payment", "label": "İlk ödeme linki üretilmiş",
+             "done": await db.payment_transactions.count_documents({"property_id": pid}) > 0,
+             "link": "super-admin"},
+            {"key": "api", "label": "Public API anahtarı oluşturulmuş",
+             "done": await db.public_api_keys.count_documents({"property_id": pid}) > 0,
+             "link": "super-admin"},
+        ]
+
+    @router.get("/onboarding/{pid}")
+    async def onboarding(pid: str, _u: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        steps = await _health_steps(pid)
+        done = sum(1 for s in steps if s["done"])
+        return {"property_id": pid, "steps": steps, "done": done, "total": len(steps),
+                "score": int(done / len(steps) * 100)}
+
+    @router.get("/super-admin/health-scores")
+    async def health_scores(_u: dict = Depends(require_roles("admin"))):
+        props = await db.properties.find({"is_active": {"$ne": False}},
+                                         {"_id": 0, "id": 1, "name": 1, "plan": 1, "suspended": 1}).to_list(100)
+        out = []
+        for p in props:
+            steps = await _health_steps(p["id"])
+            done = sum(1 for s in steps if s["done"])
+            out.append({**p, "score": int(done / len(steps) * 100),
+                        "missing": [s["label"] for s in steps if not s["done"]]})
+        out.sort(key=lambda x: x["score"])
+        return {"tenants": out, "plans": PLAN_MODULES}
+
+    @router.post("/super-admin/tenants/{pid}/plan")
+    async def set_plan(pid: str, data: dict, _u: dict = Depends(require_roles("admin"))):
+        plan = str(data.get("plan", "full"))
+        if plan not in PLAN_MODULES:
+            raise HTTPException(422, "plan: basic|pro|full")
+        await db.properties.update_one({"id": pid}, {"$set": {
+            "plan": plan, "modules_enabled": "all" if plan == "full" else plan,
+            "plan_changed_at": now_iso()}})
+        return {"ok": True, "property_id": pid, "plan": plan, "scope": PLAN_MODULES[plan]}
+
     # ================= 4) VERİ GÖÇÜ (CSV IMPORT) =================
     @router.get("/migration/template/{kind}")
     async def template(kind: str, _u: dict = Depends(require_roles(*ROLES))):

@@ -980,3 +980,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - SÜPER ADMİN: GET /api/super-admin/tenants (kullanım sayaçlarıyla), POST /{pid}/suspend.
 - VERİ GÖÇÜ: GET /api/migration/template/{kind}, POST /api/migration/import/{pid}/{kind} (bookings/guests/room_types, CSV, tarih validasyonu fromisoformat + co>ci, hata satır raporu, migration_log).
 - Test: iter 574 30/30 pytest + route çakışması/tarih validasyonu düzeltmeleri sonrası curl doğrulaması. UI henüz YOK (backend-first) — panel entegrasyonu sonraki adım.
+
+## Güncelleme (2026-08-19, Platform Yönetimi + Onboarding + Plan + Sağlık Skoru — UI e2e doğrulandı)
+- Backend (p0_pack.py ek): GET /api/onboarding/{pid} (5 adım: oda/fiyat/kanal/ödeme/API, score%), GET /api/super-admin/health-scores (tenant başına % + eksik listesi, skora göre sıralı), POST /api/super-admin/tenants/{pid}/plan (basic|pro|full, modules_enabled günceller).
+- UI: PlatformAdminPanel.js — 'super-admin' view (Settings & Admin menüsü, admin-only, testId super-admin-btn). Kartlar: müşteri otelleri (sağlık skoru barı %40'lar doğrulandı, plan select, askıya al), 💳 Ödeme Linki Üret (gerçek Stripe checkout URL üretti, tx listesi), 🔑 API anahtarı üret/listele (hbx_ tam key bir kez gösterilir), 📦 CSV import (kind seçici), 📖 API Dokümantasyonu (7 endpoint + auth açıklaması).
+- Onboarding: mevcut OnboardingBanner TodayHub'a bağlandı (kurulum eksikse görünür, onResume→onboarding view); mevcut OnboardingWizard view'ı zaten vardı. Yeni /api/onboarding/{pid} endpoint'i skoru veriyor.
+- Rezervasyona ödeme linki: panel üzerinden booking_id ile link üretimi çalışıyor (rezervasyon detayına gömme sonraki adım). Cloudbeds API key HÂLÂ gelmedi.

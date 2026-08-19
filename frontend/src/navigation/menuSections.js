@@ -504,6 +504,7 @@ export function buildMenuSections(t, user) {
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
         ...(user?.role === "admin" ? [{ id: "settings-hub", icon: Gear, name: "Settings hub", testId: "settings-hub-btn", core: true }] : []),
         ...(user?.role === "admin" ? [{ id: "error-sentinel", icon: Gear, name: "Hata Nöbetçisi", testId: "error-sentinel-btn" }] : []),
+        ...(user?.role === "admin" ? [{ id: "super-admin", icon: Gear, name: "👑 Platform Yönetimi (Süper Admin)", testId: "super-admin-btn", core: true }] : []),
 
         { divider: true, label: "Team & Access" },
         ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: t("nav.team"), testId: "team-btn", core: true }] : []),

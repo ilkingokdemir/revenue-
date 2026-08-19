@@ -966,3 +966,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Stop-Sell: cloudbeds availability payload'ında roomsAvailable<=0 olan günlere stopSell:true; response'ta stop_sell_days. Doğrulandı: suite total_rooms=0 senaryosunda 3 gün stopSell:true (test sonrası total_rooms=2 restore edildi, geçici rate_map eşlemesi kaldırıldı).
 - Mews Önizlemeli Push: GET /api/pms-connect/{provider}/push-preview/{pid}?days (eşleme çarpanlı tarih×oda tablosu, TÜM sağlayıcılar için çalışır: mews/apaleo/siteminder/eviivo/elektraweb); PmsConnectHub'da '👁 Önizle & Gönder' butonu + modal (pms-preview-btn/modal/confirm). Doğrulandı: Mews 14 satır tablo → Onayla → push.
 - Cloudbeds API key HÂLÂ kullanıcıdan gelmedi — canlı push/müsaitlik/stop-sell testi bekliyor.
+
+## Güncelleme (2026-08-19, Tesis Provizyonu — TÜM otellere uygulandı + yeni hesap otomasyonu)
+- /app/backend/routes/platform_ext/provisioning.py: provision_property(db,pid,name) idempotent seed — plan=full/modules_enabled=all, örnek oda tipi (yoksa), comp_trigger + occupancy_rules + cloudbeds_config + template_settings varsayılanları, hoş geldin bildirimi. Routes: GET /api/provisioning/status, POST /api/provisioning/apply-all (admin).
+- UYGULANDI: 13/13 aktif otel plan=full oldu (apply-all koştu). auth_routes.py POST /properties artık her YENİ oteli otomatik provizyonlar (doğrulandı: test oteli 7 öğeyle açıldı, sonra temizlendi).
+- Gelecek müşteri otelleri: hesap açıldığında 280+ modülün tamamı + varsayılan konfigürasyonlarla hazır başlar.

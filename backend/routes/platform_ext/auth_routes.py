@@ -205,6 +205,9 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
         doc = new_prop.model_dump()
         await db.properties.insert_one(doc)
         doc.pop("_id", None)
+        from routes.platform_ext.provisioning import provision_property
+        prov = await provision_property(db, doc["id"], doc.get("name", ""))
+        doc["provisioning"] = prov["seeded"]
         return doc
 
     @router.put("/properties/{property_id}")

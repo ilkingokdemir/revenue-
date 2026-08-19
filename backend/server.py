@@ -1805,6 +1805,10 @@ api_router.include_router(create_health_sentinel_router(db, require_roles))
 from routes.distribution.connector_catalog import create_connector_catalog_router
 api_router.include_router(create_connector_catalog_router(db, require_roles))
 
+# ===== Tesis Provizyonu — her hesap tüm modüllerle açılır =====
+from routes.platform_ext.provisioning import create_provisioning_router
+api_router.include_router(create_provisioning_router(db, require_roles))
+
 @app.on_event("startup")
 async def _start_journey_engine():
     import asyncio as _asyncio

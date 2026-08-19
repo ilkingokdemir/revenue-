@@ -133,7 +133,8 @@ def create_site_builder_router(db, require_roles):
         content = data.get("content") or {}
         if isinstance(content.get("amenities"), list):
             content["amenities"] = ", ".join(str(x) for x in content["amenities"])
-        for k in ("headline", "about", "amenities", "phone", "email", "address"):
+        for k in ("headline", "about", "amenities", "phone", "email", "address",
+                  "seo_title", "seo_description", "seo_keywords"):
             if k in content and not isinstance(content[k], str):
                 content[k] = str(content[k])
         upd = {"property_id": pid, "template": tpl, "content": content,

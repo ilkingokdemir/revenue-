@@ -35,6 +35,37 @@ export default function HotelSitePage({ propertyId }) {
       .catch(() => setErr(true));
   }, [propertyId]);
 
+  // SEO: title + meta + OG + JSON-LD (schema.org Hotel)
+  useEffect(() => {
+    if (!data) return;
+    const c = data.site.content || {};
+    const name = data.property?.name || propertyId;
+    const title = c.seo_title || `${name}${c.headline ? " — " + c.headline : ""}`;
+    const desc = c.seo_description || c.about || `${name} için online rezervasyon.`;
+    document.title = title;
+    const setMeta = (attr, key, val) => {
+      let el = document.head.querySelector(`meta[${attr}="${key}"]`);
+      if (!el) { el = document.createElement("meta"); el.setAttribute(attr, key); document.head.appendChild(el); }
+      el.setAttribute("content", val);
+    };
+    setMeta("name", "description", desc.slice(0, 160));
+    if (c.seo_keywords) setMeta("name", "keywords", c.seo_keywords);
+    setMeta("property", "og:title", title);
+    setMeta("property", "og:description", desc.slice(0, 160));
+    setMeta("property", "og:type", "website");
+    const cov = (data.photos || []).find((p) => p.kind === "cover");
+    if (cov) setMeta("property", "og:image", `${process.env.REACT_APP_BACKEND_URL}${cov.url}`);
+    let ld = document.getElementById("hotel-jsonld");
+    if (!ld) { ld = document.createElement("script"); ld.type = "application/ld+json"; ld.id = "hotel-jsonld"; document.head.appendChild(ld); }
+    ld.textContent = JSON.stringify({
+      "@context": "https://schema.org", "@type": "Hotel", name,
+      description: desc.slice(0, 300),
+      ...(c.address ? { address: c.address } : {}),
+      ...(c.phone ? { telephone: c.phone } : {}),
+      ...(cov ? { image: `${process.env.REACT_APP_BACKEND_URL}${cov.url}` } : {}),
+    });
+  }, [data, propertyId]);
+
   if (err) return <div className="min-h-screen flex items-center justify-center text-stone-500 text-sm" data-testid="site-not-found">Bu site yayında değil.</div>;
   if (!data) return <div className="min-h-screen flex items-center justify-center text-stone-400 text-sm">Yükleniyor…</div>;
 

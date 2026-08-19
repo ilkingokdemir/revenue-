@@ -10,7 +10,7 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
   const [templates, setTemplates] = useState([]);
   const [tpl, setTpl] = useState("classic");
   const [published, setPublished] = useState(false);
-  const [content, setContent] = useState({ headline: "", about: "", amenities: "", phone: "", email: "", address: "" });
+  const [content, setContent] = useState({ headline: "", about: "", amenities: "", phone: "", email: "", address: "", seo_title: "", seo_description: "" });
   const [photos, setPhotos] = useState([]);
   const [domain, setDomain] = useState("");
   const [domainStatus, setDomainStatus] = useState(null);
@@ -65,7 +65,7 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
       const s = data.site || {};
       setTpl(s.template || "classic");
       setPublished(!!s.published);
-      setContent({ headline: "", about: "", amenities: "", phone: "", email: "", address: "", ...(s.content || {}) });
+      setContent({ headline: "", about: "", amenities: "", phone: "", email: "", address: "", seo_title: "", seo_description: "", ...(s.content || {}) });
       setPhotos(data.photos || []);
       if (s.custom_domain) { setDomain(s.custom_domain); setDomainStatus(s.domain_status || "pending"); }
     } catch { toast.error("Yüklenemedi"); }
@@ -175,6 +175,34 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
               Yayından Kaldır
             </button>
           )}
+        </div>
+
+        {/* SEO Ayarları */}
+        <div className="rounded-xl border border-stone-200 p-3 mt-2" data-testid="site-seo-card">
+          <div className="text-[10px] font-bold uppercase text-stone-500 mb-2">SEO Ayarları</div>
+          <div className="space-y-2">
+            <div>
+              <input value={content.seo_title} onChange={(e) => setContent({ ...content, seo_title: e.target.value })}
+                placeholder="SEO başlığı (örn. Otelim — Şehir Merkezinde Butik Otel)" className={inputCls} data-testid="site-seo-title-input" maxLength={70} />
+              <div className={`text-[9px] text-right ${content.seo_title.length > 60 ? "text-red-500" : "text-stone-400"}`}>{content.seo_title.length}/60</div>
+            </div>
+            <div>
+              <textarea value={content.seo_description} onChange={(e) => setContent({ ...content, seo_description: e.target.value })}
+                rows={2} placeholder="SEO açıklaması — aramada başlığın altında görünen metin" className={inputCls} data-testid="site-seo-desc-input" maxLength={170} />
+              <div className={`text-[9px] text-right ${content.seo_description.length > 160 ? "text-red-500" : "text-stone-400"}`}>{content.seo_description.length}/160</div>
+            </div>
+          </div>
+          {/* Google önizlemesi */}
+          <div className="mt-2 rounded-lg border border-stone-100 bg-white p-3" data-testid="site-google-preview">
+            <div className="text-[9px] font-bold uppercase text-stone-400 mb-1.5">Google Önizlemesi</div>
+            <div className="text-[11px] text-emerald-700 truncate">{`${window.location.origin}/site/${pid}`}{domain && domainStatus === "verified" ? ` · ${domain}` : ""}</div>
+            <div className="text-[15px] text-[#1a0dab] leading-snug truncate" style={{ fontFamily: "arial, sans-serif" }}>
+              {content.seo_title || content.headline || "Otel adınız — başlık buraya"}
+            </div>
+            <div className="text-[12px] text-stone-600 leading-snug line-clamp-2" style={{ fontFamily: "arial, sans-serif" }}>
+              {content.seo_description || content.about || "SEO açıklamanız burada görünecek. 160 karaktere kadar yazın."}
+            </div>
+          </div>
         </div>
 
         {/* Özel alan adı */}

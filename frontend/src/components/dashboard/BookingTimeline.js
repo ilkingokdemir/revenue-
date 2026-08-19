@@ -1135,6 +1135,38 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                         if (ei <= 0 || si >= date_columns.length) return null;
                         const left = si * COL_W + 2;
                         const width = Math.max((ei - si) * COL_W - 4, COL_W * 0.5);
+                        const isIcal = !!block.ical_source_id || block.created_by === "ical_sync";
+                        if (isIcal) {
+                          const channel = (block.reason || "").replace(/^iCal:\s*/, "").split(" — ")[0] || "iCal";
+                          const isAirbnb = channel.toLowerCase().includes("airbnb");
+                          return (
+                            <div
+                              key={block.id}
+                              className="absolute top-1 bottom-1 rounded-md shadow cursor-default overflow-hidden"
+                              style={{
+                                left, width,
+                                backgroundImage: "repeating-linear-gradient(45deg, #FF385C 0, #FF385C 6px, #e5254c 6px, #e5254c 12px)",
+                              }}
+                              title={`iCal SENKRON · ${block.reason} · ${block.start} → ${block.end} (senkronla yönetilir, elle silinemez)`}
+                              data-testid={`ical-block-${block.id}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toast.info(`Bu blok "${channel}" iCal senkronundan geliyor — iCal Senkronu panelinden yönetilir`);
+                              }}
+                            >
+                              <div className="absolute inset-0 bg-black/15 flex items-center gap-1 px-1.5">
+                                {isAirbnb ? (
+                                  <svg viewBox="0 0 448 512" className="w-3 h-3 flex-shrink-0" fill="white" aria-label="Airbnb">
+                                    <path d="M224 373.12c-25.24-31.67-40.08-59.43-45-83.18-22.55-88 112.61-88 90.06 0-5.45 24.25-20.29 52-45.06 83.18zm138.15 73.23c-42.06 18.31-83.67-10.88-119.3-50.47 103.9-130.07 46.11-200-18.85-200-54.92 0-85.16 46.51-73.28 100.5 6.93 29.19 25.23 62.39 54.43 99.5-32.53 36.05-60.55 52.69-85.15 54.92-50 7.43-89.11-41.06-71.3-91.09 15.1-39.16 111.72-231.18 115.87-241.56 15.75-30.07 25.56-57.4 59.38-57.4 32.34 0 43.4 25.94 60.37 59.87 36 70.62 89.35 177.48 114.84 239.09 13.17 33.07-1.37 71.29-37.01 86.64z" />
+                                  </svg>
+                                ) : (
+                                  <CalendarDays className="w-3 h-3 text-white flex-shrink-0" />
+                                )}
+                                <span className="text-[10px] text-white font-bold uppercase tracking-wider truncate">{channel}</span>
+                              </div>
+                            </div>
+                          );
+                        }
                         return (
                           <div
                             key={block.id}

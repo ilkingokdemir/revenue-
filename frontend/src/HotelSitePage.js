@@ -9,6 +9,22 @@ const THEMES = {
   boutique: { bg: "bg-white", text: "text-stone-900", accent: "bg-stone-900 hover:bg-stone-700", card: "bg-stone-50 border border-stone-200", hero: "bg-gradient-to-br from-rose-100 to-stone-100" },
 };
 
+export function CustomDomainSite({ fallback }) {
+  const [pid, setPid] = useState(null);
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    axios.get(`${API}/site-builder/public/resolve-domain`, { params: { host: window.location.host } })
+      .then(({ data }) => setPid(data.property_id))
+      .catch(() => {})
+      .finally(() => setChecked(true));
+  }, []);
+
+  if (!checked) return <div className="min-h-screen flex items-center justify-center text-stone-400 text-sm">Yükleniyor…</div>;
+  if (pid) return <HotelSitePage propertyId={pid} />;
+  return fallback || null;
+}
+
 export default function HotelSitePage({ propertyId }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(false);

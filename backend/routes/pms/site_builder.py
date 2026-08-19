@@ -154,4 +154,60 @@ def create_site_builder_router(db, require_roles):
         return {"site": cfg, "property": prop, "room_types": rts,
                 "photos": [{"id": p["id"], "kind": p["kind"], "url": f"/api/site-builder/photo/{p['id']}"} for p in photos]}
 
+    # ---------------- ÖZEL ALAN ADI ----------------
+    @router.post("/{pid}/domain")
+    async def set_domain(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        import re as _re
+        domain = (data.get("domain") or "").lower().strip().replace("https://", "").replace("http://", "").rstrip("/")
+        expected = (data.get("expected_target") or "").lower().strip()
+        if not _re.match(r"^([a-z0-9-]+\.)+[a-z]{2,}$", domain):
+            raise HTTPException(400, "Geçerli bir alan adı girin (örn. otelim.com)")
+        taken = await db.hotel_sites.find_one({"custom_domain": domain, "property_id": {"$ne": pid}}, {"_id": 1})
+        if taken:
+            raise HTTPException(409, "Bu alan adı başka bir tesise bağlı")
+        await db.hotel_sites.update_one({"property_id": pid}, {"$set": {
+            "custom_domain": domain, "domain_status": "pending", "domain_target": expected,
+            "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        return {"ok": True, "domain": domain, "status": "pending",
+                "dns_instruction": f"DNS sağlayıcınızda CNAME kaydı ekleyin: {domain} → {expected or 'uygulama adresiniz'}"}
+
+    @router.post("/{pid}/domain/verify")
+    async def verify_domain(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        cfg = await db.hotel_sites.find_one({"property_id": pid}, {"_id": 0, "custom_domain": 1, "domain_target": 1})
+        if not cfg or not cfg.get("custom_domain"):
+            raise HTTPException(400, "Önce alan adı kaydedin")
+        domain, target = cfg["custom_domain"], (cfg.get("domain_target") or "").lower()
+        found, status = [], "pending"
+        try:
+            for rtype in ("CNAME", "A"):
+                r = _requests.get(f"https://dns.google/resolve?name={domain}&type={rtype}", timeout=10)
+                for ans in (r.json().get("Answer") or []):
+                    found.append(ans.get("data", "").rstrip(".").lower())
+        except Exception as e:
+            raise HTTPException(502, f"DNS sorgusu başarısız: {str(e)[:100]}")
+        if target and any(target in f for f in found):
+            status = "verified"
+        await db.hotel_sites.update_one({"property_id": pid}, {"$set": {
+            "domain_status": status, "domain_checked_at": datetime.now(timezone.utc).isoformat(),
+            "domain_dns_found": found[:5]}})
+        return {"ok": True, "status": status, "dns_found": found[:5],
+                "note": "Doğrulandı! Alan adınız siteye yönleniyor." if status == "verified"
+                else f"CNAME henüz görünmüyor. DNS'e {domain} → {target} CNAME kaydı ekleyin (yayılım 1-24 saat sürebilir)."}
+
+    @router.delete("/{pid}/domain")
+    async def remove_domain(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        await db.hotel_sites.update_one({"property_id": pid}, {"$unset": {
+            "custom_domain": "", "domain_status": "", "domain_target": "", "domain_dns_found": ""}})
+        return {"ok": True}
+
+    @router.get("/public/resolve-domain")
+    async def resolve_domain(host: str):
+        host = (host or "").lower().strip()
+        cfg = await db.hotel_sites.find_one(
+            {"custom_domain": host, "domain_status": "verified", "published": True},
+            {"_id": 0, "property_id": 1})
+        if not cfg:
+            raise HTTPException(404, "Alan adı eşleşmedi")
+        return {"property_id": cfg["property_id"]}
+
     return router

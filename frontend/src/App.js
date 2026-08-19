@@ -63,7 +63,7 @@ import { buildMenuSections } from "./navigation/menuSections";
 import { isModuleAllowed, requiredPlanFor } from "./navigation/planGate";
 import PlanUpsellModal from "@/components/dashboard/PlanUpsellModal";
 import SignupPage from "@/components/dashboard/SignupPage";
-import HotelSitePage from "./HotelSitePage";
+import HotelSitePage, { CustomDomainSite } from "./HotelSitePage";
 import { SIDEBAR_PERM_MAP } from "./navigation/permMap";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
@@ -1402,6 +1402,14 @@ function App() {
   if (window.location.pathname.startsWith("/site/")) {
     const sitePid = window.location.pathname.split("/site/")[1];
     return <HotelSitePage propertyId={sitePid} />;
+  }
+  {
+    let appHost = "";
+    try { appHost = new URL(process.env.REACT_APP_BACKEND_URL).host; } catch { /* ignore */ }
+    const h = window.location.host;
+    if (appHost && h !== appHost && !h.includes("localhost") && !h.endsWith(".emergentagent.com")) {
+      return <CustomDomainSite fallback={<LandingPage />} />;
+    }
   }
   if (window.location.pathname.startsWith("/book/")) {
     const propertyId = window.location.pathname.split("/book/")[1];

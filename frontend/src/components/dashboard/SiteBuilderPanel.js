@@ -12,7 +12,35 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
   const [published, setPublished] = useState(false);
   const [content, setContent] = useState({ headline: "", about: "", amenities: "", phone: "", email: "", address: "" });
   const [photos, setPhotos] = useState([]);
+  const [domain, setDomain] = useState("");
+  const [domainStatus, setDomainStatus] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  const saveDomain = async () => {
+    if (!domain.trim()) { toast.error("Alan adı girin"); return; }
+    try {
+      const { data } = await axios.post(`${API}/site-builder/${pid}/domain`,
+        { domain: domain.trim(), expected_target: window.location.host });
+      setDomainStatus("pending");
+      toast.success(data.dns_instruction);
+    } catch (e) { toast.error(e.response?.data?.detail || "Kaydedilemedi"); }
+  };
+
+  const verifyDomain = async () => {
+    try {
+      const { data } = await axios.post(`${API}/site-builder/${pid}/domain/verify`);
+      setDomainStatus(data.status);
+      data.status === "verified" ? toast.success(data.note) : toast.warning(data.note);
+    } catch (e) { toast.error(e.response?.data?.detail || "Doğrulanamadı"); }
+  };
+
+  const removeDomain = async () => {
+    try {
+      await axios.delete(`${API}/site-builder/${pid}/domain`);
+      setDomain(""); setDomainStatus(null);
+      toast.success("Alan adı kaldırıldı");
+    } catch { toast.error("Kaldırılamadı"); }
+  };
 
   const uploadPhoto = async (kind, file) => {
     if (!file) return;
@@ -39,6 +67,7 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
       setPublished(!!s.published);
       setContent({ headline: "", about: "", amenities: "", phone: "", email: "", address: "", ...(s.content || {}) });
       setPhotos(data.photos || []);
+      if (s.custom_domain) { setDomain(s.custom_domain); setDomainStatus(s.domain_status || "pending"); }
     } catch { toast.error("Yüklenemedi"); }
   }, [pid]);
 
@@ -146,6 +175,36 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
               Yayından Kaldır
             </button>
           )}
+        </div>
+
+        {/* Özel alan adı */}
+        <div className="rounded-xl border border-stone-200 p-3 mt-2" data-testid="site-domain-card">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] font-bold uppercase text-stone-500">Özel Alan Adı</span>
+            {domainStatus && (
+              <span data-testid="site-domain-status" className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                domainStatus === "verified" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                {domainStatus === "verified" ? "Doğrulandı ✓" : "DNS Bekleniyor"}
+              </span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="otelim.com"
+              className={inputCls} data-testid="site-domain-input" />
+            <button onClick={saveDomain} data-testid="site-domain-save-btn"
+              className="px-3 py-2 rounded-lg bg-stone-900 text-white text-[10px] font-bold hover:bg-stone-700 whitespace-nowrap">Kaydet</button>
+            {domainStatus && (
+              <>
+                <button onClick={verifyDomain} data-testid="site-domain-verify-btn"
+                  className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-[10px] font-bold hover:bg-indigo-700 whitespace-nowrap">DNS Doğrula</button>
+                <button onClick={removeDomain} data-testid="site-domain-remove-btn"
+                  className="px-3 py-2 rounded-lg border border-red-200 text-red-600 text-[10px] font-bold hover:bg-red-50 whitespace-nowrap">Kaldır</button>
+              </>
+            )}
+          </div>
+          <p className="text-[10px] text-stone-400 mt-2">
+            DNS sağlayıcınızda CNAME kaydı ekleyin: <code className="bg-stone-100 px-1 rounded">{domain || "otelim.com"} → {window.location.host}</code> — yayılım 1-24 saat sürebilir, sonra "DNS Doğrula"ya basın.
+          </p>
         </div>
       </div>
     </div>

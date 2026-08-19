@@ -938,6 +938,31 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
       {/* Main Content Area */}
       <main className="flex-1 min-w-0 lg:ml-56 pt-14 lg:pt-0">
+        {/* Salt-okunur mod şeridi — süresi dolan, dönüşmemiş deneme hesapları */}
+        {(() => {
+          const expiredProps = properties.filter((p) =>
+            p.signup_source === "self_signup" && p.trial_ends_at && !p.converted_at &&
+            new Date(p.trial_ends_at) < Date.now() &&
+            (activePropertyId === "all" || p.id === activePropertyId));
+          if (expiredProps.length === 0) return null;
+          const p0 = expiredProps[0];
+          return (
+            <div data-testid="trial-readonly-banner"
+              className="sticky top-0 z-[60] flex flex-wrap items-center gap-2 bg-red-600 text-white px-4 py-2 shadow-md">
+              <span className="text-sm">🔒</span>
+              <span className="flex-1 min-w-[220px] text-xs font-bold">
+                Deneme süreniz doldu — <b>{p0.name}</b> salt-okunur modda. Verileriniz güvende, ancak yeni kayıt ekleyemez ve düzenleme yapamazsınız.
+              </span>
+              <button
+                data-testid="trial-readonly-upgrade-btn"
+                onClick={() => setUpsellFor({ name: "Deneme süreniz doldu — hesap salt-okunur modda", required: "pro" })}
+                className="px-3 py-1.5 rounded-lg bg-white text-red-700 text-xs font-black hover:bg-red-50 transition-colors">
+                Planı Yükselt →
+              </button>
+            </div>
+          );
+        })()}
+
         {/* First-run progress banner — auto-hides when setup is complete */}
         {activeView !== "onboarding" && user?.role === "admin" && (
           <OnboardingBanner

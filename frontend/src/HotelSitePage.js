@@ -43,14 +43,18 @@ export default function HotelSitePage({ propertyId }) {
       vid = localStorage.getItem("mhb_visitor_id") || "";
       if (!vid) { vid = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem("mhb_visitor_id", vid); }
     } catch { /* ignore */ }
-    axios.post(`${API}/site-builder/public/track`, { property_id: propertyId, event: "view", visitor_id: vid }).catch(() => {});
+    axios.post(`${API}/site-builder/public/track`, { property_id: propertyId, event: "view", visitor_id: vid, referrer: document.referrer || "" }).catch(() => {});
+    // Pro mod: profesyonel platform şablonuna (Booking.com/Airbnb/Expedia görünümü) yönlendir
+    if (data.site.mode === "pro" && data.site.engine_template) {
+      window.location.replace(`/book?property=${propertyId}&template=${data.site.engine_template}`);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data ? 1 : 0]);
 
   const trackCta = () => {
     let vid = "";
     try { vid = localStorage.getItem("mhb_visitor_id") || ""; } catch { /* ignore */ }
-    axios.post(`${API}/site-builder/public/track`, { property_id: propertyId, event: "cta_click", visitor_id: vid }).catch(() => {});
+    axios.post(`${API}/site-builder/public/track`, { property_id: propertyId, event: "cta_click", visitor_id: vid, referrer: document.referrer || "" }).catch(() => {});
   };
 
   // SEO: title + meta + OG + JSON-LD (schema.org Hotel)

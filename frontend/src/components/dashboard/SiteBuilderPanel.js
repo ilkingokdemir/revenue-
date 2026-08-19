@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Globe, ArrowSquareOut } from "@phosphor-icons/react";
+import { TEMPLATES as PRO_TEMPLATES } from "../../templates/templateConfig";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -15,6 +16,8 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
   const [domain, setDomain] = useState("");
   const [domainStatus, setDomainStatus] = useState(null);
   const [stats, setStats] = useState(null);
+  const [mode, setMode] = useState("simple");
+  const [engineTpl, setEngineTpl] = useState("booking-classic");
   const [busy, setBusy] = useState(false);
 
   const saveDomain = async () => {
@@ -66,6 +69,8 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
       const s = data.site || {};
       setTpl(s.template || "classic");
       setPublished(!!s.published);
+      if (s.mode) setMode(s.mode);
+      if (s.engine_template) setEngineTpl(s.engine_template);
       setContent({ headline: "", about: "", amenities: "", phone: "", email: "", address: "", seo_title: "", seo_description: "", ...(s.content || {}) });
       setPhotos(data.photos || []);
       if (s.custom_domain) { setDomain(s.custom_domain); setDomainStatus(s.domain_status || "pending"); }
@@ -81,7 +86,7 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
   const save = async (pub) => {
     setBusy(true);
     try {
-      const { data } = await axios.post(`${API}/site-builder/${pid}`, { template: tpl, content, published: pub });
+      const { data } = await axios.post(`${API}/site-builder/${pid}`, { template: tpl, content, published: pub, mode, engine_template: engineTpl });
       setPublished(pub);
       toast.success(pub ? `Site yayında! ${window.location.origin}/site/${pid}` : "Taslak kaydedildi");
       if (pub) window.open(`/site/${pid}`, "_blank");
@@ -107,6 +112,17 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
         )}
       </div>
 
+      {/* Mod seçimi: basit tema vs profesyonel platform şablonları */}
+      <div className="flex gap-2 mb-4" data-testid="site-mode-toggle">
+        {[["simple", "Basit Tema (3)"], ["pro", "Profesyonel Şablonlar (10) — Booking.com / Airbnb / Expedia görünümü"]].map(([m, l]) => (
+          <button key={m} onClick={() => setMode(m)} data-testid={`site-mode-${m}`}
+            className={`px-4 py-2 rounded-full text-[11px] font-bold ${mode === m ? "bg-indigo-600 text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {mode === "simple" ? (
       <div className="grid grid-cols-3 gap-3 mb-5">
         {templates.map((t) => (
           <button key={t.id} onClick={() => setTpl(t.id)} data-testid={`site-tpl-${t.id}`}
@@ -116,6 +132,22 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
           </button>
         ))}
       </div>
+      ) : (
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-5" data-testid="site-pro-templates">
+        {Object.values(PRO_TEMPLATES).map((t) => (
+          <div key={t.id} className={`rounded-xl border-2 p-3 ${engineTpl === t.id ? "border-indigo-600 bg-indigo-50" : "border-stone-200 hover:border-indigo-300"}`} data-testid={`site-protpl-${t.id}`}>
+            <button onClick={() => setEngineTpl(t.id)} className="text-left w-full">
+              <div className="w-full h-2 rounded-full mb-2" style={{ background: t.colors?.primary || "#333" }} />
+              <div className="text-[11px] font-bold text-stone-800 truncate">{t.name}</div>
+              <div className="text-[9px] font-semibold text-stone-400">{t.platform} tarzı</div>
+            </button>
+            <a href={`/book?property=${pid}&template=${t.id}`} target="_blank" rel="noreferrer"
+              data-testid={`site-protpl-preview-${t.id}`}
+              className="inline-block mt-1.5 text-[9px] font-bold text-indigo-600 hover:underline">Önizle ↗</a>
+          </div>
+        ))}
+      </div>
+      )}
 
       {/* Ziyaret istatistikleri */}
       {stats && (
@@ -132,6 +164,21 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
               </div>
             ))}
           </div>
+          {stats.sources && Object.keys(stats.sources).length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3" data-testid="site-stats-sources">
+              {Object.entries(stats.sources).sort((a, b) => b[1] - a[1]).map(([s, n]) => {
+                const total = Object.values(stats.sources).reduce((x, y) => x + y, 0) || 1;
+                const label = { google: "Google", social: "Sosyal Medya", direct: "Direkt", other: "Diğer" }[s] || s;
+                const cls = { google: "bg-blue-50 text-blue-700 border-blue-200", social: "bg-pink-50 text-pink-700 border-pink-200", direct: "bg-emerald-50 text-emerald-700 border-emerald-200", other: "bg-stone-50 text-stone-600 border-stone-200" }[s] || "bg-stone-50 text-stone-600 border-stone-200";
+                return (
+                  <span key={s} data-testid={`site-source-${s}`}
+                    className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${cls}`}>
+                    {label}: {n} (%{Math.round((n / total) * 100)})
+                  </span>
+                );
+              })}
+            </div>
+          )}
           {stats.daily?.length > 0 && (
             <div className="flex items-end gap-1 h-14" data-testid="site-stats-chart">
               {stats.daily.map((d) => {

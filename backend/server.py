@@ -86,6 +86,7 @@ from routes.pms.site_builder import create_site_builder_router
 from routes.finance_ext.terminal import create_terminal_router
 from routes.ai.ai_copilot import create_ai_copilot_router
 from routes.platform_ext.presets import create_presets_router
+from routes.platform_ext.trial_emails import create_trial_emails_router, trial_email_loop
 from routes.hotel_ops.event_intelligence import create_event_intelligence_router
 from routes.revenue_ext.parity_analysis import create_parity_analysis_router
 from routes.distribution.channel_manager import create_channel_manager_router
@@ -1606,6 +1607,7 @@ api_router.include_router(create_site_builder_router(db, require_roles))
 api_router.include_router(create_terminal_router(db, require_roles))
 api_router.include_router(create_ai_copilot_router(db, require_roles))
 api_router.include_router(create_presets_router(db, require_roles))
+api_router.include_router(create_trial_emails_router(db, require_roles))
 
 from routes.integrations_pkg.webhooks_api_keys import create_webhooks_api_keys_router
 api_router.include_router(create_webhooks_api_keys_router(db, require_roles))
@@ -2186,6 +2188,7 @@ async def startup_event():
     asyncio.create_task(health_sentinel_loop(db))
     from routes.distribution.cloudbeds_adapter import cloudbeds_autopush_loop
     asyncio.create_task(cloudbeds_autopush_loop(db))
+    asyncio.create_task(trial_email_loop(db))
     asyncio.create_task(profit_autopilot_loop(db))
     asyncio.create_task(data_quality_sentinel_loop(db))
     asyncio.create_task(open_pricing_optimizer_loop(db))

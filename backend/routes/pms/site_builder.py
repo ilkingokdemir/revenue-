@@ -138,6 +138,8 @@ def create_site_builder_router(db, require_roles):
             if k in content and not isinstance(content[k], str):
                 content[k] = str(content[k])
         upd = {"property_id": pid, "template": tpl, "content": content,
+               "mode": data.get("mode") if data.get("mode") in ("simple", "pro") else "simple",
+               "engine_template": (data.get("engine_template") or "")[:40],
                "published": bool(data.get("published")),
                "updated_at": datetime.now(timezone.utc).isoformat()}
         await db.hotel_sites.update_one({"property_id": pid}, {"$set": upd}, upsert=True)
@@ -219,9 +221,19 @@ def create_site_builder_router(db, require_roles):
         if not pid or event not in ("view", "cta_click"):
             raise HTTPException(422, "property_id ve event (view|cta_click) zorunlu")
         now = datetime.now(timezone.utc)
+        ref = (data.get("referrer") or "").lower()
+        if not ref:
+            source = "direct"
+        elif "google." in ref:
+            source = "google"
+        elif any(s in ref for s in ("facebook.", "instagram.", "twitter.", "x.com", "t.co/", "linkedin.", "tiktok.", "youtube.")):
+            source = "social"
+        else:
+            source = "other"
         await db.site_visits.insert_one({
             "id": str(uuid.uuid4()), "property_id": pid, "event": event,
-            "visitor_id": (data.get("visitor_id") or "")[:64],
+            "visitor_id": (data.get("visitor_id") or "")[:64], "source": source,
+            "referrer": ref[:200],
             "date": now.date().isoformat(), "created_at": now.isoformat()})
         return {"ok": True}
 
@@ -237,13 +249,17 @@ def create_site_builder_router(db, require_roles):
         bookings = await db.bookings.count_documents(
             {"property_id": pid, "source": "website_widget", "created_at": {"$gte": since}})
         daily = {}
-        async for v in db.site_visits.find({**q, "event": "view"}, {"_id": 0, "date": 1}):
+        sources = {}
+        async for v in db.site_visits.find({**q, "event": "view"}, {"_id": 0, "date": 1, "source": 1}):
             daily[v["date"]] = daily.get(v["date"], 0) + 1
+            s = v.get("source") or "direct"
+            sources[s] = sources.get(s, 0) + 1
         series = sorted(daily.items())[-14:]
         return {"days": days, "views": views, "unique_visitors": uniques, "cta_clicks": clicks,
                 "bookings": bookings,
                 "click_rate_pct": round(min(clicks / views * 100, 100), 1) if views else 0,
                 "conversion_pct": round(min(bookings / views * 100, 100), 1) if views else 0,
+                "sources": sources,
                 "daily": [{"date": d, "views": c} for d, c in series]}
 
     return router

@@ -526,6 +526,17 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         setActiveView(v);
       }
     } catch { /* ignore */ }
+    // E-postadaki yükseltme linki (?upgrade=1) → upsell modalini aç
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("upgrade") === "1") {
+        setUpsellFor({ name: "Deneme süreniz doldu", required: "pro" });
+        params.delete("upgrade");
+        params.delete("property");
+        const qs = params.toString();
+        window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+      }
+    } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

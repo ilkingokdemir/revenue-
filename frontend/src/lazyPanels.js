@@ -29,6 +29,8 @@ export const AIPredictionsPanel = L(() => import("./components/dashboard/AIPredi
 export const ChannelRevenuePanel = L(() => import("./components/dashboard/ChannelRevenuePanel"));
 export const RmsComparisonPanel = L(() => import("./components/dashboard/RmsComparisonPanel"));
 export const RmsSetupWizard = L(() => import("./components/dashboard/RmsSetupWizard"));
+export const CmSetupWizard = L(() => import("./components/dashboard/CmSetupWizard"));
+export const PriceGuardsPanel = L(() => import("./components/dashboard/PriceGuardsPanel"));
 export const MarketingRadarPanel = L(() => import("./components/dashboard/MarketingRadarPanel"));
 export const BIChatPanel = L(() => import("./components/dashboard/BIChatPanel"));
 export const ParkingRmsPanel = L(() => import("./components/dashboard/ParkingRmsPanel"));

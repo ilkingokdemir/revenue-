@@ -262,6 +262,7 @@ export function buildMenuSections(t, user) {
       items: [
         { divider: true, label: "Pricing" },
         { id: "rms-setup", icon: MagicWand, name: "RMS Hızlı Kurulum (30 dk)", testId: "rms-setup-btn", core: true },
+        { id: "price-guards", icon: ShieldCheck, name: "Fiyat Bekçileri (POBA + Surge)", testId: "price-guards-btn", core: true },
         { id: "my-rates", icon: ChartLine, name: "My Rates (Daily Grid)", testId: "my-rates-btn", core: true },
         { id: "revenue", icon: ChartLine, name: "Revenue management", testId: "revenue-btn", core: true },
         { id: "profit-os", icon: Target, name: "Profit OS", testId: "profit-os-btn" },
@@ -332,6 +333,7 @@ export function buildMenuSections(t, user) {
       color: "text-stone-500",
       items: [
         { id: "chmgr-hub", icon: Lightning, name: "Channel manager hub", testId: "chmgr-hub-btn", core: true },
+        { id: "cm-setup", icon: MagicWand, name: "CM Hızlı Kurulum", testId: "cm-setup-btn", core: true },
         { id: "channels-v2", icon: CloudArrowUp, name: "Channel Manager v2", testId: "channels-v2-btn" },
         { id: "channel-settings", icon: Gear, name: t("nav.channel_settings"), testId: "channel-settings-btn" },
         { id: "channel-map-matrix", icon: Buildings, name: "Channel mappings", testId: "channel-map-matrix-btn" },

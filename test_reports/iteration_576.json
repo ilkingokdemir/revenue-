@@ -1,0 +1,41 @@
+{
+  "summary": "Iter 576 — Full test of Public Self-Signup + Tenant Isolation, CM Quick Setup Wizard, Price Guards (POBA + Surge), and super-admin plan tier 'cm'. Backend: 22/22 pytest PASSED. Frontend: signup e2e worked (landing 'RMS ile Başla' -> /signup -> plan cards visible -> submit -> auto-login -> PendingLegalDocsGate all 6 docs accepted -> CM wizard visible, Go-Live %17 chip, branch selector shows ONLY the newly created hotel (tenant isolation verified in UI), all 8 channel cards + save button present). Price Guards panel opened via sidebar 'Fiyat Bekçileri', POBA + Surge toggles worked, 'Şimdi Çalıştır' produced toast '12 aksiyon uygulandı' + log rows in guards-log. Full DB cleanup performed (rate_overrides poba/surge deleted, price_guard_log cleared for 'default', 5 self_signup test tenants deleted, guards disabled, default plan='full' preserved).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/signup", "issue": "Rate limit is 3 per IP per 10 min but spec/error message says '4th signup within 10 min -> 429'. Code path: recent>=3 rejects, so 3rd signup succeeds and 4th=429. This matches main-agent context note ('3 per IP per 10 min') but conflicts with the review-request phrasing ('4th signup ... -> 429'). Consider clarifying spec/message. Non-blocking."},
+      {"endpoint": "GET /api/super-admin/tenants", "issue": "Response body only contains {tenants,total}; the 'plans' map key is still missing (route conflict noted since iter574/575). Non-fatal for our tests but plan-picker UI reading d.plans may render empty. Persists from previous iterations."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "SignupPage / any page rendering a <p> containing a <div>", "issue": "React hydration warning: 'In HTML, <div> cannot be a descendant of <p>. This will cause a hydration error.' logged on /signup + / (dashboard after signup). Non-blocking but produces console noise and may break SSR in future.", "selector": "n/a", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter576_signup_cm_guards.py",
+    "/app/test_reports/pytest/iter576.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: fix hydration warning (div inside p) on SignupPage/dashboard.",
+    "OPTIONAL: resolve /api/super-admin/tenants route conflict so response includes 'plans' map (long-standing from iter574/575).",
+    "OPTIONAL: align signup rate-limit spec message (code says '>=3', so 3rd is last-allowed → 4th is 429)."
+  ],
+  "critical_code_review_comments": [
+    "POSITIVE: cm_onboarding.py is compact (136 lines), all endpoints async, proper 400/422 handling, no _id leaks, mocked test-push clearly labelled ('mocked': True + turkish message).",
+    "POSITIVE: price_guards.py cleanly separates worker/API via shared run_price_guards helper; upsert on rate_overrides uses set_by='poba_guard'/'surge_guard' so cleanup is trivial; guardrails clamp (max_rate hi) respected.",
+    "POSITIVE: /auth/signup has proper input validation order (plan → hotel/name → email regex → password length → rate-limit → duplicate → provision → login+cookies). Provisions property with correct modules_enabled based on plan and re-applies plan after provisioning (defensive).",
+    "POSITIVE: Tenant isolation in GET /properties uses user.property_ids filter for non-admins — verified in test & UI (branch selector shows only 1 hotel).",
+    "CONCERN (minor): signup_log doesn't distinguish successful vs failed attempts; a duplicate-email 400 still increments (via the recent read but not the write path, so OK). Verified — 400/422 paths do NOT insert signup_log, good.",
+    "CONCERN (minor): PendingLegalDocsGate blocks new users from ALL interaction until 6 docs are accepted; that's 6 clicks per new signup. Fine for humans, painful for QA automation. Consider a bulk-accept dev-only path."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter576_signup_cm_guards.py"],
+  "success_rate": {"backend": "100% (22/22 pytest)", "frontend": "100% for tested flows (signup, CM wizard visible, Price Guards panel + run + log)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (unchanged). Signup users are ephemeral (random emails cmtest_/fecm_@test.com, all deleted post-test).",
+  "seed_data_creation": "Created & then DELETED 5 self_signup test tenants (test-signup-hotel-cffab1, marina-test-otel-d8ac74, cm-test-hotel-fg6x-1e7306, fe-cm-hotel-e8llcy-0d9bde, fe-hotel-94fg1d-ea9c23) with their users, room_types, rate_plans, channel_connections, channel_mappings, cm_setup, bookings. Property 'default': rate_overrides (poba/surge) + price_guard_log cleared; POBA & Surge disabled. Default plan remains 'full'.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 4 new features (public signup, tenant isolation, CM wizard, price guards) are fully working end-to-end. Only lingering issues are a React hydration warning on signup/dashboard and a still-unresolved route conflict on /api/super-admin/tenants missing 'plans' map (also flagged in iter574/575). Signup rate-limit is 3/IP/10min — plan test runs accordingly. When testing new signups, be aware PendingLegalDocsGate requires 6 sequential 'Accept & Continue' clicks after signup to reach the wizard."
+}

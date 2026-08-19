@@ -172,6 +172,8 @@ export default function LandingPage() {
           <div className="hidden md:flex items-center gap-3">
             <button onClick={goLogin} data-testid="landing-signin-btn"
               className="px-4 py-2 rounded-lg text-sm font-bold text-stone-700 border border-stone-300 hover:border-[#1D4ED8] hover:text-[#1D4ED8] transition-colors">Sign In</button>
+            <button onClick={() => { window.location.href = "/signup"; }} data-testid="landing-signup-btn"
+              className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-stone-900 hover:bg-stone-700 transition-colors">RMS ile Başla</button>
             <button onClick={() => scrollTo("#demo")} data-testid="landing-nav-demo-btn"
               className="px-4 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-[#1D4ED8] to-[#06B6D4] hover:from-[#1E40AF] hover:to-[#0891B2] text-white transition-colors shadow-[0_4px_16px_rgba(29,78,216,0.3)]">Request Demo</button>
           </div>

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const cfg = { withCredentials: true };
-const PLANS = ["basic", "rms", "pro", "full"];
+const PLANS = ["basic", "rms", "cm", "pro", "full"];
 const API_DOCS = [
   ["POST /api/public-keys/{pid}", "API anahtarı üret (admin)"],
   ["GET /api/public/v1/bookings", "Rezervasyonları listele — Header: X-API-Key"],

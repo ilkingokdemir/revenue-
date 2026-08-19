@@ -1438,3 +1438,24 @@ async def comp_trigger_loop(db, interval_seconds: int = 21600):
         except Exception as e:
             logger.warning(f"comp_trigger_loop error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+async def price_guard_loop(db, interval_seconds: int = 3600):
+    """POBA + Surge bekçileri — etkin tesislerde saatte bir tarar."""
+    from routes.revenue_ext.price_guards import run_price_guards
+    await asyncio.sleep(120)
+    while True:
+        try:
+            cfgs = await db.price_guards.find(
+                {"$or": [{"poba.enabled": True}, {"surge.enabled": True}]},
+                {"_id": 0, "property_id": 1}).to_list(200)
+            for c in cfgs:
+                try:
+                    res = await run_price_guards(db, c["property_id"])
+                    if res["count"]:
+                        logger.info(f"price_guard_loop: {c['property_id']} → {res['count']} aksiyon")
+                except Exception as e:
+                    logger.warning(f"price_guard_loop {c.get('property_id')} error: {e}")
+        except Exception as e:
+            logger.warning(f"price_guard_loop error: {e}")
+        await asyncio.sleep(interval_seconds)

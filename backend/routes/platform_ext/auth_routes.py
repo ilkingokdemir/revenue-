@@ -58,6 +58,63 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
             "needs_onboarding": needs_onboarding,
         }
 
+    @router.post("/auth/signup")
+    async def public_signup(body: dict, request: Request, response: Response):
+        """Public self-signup: otel + ilk kullanıcı hesabı oluşturur, seçilen planla provizyonlar."""
+        import re as _re
+        import uuid as _uuid
+        hotel_name = (body.get("hotel_name") or "").strip()
+        name = (body.get("name") or "").strip()
+        email = (body.get("email") or "").lower().strip()
+        password = body.get("password") or ""
+        plan = body.get("plan") or "rms"
+        if plan not in ("rms", "cm", "pro", "full", "basic"):
+            raise HTTPException(status_code=422, detail="plan: rms|cm|pro|full|basic")
+        if not hotel_name or not name:
+            raise HTTPException(status_code=400, detail="Otel adı ve ad soyad zorunlu")
+        if not _re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+            raise HTTPException(status_code=400, detail="Geçerli bir e-posta girin")
+        if len(password) < 8:
+            raise HTTPException(status_code=400, detail="Şifre en az 8 karakter olmalı")
+        # basit kötüye kullanım koruması: IP başına 10 dk'da 3 kayıt
+        client_ip = request.client.host if request.client else "unknown"
+        since = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+        recent = await db.signup_log.count_documents({"ip": client_ip, "created_at": {"$gte": since}})
+        if recent >= 3:
+            raise HTTPException(status_code=429, detail="Çok fazla kayıt denemesi. Birkaç dakika sonra tekrar deneyin.")
+        if await db.users.find_one({"email": email}):
+            raise HTTPException(status_code=400, detail="Bu e-posta zaten kayıtlı")
+
+        slug = _re.sub(r"[^a-z0-9]+", "-", hotel_name.lower()).strip("-")[:24] or "hotel"
+        pid = f"{slug}-{str(_uuid.uuid4())[:6]}"
+        await db.properties.insert_one({
+            "id": pid, "name": hotel_name, "address": "", "city": "", "country": "",
+            "property_type": "hotel", "is_active": True, "plan": plan,
+            "modules_enabled": "all" if plan == "full" else plan, "signup_source": "self_signup",
+            "created_at": datetime.now(timezone.utc).isoformat()})
+        from routes.platform_ext.provisioning import provision_property
+        await provision_property(db, pid, hotel_name)
+        await db.properties.update_one({"id": pid}, {"$set": {"plan": plan,
+                                                              "modules_enabled": "all" if plan == "full" else plan}})
+
+        new_user = {
+            "id": str(_uuid.uuid4()), "email": email, "password_hash": hash_password(password),
+            "name": name, "role": "manager", "department": "management",
+            "property_ids": [pid], "is_active": True, "is_activated": True,
+            "signup_source": "self_signup", "created_at": datetime.now(timezone.utc).isoformat()}
+        result = await db.users.insert_one(new_user)
+        await db.signup_log.insert_one({"ip": client_ip, "email": email, "property_id": pid,
+                                        "created_at": datetime.now(timezone.utc).isoformat()})
+
+        user_id = str(result.inserted_id)
+        access_token = create_access_token(user_id, email)
+        refresh_token = create_refresh_token(user_id)
+        response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=86400, path="/")
+        response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
+        return {"id": user_id, "email": email, "name": name, "role": "manager",
+                "department": "management", "is_activated": True, "token": access_token,
+                "property_id": pid, "plan": plan}
+
     @router.post("/auth/login")
     async def login(user: UserLogin, request: Request, response: Response):
         """Login"""
@@ -194,6 +251,10 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
             }
             await db.properties.insert_one(default_prop)
             properties = [default_prop]
+        # Tenant izolasyonu: self-signup kullanıcıları sadece kendi otellerini görür
+        scoped = current_user.get("property_ids")
+        if scoped and current_user.get("role") != "admin":
+            properties = [p for p in properties if p.get("id") in scoped]
         return [{k: v for k, v in p.items() if k != "_id"} for p in properties]
 
     @router.post("/properties")

@@ -199,6 +199,7 @@ def create_p0_router(db, require_roles):
     # ================= 3) SÜPER ADMİN KONSOLU =================
     PLAN_MODULES = {"basic": "Ön büro + rezervasyon + takvim (çekirdek ~30 modül)",
                     "rms": "Sadece Gelir Yönetimi — fiyatlama, forecast, compset, raporlar",
+                    "cm": "Sadece Channel Manager — kanallar, eşleme, booking engine",
                     "pro": "Basic + gelir yönetimi + kanallar + raporlar (~150 modül)",
                     "full": "Tüm 280+ modül + Public API + süper admin"}
 
@@ -267,7 +268,7 @@ def create_p0_router(db, require_roles):
     async def set_plan(pid: str, data: dict, _u: dict = Depends(require_roles("admin"))):
         plan = str(data.get("plan", "full"))
         if plan not in PLAN_MODULES:
-            raise HTTPException(422, "plan: basic|rms|pro|full")
+            raise HTTPException(422, "plan: basic|rms|cm|pro|full")
         await db.properties.update_one({"id": pid}, {"$set": {
             "plan": plan, "modules_enabled": "all" if plan == "full" else plan,
             "plan_changed_at": now_iso()}})

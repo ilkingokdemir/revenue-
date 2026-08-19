@@ -211,6 +211,8 @@ import {
   RevenueProtectionPanel,
   RmsComparisonPanel,
   RmsSetupWizard,
+  CmSetupWizard,
+  PriceGuardsPanel,
   MarketingRadarPanel,
   BIChatPanel,
   ParkingRmsPanel,
@@ -806,6 +808,12 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         )}
         {activeView === "rms-setup" && (
           <RmsSetupWizard activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "cm-setup" && (
+          <CmSetupWizard activePropertyId={activePropertyId} properties={properties} />
+        )}
+        {activeView === "price-guards" && (
+          <PriceGuardsPanel activePropertyId={activePropertyId} properties={properties} />
         )}
 
         {/* Pazarlama Fırsat Radarı (IDeaS Marketing Optimization paritesi) */}

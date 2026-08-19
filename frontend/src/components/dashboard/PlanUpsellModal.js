@@ -18,7 +18,7 @@ export const PlanUpsellModal = ({ upsell, currentPlan, isAdmin, onClose, onUpgra
           </button>
         </div>
         <div className="p-5 space-y-2">
-          {["basic", "rms", "pro", "full"].map((p) => (
+          {["basic", "rms", "cm", "pro", "full"].map((p) => (
             <div key={p} data-testid={`plan-upsell-row-${p}`}
               className={`rounded-lg border px-3 py-2 text-[11px] flex items-center gap-2 ${
                 p === currentPlan ? "border-stone-300 bg-stone-50 text-stone-500"

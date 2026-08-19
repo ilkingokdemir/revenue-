@@ -62,6 +62,7 @@ import { UserManagementPanel, ApiConnectionPanel, WebhooksPanel, } from "@/panel
 import { buildMenuSections } from "./navigation/menuSections";
 import { isModuleAllowed, requiredPlanFor } from "./navigation/planGate";
 import PlanUpsellModal from "@/components/dashboard/PlanUpsellModal";
+import SignupPage from "@/components/dashboard/SignupPage";
 import { SIDEBAR_PERM_MAP } from "./navigation/permMap";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
@@ -511,6 +512,18 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     ? "full"
     : (properties.find((p) => p.id === activePropertyId)?.plan || "full");
   const [upsellFor, setUpsellFor] = useState(null);
+
+  // Self-signup sonrası kullanıcıyı ilgili kurulum sihirbazına düşür
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("mhb_post_signup_view");
+      if (v) {
+        localStorage.removeItem("mhb_post_signup_view");
+        setActiveView(v);
+      }
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
 
   // Sidebar permission gating map extracted to navigation/permMap.js (iter 386)
@@ -1224,6 +1237,9 @@ function MainApp() {
   }
 
   if (!user) {
+    if (window.location.pathname === "/signup") {
+      return <SignupPage onLogin={handleLogin} />;
+    }
     if (window.location.pathname !== "/login") {
       return <LandingPage />;
     }

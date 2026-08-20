@@ -215,6 +215,57 @@ def create_demo_seeder_router(db):
             "sample": sample,
         }
 
+    @router.post("/compare/{property_id}")
+    async def compare_scenarios(
+        property_id: str,
+        a: str = "high_season",
+        b: str = "low_occupancy",
+        current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any")),
+    ):
+        """İki senaryoyu bellek-içi simüle eder (DB'ye yazmaz) — 30 günlük gelir/doluluk kıyası."""
+        if a not in SCENARIOS or b not in SCENARIOS:
+            raise HTTPException(422, f"a/b: {'|'.join(SCENARIOS)}")
+        rooms = await db.room_types.find({"property_id": property_id}, {"_id": 0}).to_list(200)
+        if not rooms:
+            raise HTTPException(400, "Önce en az bir oda tipi ekleyin")
+        total_rooms = await db.rooms.count_documents({"property_id": property_id})
+        if not total_rooms:
+            total_rooms = sum(int(r.get("total_rooms") or 0) for r in rooms) or 10
+        today = datetime.now(timezone.utc).date()
+        days = [(today + timedelta(days=i)).isoformat() for i in range(30)]
+
+        def simulate(scenario: str) -> dict:
+            prof = SCENARIOS[scenario]
+            rng = random.Random(f"{property_id}-{scenario}")
+            occ = {d: 0 for d in days}
+            rev = {d: 0.0 for d in days}
+            for i in range(prof["count"]):
+                is_group = scenario == "group_heavy" and i < int(prof["count"] * 0.6)
+                room = rng.choice(rooms)
+                offset = rng.randint(*prof["offset"])
+                ci = today + timedelta(days=offset)
+                los = rng.choices([1, 2, 3, 4, 5, 7], weights=[20, 35, 22, 12, 6, 5])[0]
+                rooms_booked = rng.randint(2, 4) if is_group else 1
+                nightly = float(room.get("base_price") or 120) * rng.uniform(*prof["rate_mult"])
+                for n in range(los):
+                    d = (ci + timedelta(days=n)).isoformat()
+                    if d in occ:
+                        occ[d] = min(occ[d] + rooms_booked, total_rooms)
+                        rev[d] += nightly * rooms_booked
+            total_rev = sum(rev.values())
+            occupied_nights = sum(occ.values())
+            return {"scenario": scenario,
+                    "daily_occ_pct": [round(occ[d] * 100 / total_rooms, 1) for d in days],
+                    "daily_rev": [round(rev[d], 2) for d in days],
+                    "total_rev": round(total_rev, 2),
+                    "avg_occ_pct": round(occupied_nights * 100 / (total_rooms * len(days)), 1),
+                    "adr": round(total_rev / occupied_nights, 2) if occupied_nights else 0}
+
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1})
+        return {"property_id": property_id, "days": days, "total_rooms": total_rooms,
+                "currency": (prop or {}).get("currency", "GBP"),
+                "a": simulate(a), "b": simulate(b)}
+
     @router.post("/clear/{property_id}")
     async def clear(
         property_id: str,

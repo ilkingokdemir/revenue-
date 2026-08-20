@@ -3,6 +3,7 @@ import RobotImpactCard from "./RobotImpactCard";
 import axios from "axios";
 import { toast } from "sonner";
 import DemoTour from "./DemoTour";
+import ScenarioComparePanel from "./ScenarioComparePanel";
 import DeparturesBoard from "./DeparturesBoard";
 import { Pickup24Card } from "./Pickup24Card";
 import { GapSummaryCard } from "./GapSummaryCard";
@@ -51,6 +52,7 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
   const [demoBusy, setDemoBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showTour, setShowTour] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
   const [scenario, setScenario] = useState("balanced");
 
   useEffect(() => {
@@ -203,6 +205,7 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
   return (
     <div className="p-5 lg:p-7 max-w-[1480px] mx-auto" data-testid="today-hub">
       {showTour && <DemoTour onClose={() => setShowTour(false)} />}
+      {showCompare && <ScenarioComparePanel propertyId={propertyId} onClose={() => setShowCompare(false)} />}
       <OnboardingBanner propertyId={propertyId} onResume={() => onNavigate && onNavigate("onboarding")} />
       {/* HERO */}
       <div className="mb-6">
@@ -335,6 +338,10 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
           <span className="flex-1 min-w-[200px] text-xs font-bold text-emerald-800">
             Demo Veri Modu aktif — {demo.demo_booking_count} örnek rezervasyon gösteriliyor. Gerçek verinizle karışmaz, tek tıkla silinir.
           </span>
+          <button onClick={() => setShowCompare(true)} data-testid="scenario-compare-btn"
+            className="px-3 py-1.5 rounded-lg border border-emerald-300 text-xs font-bold text-emerald-700 hover:bg-emerald-100">
+            ⚖️ Senaryo Karşılaştır
+          </button>
           <button onClick={() => setShowTour(true)} data-testid="demo-tour-start-btn"
             className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">
             🧭 Tanıtım Turu

@@ -346,6 +346,8 @@ def create_demo_seeder_router(db):
                 {"$set": {"property_id": property_id, "room_type_id": it["room_type_id"],
                           "date": it["date"], "custom_rate": it["suggested_rate"],
                           "set_by": "scenario-simulator",
+                          "scenario": batch["scenario"],
+                          "approved_by": current_user.get("email", ""),
                           "reason": f"🏆 {batch['scenario']} senaryosu simülasyonundan onaylandı",
                           "updated_at": now}}, upsert=True)
         await db.scenario_rate_suggestions.update_one(

@@ -1144,3 +1144,7 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - TAKVİM ROZETİ: rate-calendar endpoint'ine override_source (set_by) eklendi (revenue.py); RateCalendarEditable'da override_source==='scenario-simulator' olan günlerde fiyat önünde 🏆 (scenario-badge-{date}). UI doğrulandı: Revenue management → Rate Calendar'da 12 günde 🏆 £210/£226/£234 görünüyor. NOT: RevenuePanel iç sekmesine gitmek için sidebar 'Revenue management' (revenue-btn) → 'Rate Calendar' butonu (sidebar'daki 'Calendar' Booking Calendar'dır, karıştırma).
 - Test batch'leri geri alındı; default fiyatları orijinal (scenario override 0).
 - NOT: WatchFiles hot-reload bu dev uygulamada bazen yeni worker'ı başlatamıyor — çözüm: sudo supervisorctl restart backend (güvenilir).
+
+## Güncelleme (2026-08-20, ROZET DETAY BALONU + FİNAL DEPLOY KONTROLÜ — e2e PASS)
+- ROZET BALONU: confirm artık rate_overrides'a scenario + approved_by yazıyor; rate-calendar day'e override_scenario/override_by/override_at eklendi (revenue.py). RateCalendarEditable'da 🏆 hover balonu (group-hover, stone-900 balon): senaryo adı emoji'li + '✓ X onayladı' + tarih. testid: scenario-tooltip-{date}. UI hover doğrulandı ('🔥 Yoğun Sezon senaryosundan / ✓ admin@hotelbox.com onayladı / 20.08.2026 09:14'). Test batch geri alındı (senaryo override 0).
+- FİNAL DEPLOY KONTROLÜ: deployment_agent tekrar PASS (tüm yeni dosyalar dahil). Deploy işlemi kullanıcının Deploy butonuna kalmış durumda — kod tarafı hazır.

@@ -410,7 +410,15 @@ export const RateCalendarEditable = ({ propertyId }) => {
                         <>
                           <div className="text-sm font-bold text-amber-600">
                             {d.override_source === "scenario-simulator" && (
-                              <span title="Senaryo simülasyonundan onaylanan fiyat" data-testid={`scenario-badge-${d.date}`}>🏆 </span>
+                              <span className="relative group cursor-help" data-testid={`scenario-badge-${d.date}`}>
+                                🏆{" "}
+                                <span className="hidden group-hover:block absolute z-30 bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-48 bg-stone-900 text-white text-[10px] font-medium rounded-lg px-2.5 py-2 text-left shadow-xl whitespace-normal normal-case"
+                                  data-testid={`scenario-tooltip-${d.date}`}>
+                                  <span className="font-black">{({balanced: "⚖️ Dengeli", high_season: "🔥 Yoğun Sezon", low_occupancy: "🌙 Düşük Doluluk", group_heavy: "👥 Grup Ağırlıklı"})[d.override_scenario] || d.override_scenario || "Senaryo"}</span> senaryosundan
+                                  <br />✓ {d.override_by || "bilinmiyor"} onayladı
+                                  {d.override_at && <><br />{new Date(d.override_at).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" })}</>}
+                                </span>
+                              </span>
                             )}
                             {cur(d.custom_rate)}
                           </div>

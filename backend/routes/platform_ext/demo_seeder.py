@@ -266,6 +266,85 @@ def create_demo_seeder_router(db):
                 "currency": (prop or {}).get("currency", "GBP"),
                 "a": simulate(a), "b": simulate(b)}
 
+    @router.post("/apply-scenario/{property_id}")
+    async def apply_scenario(
+        property_id: str,
+        payload: dict,
+        current_user: dict = Depends(require_perm("edit_bookings")),
+    ):
+        """Kazanan senaryodan 30 günlük fiyat ÖNERİSİ üretir (pending batch — fiyatlara henüz dokunmaz)."""
+        scenario = payload.get("scenario") or "high_season"
+        if scenario not in SCENARIOS:
+            raise HTTPException(422, f"scenario: {'|'.join(SCENARIOS)}")
+        prof = SCENARIOS[scenario]
+        rooms = await db.room_types.find({"property_id": property_id}, {"_id": 0}).to_list(200)
+        if not rooms:
+            raise HTTPException(400, "Önce en az bir oda tipi ekleyin")
+        total_rooms = await db.rooms.count_documents({"property_id": property_id}) or \
+            sum(int(r.get("total_rooms") or 0) for r in rooms) or 10
+        today = datetime.now(timezone.utc).date()
+        # senaryonun günlük doluluk profili (compare ile aynı deterministik simülasyon)
+        rng = random.Random(f"{property_id}-{scenario}")
+        occ = {}
+        for i in range(prof["count"]):
+            is_group = scenario == "group_heavy" and i < int(prof["count"] * 0.6)
+            offset = rng.randint(*prof["offset"])
+            ci = today + timedelta(days=offset)
+            los = rng.choices([1, 2, 3, 4, 5, 7], weights=[20, 35, 22, 12, 6, 5])[0]
+            rb = rng.randint(2, 4) if is_group else 1
+            _ = rng.choice(rooms), rng.uniform(*prof["rate_mult"])
+            for n in range(los):
+                d = (ci + timedelta(days=n)).isoformat()
+                occ[d] = occ.get(d, 0) + rb
+        mult_mid = (prof["rate_mult"][0] + prof["rate_mult"][1]) / 2
+        items = []
+        for i in range(30):
+            ds = (today + timedelta(days=i)).isoformat()
+            occ_pct = min(occ.get(ds, 0) * 100 / total_rooms, 100)
+            demand_factor = 0.95 + (occ_pct / 100) * 0.25
+            for rt in rooms:
+                base = float(rt.get("base_rate") or rt.get("base_price") or 120)
+                cur_doc = await db.rate_overrides.find_one(
+                    {"property_id": property_id, "date": ds, "room_type_id": rt.get("id", "")},
+                    {"_id": 0, "custom_rate": 1}, sort=[("updated_at", -1)])
+                current = float(cur_doc["custom_rate"]) if cur_doc and cur_doc.get("custom_rate") else base
+                suggested = round(base * mult_mid * demand_factor, 2)
+                items.append({"date": ds, "room_type_id": rt.get("id", ""), "room_name": rt.get("name", ""),
+                              "current_rate": round(current, 2), "suggested_rate": suggested,
+                              "change_pct": round((suggested - current) * 100 / current, 1) if current else 0})
+        batch = {"id": str(uuid.uuid4()), "property_id": property_id, "scenario": scenario,
+                 "status": "pending", "created_by": current_user.get("email", ""),
+                 "created_at": datetime.now(timezone.utc).isoformat(), "items": items}
+        await db.scenario_rate_suggestions.insert_one({**batch})
+        avg_change = round(sum(i["change_pct"] for i in items) / len(items), 1) if items else 0
+        return {"batch_id": batch["id"], "scenario": scenario, "days": 30, "rooms": len(rooms),
+                "suggestions": len(items), "avg_change_pct": avg_change,
+                "preview": items[:6]}
+
+    @router.post("/apply-scenario/{property_id}/confirm")
+    async def confirm_scenario(
+        property_id: str,
+        payload: dict,
+        current_user: dict = Depends(require_perm("edit_bookings")),
+    ):
+        """Onaylanan öneri batch'ini RMS fiyatlarına (rate_overrides) yazar."""
+        batch = await db.scenario_rate_suggestions.find_one(
+            {"id": payload.get("batch_id"), "property_id": property_id, "status": "pending"}, {"_id": 0})
+        if not batch:
+            raise HTTPException(404, "Bekleyen öneri bulunamadı")
+        now = datetime.now(timezone.utc).isoformat()
+        for it in batch["items"]:
+            await db.rate_overrides.update_one(
+                {"property_id": property_id, "date": it["date"], "room_type_id": it["room_type_id"]},
+                {"$set": {"property_id": property_id, "room_type_id": it["room_type_id"],
+                          "date": it["date"], "custom_rate": it["suggested_rate"],
+                          "set_by": "scenario-simulator",
+                          "reason": f"🏆 {batch['scenario']} senaryosu simülasyonundan onaylandı",
+                          "updated_at": now}}, upsert=True)
+        await db.scenario_rate_suggestions.update_one(
+            {"id": batch["id"]}, {"$set": {"status": "applied", "applied_at": now}})
+        return {"ok": True, "applied": len(batch["items"]), "scenario": batch["scenario"]}
+
     @router.post("/clear/{property_id}")
     async def clear(
         property_id: str,

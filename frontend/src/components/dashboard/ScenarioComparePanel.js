@@ -15,6 +15,29 @@ export const ScenarioComparePanel = ({ propertyId, onClose }) => {
   const [b, setB] = useState("low_occupancy");
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [applyInfo, setApplyInfo] = useState(null);
+
+  const winner = data ? (data.a.total_rev >= data.b.total_rev ? data.a.scenario : data.b.scenario) : null;
+
+  const applyWinner = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/demo-seeder/apply-scenario/${propertyId}`, { scenario: winner });
+      setApplyInfo(r.data);
+      toast.info(`${r.data.suggestions} fiyat önerisi hazırlandı — onayınızı bekliyor`);
+    } catch (e) { toast.error(e.response?.data?.detail || "Öneri oluşturulamadı"); }
+    finally { setBusy(false); }
+  };
+
+  const confirmApply = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/demo-seeder/apply-scenario/${propertyId}/confirm`, { batch_id: applyInfo.batch_id });
+      toast.success(`${r.data.applied} günlük fiyat RMS'e uygulandı ✅ (${label(r.data.scenario)})`);
+      setApplyInfo(null);
+    } catch (e) { toast.error(e.response?.data?.detail || "Uygulanamadı"); }
+    finally { setBusy(false); }
+  };
 
   const run = async () => {
     setBusy(true);
@@ -54,6 +77,29 @@ export const ScenarioComparePanel = ({ propertyId, onClose }) => {
 
         {data && (
           <div className="space-y-4" data-testid="scenario-compare-result">
+            <div className="flex flex-wrap items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+              <span className="text-sm">🏆</span>
+              <span className="flex-1 min-w-[180px] text-xs font-bold text-emerald-800">
+                Kazanan: <b>{label(winner)}</b> — {fmt(Math.abs(data.a.total_rev - data.b.total_rev), data.currency)} daha fazla gelir
+              </span>
+              {!applyInfo ? (
+                <button onClick={applyWinner} disabled={busy} data-testid="scenario-apply-btn"
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-black hover:bg-emerald-700 disabled:opacity-50">
+                  Kazananı RMS'e Aktar →
+                </button>
+              ) : (
+                <div className="flex items-center gap-2" data-testid="scenario-apply-preview">
+                  <span className="text-[11px] text-stone-600">
+                    {applyInfo.suggestions} öneri · {applyInfo.days} gün · {applyInfo.rooms} oda tipi · ort. değişim <b className={applyInfo.avg_change_pct >= 0 ? "text-emerald-700" : "text-rose-600"}>%{applyInfo.avg_change_pct}</b>
+                  </span>
+                  <button onClick={confirmApply} disabled={busy} data-testid="scenario-confirm-btn"
+                    className="px-3 py-1.5 rounded-lg bg-stone-900 text-white text-xs font-black disabled:opacity-50">Onayla ve Fiyatlara Uygula ✓</button>
+                  <button onClick={() => setApplyInfo(null)} data-testid="scenario-apply-cancel"
+                    className="px-2 py-1.5 rounded-lg text-[11px] font-bold text-stone-500 hover:bg-stone-100">Vazgeç</button>
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-3 gap-2">
               {[["Toplam Gelir (30g)", fmt(data.a.total_rev, data.currency), fmt(data.b.total_rev, data.currency),
                  data.a.total_rev - data.b.total_rev, (v) => fmt(Math.abs(v), data.currency)],

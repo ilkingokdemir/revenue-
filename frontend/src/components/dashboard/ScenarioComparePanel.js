@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -16,6 +16,25 @@ export const ScenarioComparePanel = ({ propertyId, onClose }) => {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [applyInfo, setApplyInfo] = useState(null);
+  const [history, setHistory] = useState([]);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/api/demo-seeder/apply-scenario/${propertyId}/history`);
+      setHistory(r.data.batches || []);
+    } catch { /* ignore */ }
+  }, [propertyId]);
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  const revertBatch = async (batchId) => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/demo-seeder/apply-scenario/${propertyId}/revert`, { batch_id: batchId });
+      toast.success(`${r.data.restored} fiyat geri alındı — önceki durumuna döndü ↩️`);
+      loadHistory();
+    } catch (e) { toast.error(e.response?.data?.detail || "Geri alınamadı"); }
+    finally { setBusy(false); }
+  };
 
   const winner = data ? (data.a.total_rev >= data.b.total_rev ? data.a.scenario : data.b.scenario) : null;
 
@@ -35,6 +54,7 @@ export const ScenarioComparePanel = ({ propertyId, onClose }) => {
       const r = await axios.post(`${API}/api/demo-seeder/apply-scenario/${propertyId}/confirm`, { batch_id: applyInfo.batch_id });
       toast.success(`${r.data.applied} günlük fiyat RMS'e uygulandı ✅ (${label(r.data.scenario)})`);
       setApplyInfo(null);
+      loadHistory();
     } catch (e) { toast.error(e.response?.data?.detail || "Uygulanamadı"); }
     finally { setBusy(false); }
   };
@@ -146,6 +166,38 @@ export const ScenarioComparePanel = ({ propertyId, onClose }) => {
                 <span><span className="inline-block w-2 h-2 bg-indigo-500 rounded-sm mr-1" />{label(a)}</span>
                 <span><span className="inline-block w-2 h-2 bg-amber-400 rounded-sm mr-1" />{label(b)}</span>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Öneri Geçmişi */}
+        {history.length > 0 && (
+          <div className="mt-4 bg-stone-50 border border-stone-200 rounded-xl p-3" data-testid="scenario-history">
+            <div className="text-[11px] font-black text-stone-600 uppercase mb-2">📜 Öneri Geçmişi — kim, ne zaman, ne oldu</div>
+            <div className="space-y-1.5 max-h-48 overflow-auto">
+              {history.map((h) => (
+                <div key={h.id} className="flex flex-wrap items-center gap-2 bg-white border border-stone-200 rounded-lg px-2.5 py-1.5" data-testid={`scenario-history-row-${h.id}`}>
+                  <span className="text-xs font-bold text-stone-800">{label(h.scenario)}</span>
+                  <span className="text-[10px] text-stone-500">{h.item_count} fiyat</span>
+                  <span className="flex-1 text-[10px] text-stone-400 min-w-[160px]">
+                    {h.status === "applied" && `✓ ${h.applied_by || "?"} onayladı · ${new Date(h.applied_at).toLocaleString("tr-TR")}`}
+                    {h.status === "reverted" && `↩ ${h.reverted_by || "?"} geri aldı · ${new Date(h.reverted_at).toLocaleString("tr-TR")}`}
+                    {h.status === "pending" && `⏳ ${h.created_by || "?"} oluşturdu · ${new Date(h.created_at).toLocaleString("tr-TR")}`}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border ${
+                    h.status === "applied" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : h.status === "reverted" ? "bg-stone-100 text-stone-500 border-stone-300"
+                    : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                    {h.status === "applied" ? "UYGULANDI" : h.status === "reverted" ? "GERİ ALINDI" : "BEKLİYOR"}
+                  </span>
+                  {h.status === "applied" && (
+                    <button onClick={() => revertBatch(h.id)} disabled={busy} data-testid={`scenario-revert-${h.id}`}
+                      className="px-2 py-1 rounded-lg border border-rose-300 text-[10px] font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-50">
+                      ↩ Geri Al
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}

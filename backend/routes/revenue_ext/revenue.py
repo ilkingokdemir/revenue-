@@ -221,6 +221,7 @@ def create_revenue_router(db, require_roles):
                 "available": max(0, total_rooms - booked), "is_full": is_full, "is_today": is_today,
                 "base_rate": base, "recommended_rate": recommended, "pms_rate": base,
                 "custom_rate": custom_rate, "has_override": custom_rate is not None,
+                "override_source": (ovr or {}).get("set_by"),
             })
 
         return {

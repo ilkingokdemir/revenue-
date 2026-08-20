@@ -408,7 +408,12 @@ export const RateCalendarEditable = ({ propertyId }) => {
                     <>
                       {d.has_override ? (
                         <>
-                          <div className="text-sm font-bold text-amber-600">{cur(d.custom_rate)}</div>
+                          <div className="text-sm font-bold text-amber-600">
+                            {d.override_source === "scenario-simulator" && (
+                              <span title="Senaryo simülasyonundan onaylanan fiyat" data-testid={`scenario-badge-${d.date}`}>🏆 </span>
+                            )}
+                            {cur(d.custom_rate)}
+                          </div>
                           <div className="text-[9px] text-stone-400 line-through">{cur(d.recommended_rate)} rec</div>
                         </>
                       ) : (

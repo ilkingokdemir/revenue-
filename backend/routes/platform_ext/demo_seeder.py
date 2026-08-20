@@ -333,7 +333,14 @@ def create_demo_seeder_router(db):
         if not batch:
             raise HTTPException(404, "Bekleyen öneri bulunamadı")
         now = datetime.now(timezone.utc).isoformat()
+        prev_rates = []
         for it in batch["items"]:
+            old = await db.rate_overrides.find_one(
+                {"property_id": property_id, "date": it["date"], "room_type_id": it["room_type_id"]},
+                {"_id": 0, "custom_rate": 1, "set_by": 1, "reason": 1}, sort=[("updated_at", -1)])
+            prev_rates.append({"date": it["date"], "room_type_id": it["room_type_id"],
+                               "prev_rate": float(old["custom_rate"]) if old and old.get("custom_rate") else None,
+                               "prev_set_by": (old or {}).get("set_by"), "prev_reason": (old or {}).get("reason")})
             await db.rate_overrides.update_one(
                 {"property_id": property_id, "date": it["date"], "room_type_id": it["room_type_id"]},
                 {"$set": {"property_id": property_id, "room_type_id": it["room_type_id"],
@@ -342,8 +349,55 @@ def create_demo_seeder_router(db):
                           "reason": f"🏆 {batch['scenario']} senaryosu simülasyonundan onaylandı",
                           "updated_at": now}}, upsert=True)
         await db.scenario_rate_suggestions.update_one(
-            {"id": batch["id"]}, {"$set": {"status": "applied", "applied_at": now}})
+            {"id": batch["id"]}, {"$set": {"status": "applied", "applied_at": now,
+                                           "applied_by": current_user.get("email", ""),
+                                           "prev_rates": prev_rates}})
         return {"ok": True, "applied": len(batch["items"]), "scenario": batch["scenario"]}
+
+    @router.get("/apply-scenario/{property_id}/history")
+    async def scenario_history(
+        property_id: str,
+        current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any")),
+    ):
+        batches = await db.scenario_rate_suggestions.aggregate([
+            {"$match": {"property_id": property_id}},
+            {"$sort": {"created_at": -1}},
+            {"$limit": 20},
+            {"$project": {"_id": 0, "id": 1, "scenario": 1, "status": 1, "created_by": 1,
+                          "created_at": 1, "applied_at": 1, "applied_by": 1,
+                          "reverted_at": 1, "reverted_by": 1,
+                          "item_count": {"$size": {"$ifNull": ["$items", []]}}}},
+        ]).to_list(20)
+        return {"batches": batches}
+
+    @router.post("/apply-scenario/{property_id}/revert")
+    async def revert_scenario(
+        property_id: str,
+        payload: dict,
+        current_user: dict = Depends(require_perm("edit_bookings")),
+    ):
+        """Uygulanmış senaryo fiyatlarını tek tıkla geri alır (önceki fiyat/yokluk durumuna döner)."""
+        batch = await db.scenario_rate_suggestions.find_one(
+            {"id": payload.get("batch_id"), "property_id": property_id, "status": "applied"}, {"_id": 0})
+        if not batch:
+            raise HTTPException(404, "Geri alınabilir (uygulanmış) öneri bulunamadı")
+        now = datetime.now(timezone.utc).isoformat()
+        restored = 0
+        for pr in batch.get("prev_rates") or []:
+            q = {"property_id": property_id, "date": pr["date"], "room_type_id": pr["room_type_id"]}
+            if pr["prev_rate"] is None:
+                await db.rate_overrides.delete_many({**q, "set_by": "scenario-simulator"})
+            else:
+                await db.rate_overrides.update_one(q, {"$set": {
+                    **q, "custom_rate": pr["prev_rate"],
+                    "set_by": pr.get("prev_set_by") or "manual",
+                    "reason": pr.get("prev_reason") or "senaryo geri alındı",
+                    "updated_at": now}}, upsert=True)
+            restored += 1
+        await db.scenario_rate_suggestions.update_one(
+            {"id": batch["id"]}, {"$set": {"status": "reverted", "reverted_at": now,
+                                           "reverted_by": current_user.get("email", "")}})
+        return {"ok": True, "restored": restored, "scenario": batch["scenario"]}
 
     @router.post("/clear/{property_id}")
     async def clear(

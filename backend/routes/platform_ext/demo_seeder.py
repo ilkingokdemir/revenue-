@@ -87,6 +87,22 @@ def _payment_status(booking_status: str) -> str:
     return random.choice(["paid", "paid", "partial", "unpaid"])
 
 
+# Senaryo profilleri — count/fiyat çarpanı/tarih dağılımı/kanal ve grup davranışı
+SCENARIOS = {
+    "balanced": {"count": 25, "rate_mult": (0.88, 1.12), "offset": (-14, 45), "cancel_pct": 0.08},
+    "high_season": {"count": 45, "rate_mult": (1.15, 1.45), "offset": (-7, 21), "cancel_pct": 0.03},
+    "low_occupancy": {"count": 8, "rate_mult": (0.75, 0.95), "offset": (-14, 60), "cancel_pct": 0.15},
+    "group_heavy": {"count": 30, "rate_mult": (0.85, 1.05), "offset": (-7, 45), "cancel_pct": 0.05},
+}
+
+GROUP_NAMES = [
+    ("TechSummit 2026 Konferansı", "groups@techsummit.example"),
+    ("Yilmaz Ailesi Düğünü", "wedding@yilmaz.example"),
+    ("EuroTour Seyahat Acentesi", "ops@eurotour.example"),
+    ("FC United Takım Kampı", "team@fcunited.example"),
+]
+
+
 def create_demo_seeder_router(db):
     router = APIRouter(prefix="/demo-seeder")
 
@@ -101,10 +117,14 @@ def create_demo_seeder_router(db):
     @router.post("/seed/{property_id}")
     async def seed(
         property_id: str,
-        count: int = 20,
+        count: int = 0,
+        scenario: str = "balanced",
         current_user: dict = Depends(require_perm("edit_bookings")),
     ):
-        count = max(1, min(int(count or 20), 200))
+        if scenario not in SCENARIOS:
+            raise HTTPException(422, f"scenario: {'|'.join(SCENARIOS)}")
+        prof = SCENARIOS[scenario]
+        count = max(1, min(int(count or prof["count"]), 200))
 
         # Need at least one room type
         rooms = await db.room_types.find(
@@ -122,11 +142,16 @@ def create_demo_seeder_router(db):
         today_iso = today.isoformat()
         inserts = []
 
-        for _ in range(count):
-            guest = random.choice(GUESTS)
+        for i in range(count):
+            is_group = scenario == "group_heavy" and i < int(count * 0.6)
+            if is_group:
+                grp = GROUP_NAMES[i % len(GROUP_NAMES)]
+                guest = (grp[0], grp[1], "+90 850 000 0000", "TR")
+            else:
+                guest = random.choice(GUESTS)
             room = random.choice(rooms)
-            # Check-in between today-14 and today+45
-            offset = random.randint(-14, 45)
+            # Senaryoya göre check-in penceresi
+            offset = random.randint(*prof["offset"])
             check_in_date = today + timedelta(days=offset)
             los = _pick_los()
             check_out_date = check_in_date + timedelta(days=los)
@@ -134,14 +159,15 @@ def create_demo_seeder_router(db):
             check_out = check_out_date.isoformat()
             adults = random.choices([1, 2, 2, 2, 3, 4], weights=[10, 25, 25, 20, 12, 8])[0]
             children = random.choices([0, 0, 0, 1, 2], weights=[55, 20, 10, 10, 5])[0]
-            rooms_booked = 1
+            rooms_booked = random.randint(2, 4) if is_group else 1
 
             base_price = float(room.get("base_price") or 120)
-            # Small ±12% noise on nightly rate
-            nightly = round(base_price * random.uniform(0.88, 1.12), 2)
+            nightly = round(base_price * random.uniform(*prof["rate_mult"]), 2)
             total_price = round(nightly * los * rooms_booked, 2)
 
             bstatus = _status_for(check_in, check_out, today_iso)
+            if bstatus == "cancelled" and random.random() > prof["cancel_pct"] / 0.08:
+                bstatus = "confirmed"
             pstatus = _payment_status(bstatus)
 
             doc = {
@@ -161,9 +187,10 @@ def create_demo_seeder_router(db):
                 "currency": currency,
                 "status": bstatus,
                 "payment_status": pstatus,
-                "channel": _pick_channel(),
+                "channel": "group" if is_group else _pick_channel(),
                 "source": "demo_seed",
                 "is_demo": True,
+                "is_group": is_group,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "created_by": current_user.get("email", "demo-seeder"),
             }
@@ -180,6 +207,7 @@ def create_demo_seeder_router(db):
         return {
             "ok": True,
             "created": len(inserts),
+            "scenario": scenario,
             "property_id": property_id,
             "currency": currency,
             "date_range": {"from": (today - timedelta(days=14)).isoformat(),

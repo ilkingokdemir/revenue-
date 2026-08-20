@@ -51,6 +51,7 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
   const [demoBusy, setDemoBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showTour, setShowTour] = useState(false);
+  const [scenario, setScenario] = useState("balanced");
 
   useEffect(() => {
     if (!propertyId) return;
@@ -61,7 +62,7 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
   const seedDemo = async () => {
     setDemoBusy(true);
     try {
-      const r = await axios.post(`${API}/api/demo-seeder/seed/${propertyId}?count=25`);
+      const r = await axios.post(`${API}/api/demo-seeder/seed/${propertyId}?scenario=${scenario}`);
       toast.success(`${r.data.created} gerçekçi demo rezervasyon oluşturuldu 🎬`);
       setRefreshKey((k) => k + 1);
       let done = false;
@@ -350,9 +351,16 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
           <div className="flex-1 min-w-[240px]">
             <div className="text-sm font-black">Panel boş görünüyor — Demo Veri Modu'nu dene</div>
             <div className="text-[11px] text-indigo-100 mt-0.5">
-              Tek tıkla 25 gerçekçi örnek rezervasyon (geçmiş + gelecek 45 gün) oluşturulur; doluluk, gelir, ADR ve takvim anında dolar. İstediğin an tek tıkla temizlenir.
+              Tek tıkla gerçekçi örnek rezervasyonlar oluşturulur; doluluk, gelir, ADR ve takvim anında dolar. İstediğin an tek tıkla temizlenir.
             </div>
           </div>
+          <select value={scenario} onChange={(e) => setScenario(e.target.value)} data-testid="demo-scenario-select"
+            className="px-2 py-2 rounded-xl bg-white/15 border border-white/30 text-white text-xs font-bold [&>option]:text-stone-900">
+            <option value="balanced">⚖️ Dengeli (25)</option>
+            <option value="high_season">🔥 Yoğun Sezon (45)</option>
+            <option value="low_occupancy">🌙 Düşük Doluluk (8)</option>
+            <option value="group_heavy">👥 Grup Ağırlıklı (30)</option>
+          </select>
           <button onClick={seedDemo} disabled={demoBusy} data-testid="demo-seed-btn"
             className="px-4 py-2 rounded-xl bg-white text-indigo-700 text-xs font-black hover:bg-indigo-50 disabled:opacity-50 transition-colors">
             {demoBusy ? "Oluşturuluyor..." : "Demo Verisi Doldur →"}

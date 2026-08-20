@@ -1,0 +1,32 @@
+{
+  "summary": "Iter 579 full regression: 24/24 backend pytest cases PASS covering login, bookings CRUD, all 8 market-robot refactored endpoints + close-gap dry-run, cloudbeds status+certify (passed:true mock), pms-connect providers, Stripe checkout (100), payments tx-log, terminal readers, trial-conversion summary (metrics/funnel/weekly/trials present), email-settings (live:false), morning-brief KPIs (occupancy_pct/revenue/adr/revpar present), and demo-seeder scenarios high_season=45 / low_occupancy=8 / group_heavy=30 (with is_group+channel=group+2-4 rooms verified in sample), invalid scenario -> 422. Frontend: landing→Sign In login OK, default dashboard shows demo-mode-active-strip, demo-tour-start-btn opens 5-step demo-tour-overlay, next/finish work, KPI tiles non-zero (Doluluk 50%, CHF311 gelir, ADR CHF104, RevPAR CHF52). Super Admin (/super-admin) renders trial-conversion-card, email-settings-card, trial-funnel, trial-weekly. City Rooms empty-branch scenario picker (demo-mode-card / demo-scenario-select) NOT observed — city-rooms currently has ~97 existing rooms/bookings so the empty-state card gate does not fire in this env; backend scenario endpoints themselves pass fully.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "City Rooms empty-branch demo picker", "issue": "demo-mode-card + demo-scenario-select not rendered because city-rooms is not empty in current env (chip shows '· 97'). Could not exercise UI flow (Yoğun Sezon selection + Doldur toast + KPI update + demo-clear-btn). Backend scenario endpoints all pass.", "affected_selectors": ["[data-testid=\"demo-mode-card\"]","[data-testid=\"demo-scenario-select\"]","[data-testid=\"demo-clear-btn\"]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_regression_579.py",
+    "/app/test_reports/pytest/iter579.xml"
+  ],
+  "action_items": [
+    "To visually verify the empty-branch demo scenario picker UI, wipe city-rooms bookings/rooms first (or point test to a truly empty property) — condition guarding demo-mode-card render appears to be based on 'no data' state."
+  ],
+  "critical_code_review_comments": [
+    "Market Robot 9k→10 module refactor is regression-clean: all 8 sampled routes + close-gap dry-run return 200; no missing routes.",
+    "morning-brief KPI extension delivers today.{occupancy_pct,revenue,adr,revpar} — dashboard shows non-zero values from real data.",
+    "demo-seeder SCENARIOS: exact created counts (45/8/30) match spec; group_heavy sample enforces channel='group' + rooms 2-4 as required; invalid scenario returns proper 422.",
+    "trial-conversion & email-settings admin endpoints return required shape; MOCK mode (live:false) confirmed."
+  ],
+  "updated_files": ["/app/backend/tests/test_regression_579.py"],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "~90% (demo-mode-card empty-state path not exercised)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "test_regression_579.py seeds+clears city-rooms via /api/demo-seeder for each scenario test. All seeded data is cleared at test-end. default's 25 demo bookings were NOT touched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All backend regressions green. If retesting the empty-branch demo picker UI, first ensure the target property has 0 rooms/bookings — city-rooms currently has ~97 which suppresses the empty-state card. Bookings CRUD test uses TEST_Regression guest and cleans up. Super Admin route path is /super-admin.",
+  "rca of the issue": "No critical issues found in this iteration. Only observation: frontend empty-branch demo picker (demo-mode-card) is state-gated and did not render on city-rooms because it already contains data — this is UI logic behaving as designed, not a bug."
+}

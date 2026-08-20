@@ -230,6 +230,7 @@ import {
   CloudbedsPanel,
   ConnectorCatalogPanel,
   PlatformAdminPanel,
+  SystemHealthPanel,
   PmsConnectHub,
   MorningReportPanel,
   TrustCenterPanel,
@@ -882,6 +883,7 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {activeView === "super-admin" && (
           <PlatformAdminPanel activePropertyId={activePropertyId} properties={properties} />
         )}
+        {activeView === "system-health" && <SystemHealthPanel />}
         {activeView === "pms-connect" && (
           <PmsConnectHub activePropertyId={activePropertyId} properties={properties} />
         )}

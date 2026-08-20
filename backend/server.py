@@ -87,6 +87,7 @@ from routes.finance_ext.terminal import create_terminal_router
 from routes.ai.ai_copilot import create_ai_copilot_router
 from routes.platform_ext.presets import create_presets_router
 from routes.platform_ext.trial_emails import create_trial_emails_router, trial_email_loop
+from routes.platform_ext.system_health import create_system_health_router, record_request as _health_record
 from routes.hotel_ops.event_intelligence import create_event_intelligence_router
 from routes.revenue_ext.parity_analysis import create_parity_analysis_router
 from routes.distribution.channel_manager import create_channel_manager_router
@@ -1618,6 +1619,7 @@ api_router.include_router(create_terminal_router(db, require_roles))
 api_router.include_router(create_ai_copilot_router(db, require_roles))
 api_router.include_router(create_presets_router(db, require_roles))
 api_router.include_router(create_trial_emails_router(db, require_roles))
+api_router.include_router(create_system_health_router(db, require_roles))
 
 from routes.integrations_pkg.webhooks_api_keys import create_webhooks_api_keys_router
 api_router.include_router(create_webhooks_api_keys_router(db, require_roles))
@@ -1868,6 +1870,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------- SAĞLIK METRİKLERİ (istek süresi + hata kaydı) ----------
+import time as _time
+
+
+@app.middleware("http")
+async def health_metrics_mw(request, call_next):
+    if not request.url.path.startswith("/api") or request.url.path.startswith("/api/system-health"):
+        return await call_next(request)
+    t0 = _time.perf_counter()
+    status = 500
+    try:
+        resp = await call_next(request)
+        status = resp.status_code
+        return resp
+    finally:
+        try:
+            _health_record(request.method, request.url.path, status, (_time.perf_counter() - t0) * 1000)
+        except Exception:
+            pass
+
 
 # ---------- DENEME SÜRESİ SALT-OKUNUR KİLİDİ ----------
 from starlette.responses import JSONResponse as _TrialJSONResponse

@@ -48,6 +48,7 @@ export const HotelRunnerPanel = L(() => import("./components/dashboard/HotelRunn
 export const CloudbedsPanel = L(() => import("./components/dashboard/CloudbedsPanel"));
 export const ConnectorCatalogPanel = L(() => import("./components/dashboard/ConnectorCatalogPanel"));
 export const PlatformAdminPanel = L(() => import("./components/dashboard/PlatformAdminPanel"));
+export const SystemHealthPanel = L(() => import("./components/dashboard/SystemHealthPanel"));
 export const PmsConnectHub = L(() => import("./components/dashboard/PmsConnectHub"));
 export const MorningReportPanel = L(() => import("./components/dashboard/MorningReportPanel"));
 export const TrustCenterPanel = L(() => import("./components/dashboard/TrustCenterPanel"));

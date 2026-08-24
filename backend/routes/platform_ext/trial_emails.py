@@ -111,6 +111,34 @@ def churn_survey_email_html(hotel_name: str, name: str, links: dict) -> tuple:
     return subject, html
 
 
+def winback_email_html(hotel_name: str, upgrade_url: str) -> tuple:
+    subject = f"{hotel_name} — size özel %20 indirim, geri dönün 🎁"
+    html = f"""
+    <table width="100%" cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;background:#fafaf9;padding:24px;">
+      <tr><td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:32px;">
+          <tr><td style="font-size:20px;font-weight:bold;color:#1c1917;">Sizi duyduk: fiyat yüksekti 💬</td></tr>
+          <tr><td style="padding-top:10px;font-size:14px;color:#57534e;line-height:1.6;">
+            Geri bildiriminiz için teşekkürler. <b>{hotel_name}</b> için özel bir teklifimiz var:
+            ilk 6 ay <b>%20 indirim</b>. Tüm kurulumunuz ve verileriniz aynen duruyor — kaldığınız yerden devam edin.
+          </td></tr>
+          <tr><td style="padding-top:16px;" align="center">
+            <div style="display:inline-block;background:#fef3c7;border:2px dashed #f59e0b;border-radius:10px;padding:10px 26px;
+                        font-size:18px;font-weight:bold;color:#92400e;letter-spacing:2px;">WINBACK20</div>
+          </td></tr>
+          <tr><td style="padding-top:16px;" align="center">
+            <a href="{upgrade_url}" style="display:inline-block;background:linear-gradient(90deg,#059669,#10b981);color:#ffffff;
+               font-size:14px;font-weight:bold;text-decoration:none;padding:12px 28px;border-radius:10px;">%20 İndirimle Geri Dön →</a>
+          </td></tr>
+          <tr><td style="padding-top:16px;font-size:12px;color:#a8a29e;" align="center">
+            Kod 14 gün geçerlidir. Yükseltme sırasında WINBACK20 kodunu belirtmeniz yeterli. — MyHotelBox Ekibi
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>"""
+    return subject, html
+
+
 async def run_trial_email_check(db) -> dict:
     from routes.platform_ext.mailer import send_email
     now = datetime.now(timezone.utc)
@@ -235,13 +263,14 @@ def create_trial_emails_router(db, require_roles):
             converted = bool(p.get("converted_at"))
             status = "converted" if converted else ("expired" if (days_left is not None and days_left <= 0) else "active")
             survey = await db.churn_surveys.find_one(
-                {"property_id": p["id"], "reason": {"$ne": None}}, {"_id": 0, "reason": 1})
+                {"property_id": p["id"], "reason": {"$ne": None}}, {"_id": 0, "reason": 1, "winback_sent": 1})
             rows.append({"property_id": p["id"], "name": p.get("name"), "plan": p.get("plan"),
                          "signup_at": p.get("trial_started_at") or p.get("created_at"),
                          "trial_ends_at": p.get("trial_ends_at"), "days_left": days_left,
                          "emails_sent": p.get("trial_emails_sent") or [],
                          "owner_email": (user_doc or {}).get("email"), "owner_name": (user_doc or {}).get("name"),
                          "churn_reason": (survey or {}).get("reason"),
+                         "winback_sent": bool((survey or {}).get("winback_sent")),
                          "status": status, "converted_at": p.get("converted_at"), "converted_plan": p.get("converted_plan")})
         total = len(rows)
         converted_n = sum(1 for r in rows if r["status"] == "converted")
@@ -417,6 +446,24 @@ def create_trial_emails_router(db, require_roles):
                 "category": "platform", "target_user": "", "target_role": "admin",
                 "link_to": "", "priority": "normal", "read": False,
                 "created_by": "Deneme Takip Robotu", "created_at": datetime.now(timezone.utc).isoformat()})
+            # 🎁 Geri kazanma: 'fiyat yüksekti' diyene otomatik %20 indirim teklifi
+            if reason == "price" and not s.get("winback_sent"):
+                from routes.platform_ext.mailer import send_email
+                prop = await db.properties.find_one({"id": s["property_id"]}, {"_id": 0, "name": 1})
+                upgrade_url = f"{_base_url()}/?upgrade=1&property={s['property_id']}&promo=WINBACK20"
+                subj, whtml = winback_email_html((prop or {}).get("name", "Oteliniz"), upgrade_url)
+                wstatus = await send_email(db, s["email"], subj, whtml, kind="winback_offer",
+                                           meta={"property_id": s["property_id"], "promo": "WINBACK20"})
+                await db.churn_surveys.update_one({"id": token}, {"$set": {
+                    "winback_sent": True, "winback_status": wstatus,
+                    "winback_at": datetime.now(timezone.utc).isoformat()}})
+                await db.notifications.insert_one({
+                    "id": str(uuid.uuid4()), "type": "info",
+                    "title": "Geri kazanma teklifi gönderildi 🎁",
+                    "message": f"{s.get('email')} → %20 indirim (WINBACK20) — durum: {wstatus}",
+                    "category": "platform", "target_user": "", "target_role": "admin",
+                    "link_to": "", "priority": "normal", "read": False,
+                    "created_by": "Deneme Takip Robotu", "created_at": datetime.now(timezone.utc).isoformat()})
         chosen = CHURN_REASONS.get(s.get("reason") or reason, "")
         return HTMLResponse(f"""
         <div style="font-family:Arial;max-width:480px;margin:80px auto;text-align:center;background:#fff;border:1px solid #e7e5e4;border-radius:16px;padding:36px;">

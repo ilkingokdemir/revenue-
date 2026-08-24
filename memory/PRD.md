@@ -1161,3 +1161,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - PANEL: trial-conversion summary'ye churn{sent,answered,reasons[]} + satırlara churn_reason eklendi. TrialConversionPanel: huni yanında 3. kart '💔 Kayıp Nedenleri' (yanıt oranı + neden barları, testid trial-churn, churn-reason-{key}) + satırda ✉ ANKET rozeti ve 💔 neden chip'i (trial-churn-chip-{pid}).
 - Test: seed (4 gün önce bitmiş) → run ile anket mock gönderildi → public tık reason=price → ikinci tık yazamadı → summary 1/1 + satır chip → panel screenshot PASS. Test verisi temizlendi.
 - NOT: dış URL curl'leri ara sıra proxy hıçkırığı yapıyor — doğrulamada localhost:8001 güvenilir alternatif.
+
+## Güncelleme (2026-08-24, GERİ KAZANMA TEKLİFİ + SAĞLIK UYARI BİLDİRİMİ — e2e PASS)
+- WINBACK: churn-survey public endpoint'inde reason=price ise otomatik %20 indirim e-postası (winback_email_html, kod WINBACK20, link ?upgrade=1&promo=WINBACK20, kind=winback_offer) + admin bildirimi; churn_surveys.winback_sent ile idempotent. Summary satırlarına winback_sent, panelde 🎁 %20 TEKLİF chip'i (trial-winback-chip-{pid}). E2e doğrulandı (mock e-posta içinde kod+link, chip UI'da görünür).
+- SAĞLIK UYARISI: system_health.py — compute_health(db) endpoint'ten ayrıldı; check_and_alert(db): unhealthy'ye GEÇİŞTE admin'lere bildirim (Sağlık Nöbetçisi, priority high, link system-health) + tüm admin'lere e-posta (kind=health_alert), 30 dk cooldown; healthy'ye dönüşte '🟢 normale döndü' bildirimi. health_alert_loop(db, 300) server startup'ta _spawn'lı. Test: %10 5xx enjeksiyonu → unhealthy + bildirim + e-posta; cooldown ikinci çağrıda bildirim üretmedi; temiz REQS → iyileşme bildirimi. Test verileri temizlendi.
+- Yayına Al: kullanıcı aksiyonu (Deploy butonu) — kod hazır.

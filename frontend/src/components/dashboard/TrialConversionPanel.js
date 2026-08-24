@@ -225,9 +225,14 @@ export const TrialConversionPanel = () => {
                       💔 {({price: "Fiyat", features: "Özellik", setup: "Kurulum", competitor: "Rakip", no_time: "Zaman"})[t.churn_reason] || t.churn_reason}
                     </span>
                   )}
-                  {t.winback_sent && (
+                  {t.winback_sent && !t.promo_active && (
                     <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[9px] font-black" title="%20 indirimli geri kazanma teklifi gönderildi (WINBACK20)" data-testid={`trial-winback-chip-${t.property_id}`}>
                       🎁 %20 TEKLİF
+                    </span>
+                  )}
+                  {t.promo_active && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-700 text-[9px] font-black" title={`WINBACK20 kullanıldı — bitiş: ${(t.promo_until || "").slice(0, 10)}`} data-testid={`trial-promo-chip-${t.property_id}`}>
+                      🎉 %20 İNDİRİM AKTİF
                     </span>
                   )}
                   {t.status !== "converted" && (

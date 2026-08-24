@@ -24,6 +24,40 @@ def record_request(method: str, path: str, status: int, dur_ms: float):
     if status >= 400:
         ERRORS.append({"ts": datetime.now(timezone.utc).isoformat(), "method": method,
                        "path": path, "status": status, "dur_ms": round(dur_ms, 1)})
+    # günlük toplayıcı (haftalık özet için)
+    d = datetime.now(timezone.utc).date().isoformat()
+    agg = DAY_AGG.setdefault(d, {"count": 0, "e4": 0, "e5": 0, "sum_ms": 0.0, "eps": {}})
+    agg["count"] += 1
+    agg["sum_ms"] += dur_ms
+    if 400 <= status < 500:
+        agg["e4"] += 1
+    elif status >= 500:
+        agg["e5"] += 1
+    ep = f"{method} {norm}"
+    if ep in agg["eps"] or len(agg["eps"]) < 300:
+        e = agg["eps"].setdefault(ep, [0, 0.0, 0.0, 0])
+        e[0] += 1
+        e[1] += dur_ms
+        e[2] = max(e[2], dur_ms)
+        if status >= 400:
+            e[3] += 1
+
+
+DAY_AGG = {}
+
+
+async def flush_daily(db):
+    """Bellekteki günlük toplamları db.health_daily'ye yazar (en yavaş 20 uçla)."""
+    for d, agg in list(DAY_AGG.items()):
+        eps = sorted(agg["eps"].items(), key=lambda kv: kv[1][1] / max(kv[1][0], 1), reverse=True)[:20]
+        await db.health_daily.update_one({"date": d}, {"$set": {
+            "date": d, "requests": agg["count"], "errors_4xx": agg["e4"], "errors_5xx": agg["e5"],
+            "avg_ms": round(agg["sum_ms"] / max(agg["count"], 1), 1),
+            "top_endpoints": [{"endpoint": k, "count": v[0], "avg_ms": round(v[1] / max(v[0], 1), 1),
+                               "max_ms": round(v[2], 1), "errors": v[3]} for k, v in eps]}}, upsert=True)
+    today = datetime.now(timezone.utc).date().isoformat()
+    for d in [k for k in DAY_AGG if k != today]:
+        DAY_AGG.pop(d, None)
 
 
 def create_system_health_router(db, require_roles):
@@ -32,6 +66,11 @@ def create_system_health_router(db, require_roles):
     @router.get("/system-health/status")
     async def health_status(user=Depends(require_roles("admin", "manager"))):
         return await compute_health(db)
+
+    @router.post("/system-health/send-weekly-digest")
+    async def trigger_digest(user=Depends(require_roles("admin"))):
+        await flush_daily(db)
+        return await send_weekly_digest(db, force=True)
 
     return router
 
@@ -131,5 +170,71 @@ async def health_alert_loop(db, interval_seconds: int = 300):
         await asyncio.sleep(interval_seconds)
         try:
             await check_and_alert(db)
+            await flush_daily(db)
         except Exception as e:
             log.warning(f"health_alert_loop error: {e}")
+
+
+async def send_weekly_digest(db, force: bool = False) -> dict:
+    """Pazartesi sabahı: geçen 7 günün hata oranı + en yavaş uçlar özeti (adminlere e-posta)."""
+    from datetime import timedelta
+    from routes.platform_ext.mailer import send_email
+    now = datetime.now(timezone.utc)
+    week_key = f"{now.isocalendar().year}-W{now.isocalendar().week}"
+    if not force and await db.health_digest_log.find_one({"week": week_key}):
+        return {"skipped": True, "week": week_key}
+    days = [(now.date() - timedelta(days=i)).isoformat() for i in range(0, 7)]
+    docs = await db.health_daily.find({"date": {"$in": days}}, {"_id": 0}).to_list(10)
+    total = sum(d["requests"] for d in docs)
+    e5 = sum(d["errors_5xx"] for d in docs)
+    e4 = sum(d["errors_4xx"] for d in docs)
+    avg_ms = round(sum(d["avg_ms"] * d["requests"] for d in docs) / total, 1) if total else 0
+    # uçları birleştir
+    eps = {}
+    for d in docs:
+        for e in d.get("top_endpoints", []):
+            a = eps.setdefault(e["endpoint"], {"count": 0, "sum": 0.0, "max_ms": 0.0, "errors": 0})
+            a["count"] += e["count"]
+            a["sum"] += e["avg_ms"] * e["count"]
+            a["max_ms"] = max(a["max_ms"], e["max_ms"])
+            a["errors"] += e["errors"]
+    slowest = sorted(eps.items(), key=lambda kv: kv[1]["sum"] / max(kv[1]["count"], 1), reverse=True)[:5]
+    rows = "".join(
+        f"<tr><td style='padding:4px 8px;font-family:monospace;font-size:12px;'>{k}</td>"
+        f"<td style='padding:4px 8px;font-size:12px;'>{v['count']}×</td>"
+        f"<td style='padding:4px 8px;font-size:12px;'><b>{round(v['sum']/max(v['count'],1),1)} ms</b></td>"
+        f"<td style='padding:4px 8px;font-size:12px;'>max {round(v['max_ms'],1)} ms</td></tr>"
+        for k, v in slowest) or "<tr><td colspan='4' style='padding:8px;font-size:12px;'>Veri yok</td></tr>"
+    e5_rate = round(e5 * 100 / total, 2) if total else 0
+    html = f"""
+    <h3>📊 Haftalık Sistem Sağlığı Özeti ({week_key})</h3>
+    <p style="font-size:14px;">Son 7 gün: <b>{total}</b> istek · ort. yanıt <b>{avg_ms} ms</b> ·
+    5xx hata: <b>{e5}</b> (%{e5_rate}) · 4xx: {e4}</p>
+    <h4>🐢 En Yavaş 5 Uç</h4>
+    <table style="border-collapse:collapse;background:#fafaf9;border-radius:8px;">{rows}</table>
+    <p style="font-size:12px;color:#a8a29e;">Detay için panelde Sistem Sağlığı sayfasına bakın. — Sağlık Nöbetçisi</p>"""
+    admins = await db.users.find({"role": "admin", "is_active": {"$ne": False}}, {"_id": 0, "email": 1}).to_list(20)
+    sent = []
+    for a in admins:
+        if a.get("email"):
+            st = await send_email(db, a["email"], f"📊 Haftalık Sistem Sağlığı Özeti — {week_key}", html,
+                                  kind="health_digest")
+            sent.append({"to": a["email"], "status": st})
+    await db.health_digest_log.update_one({"week": week_key}, {"$set": {
+        "week": week_key, "sent_at": now.isoformat(), "recipients": sent,
+        "total_requests": total, "errors_5xx": e5}}, upsert=True)
+    return {"week": week_key, "sent": sent, "total_requests": total, "errors_5xx": e5, "avg_ms": avg_ms}
+
+
+async def weekly_digest_loop(db, interval_seconds: int = 3600):
+    import asyncio
+    import logging
+    log = logging.getLogger(__name__)
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            now = datetime.now(timezone.utc)
+            if now.weekday() == 0 and now.hour >= 6:
+                await send_weekly_digest(db)
+        except Exception as e:
+            log.warning(f"weekly_digest_loop error: {e}")

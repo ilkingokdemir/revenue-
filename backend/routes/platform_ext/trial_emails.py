@@ -271,6 +271,8 @@ def create_trial_emails_router(db, require_roles):
                          "owner_email": (user_doc or {}).get("email"), "owner_name": (user_doc or {}).get("name"),
                          "churn_reason": (survey or {}).get("reason"),
                          "winback_sent": bool((survey or {}).get("winback_sent")),
+                         "promo_active": p.get("promo_code") == "WINBACK20" and (p.get("promo_until") or "") > now.isoformat(),
+                         "promo_until": p.get("promo_until"),
                          "status": status, "converted_at": p.get("converted_at"), "converted_plan": p.get("converted_plan")})
         total = len(rows)
         converted_n = sum(1 for r in rows if r["status"] == "converted")
@@ -473,5 +475,33 @@ def create_trial_emails_router(db, require_roles):
           Geri bildiriminiz ürünü daha iyi yapmamıza yardımcı olacak.</p>
           <p style="color:#a8a29e;font-size:12px;">Fikrinizi değiştirirseniz kapımız her zaman açık — MyHotelBox Ekibi</p>
         </div>""")
+
+    @router.post("/public/winback-claim")
+    async def winback_claim(payload: dict):
+        """Teklif linkiyle dönen otel: ilk 6 ay %20 indirim tanımlar (yalnızca teklif gönderilmiş otel)."""
+        pid = (payload.get("property_id") or "").strip()
+        code = (payload.get("code") or "").strip().upper()
+        if code != "WINBACK20":
+            raise HTTPException(status_code=422, detail="Geçersiz promosyon kodu")
+        offered = await db.churn_surveys.find_one({"property_id": pid, "winback_sent": True}, {"_id": 0, "id": 1})
+        if not offered:
+            raise HTTPException(status_code=404, detail="Bu tesise tanımlı bir geri kazanma teklifi yok")
+        p = await db.properties.find_one({"id": pid, "signup_source": "self_signup"}, {"_id": 0, "promo_code": 1, "name": 1})
+        if not p:
+            raise HTTPException(status_code=404, detail="Tesis bulunamadı")
+        if p.get("promo_code") == "WINBACK20":
+            return {"ok": True, "already_claimed": True, "promo_pct": 20}
+        now = datetime.now(timezone.utc)
+        promo_until = (now + timedelta(days=180)).isoformat()
+        await db.properties.update_one({"id": pid}, {"$set": {
+            "promo_code": "WINBACK20", "promo_pct": 20,
+            "promo_until": promo_until, "promo_claimed_at": now.isoformat()}})
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "type": "info", "title": "WINBACK20 teklifi kullanıldı 🎉",
+            "message": f"{p.get('name', pid)} geri döndü — ilk 6 ay %20 indirim tanımlandı (bitiş: {promo_until[:10]}).",
+            "category": "platform", "target_user": "", "target_role": "admin",
+            "link_to": "super-admin", "priority": "normal", "read": False,
+            "created_by": "Deneme Takip Robotu", "created_at": now.isoformat()})
+        return {"ok": True, "promo_pct": 20, "promo_until": promo_until}
 
     return router

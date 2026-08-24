@@ -531,8 +531,18 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       const params = new URLSearchParams(window.location.search);
       if (params.get("upgrade") === "1") {
         setUpsellFor({ name: "Deneme süreniz doldu", required: "pro" });
+        const promo = params.get("promo");
+        const promoPid = params.get("property");
+        if (promo === "WINBACK20" && promoPid) {
+          axios.post(`${API}/api/public/winback-claim`, { property_id: promoPid, code: promo })
+            .then(({ data }) => toast.success(data.already_claimed
+              ? "%20 indiriminiz zaten tanımlı 🎁"
+              : "Hoş geldiniz! İlk 6 ay %20 indiriminiz tanımlandı 🎁"))
+            .catch(() => { /* sessiz */ });
+        }
         params.delete("upgrade");
         params.delete("property");
+        params.delete("promo");
         const qs = params.toString();
         window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
       }

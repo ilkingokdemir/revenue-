@@ -87,7 +87,7 @@ from routes.finance_ext.terminal import create_terminal_router
 from routes.ai.ai_copilot import create_ai_copilot_router
 from routes.platform_ext.presets import create_presets_router
 from routes.platform_ext.trial_emails import create_trial_emails_router, trial_email_loop
-from routes.platform_ext.system_health import create_system_health_router, record_request as _health_record, health_alert_loop
+from routes.platform_ext.system_health import create_system_health_router, record_request as _health_record, health_alert_loop, weekly_digest_loop
 from routes.hotel_ops.event_intelligence import create_event_intelligence_router
 from routes.revenue_ext.parity_analysis import create_parity_analysis_router
 from routes.distribution.channel_manager import create_channel_manager_router
@@ -2250,6 +2250,7 @@ async def startup_event():
     _spawn(cloudbeds_autopush_loop(db))
     _spawn(trial_email_loop(db))
     _spawn(health_alert_loop(db))
+    _spawn(weekly_digest_loop(db))
     _spawn(profit_autopilot_loop(db))
     _spawn(data_quality_sentinel_loop(db))
     _spawn(open_pricing_optimizer_loop(db))

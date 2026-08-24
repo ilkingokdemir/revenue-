@@ -22,6 +22,26 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
   const [plans, setPlans] = useState({});
   const [mrr, setMrr] = useState(0);
   const [mrrTrend, setMrrTrend] = useState([]);
+  const [mrrTarget, setMrrTarget] = useState(null);
+  const [targetInput, setTargetInput] = useState("");
+  const [historyFor, setHistoryFor] = useState(null);
+  const [historyItems, setHistoryItems] = useState([]);
+
+  const saveTarget = async () => {
+    try {
+      const r = await axios.post(`${API}/api/super-admin/mrr-target`, { target: parseFloat(targetInput) }, cfg);
+      setMrrTarget(r.data.mrr_target); setTargetInput("");
+      toast.success(`Aylık hedef £${r.data.mrr_target.toLocaleString("tr-TR")} olarak kaydedildi 🎯`);
+    } catch (e) { toast.error(e.response?.data?.detail || "Hedef kaydedilemedi"); }
+  };
+
+  const toggleHistory = async (pid) => {
+    if (historyFor === pid) { setHistoryFor(null); return; }
+    try {
+      const r = await axios.get(`${API}/api/super-admin/plan-history?property_id=${pid}`, cfg);
+      setHistoryItems(r.data.items || []); setHistoryFor(pid);
+    } catch { toast.error("Geçmiş yüklenemedi"); }
+  };
   const [keys, setKeys] = useState([]);
   const [newKey, setNewKey] = useState(null);
   const [txs, setTxs] = useState([]);
@@ -39,7 +59,7 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
         axios.get(`${API}/api/payments/tx-log/${pid}`, cfg),
       ]);
       setTenants(h.data.tenants); setPlans(h.data.plans); setMrr(h.data.mrr || 0);
-      setMrrTrend(h.data.mrr_trend || []);
+      setMrrTrend(h.data.mrr_trend || []); setMrrTarget(h.data.mrr_target ?? null);
       setKeys(k.data.keys); setTxs(t.data.transactions.slice(0, 8));
     } catch { toast.error("Platform verileri yüklenemedi"); }
   }, [pid]);
@@ -152,6 +172,30 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
               </div>
             );
           })()}
+          {/* 🎯 Aylık hedef çubuğu */}
+          <div className="flex-1 min-w-[220px]" data-testid="pa-mrr-target">
+            {mrrTarget ? (() => {
+              const pct = Math.min(100, Math.round((mrr / mrrTarget) * 100));
+              const color = pct >= 100 ? "bg-emerald-500" : pct >= 60 ? "bg-amber-400" : "bg-rose-400";
+              return (
+                <div>
+                  <div className="flex justify-between text-[10px] font-bold text-stone-500">
+                    <span>🎯 Aylık hedef: £{mrrTarget.toLocaleString("tr-TR")}</span>
+                    <span className={pct >= 100 ? "text-emerald-600 font-black" : "text-stone-600"} data-testid="pa-target-pct">%{pct}{pct >= 100 && " 🎉"}</span>
+                  </div>
+                  <div className="h-3 bg-stone-200 rounded-full overflow-hidden mt-1">
+                    <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} data-testid="pa-target-bar" />
+                  </div>
+                </div>
+              );
+            })() : <span className="text-[10px] text-stone-400">Henüz aylık hedef yok — sağdan belirleyin →</span>}
+          </div>
+          <div className="flex items-center gap-1">
+            <input value={targetInput} onChange={(e) => setTargetInput(e.target.value)} placeholder={mrrTarget ? `£${mrrTarget}` : "Hedef £"}
+              className="border border-stone-300 rounded-lg px-2 py-1.5 text-xs w-24" data-testid="pa-target-input" />
+            <button onClick={saveTarget} disabled={!targetInput} data-testid="pa-target-save"
+              className="px-2.5 py-1.5 rounded-lg bg-stone-900 text-white text-[10px] font-black disabled:opacity-40">🎯 Kaydet</button>
+          </div>
         </div>
         <div className="space-y-1.5 max-h-64 overflow-auto">
           {tenants.map((t) => (
@@ -170,6 +214,25 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
                 <span className="text-sm font-black text-stone-700" data-testid={`pa-billed-${t.id}`}>£{t.list_price}<span className="text-[10px] text-stone-400 font-medium">/ay</span></span>
               )}
               {t.suspended && <span className="text-rose-600 text-[9px] font-black">⛔ ASKIDA — faturalanmaz</span>}
+              <button onClick={() => toggleHistory(t.id)} data-testid={`pa-history-btn-${t.id}`}
+                className="px-2 py-0.5 rounded-lg border border-stone-300 text-[9px] font-bold text-stone-500 hover:bg-stone-100">
+                🕒 {historyFor === t.id ? "Kapat" : "Geçmiş"}
+              </button>
+              {historyFor === t.id && (
+                <div className="w-full mt-1 pl-2 border-l-2 border-indigo-200 space-y-1" data-testid={`pa-history-${t.id}`}>
+                  {historyItems.length === 0 ? (
+                    <span className="text-[10px] text-stone-400">Plan değişikliği kaydı yok — mevcut plan: {(t.plan || "full").toUpperCase()}</span>
+                  ) : historyItems.map((h, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[10px]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                      <span className="font-black text-stone-700">{(h.from_plan || "?").toUpperCase()} → {(h.to_plan || "?").toUpperCase()}</span>
+                      <span className="text-stone-400">{h.changed_by || h.source}</span>
+                      <span className="text-stone-400">{new Date(h.changed_at).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" })}</span>
+                      {h.source === "trial-conversion" && <span className="px-1 rounded bg-emerald-50 text-emerald-600 font-bold">deneme dönüşümü</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

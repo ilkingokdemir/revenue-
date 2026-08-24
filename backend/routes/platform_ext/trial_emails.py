@@ -334,6 +334,11 @@ def create_trial_emails_router(db, require_roles):
         await db.properties.update_one({"id": pid}, {"$set": {
             "plan": plan, "modules_enabled": "all" if plan == "full" else plan,
             "converted_at": datetime.now(timezone.utc).isoformat(), "converted_plan": plan}})
+        if p.get("plan") != plan:
+            await db.plan_changes.insert_one({
+                "property_id": pid, "from_plan": p.get("plan") or "trial", "to_plan": plan,
+                "changed_by": user.get("email", ""), "changed_at": datetime.now(timezone.utc).isoformat(),
+                "source": "trial-conversion"})
         invalidate_trial_cache()
         return {"ok": True, "property_id": pid, "plan": plan}
 

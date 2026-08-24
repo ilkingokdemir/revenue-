@@ -304,6 +304,7 @@ def create_p0_router(db, require_roles):
                 total += price
             months.append({"month": f"{yy:04d}-{mm:02d}", "mrr": round(total, 2)})
         return {"tenants": out, "plans": PLAN_MODULES, "plan_prices": PLAN_PRICES, "mrr": mrr,
+                "mrr_target": ((await db.platform_settings.find_one({"id": "billing"}, {"_id": 0, "mrr_target": 1})) or {}).get("mrr_target"),
                 "mrr_trend": months}
 
     @router.post("/super-admin/tenants/{pid}/plan")
@@ -311,10 +312,31 @@ def create_p0_router(db, require_roles):
         plan = str(data.get("plan", "full"))
         if plan not in PLAN_MODULES:
             raise HTTPException(422, "plan: basic|rms|cm|pro|full")
+        prev = await db.properties.find_one({"id": pid}, {"_id": 0, "plan": 1})
         await db.properties.update_one({"id": pid}, {"$set": {
             "plan": plan, "modules_enabled": "all" if plan == "full" else plan,
             "plan_changed_at": now_iso()}})
+        if prev and prev.get("plan") != plan:
+            await db.plan_changes.insert_one({
+                "property_id": pid, "from_plan": prev.get("plan") or "full", "to_plan": plan,
+                "changed_by": _u.get("email", ""), "changed_at": now_iso(), "source": "super-admin"})
         return {"ok": True, "property_id": pid, "plan": plan, "scope": PLAN_MODULES[plan]}
+
+    @router.get("/super-admin/plan-history")
+    async def plan_history(property_id: str = "", _u: dict = Depends(require_roles("admin"))):
+        q = {"property_id": property_id} if property_id else {}
+        items = await db.plan_changes.find(q, {"_id": 0}).sort("changed_at", -1).to_list(50)
+        return {"items": items}
+
+    @router.post("/super-admin/mrr-target")
+    async def set_mrr_target(data: dict, _u: dict = Depends(require_roles("admin"))):
+        try:
+            target = float(data.get("target"))
+        except (TypeError, ValueError):
+            raise HTTPException(422, "target: sayı olmalı")
+        await db.platform_settings.update_one({"id": "billing"}, {"$set": {
+            "id": "billing", "mrr_target": target, "updated_at": now_iso()}}, upsert=True)
+        return {"ok": True, "mrr_target": target}
 
     # ================= 4) VERİ GÖÇÜ (CSV IMPORT) =================
     @router.get("/migration/template/{kind}")

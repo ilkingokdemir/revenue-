@@ -1181,3 +1181,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - /super-admin/health-scores'a mrr_trend eklendi: son 6 ayın MRR'ı — tesis katılım tarihine (provisioned_at/trial_started_at/created_at) göre geriye dönük hesap, WINBACK20 indirimi claim ayından itibaren ve promo_until'e kadar düşülür, askıdakiler hariç.
 - Faturalama kartında MRR yanında mini SVG çizgi grafik (6 nokta, ay etiketleri) + '▲/▼ £X son ay' delta rozeti. testids: pa-mrr-trend, pa-mrr-delta. Curl + UI screenshot PASS (tüm tesisler Ağustos 2026'da katıldığı için önceki aylar 0 — veri dürüst).
 - Resend anahtarı girme + Deploy: KULLANICI aksiyonları (kart ve deploy hazır durumda).
+
+## Güncelleme (2026-08-24, PLAN DEĞİŞİKLİK GEÇMİŞİ + GELİR HEDEFİ ÇUBUĞU — e2e PASS)
+- PLAN GEÇMİŞİ: db.plan_changes {property_id, from_plan, to_plan, changed_by, changed_at, source}. Loglama: super-admin set_plan (source=super-admin) + trial-conversion convert (source=trial-conversion, from=önceki plan|trial). GET /api/super-admin/plan-history?property_id= (son 50). UI: Faturalama satırında '🕒 Geçmiş' toggle → indigo zaman çizelgesi (FROM → TO · kim · tarih · 'deneme dönüşümü' rozeti). testids: pa-history-btn-{id}, pa-history-{id}.
+- GELİR HEDEFİ: POST /api/super-admin/mrr-target {target} (422 doğrulama) → db.platform_settings{id:billing}.mrr_target; health-scores yanıtına mrr_target eklendi. UI: MRR banner'ında 🎯 hedef çubuğu (yeşil ≥%100 🎉 / amber ≥%60 / kırmızı altı) + % rozeti + hedef girişi/Kaydet. testids: pa-mrr-target, pa-target-pct/-bar/-input/-save.
+- Test: hedef 2500 kaydet → %80 amber çubuk UI'da; plan pro→full→pro değişimleri loglandı ve zaman çizelgesinde göründü; geçersiz hedef 422. aldgate-flats planı FULL olarak bırakıldı (orijinal değeri).

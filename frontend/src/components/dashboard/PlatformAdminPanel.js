@@ -20,6 +20,7 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
   const pid = activePropertyId && activePropertyId !== "all" ? activePropertyId : properties[0]?.id || "default";
   const [tenants, setTenants] = useState([]);
   const [plans, setPlans] = useState({});
+  const [mrr, setMrr] = useState(0);
   const [keys, setKeys] = useState([]);
   const [newKey, setNewKey] = useState(null);
   const [txs, setTxs] = useState([]);
@@ -36,7 +37,7 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
         axios.get(`${API}/api/public-keys/${pid}`, cfg),
         axios.get(`${API}/api/payments/tx-log/${pid}`, cfg),
       ]);
-      setTenants(h.data.tenants); setPlans(h.data.plans);
+      setTenants(h.data.tenants); setPlans(h.data.plans); setMrr(h.data.mrr || 0);
       setKeys(k.data.keys); setTxs(t.data.transactions.slice(0, 8));
     } catch { toast.error("Platform verileri yüklenemedi"); }
   }, [pid]);
@@ -115,6 +116,34 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
           ))}
         </div>
         <p className="text-[10px] text-stone-400 mt-2">{Object.entries(plans).map(([k, v]) => `${k.toUpperCase()}: ${v}`).join(" · ")}</p>
+      </Card>
+
+      <Card title="💳 Faturalama — plan ücretleri ve aktif indirimler" tid="pa-billing">
+        <div className="flex items-center gap-2 mb-2 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
+          <span className="text-xs font-bold text-stone-600">Aylık Tekrarlayan Gelir (MRR)</span>
+          <span className="text-lg font-black text-emerald-600" data-testid="pa-mrr">£{mrr.toLocaleString("tr-TR")}</span>
+          <span className="text-[10px] text-stone-400">askıya alınanlar hariç · indirimler düşülmüş</span>
+        </div>
+        <div className="space-y-1.5 max-h-64 overflow-auto">
+          {tenants.map((t) => (
+            <div key={t.id} className="flex flex-wrap items-center gap-2 bg-stone-50 border border-stone-200 rounded-xl px-3 py-1.5" data-testid={`pa-billing-${t.id}`}>
+              <span className="flex-1 min-w-[140px] text-xs font-bold text-stone-700">{t.name || t.id}</span>
+              <span className="text-[10px] font-black text-stone-500 uppercase">{(t.plan || "full")}</span>
+              {t.promo_active ? (
+                <>
+                  <span className="text-[11px] text-stone-400 line-through">£{t.list_price}</span>
+                  <span className="text-sm font-black text-emerald-600" data-testid={`pa-billed-${t.id}`}>£{t.billed_price}<span className="text-[10px] text-stone-400 font-medium">/ay</span></span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-700 text-[9px] font-black" data-testid={`pa-promo-${t.id}`}>
+                    🎉 %{t.promo_pct} İNDİRİM · bitiş {(t.promo_until || "").slice(0, 10)}
+                  </span>
+                </>
+              ) : (
+                <span className="text-sm font-black text-stone-700" data-testid={`pa-billed-${t.id}`}>£{t.list_price}<span className="text-[10px] text-stone-400 font-medium">/ay</span></span>
+              )}
+              {t.suspended && <span className="text-rose-600 text-[9px] font-black">⛔ ASKIDA — faturalanmaz</span>}
+            </div>
+          ))}
+        </div>
       </Card>
 
       <div className="grid lg:grid-cols-2 gap-4">

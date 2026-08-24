@@ -251,18 +251,31 @@ def create_p0_router(db, require_roles):
         return {"property_id": pid, "steps": steps, "done": done, "total": len(steps),
                 "score": int(done / len(steps) * 100)}
 
+    PLAN_PRICES = {"basic": 49, "rms": 99, "cm": 99, "pro": 149, "full": 199}  # £/ay liste fiyatı
+
     @router.get("/super-admin/health-scores")
     async def health_scores(_u: dict = Depends(require_roles("admin"))):
         props = await db.properties.find({"is_active": {"$ne": False}},
-                                         {"_id": 0, "id": 1, "name": 1, "plan": 1, "suspended": 1}).to_list(100)
+                                         {"_id": 0, "id": 1, "name": 1, "plan": 1, "suspended": 1,
+                                          "promo_code": 1, "promo_pct": 1, "promo_until": 1}).to_list(100)
         out = []
         for p in props:
             steps = await _health_steps(p["id"])
             done = sum(1 for s in steps if s["done"])
-            out.append({**p, "score": int(done / len(steps) * 100),
-                        "missing": [s["label"] for s in steps if not s["done"]]})
+            list_price = PLAN_PRICES.get(p.get("plan") or "full", 199)
+            promo_active = (p.get("promo_code") == "WINBACK20"
+                            and (p.get("promo_until") or "") > now_iso())
+            billed = round(list_price * (1 - (p.get("promo_pct") or 0) / 100), 2) if promo_active else list_price
+            out.append({**{k: v for k, v in p.items() if k not in ("promo_code",)},
+                        "score": int(done / len(steps) * 100),
+                        "missing": [s["label"] for s in steps if not s["done"]],
+                        "list_price": list_price, "billed_price": billed,
+                        "promo_active": promo_active,
+                        "promo_pct": p.get("promo_pct") if promo_active else None,
+                        "promo_until": p.get("promo_until") if promo_active else None})
         out.sort(key=lambda x: x["score"])
-        return {"tenants": out, "plans": PLAN_MODULES}
+        mrr = round(sum(t["billed_price"] for t in out if not t.get("suspended")), 2)
+        return {"tenants": out, "plans": PLAN_MODULES, "plan_prices": PLAN_PRICES, "mrr": mrr}
 
     @router.post("/super-admin/tenants/{pid}/plan")
     async def set_plan(pid: str, data: dict, _u: dict = Depends(require_roles("admin"))):

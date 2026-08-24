@@ -1154,3 +1154,10 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - FRONTEND: SystemHealthPanel.js — 30 sn auto-refresh; durum banner'ı, 6 metrik karosu, 🐢 En Yavaş Uçlar, ⚠️ Son Hatalar. Menü: system-health (admin-only, core:true — ÖNEMLİ: BASIT modda core:true olmayan öğeler App.js:578'de filtrelenir, ilk denemede bu yüzden görünmedi). lazyPanels + DashboardViews'a bağlandı. testids: system-health-btn/-page, health-status-banner, health-slowest, health-recent-errors.
 - Test: curl (404 üretip son hatalarda görüldü, metrikler doğru) + UI screenshot (146 istek, p95 417.9ms, yavaş uçlar gerçek, 401 hataları listede). Deploy sonrası izleme hazır.
 - RESEND: kullanıcı anahtarı Süper Admin'deki karttan KENDİSİ girecek (tekrar sorma; kart + canlı doğrulama zaten hazır).
+
+## Güncelleme (2026-08-24, KAYIP NEDENİ ANKETİ — e2e PASS)
+- ANKET AKIŞI: trial_emails.py yeni 'survey' aşaması — bitişten 3+ gün sonra, dönüşmemiş otele tek soruluk e-posta (5 tık-butonu: price/features/setup/competitor/no_time = CHURN_REASONS). Idempotent (trial_emails_sent 'survey'), converted olanlara artık hiçbir aşama gitmez. db.churn_surveys {id=token, property_id, email, sent_at, reason, answered_at}.
+- PUBLIC YANIT: GET /api/public/churn-survey/{token}?reason=X — auth'suz, HTML teşekkür sayfası; ilk yanıt kilitlenir (ikinci tık üzerine YAZMAZ), geçersiz token 404, yanıtta admin'e bildirim.
+- PANEL: trial-conversion summary'ye churn{sent,answered,reasons[]} + satırlara churn_reason eklendi. TrialConversionPanel: huni yanında 3. kart '💔 Kayıp Nedenleri' (yanıt oranı + neden barları, testid trial-churn, churn-reason-{key}) + satırda ✉ ANKET rozeti ve 💔 neden chip'i (trial-churn-chip-{pid}).
+- Test: seed (4 gün önce bitmiş) → run ile anket mock gönderildi → public tık reason=price → ikinci tık yazamadı → summary 1/1 + satır chip → panel screenshot PASS. Test verisi temizlendi.
+- NOT: dış URL curl'leri ara sıra proxy hıçkırığı yapıyor — doğrulamada localhost:8001 güvenilir alternatif.

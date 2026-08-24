@@ -12,6 +12,15 @@ logger = logging.getLogger(__name__)
 STAGES = {
     "t3": {"days_max": 3, "kind": "trial_reminder"},
     "expired": {"days_max": 0, "kind": "trial_upgrade"},
+    "survey": {"days_max": -3, "kind": "churn_survey"},
+}
+
+CHURN_REASONS = {
+    "price": "💰 Fiyat yüksekti",
+    "features": "🧩 Aradığım özellik yoktu",
+    "setup": "🔧 Kurulum zor geldi",
+    "competitor": "🏃 Başka ürün seçtim",
+    "no_time": "⏰ Denemeye vaktim olmadı",
 }
 
 _expired_cache = {"pids": frozenset(), "ts": 0.0}
@@ -76,6 +85,32 @@ def trial_email_html(hotel_name: str, name: str, stage: str, days_left: int, upg
     return subject, html
 
 
+def churn_survey_email_html(hotel_name: str, name: str, links: dict) -> tuple:
+    subject = f"{hotel_name} — tek soru: neden vazgeçtiniz? 🙏"
+    buttons = "".join(
+        f'<tr><td style="padding:5px 0;" align="center">'
+        f'<a href="{links[k]}" style="display:block;width:82%;background:#f5f5f4;border:1px solid #d6d3d1;'
+        f'color:#1c1917;font-size:13px;font-weight:bold;text-decoration:none;padding:11px 16px;border-radius:10px;">{lbl}</a>'
+        f"</td></tr>" for k, lbl in CHURN_REASONS.items())
+    html = f"""
+    <table width="100%" cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;background:#fafaf9;padding:24px;">
+      <tr><td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:32px;">
+          <tr><td style="font-size:19px;font-weight:bold;color:#1c1917;">Merhaba {name}, tek bir sorumuz var 🙏</td></tr>
+          <tr><td style="padding-top:10px;font-size:14px;color:#57534e;line-height:1.6;">
+            <b>{hotel_name}</b> denemeniz sona erdi ve devam etmemeyi seçtiniz — sorun değil!
+            Ürünü daha iyi yapabilmemiz için tek tıkla söyler misiniz: <b>neden vazgeçtiniz?</b>
+          </td></tr>
+          {buttons}
+          <tr><td style="padding-top:16px;font-size:12px;color:#a8a29e;" align="center">
+            Tek tık yeter — sayfa açılınca işiniz bitti. Teşekkürler! — MyHotelBox Ekibi
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>"""
+    return subject, html
+
+
 async def run_trial_email_check(db) -> dict:
     from routes.platform_ext.mailer import send_email
     now = datetime.now(timezone.utc)
@@ -93,11 +128,15 @@ async def run_trial_email_check(db) -> dict:
             continue
         days_left = (ends - now).total_seconds() / 86400
         already = p.get("trial_emails_sent") or []
+        converted = bool(p.get("converted_at"))
         stage = None
-        if days_left <= 0 and "expired" not in already:
-            stage = "expired"
-        elif 0 < days_left <= 3 and "t3" not in already:
-            stage = "t3"
+        if not converted:
+            if days_left <= -3 and "survey" not in already:
+                stage = "survey"
+            elif days_left <= 0 and "expired" not in already:
+                stage = "expired"
+            elif 0 < days_left <= 3 and "t3" not in already:
+                stage = "t3"
         if not stage:
             skipped += 1
             continue
@@ -110,15 +149,23 @@ async def run_trial_email_check(db) -> dict:
             skipped += 1
             continue
         upgrade_url = f"{_base_url()}/?upgrade=1&property={pid}"
-        subj, html = trial_email_html(p.get("name", "Oteliniz"), user.get("name", ""), stage,
-                                      max(1, int(days_left + 0.999)), upgrade_url)
+        if stage == "survey":
+            token = str(uuid.uuid4())
+            links = {k: f"{_base_url()}/api/public/churn-survey/{token}?reason={k}" for k in CHURN_REASONS}
+            subj, html = churn_survey_email_html(p.get("name", "Oteliniz"), user.get("name", ""), links)
+            await db.churn_surveys.insert_one({
+                "id": token, "property_id": pid, "email": user["email"],
+                "sent_at": now.isoformat(), "reason": None, "answered_at": None})
+        else:
+            subj, html = trial_email_html(p.get("name", "Oteliniz"), user.get("name", ""), stage,
+                                          max(1, int(days_left + 0.999)), upgrade_url)
         status = await send_email(db, user["email"], subj, html, kind=STAGES[stage]["kind"],
                                   meta={"property_id": pid, "stage": stage})
         await db.properties.update_one({"id": pid}, {"$addToSet": {"trial_emails_sent": stage}})
         await db.notifications.insert_one({
             "id": str(uuid.uuid4()), "type": "info",
             "title": "Deneme e-postası gönderildi" if status == "sent" else "Deneme e-postası (mock) kaydedildi",
-            "message": f"{p.get('name', pid)} → {user['email']} ({'bitişe 3 gün hatırlatması' if stage == 't3' else 'yükseltme daveti'}) — durum: {status}",
+            "message": f"{p.get('name', pid)} → {user['email']} ({'kayıp nedeni anketi' if stage == 'survey' else 'bitişe 3 gün hatırlatması' if stage == 't3' else 'yükseltme daveti'}) — durum: {status}",
             "category": "platform", "target_user": "", "target_role": "admin",
             "link_to": "", "priority": "normal", "read": False,
             "created_by": "Deneme Takip Robotu", "created_at": now.isoformat()})
@@ -187,11 +234,14 @@ def create_trial_emails_router(db, require_roles):
                 {"property_ids": p["id"], "signup_source": "self_signup"}, {"_id": 0, "email": 1, "name": 1})
             converted = bool(p.get("converted_at"))
             status = "converted" if converted else ("expired" if (days_left is not None and days_left <= 0) else "active")
+            survey = await db.churn_surveys.find_one(
+                {"property_id": p["id"], "reason": {"$ne": None}}, {"_id": 0, "reason": 1})
             rows.append({"property_id": p["id"], "name": p.get("name"), "plan": p.get("plan"),
                          "signup_at": p.get("trial_started_at") or p.get("created_at"),
                          "trial_ends_at": p.get("trial_ends_at"), "days_left": days_left,
                          "emails_sent": p.get("trial_emails_sent") or [],
                          "owner_email": (user_doc or {}).get("email"), "owner_name": (user_doc or {}).get("name"),
+                         "churn_reason": (survey or {}).get("reason"),
                          "status": status, "converted_at": p.get("converted_at"), "converted_plan": p.get("converted_plan")})
         total = len(rows)
         converted_n = sum(1 for r in rows if r["status"] == "converted")
@@ -227,11 +277,19 @@ def create_trial_emails_router(db, require_roles):
                     cohort.append(r)
             weeks.append({"week": ws.strftime("%d %b"), "signups": len(cohort),
                           "conversions": sum(1 for r in cohort if r["status"] == "converted")})
+        # Kayıp nedenleri kırılımı (huni yanına)
+        surveys_sent = await db.churn_surveys.count_documents({"property_id": {"$in": pids}})
+        churn_counts = {}
+        async for s in db.churn_surveys.find({"property_id": {"$in": pids}, "reason": {"$ne": None}}, {"_id": 0, "reason": 1}):
+            churn_counts[s["reason"]] = churn_counts.get(s["reason"], 0) + 1
+        churn_reasons = [{"key": k, "label": lbl, "count": churn_counts.get(k, 0)}
+                         for k, lbl in CHURN_REASONS.items()]
         return {"metrics": {"total": total, "active": sum(1 for r in rows if r["status"] == "active"),
                             "expired": sum(1 for r in rows if r["status"] == "expired"),
                             "converted": converted_n,
                             "conversion_rate": round(converted_n * 100 / total, 1) if total else 0.0},
                 "funnel": funnel, "weekly": weeks,
+                "churn": {"sent": surveys_sent, "answered": sum(churn_counts.values()), "reasons": churn_reasons},
                 "trials": rows}
 
     @router.post("/trial-conversion/{pid}/convert")
@@ -342,5 +400,31 @@ def create_trial_emails_router(db, require_roles):
                 "message": "Gönderildi ✅" if status == "sent"
                 else ("Gönderim başarısız — anahtarı kontrol edin" if status == "failed"
                       else "Anahtar yok/placeholder — MOCK olarak kaydedildi")}
+
+    # ---- Kayıp Nedeni Anketi (public, tek tık) ----
+    @router.get("/public/churn-survey/{token}")
+    async def churn_survey_answer(token: str, reason: str = ""):
+        from fastapi.responses import HTMLResponse
+        s = await db.churn_surveys.find_one({"id": token}, {"_id": 0})
+        if not s:
+            return HTMLResponse("<h3 style='font-family:Arial;text-align:center;margin-top:80px;'>Bağlantı geçersiz veya süresi dolmuş.</h3>", status_code=404)
+        if reason in CHURN_REASONS and not s.get("reason"):
+            await db.churn_surveys.update_one({"id": token}, {"$set": {
+                "reason": reason, "answered_at": datetime.now(timezone.utc).isoformat()}})
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()), "type": "info", "title": "Kayıp nedeni anketi yanıtlandı",
+                "message": f"{s.get('email')} → {CHURN_REASONS[reason]}",
+                "category": "platform", "target_user": "", "target_role": "admin",
+                "link_to": "", "priority": "normal", "read": False,
+                "created_by": "Deneme Takip Robotu", "created_at": datetime.now(timezone.utc).isoformat()})
+        chosen = CHURN_REASONS.get(s.get("reason") or reason, "")
+        return HTMLResponse(f"""
+        <div style="font-family:Arial;max-width:480px;margin:80px auto;text-align:center;background:#fff;border:1px solid #e7e5e4;border-radius:16px;padding:36px;">
+          <div style="font-size:40px;">🙏</div>
+          <h2 style="color:#1c1917;margin:12px 0 6px;">Teşekkürler!</h2>
+          <p style="color:#57534e;font-size:14px;">Yanıtınız kaydedildi{f": <b>{chosen}</b>" if chosen else ""}.<br/>
+          Geri bildiriminiz ürünü daha iyi yapmamıza yardımcı olacak.</p>
+          <p style="color:#a8a29e;font-size:12px;">Fikrinizi değiştirirseniz kapımız her zaman açık — MyHotelBox Ekibi</p>
+        </div>""")
 
     return router

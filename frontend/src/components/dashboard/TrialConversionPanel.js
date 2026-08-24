@@ -119,7 +119,7 @@ export const TrialConversionPanel = () => {
 
         {/* Dönüşüm hunisi + haftalık kohort */}
         {data.funnel && (
-          <div className="grid md:grid-cols-2 gap-3 mb-4">
+          <div className="grid md:grid-cols-3 gap-3 mb-4">
             <div className="bg-stone-50 border border-stone-200 rounded-xl p-3" data-testid="trial-funnel">
               <div className="text-[11px] font-black text-stone-600 uppercase mb-2">🔻 Dönüşüm Hunisi — kayıp nerede?</div>
               <div className="space-y-1.5">
@@ -170,6 +170,31 @@ export const TrialConversionPanel = () => {
                 <span><span className="inline-block w-2 h-2 bg-emerald-500 rounded-sm mr-1" />Dönüşüm</span>
               </div>
             </div>
+            {data.churn && (
+              <div className="bg-stone-50 border border-stone-200 rounded-xl p-3" data-testid="trial-churn">
+                <div className="text-[11px] font-black text-stone-600 uppercase mb-2">💔 Kayıp Nedenleri — anket ({data.churn.answered}/{data.churn.sent} yanıt)</div>
+                {data.churn.sent === 0 ? (
+                  <p className="text-[11px] text-stone-400">Henüz anket gönderilmedi. Süresi dolduktan 3 gün sonra otomatik gönderilir.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {data.churn.reasons.map((r) => {
+                      const max = Math.max(1, ...data.churn.reasons.map((x) => x.count));
+                      return (
+                        <div key={r.key} data-testid={`churn-reason-${r.key}`}>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="font-bold text-stone-700">{r.label}</span>
+                            <span className="font-black text-stone-500">{r.count}</span>
+                          </div>
+                          <div className="h-2 bg-stone-200 rounded-full overflow-hidden mt-0.5">
+                            <div className="h-full bg-rose-400 rounded-full" style={{ width: `${(r.count / max) * 100}%`, minWidth: r.count ? 4 : 0 }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
         {data.trials.length === 0 ? (
@@ -193,7 +218,13 @@ export const TrialConversionPanel = () => {
                   <div className="flex gap-1">
                     {t.emails_sent.includes("t3") && <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[9px] font-black" title="3 gün hatırlatması gönderildi">✉ T-3</span>}
                     {t.emails_sent.includes("expired") && <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[9px] font-black" title="Bitiş e-postası gönderildi">✉ BİTİŞ</span>}
+                    {t.emails_sent.includes("survey") && <span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[9px] font-black" title="Kayıp nedeni anketi gönderildi">✉ ANKET</span>}
                   </div>
+                  {t.churn_reason && (
+                    <span className="px-2 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[9px] font-black" data-testid={`trial-churn-chip-${t.property_id}`}>
+                      💔 {({price: "Fiyat", features: "Özellik", setup: "Kurulum", competitor: "Rakip", no_time: "Zaman"})[t.churn_reason] || t.churn_reason}
+                    </span>
+                  )}
                   {t.status !== "converted" && (
                     <>
                       <button onClick={() => extendTrial(t.property_id)} data-testid={`trial-extend-${t.property_id}`}

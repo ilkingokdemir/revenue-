@@ -1176,3 +1176,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - BACKEND (p0_pack.py): PLAN_PRICES {basic:49, rms:99, cm:99, pro:149, full:199} £/ay; /super-admin/health-scores artık her tesise list_price, billed_price (WINBACK20 aktifse %20 düşülmüş), promo_active/promo_pct/promo_until döner + mrr (askıya alınanlar hariç, indirimler düşülmüş toplam).
 - FRONTEND (PlatformAdminPanel): yeni '💳 Faturalama' kartı — MRR banner'ı (pa-mrr), tesis satırlarında plan + fiyat; promo'lu otelde üstü çizili liste fiyatı → yeşil indirimli tutar + '🎉 %20 İNDİRİM · bitiş {tarih}' rozeti (pa-promo-{id}); askıdakilere '⛔ ASKIDA — faturalanmaz'. testids: pa-billing, pa-billed-{id}.
 - Test: promo'lu sahte tesis PRO £149→£119.2, MRR £2.109,2 (curl + UI screenshot PASS). Test verisi temizlendi.
+
+## Güncelleme (2026-08-24, MRR TREND GRAFİĞİ — e2e PASS)
+- /super-admin/health-scores'a mrr_trend eklendi: son 6 ayın MRR'ı — tesis katılım tarihine (provisioned_at/trial_started_at/created_at) göre geriye dönük hesap, WINBACK20 indirimi claim ayından itibaren ve promo_until'e kadar düşülür, askıdakiler hariç.
+- Faturalama kartında MRR yanında mini SVG çizgi grafik (6 nokta, ay etiketleri) + '▲/▼ £X son ay' delta rozeti. testids: pa-mrr-trend, pa-mrr-delta. Curl + UI screenshot PASS (tüm tesisler Ağustos 2026'da katıldığı için önceki aylar 0 — veri dürüst).
+- Resend anahtarı girme + Deploy: KULLANICI aksiyonları (kart ve deploy hazır durumda).

@@ -21,6 +21,7 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
   const [tenants, setTenants] = useState([]);
   const [plans, setPlans] = useState({});
   const [mrr, setMrr] = useState(0);
+  const [mrrTrend, setMrrTrend] = useState([]);
   const [keys, setKeys] = useState([]);
   const [newKey, setNewKey] = useState(null);
   const [txs, setTxs] = useState([]);
@@ -38,6 +39,7 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
         axios.get(`${API}/api/payments/tx-log/${pid}`, cfg),
       ]);
       setTenants(h.data.tenants); setPlans(h.data.plans); setMrr(h.data.mrr || 0);
+      setMrrTrend(h.data.mrr_trend || []);
       setKeys(k.data.keys); setTxs(t.data.transactions.slice(0, 8));
     } catch { toast.error("Platform verileri yüklenemedi"); }
   }, [pid]);
@@ -119,10 +121,37 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
       </Card>
 
       <Card title="💳 Faturalama — plan ücretleri ve aktif indirimler" tid="pa-billing">
-        <div className="flex items-center gap-2 mb-2 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
-          <span className="text-xs font-bold text-stone-600">Aylık Tekrarlayan Gelir (MRR)</span>
-          <span className="text-lg font-black text-emerald-600" data-testid="pa-mrr">£{mrr.toLocaleString("tr-TR")}</span>
-          <span className="text-[10px] text-stone-400">askıya alınanlar hariç · indirimler düşülmüş</span>
+        <div className="flex flex-wrap items-center gap-4 mb-2 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
+          <div>
+            <span className="text-xs font-bold text-stone-600 block">Aylık Tekrarlayan Gelir (MRR)</span>
+            <span className="text-lg font-black text-emerald-600" data-testid="pa-mrr">£{mrr.toLocaleString("tr-TR")}</span>
+            <span className="text-[10px] text-stone-400 block">askıya alınanlar hariç · indirimler düşülmüş</span>
+          </div>
+          {mrrTrend.length > 1 && (() => {
+            const vals = mrrTrend.map((t) => t.mrr);
+            const min = Math.min(...vals), max = Math.max(...vals), span = Math.max(max - min, 1);
+            const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * 160},${34 - ((v - min) / span) * 28}`).join(" ");
+            const delta = vals[vals.length - 1] - vals[vals.length - 2];
+            return (
+              <div className="flex items-end gap-2" data-testid="pa-mrr-trend">
+                <div>
+                  <svg viewBox="0 0 160 38" className="w-40 h-10">
+                    <polyline fill="none" stroke="#10b981" strokeWidth="2" points={pts} />
+                    {vals.map((v, i) => (
+                      <circle key={i} cx={(i / (vals.length - 1)) * 160} cy={34 - ((v - min) / span) * 28} r="2.2" fill="#059669" />
+                    ))}
+                  </svg>
+                  <div className="flex justify-between text-[8px] text-stone-400 w-40">
+                    <span>{mrrTrend[0].month.slice(5)}.{mrrTrend[0].month.slice(2, 4)}</span>
+                    <span>{mrrTrend[mrrTrend.length - 1].month.slice(5)}.{mrrTrend[mrrTrend.length - 1].month.slice(2, 4)}</span>
+                  </div>
+                </div>
+                <span className={`text-[10px] font-black ${delta >= 0 ? "text-emerald-600" : "text-rose-600"}`} data-testid="pa-mrr-delta">
+                  {delta >= 0 ? "▲" : "▼"} £{Math.abs(delta).toLocaleString("tr-TR")} son ay
+                </span>
+              </div>
+            );
+          })()}
         </div>
         <div className="space-y-1.5 max-h-64 overflow-auto">
           {tenants.map((t) => (

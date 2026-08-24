@@ -275,7 +275,36 @@ def create_p0_router(db, require_roles):
                         "promo_until": p.get("promo_until") if promo_active else None})
         out.sort(key=lambda x: x["score"])
         mrr = round(sum(t["billed_price"] for t in out if not t.get("suspended")), 2)
-        return {"tenants": out, "plans": PLAN_MODULES, "plan_prices": PLAN_PRICES, "mrr": mrr}
+        # Son 6 ay MRR trendi (tesisin katılım tarihine göre geriye dönük kurgu) + bugünün anlık değeri
+        from datetime import datetime as _dt, timezone as _tz
+        raw = await db.properties.find({"is_active": {"$ne": False}},
+                                       {"_id": 0, "plan": 1, "suspended": 1, "provisioned_at": 1,
+                                        "created_at": 1, "trial_started_at": 1,
+                                        "promo_pct": 1, "promo_code": 1, "promo_until": 1,
+                                        "promo_claimed_at": 1}).to_list(100)
+        now_dt = _dt.now(_tz.utc)
+        months = []
+        y, m = now_dt.year, now_dt.month
+        for i in range(5, -1, -1):
+            mm = m - i
+            yy = y + (mm - 1) // 12
+            mm = (mm - 1) % 12 + 1
+            month_end = f"{yy:04d}-{mm:02d}-31"
+            total = 0.0
+            for p in raw:
+                if p.get("suspended"):
+                    continue
+                joined = p.get("provisioned_at") or p.get("trial_started_at") or p.get("created_at") or ""
+                if joined and joined[:10] > month_end:
+                    continue
+                price = PLAN_PRICES.get(p.get("plan") or "full", 199)
+                if (p.get("promo_code") == "WINBACK20" and (p.get("promo_claimed_at") or "")[:7] <= f"{yy:04d}-{mm:02d}"
+                        and (p.get("promo_until") or "") > f"{yy:04d}-{mm:02d}-01"):
+                    price = round(price * (1 - (p.get("promo_pct") or 0) / 100), 2)
+                total += price
+            months.append({"month": f"{yy:04d}-{mm:02d}", "mrr": round(total, 2)})
+        return {"tenants": out, "plans": PLAN_MODULES, "plan_prices": PLAN_PRICES, "mrr": mrr,
+                "mrr_trend": months}
 
     @router.post("/super-admin/tenants/{pid}/plan")
     async def set_plan(pid: str, data: dict, _u: dict = Depends(require_roles("admin"))):

@@ -1254,3 +1254,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - BÜLTEN KARŞILAŞTIRMASI: weekly_digest build_digest artık önceki haftayı da hesaplar; deltas {revenue_pct, occupancy_pts, adr_pct, arrivals_diff} + HTML'de ▲/▼ okları + panel önizlemede renkli oklar (digest-delta-*).
 - CANLI DUMAN TESTİ: Kullanıcı URL'yi hâlâ paylaşmadı — hazır bekliyor.
 - Test: iteration_586.json frontend %100 PASS.
+
+## Güncelleme (2026-06, iter 586+ — Depozito Ödendi Takibi + Risk Trendi TAMAMLANDI)
+- DEPOZİTO ÖDENDİ TAKİBİ: mark_deposit_paid(db, session_id) — deposit_requests→paid, booking→{payment_status:deposit_paid, noshow_secured:true} + bildirim. İki tetik: (1) Stripe webhook /api/webhook/stripe içine kanca (payments.py), (2) fallback POST /api/deposit-rule/{pid}/check-payments (Stripe session sorgusu) + panelde 'Ödemeleri Kontrol Et' butonu. Simülasyonla doğrulandı (sonra geri alındı — gerçek ödeme yapılmadı).
+- RİSK TRENDİ: noshow_risk_snapshots (günlük avg_score/high/medium) — loop'ta ve GET'te kaydedilir, trend endpoint bugün+yarını self-heal eder. GET /api/noshow-risk/{pid}/trend → 14 gün + weekly_avg. UI: risk-trend-card (recharts, 2 çizgi) + haftalık ortalama rozeti. Screenshot ile doğrulandı.
+- Testler: backend curl + mark_deposit_paid simülasyonu + UI screenshot (panel/trend/buton hepsi render).
+- CANLI DUMAN TESTİ: URL hâlâ bekleniyor.

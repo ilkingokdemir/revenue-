@@ -77,6 +77,18 @@ async def score_arrivals(db, pid: str, day: str) -> List[Dict]:
     return out
 
 
+async def record_snapshot(db, pid: str, day: str, items) -> None:
+    if not items:
+        return
+    avg = round(sum(i["score"] for i in items) / len(items), 1)
+    await db.noshow_risk_snapshots.update_one(
+        {"property_id": pid, "date": day},
+        {"$set": {"avg_score": avg, "total": len(items),
+                  "high": sum(1 for i in items if i["level"] == "high"),
+                  "medium": sum(1 for i in items if i["level"] == "medium"),
+                  "updated_at": _now().isoformat()}}, upsert=True)
+
+
 async def noshow_risk_loop(db, interval_seconds: int = 3600):
     await asyncio.sleep(330)
     while True:
@@ -85,12 +97,13 @@ async def noshow_risk_loop(db, interval_seconds: int = 3600):
             if 14 <= now.hour <= 18:  # öğleden sonra tek sefer bildirim penceresi
                 tomorrow = (now.date() + timedelta(days=1)).isoformat()
                 for pid in await db.properties.distinct("id"):
+                    risks = await score_arrivals(db, pid, tomorrow)
+                    await record_snapshot(db, pid, tomorrow, risks)
                     already = await db.notifications.find_one(
                         {"property_id": pid, "category": "noshow_risk",
                          "meta_date": tomorrow})
                     if already:
                         continue
-                    risks = await score_arrivals(db, pid, tomorrow)
                     high = [r for r in risks if r["level"] == "high"]
                     if not high:
                         continue
@@ -115,6 +128,7 @@ def create_noshow_risk_router(db, require_roles):
     async def risks(pid: str, day: str = "", _u: dict = Depends(require_roles(*ROLES))):
         target = day or (_now().date() + timedelta(days=1)).isoformat()
         items = await score_arrivals(db, pid, target)
+        await record_snapshot(db, pid, target, items)
         conf = {c["booking_id"]: c async for c in db.noshow_confirmations.find(
             {"property_id": pid}, {"_id": 0})}
         deps = {d["booking_id"]: d["status"] async for d in db.deposit_requests.find(
@@ -128,6 +142,23 @@ def create_noshow_risk_router(db, require_roles):
                 "summary": {"total": len(items),
                             "high": sum(1 for i in items if i["level"] == "high"),
                             "medium": sum(1 for i in items if i["level"] == "medium")}}
+
+    @router.get("/{pid}/trend")
+    async def trend(pid: str, days: int = 14, _u: dict = Depends(require_roles(*ROLES))):
+        """Günlük risk skoru ortalamaları + haftalık ortalama."""
+        days = max(7, min(days, 30))
+        # bugünün ve yarının snapshot'ı yoksa canlı hesapla (grafik boş kalmasın)
+        for off in (0, 1):
+            d = (_now().date() + timedelta(days=off)).isoformat()
+            if not await db.noshow_risk_snapshots.find_one({"property_id": pid, "date": d}):
+                await record_snapshot(db, pid, d, await score_arrivals(db, pid, d))
+        snaps = await db.noshow_risk_snapshots.find(
+            {"property_id": pid}, {"_id": 0}).sort("date", -1).to_list(days)
+        snaps.reverse()
+        last7 = snaps[-7:]
+        weekly_avg = round(sum(s["avg_score"] for s in last7) / len(last7), 1) if last7 else 0
+        return {"trend": snaps, "weekly_avg": weekly_avg,
+                "weekly_high_total": sum(s.get("high", 0) for s in last7)}
 
     @router.post("/{pid}/confirm/{booking_id}")
     async def send_confirmation(pid: str, booking_id: str, data: Dict = None,

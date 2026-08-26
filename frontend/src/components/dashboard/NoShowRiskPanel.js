@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { UserFocus, ArrowsClockwise } from "@phosphor-icons/react";
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/noshow-risk`;
 const DEP_API = `${process.env.REACT_APP_BACKEND_URL}/api/deposit-rule`;
@@ -13,22 +14,38 @@ export default function NoShowRiskPanel({ propertyId = "default" }) {
   const [dep, setDep] = useState(null);
   const [depBusy, setDepBusy] = useState(false);
   const [confirmBusy, setConfirmBusy] = useState("");
+  const [trend, setTrend] = useState(null);
+  const [checkBusy, setCheckBusy] = useState(false);
   const pid = propertyId === "all" ? "default" : propertyId;
 
   const load = useCallback(async (d) => {
     setLoading(true);
     try {
-      const [r, dr] = await Promise.all([
+      const [r, dr, tr] = await Promise.all([
         axios.get(`${API}/${pid}${d ? `?day=${d}` : ""}`),
         axios.get(`${DEP_API}/${pid}`),
+        axios.get(`${API}/${pid}/trend?days=14`),
       ]);
       setData(r.data);
       setDep(dr.data);
+      setTrend(tr.data);
       if (!d) setDay(r.data.date);
     } catch { toast.error("No-show riski yüklenemedi"); }
     setLoading(false);
   }, [pid]);
   useEffect(() => { load(""); }, [load]);
+
+  async function checkPayments() {
+    setCheckBusy(true);
+    try {
+      const r = await axios.post(`${DEP_API}/${pid}/check-payments`);
+      r.data.count > 0
+        ? toast.success(`🎉 ${r.data.count} depozito ÖDENDİ olarak işaretlendi — rezervasyon(lar) güvenceli`)
+        : toast.info("Yeni ödenen depozito yok");
+      load(day);
+    } catch { toast.error("Ödeme kontrolü başarısız"); }
+    setCheckBusy(false);
+  }
 
   async function sendConfirm(bookingId, channel) {
     setConfirmBusy(`${bookingId}-${channel}`);
@@ -153,6 +170,27 @@ export default function NoShowRiskPanel({ propertyId = "default" }) {
         )}
       </div>
 
+      {trend && trend.trend?.length > 0 && (
+        <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="risk-trend-card">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs uppercase tracking-wider text-stone-400">📉 Risk Trendi (günlük ortalama skor)</div>
+            <div className="text-sm font-bold" data-testid="risk-weekly-avg">
+              Haftalık ort: <span className={trend.weekly_avg >= 50 ? "text-rose-600" : trend.weekly_avg >= 30 ? "text-amber-600" : "text-emerald-600"}>{trend.weekly_avg}</span>
+              <span className="text-xs text-stone-400 font-normal"> · 7 günde {trend.weekly_high_total} yüksek risk</span>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={140}>
+            <LineChart data={trend.trend} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+              <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={(d) => d.slice(5)} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 9 }} />
+              <Tooltip formatter={(v, n) => [v, n === "avg_score" ? "Ortalama skor" : "Yüksek risk"]} labelFormatter={(d) => `Tarih: ${d}`} />
+              <Line type="monotone" dataKey="avg_score" stroke="#e11d48" strokeWidth={2} dot={{ r: 2.5 }} name="avg_score" />
+              <Line type="monotone" dataKey="high" stroke="#d97706" strokeWidth={1.5} strokeDasharray="4 3" dot={false} name="high" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
       {dep && (
         <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="deposit-rule-card">
           <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
@@ -171,6 +209,10 @@ export default function NoShowRiskPanel({ propertyId = "default" }) {
               <button onClick={runDeposit} disabled={depBusy} data-testid="deposit-run-btn"
                 className="px-4 py-2 rounded-full bg-stone-900 text-white text-sm font-semibold disabled:opacity-50">
                 {depBusy ? "Taranıyor…" : "Şimdi Tara"}
+              </button>
+              <button onClick={checkPayments} disabled={checkBusy} data-testid="deposit-check-payments-btn"
+                className="px-4 py-2 rounded-full border border-emerald-400 text-emerald-700 text-sm font-semibold hover:bg-emerald-50 disabled:opacity-50">
+                {checkBusy ? "Sorgulanıyor…" : "Ödemeleri Kontrol Et"}
               </button>
             </div>
           </div>

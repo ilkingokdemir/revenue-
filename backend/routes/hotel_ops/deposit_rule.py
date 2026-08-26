@@ -32,6 +32,26 @@ async def _get_cfg(db, pid: str) -> Dict:
     return {**DEFAULT_CFG, **{k: doc[k] for k in DEFAULT_CFG if k in doc}}
 
 
+async def mark_deposit_paid(db, session_id: str) -> bool:
+    req = await db.deposit_requests.find_one({"session_id": session_id}, {"_id": 0})
+    if not req or req.get("status") == "paid":
+        return False
+    now = _now().isoformat()
+    await db.deposit_requests.update_one(
+        {"session_id": session_id}, {"$set": {"status": "paid", "paid_at": now}})
+    await db.bookings.update_one(
+        {"id": req["booking_id"]},
+        {"$set": {"payment_status": "deposit_paid", "noshow_secured": True,
+                  "deposit_amount": req["amount"], "updated_at": now}})
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()), "property_id": req["property_id"], "category": "deposit_rule",
+        "priority": "medium", "target_user": "", "target_role": "manager",
+        "title": f"✅ Depozito ödendi: {req.get('guest_name','')} — {req['currency']} {req['amount']}",
+        "message": f"Rezervasyon {req.get('booking_ref','')} artık no-show'a karşı GÜVENCELİ.",
+        "read": False, "created_at": now})
+    return True
+
+
 async def run_deposit_check(db, pid: str, origin_url: str = "") -> Dict:
     cfg = await _get_cfg(db, pid)
     if not cfg["enabled"]:
@@ -145,6 +165,22 @@ def create_deposit_rule_router(db, require_roles):
         if upd:
             await db.deposit_rules.update_one({"property_id": pid}, {"$set": upd}, upsert=True)
         return {"ok": True, "config": await _get_cfg(db, pid)}
+
+    @router.post("/{pid}/check-payments")
+    async def check_payments(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Webhook fallback: bekleyen depozitoların Stripe durumunu sorgular."""
+        paid = []
+        async for req in db.deposit_requests.find(
+                {"property_id": pid, "status": "requested"}, {"_id": 0}):
+            try:
+                s = await asyncio.to_thread(stripe.checkout.Session.retrieve, req["session_id"])
+                if getattr(s, "payment_status", "") == "paid":
+                    if await mark_deposit_paid(db, req["session_id"]):
+                        paid.append({"guest_name": req.get("guest_name"),
+                                     "amount": req["amount"], "booking_ref": req.get("booking_ref")})
+            except Exception as ex:
+                logger.warning("Deposit status check error %s: %s", req["session_id"], ex)
+        return {"ok": True, "newly_paid": paid, "count": len(paid)}
 
     @router.post("/{pid}/run")
     async def run_now(pid: str, data: Dict = None, request: Request = None,

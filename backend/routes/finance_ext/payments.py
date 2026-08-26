@@ -257,6 +257,12 @@ def create_payments_router(db, require_roles):
         try:
             event = await stripe_checkout.handle_webhook(body, sig)
             if event.payment_status == "paid":
+                # No-show depozito isteği ödendiyse işaretle (rezervasyon güvenceli olur)
+                try:
+                    from routes.hotel_ops.deposit_rule import mark_deposit_paid
+                    await mark_deposit_paid(db, event.session_id)
+                except Exception as _dep_ex:
+                    logger.warning(f"deposit webhook mark error: {_dep_ex}")
                 tx = await db.payment_transactions.find_one({"session_id": event.session_id}, {"_id": 0})
                 if tx and tx.get("payment_status") != "paid":
                     await db.payment_transactions.update_one(

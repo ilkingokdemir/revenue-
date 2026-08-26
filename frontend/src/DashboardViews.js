@@ -119,6 +119,9 @@ import {
   StorefrontVerifyPanel,
   SecondWriterPanel,
   AnnualPlanPanel,
+  RampLadderPanel,
+  WriteLeasePanel,
+  MorningKarnePanel,
   IpAllowlistPanel,
   KDSPanel,
   KeyFiguresPanel,
@@ -1666,6 +1669,9 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {activeView === "storefront-verify" && <StorefrontVerifyPanel propertyId={activePropertyId || "default"} />}
         {activeView === "second-writer" && <SecondWriterPanel propertyId={activePropertyId || "default"} />}
         {activeView === "annual-plan" && <AnnualPlanPanel propertyId={activePropertyId || "default"} />}
+        {activeView === "ramp-ladder" && <RampLadderPanel propertyId={activePropertyId || "default"} />}
+        {activeView === "write-lease" && <WriteLeasePanel propertyId={activePropertyId || "default"} />}
+        {activeView === "morning-karne" && <MorningKarnePanel propertyId={activePropertyId || "default"} />}
         {activeView === "restriction-advisor" && <RestrictionAdvisorPanel propertyId={activePropertyId || "all"} />}
         {activeView === "gap-filler" && <GapFillerPanel propertyId={activePropertyId || "all"} />}
         {activeView === "lost-demand" && <LostDemandPanel propertyId={activePropertyId || "all"} />}

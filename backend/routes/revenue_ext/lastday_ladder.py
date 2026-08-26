@@ -13,6 +13,8 @@ import uuid
 import asyncio
 import logging
 
+from routes.revenue_ext.write_lease import acquire_lease, lease_holder
+
 logger = logging.getLogger(__name__)
 
 ACTOR = "lastday-ladder"
@@ -96,6 +98,10 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
 
             # --- REVERSAL: satış geldiyse bir kademe geri çık ---
             if sold > last_sold and step_no > 0:
+                if await acquire_lease(db, pid, rt_id, day, ACTOR) is None:
+                    skips.append({"date": day, "room_type": rt.get("name", ""), "reason": "lease_held",
+                                  "detail": f"Hücre kirası '{await lease_holder(db, pid, rt_id, day)}' aktöründe"})
+                    continue
                 new_step = step_no - 1
                 new_rate = anchor * ((1 - step_p) ** new_step)
                 if floor is not None:
@@ -166,6 +172,10 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                 skips.append({"date": day, "room_type": rt.get("name", ""), "reason": "at_floor"})
                 continue
 
+            if await acquire_lease(db, pid, rt_id, day, ACTOR) is None:
+                skips.append({"date": day, "room_type": rt.get("name", ""), "reason": "lease_held",
+                              "detail": f"Hücre kirası '{await lease_holder(db, pid, rt_id, day)}' aktöründe — çit yazımı engelledi"})
+                continue
             await _write_rate(db, pid, rt_id, day, new_rate,
                               f"Son-gün merdiveni: kademe {new_step}/{cfg['max_steps']} (−%{cfg['step_pct']}) — {unsold} oda boş")
             log = {"id": str(uuid.uuid4()), "property_id": pid, "stay_date": day,

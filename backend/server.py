@@ -1865,12 +1865,20 @@ from routes.revenue_ext.second_writer import create_second_writer_router, second
 api_router.include_router(create_second_writer_router(db, require_roles))
 from routes.revenue_ext.annual_plan import create_annual_plan_router
 api_router.include_router(create_annual_plan_router(db, require_roles))
+from routes.revenue_ext.write_lease import create_write_lease_router
+api_router.include_router(create_write_lease_router(db, require_roles))
+from routes.revenue_ext.ramp_ladder import create_ramp_ladder_router, ramp_ladder_loop
+api_router.include_router(create_ramp_ladder_router(db, require_roles))
+from routes.revenue_ext.morning_karne import create_morning_karne_router, morning_karne_loop
+api_router.include_router(create_morning_karne_router(db, require_roles))
 
 @app.on_event("startup")
 async def _start_reviq_gap_loops():
     _spawn(lastday_ladder_loop(db))
     _spawn(storefront_verify_loop(db))
     _spawn(second_writer_loop(db))
+    _spawn(ramp_ladder_loop(db))
+    _spawn(morning_karne_loop(db))
 
 app.include_router(api_router)
 

@@ -193,6 +193,9 @@ export const LastDayLadderPanel = L(() => import("./components/dashboard/LastDay
 export const StorefrontVerifyPanel = L(() => import("./components/dashboard/StorefrontVerifyPanel"));
 export const SecondWriterPanel = L(() => import("./components/dashboard/SecondWriterPanel"));
 export const AnnualPlanPanel = L(() => import("./components/dashboard/AnnualPlanPanel"));
+export const RampLadderPanel = L(() => import("./components/dashboard/RampLadderPanel"));
+export const WriteLeasePanel = L(() => import("./components/dashboard/WriteLeasePanel"));
+export const MorningKarnePanel = L(() => import("./components/dashboard/MorningKarnePanel"));
 export const RestrictionAdvisorPanel = L(() => import("./components/dashboard/RestrictionAdvisorPanel"));
 export const GapFillerPanel = L(() => import("./components/dashboard/GapFillerPanel"));
 export const LostDemandPanel = L(() => import("./components/dashboard/LostDemandPanel"));

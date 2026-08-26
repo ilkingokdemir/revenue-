@@ -199,6 +199,10 @@ def create_annual_plan_router(db, require_roles):
         actor = f"annual-plan-v{p['version']}"
         now = _now().isoformat()
         applied = 0
+        # Operatör egemenliği: yayınlanan hücrelerdeki robot kiralarını iptal et
+        await db.rate_cell_leases.delete_many(
+            {"property_id": pid, "room_type_id": "",
+             "date": {"$in": [d["date"] for d in p["days"]]}})
         for d in p["days"]:
             await db.rate_overrides.update_one(
                 {"property_id": pid, "room_type_id": "", "date": d["date"]},

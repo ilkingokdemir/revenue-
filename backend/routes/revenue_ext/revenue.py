@@ -266,6 +266,9 @@ def create_revenue_router(db, require_roles):
             {"property_id": property_id, "date": date_str, "room_type_id": room_type_id},
             {"$set": doc}, upsert=True
         )
+        # Operatör egemenliği: bu hücredeki robot kiralarını (kira-çit) iptal et
+        await db.rate_cell_leases.delete_many(
+            {"property_id": property_id, "date": date_str})
         return {"message": "Rate override saved", "date": date_str, "custom_rate": float(custom_rate)}
 
     # ==================== PRICING STRATEGY ====================

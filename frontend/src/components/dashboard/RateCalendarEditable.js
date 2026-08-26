@@ -312,7 +312,9 @@ export const RateCalendarEditable = ({ propertyId }) => {
           <div>
             <label className="text-xs text-stone-500 mr-2">Room Type</label>
             <Select value={roomType || cal.room_type?.id || "default"} onValueChange={v => setRoomType(v)}>
-              <SelectTrigger className="w-44 h-9 text-sm"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-44 h-9 text-sm" data-testid="rate-cal-room-type-select">
+                <SelectValue placeholder={cal.room_type?.name || "Oda tipi"} />
+              </SelectTrigger>
               <SelectContent>{[...new Map(cal.room_types.map(r => [r.id, r])).values()].map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
@@ -409,6 +411,17 @@ export const RateCalendarEditable = ({ propertyId }) => {
                       {d.has_override ? (
                         <>
                           <div className="text-sm font-bold text-amber-600">
+                            {(d.override_source === "lastday-ladder" || d.override_source === "ramp-ladder") && (
+                              <span className="relative group cursor-help" data-testid={`ladder-badge-${d.date}`}>
+                                {d.override_source === "lastday-ladder" ? "🪜" : "📈"}{" "}
+                                <span className="hidden group-hover:block absolute z-30 bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-48 bg-stone-900 text-white text-[10px] font-medium rounded-lg px-2.5 py-2 text-left shadow-xl whitespace-normal normal-case"
+                                  data-testid={`ladder-tooltip-${d.date}`}>
+                                  <span className="font-black">{d.override_source === "lastday-ladder" ? "🪜 Son-gün merdiveni" : "📈 Zam merdiveni"}</span> bu geceyi sahiplendi
+                                  <br />✓ Taban/tavan korumalı, satışta yön döner
+                                  {d.override_at && <><br />{new Date(d.override_at).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" })}</>}
+                                </span>
+                              </span>
+                            )}
                             {d.override_source === "scenario-simulator" && (
                               <span className="relative group cursor-help" data-testid={`scenario-badge-${d.date}`}>
                                 🏆{" "}

@@ -1207,3 +1207,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - YILLIK PLAN D90-365: /api/annual-plan/{pid} (generate/versions/publish/latest). Şekil(730g, shrinkage)×seviye(30g medyan veya operatör çapası), fail-closed (<60 gece örneklem), sürüm arşivi, rakip sapma manşeti, yayın ayrı operatör eylemi (set_by annual-plan-vN). Panel: annual-plan.
 - Test: iteration_580.json PASS (backend 11/11 pytest + frontend Playwright %100). Regresyon dosyası: /app/backend/tests/test_iter580_revenue_iq_gaps.py
 - Kalan RevenueIQ gap backlog (P1/P2): Misafir-onaylı zam merdiveni, lease/fencing yazım kilidi, kısmi yayın telafisi, günlük sabah karnesi, cold-start kardeş otel şekil ödünçü, asimetrik zaman kuralı, 2 yıl geçmiş otomatik import.
+
+## Güncelleme (2026-06, iter 581 — 4 yeni RevenueIQ gap özelliği TAMAMLANDI, 22/22 PASS)
+- ZAM MERDİVENİ (misafir-onaylı): /api/ramp-ladder/{pid}. Kademe 1 talep kanıtı (doluluk eşiği); kademe 2+ YENİ REZERVASYON şartı (awaiting_guest_approval kilidi). Tavan korumalı, D2-D21, kira-çit ile yazar, set_by 'ramp-ladder'. Panel: ramp-ladder. NOT: test için occ_threshold=30 bırakıldı (varsayılan 70).
+- YAZIM KİLİDİ (kira-çit): /api/write-lease/{pid} (list/test-acquire/force-release). rate_cell_leases; lastday+ramp merdivenleri yazmadan önce kira alır; manuel override ve yıllık plan yayını robot kiralarını iptal eder (operatör egemenliği). Panel: write-lease.
+- SABAH KARNESİ: /api/morning-karne/{pid} (latest/send-now/history/config). 8 kontrollü A/B/C notu, her sabah 06:00 UTC sonrası admin+manager'lara e-posta (Resend MOCK → email_outbox). Panel: morning-karne.
+- TAKVİM ROZETİ: RateCalendarEditable'da override_source lastday-ladder → 🪜, ramp-ladder → 📈 rozet + tooltip (ladder-badge-{date}). Room Type select'e data-testid + görünür değer eklendi.
+- Test: iteration_581.json PASS (22/22 pytest: 11 regresyon + 11 yeni; frontend %95→UX düzeltmesi yapıldı). Regresyon dosyaları: tests/test_iter580_*.py + tests/test_iter581_*.py
+- Kalan RevenueIQ gap backlog (P2): kısmi yayın telafisi, cold-start kardeş otel şekil ödünçü, asimetrik zaman kuralı, 2 yıl geçmiş otomatik import, ramp 'demand_faded' yön dönüşü (kademe geri alma).

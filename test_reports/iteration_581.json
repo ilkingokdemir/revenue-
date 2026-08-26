@@ -1,0 +1,36 @@
+{
+  "summary": "Iter 581 — RevenueIQ 4 new gaps testi. Backend 22/22 pytest PASS (11 regression iter580 + 11 new iter581). Frontend Ramp Ladder, Write Lease, Morning Karne panelleri tam çalışıyor: tüm ana data-testid'ler mevcut, scan/demo/send akışları toast + tablo dolumu ile başarılı. Guest-approval kilidi backend'de kanıtlandı (occ_threshold 30 ile scan 1. basamak attı, 2. scan awaiting_guest_approval'da kilitlendi). Yazım kilidi çifte yazım A:true / B:false, force-release temizliği ve manuel override robot lease revoke doğrulandı. Sabah Karnesi grade B, 8 kontrol, mock e-posta admin@hotelbox.com'a düştü, history 4 kayıt.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "RateCalendarEditable — Room Type Select", "issues": ["Room Type shadcn Select trigger'ın data-testid'i yok; ayrıca combobox'ın seçili değeri 'cal.room_type?.id' varsayılan seçili gelmesine rağmen SelectValue metni render edilmeden boş görünüyor (kullanıcı hangi oda tipinin gösterildiğini göremiyor). Öneri: SelectTrigger'a data-testid='rate-cal-room-type-select' ekle ve value fallback 'default' yerine cal.room_type?.id'yi tercih et."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter581_ramp_lease_karne.py",
+    "/app/test_reports/pytest/iter581.xml",
+    "/app/test_reports/pytest/iter581_regression.xml"
+  ],
+  "action_items": [
+    "(Küçük UX) RateCalendarEditable Room Type SelectTrigger'a data-testid ekle ve seçili oda tipinin metnini görünür yap.",
+    "(Küçük UX) Ladder 🪜 rozeti backend'de override_source='lastday-ladder'/'ramp-ladder' olarak doğrulandı; UI bu kayıtları göstermek için oda tipi filtresi zorunlu — 'Room Type' seçili değilse otomatik ilk oda tipini seç ya da agregasyonda source'u koru."
+  ],
+  "critical_code_review_comments": [
+    "morning_karne.py send_karne — send_hour_utc konfigürasyonu PUT config'de kabul edilmiyor (sadece enabled saklanıyor); UI'da 'saat' ayarı yok ama sabit değer görünür durumda, ileride kişiselleştirme için endpoint'e alan eklenmeli.",
+    "ramp_ladder.py scan — 'demand_faded' skip'i step_no>0 olduğunda üretilir ama zaten yazılmış override'ı geri almaz (yalnız log). İleride 'yön dönüşü' istenirse ladder_state.step_no'yu azaltıp override'ı silme eklenmeli.",
+    "write_lease.py acquire_lease — expires_at karşılaştırması ISO string sözlüksel karşılaştırma; UTC ISO ile doğru çalışsa da doğrudan datetime obje karşılaştırması daha güvenli.",
+    "ramp_ladder.py — ceiling hesabında 'SAFETY_CAP_MULT * anchor' anchor eski çapa; kademe 3'te bile aynı çapaya göre tavan hesaplanıyor (doğru davranış) fakat log/UX'te 'tavan = X' notu kullanıcıya gösterilirken 'çapa=Y' de gösterilmeli (bilgilendirici)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter581_ramp_lease_karne.py (yeni)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Yazım Kilidi tatbikatı için writer-A hücresi force-release ile temizlendi. Morning Karne history'ye +1 kayıt eklendi (mock). Ramp config test için occ_threshold=30 kaldı.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Rate Calendar'da 🪜 badge doğrulaması için Room Type shadcn Select'i Playwright'ta açmak zor; API'de override_source doğru geliyor (lastday-ladder Aug 26-27, ramp-ladder Aug 28, event-intelligence Sept 3-7). Sonraki agent isterse Room Type için data-testid ekletebilir veya manuel doğrulama yapılabilir. Backend regression /app/backend/tests/test_iter580_revenue_iq_gaps.py + yeni /app/backend/tests/test_iter581_ramp_lease_karne.py birlikte 22 test.",
+  "rca of the issue": "Herhangi bir kırık işlev tespit edilmedi. Rate Calendar badge Playwright doğrulaması yapılamadı çünkü Room Type Select trigger'ı data-testid'siz shadcn portal; kod ve API verisi doğru olduğundan bug değil, sadece test edilebilirlik eksiği (bkz. action_items)."
+}

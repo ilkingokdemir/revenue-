@@ -234,16 +234,22 @@ export default function MorningKarnePanel({ propertyId = "default" }) {
         {digest?.live_preview && (
           <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-center" data-testid="digest-preview">
             {[
-              ["Gelir (7g)", `£${digest.live_preview.revenue}`],
-              ["Doluluk", `%${digest.live_preview.occupancy}`],
-              ["ADR", `£${digest.live_preview.adr}`],
-              ["Giriş", digest.live_preview.arrivals],
-              ["İptal", digest.live_preview.cancellations],
-              ["Merdiven", `≈£${digest.live_preview.ladder?.total_estimate}`],
-            ].map(([kk, v]) => (
+              ["Gelir (7g)", `£${digest.live_preview.revenue}`, digest.live_preview.deltas?.revenue_pct, "%"],
+              ["Doluluk", `%${digest.live_preview.occupancy}`, digest.live_preview.deltas?.occupancy_pts, " puan"],
+              ["ADR", `£${digest.live_preview.adr}`, digest.live_preview.deltas?.adr_pct, "%"],
+              ["Giriş", digest.live_preview.arrivals, digest.live_preview.deltas?.arrivals_diff, ""],
+              ["İptal", digest.live_preview.cancellations, null, ""],
+              ["Merdiven", `≈£${digest.live_preview.ladder?.total_estimate}`, null, ""],
+            ].map(([kk, v, delta, suffix]) => (
               <div key={kk} className="bg-stone-50 rounded-xl p-2">
                 <div className="text-base font-bold">{v}</div>
                 <div className="text-[10px] text-stone-500">{kk}</div>
+                {delta != null && (
+                  <div className={`text-[10px] font-bold ${delta > 0 ? "text-emerald-600" : delta < 0 ? "text-rose-600" : "text-stone-400"}`}
+                    data-testid={`digest-delta-${kk}`}>
+                    {delta > 0 ? `▲ +${delta}${suffix}` : delta < 0 ? `▼ ${delta}${suffix}` : `= 0${suffix}`}
+                  </div>
+                )}
               </div>
             ))}
           </div>

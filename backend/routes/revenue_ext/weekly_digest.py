@@ -20,13 +20,8 @@ def _now():
     return datetime.now(timezone.utc)
 
 
-async def build_digest(db, pid: str) -> Dict:
-    today = _now().date()
-    start = today - timedelta(days=7)
+async def _week_metrics(db, pid: str, start, total_rooms: int) -> Dict:
     days = [(start + timedelta(days=i)).isoformat() for i in range(7)]
-    total_rooms = 0
-    async for rt in db.room_types.find({"property_id": pid}, {"_id": 0, "total_rooms": 1}):
-        total_rooms += int(rt.get("total_rooms", 0))
     revenue, sold_nights = 0.0, 0
     for d in days:
         async for b in db.bookings.find(
@@ -42,17 +37,51 @@ async def build_digest(db, pid: str) -> Dict:
             sold_nights += 1
     occ = round(sold_nights / (total_rooms * 7) * 100, 1) if total_rooms else 0.0
     adr = round(revenue / sold_nights, 2) if sold_nights else 0.0
+    end = start + timedelta(days=7)
     arrivals = await db.bookings.count_documents(
-        {"property_id": pid, "check_in": {"$gte": start.isoformat(), "$lt": today.isoformat()},
+        {"property_id": pid, "check_in": {"$gte": start.isoformat(), "$lt": end.isoformat()},
          "status": {"$nin": ["cancelled"]}, "source": {"$ne": "pms_history_import"}})
     cancels = await db.bookings.count_documents(
         {"property_id": pid, "status": "cancelled",
-         "check_in": {"$gte": start.isoformat(), "$lt": today.isoformat()}})
+         "check_in": {"$gte": start.isoformat(), "$lt": end.isoformat()}})
+    return {"revenue": round(revenue, 2), "occupancy": occ, "adr": adr,
+            "sold_nights": sold_nights, "arrivals": arrivals, "cancellations": cancels}
+
+
+def _delta(cur: float, prev: float, pts: bool = False):
+    if pts:
+        return round(cur - prev, 1)
+    if prev <= 0:
+        return None
+    return round((cur - prev) / prev * 100, 1)
+
+
+async def build_digest(db, pid: str) -> Dict:
+    today = _now().date()
+    start = today - timedelta(days=7)
+    total_rooms = 0
+    async for rt in db.room_types.find({"property_id": pid}, {"_id": 0, "total_rooms": 1}):
+        total_rooms += int(rt.get("total_rooms", 0))
+    cur = await _week_metrics(db, pid, start, total_rooms)
+    prev = await _week_metrics(db, pid, start - timedelta(days=7), total_rooms)
     ladder = await compute_ladder_weekly(db, pid)
     return {"week_start": start.isoformat(), "week_end": (today - timedelta(days=1)).isoformat(),
-            "revenue": round(revenue, 2), "occupancy": occ, "adr": adr,
-            "sold_nights": sold_nights, "arrivals": arrivals, "cancellations": cancels,
+            **cur, "prev": prev,
+            "deltas": {"revenue_pct": _delta(cur["revenue"], prev["revenue"]),
+                       "occupancy_pts": _delta(cur["occupancy"], prev["occupancy"], pts=True),
+                       "adr_pct": _delta(cur["adr"], prev["adr"]),
+                       "arrivals_diff": cur["arrivals"] - prev["arrivals"]},
             "ladder": ladder}
+
+
+def _arrow(v, suffix="%"):
+    if v is None:
+        return "<span style='color:#a8a29e;font-size:11px'>geçen hafta verisi yok</span>"
+    if v > 0:
+        return f"<span style='color:#059669;font-size:12px;font-weight:700'>▲ +{v}{suffix}</span>"
+    if v < 0:
+        return f"<span style='color:#dc2626;font-size:12px;font-weight:700'>▼ {v}{suffix}</span>"
+    return f"<span style='color:#a8a29e;font-size:12px'>= 0{suffix}</span>"
 
 
 def _digest_html(prop_name: str, d: Dict) -> str:
@@ -61,16 +90,17 @@ def _digest_html(prop_name: str, d: Dict) -> str:
     big = "font-size:22px;font-weight:800;color:#1c1917"
     small = "font-size:11px;color:#78716c"
     l = d["ladder"]
+    dl = d.get("deltas", {})
     return (f"<div style='font-family:Arial,sans-serif;max-width:600px;margin:auto'>"
             f"<div style='background:#1c1917;color:#fff;border-radius:14px;padding:22px'>"
             f"<div style='font-size:11px;letter-spacing:2px;color:#d6d3d1'>HAFTALIK YÖNETİCİ BÜLTENİ</div>"
             f"<h2 style='margin:6px 0'>{prop_name}</h2>"
-            f"<div style='font-size:12px;color:#a8a29e'>{d['week_start']} → {d['week_end']}</div></div>"
+            f"<div style='font-size:12px;color:#a8a29e'>{d['week_start']} → {d['week_end']} · geçen haftayla kıyaslı</div></div>"
             f"<div style='padding:14px 0'>"
-            f"<div style='{box}'><div style='{big}'>£{d['revenue']}</div><div style='{small}'>Oda geliri (7g)</div></div>"
-            f"<div style='{box}'><div style='{big}'>%{d['occupancy']}</div><div style='{small}'>Ortalama doluluk</div></div>"
-            f"<div style='{box}'><div style='{big}'>£{d['adr']}</div><div style='{small}'>ADR</div></div>"
-            f"<div style='{box}'><div style='{big}'>{d['arrivals']}</div><div style='{small}'>Giriş</div></div>"
+            f"<div style='{box}'><div style='{big}'>£{d['revenue']}</div><div style='{small}'>Oda geliri (7g)</div>{_arrow(dl.get('revenue_pct'))}</div>"
+            f"<div style='{box}'><div style='{big}'>%{d['occupancy']}</div><div style='{small}'>Ortalama doluluk</div>{_arrow(dl.get('occupancy_pts'), ' puan')}</div>"
+            f"<div style='{box}'><div style='{big}'>£{d['adr']}</div><div style='{small}'>ADR</div>{_arrow(dl.get('adr_pct'))}</div>"
+            f"<div style='{box}'><div style='{big}'>{d['arrivals']}</div><div style='{small}'>Giriş</div>{_arrow(dl.get('arrivals_diff'), '')}</div>"
             f"<div style='{box}'><div style='{big}'>{d['cancellations']}</div><div style='{small}'>İptal</div></div>"
             f"<div style='{box}'><div style='{big}'>≈£{l['total_estimate']}</div><div style='{small}'>Merdiven katkısı</div></div>"
             f"</div>"

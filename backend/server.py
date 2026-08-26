@@ -1883,6 +1883,8 @@ from routes.hotel_ops.noshow_risk import create_noshow_risk_router, noshow_risk_
 api_router.include_router(create_noshow_risk_router(db, require_roles))
 from routes.revenue_ext.weekly_digest import create_weekly_digest_router, weekly_digest_loop
 api_router.include_router(create_weekly_digest_router(db, require_roles))
+from routes.hotel_ops.deposit_rule import create_deposit_rule_router, deposit_rule_loop
+api_router.include_router(create_deposit_rule_router(db, require_roles))
 
 @app.on_event("startup")
 async def _start_reviq_gap_loops():
@@ -1895,6 +1897,7 @@ async def _start_reviq_gap_loops():
     _spawn(mrr_celebration_loop(db))
     _spawn(noshow_risk_loop(db))
     _spawn(weekly_digest_loop(db))
+    _spawn(deposit_rule_loop(db))
 
 app.include_router(api_router)
 

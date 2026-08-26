@@ -4,7 +4,7 @@ yüksek riskliler önceden işaretlenir ve günlük bildirim gönderilir.
 Faktörler: iletişim eksikliği, ödeme durumu, OTA kanalı, 1 gece, misafirin
 geçmiş no-show'u, çok eski rezervasyon. Collection: yok (canlı hesap) + notifications.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List
 import uuid
@@ -115,9 +115,55 @@ def create_noshow_risk_router(db, require_roles):
     async def risks(pid: str, day: str = "", _u: dict = Depends(require_roles(*ROLES))):
         target = day or (_now().date() + timedelta(days=1)).isoformat()
         items = await score_arrivals(db, pid, target)
+        conf = {c["booking_id"]: c async for c in db.noshow_confirmations.find(
+            {"property_id": pid}, {"_id": 0})}
+        deps = {d["booking_id"]: d["status"] async for d in db.deposit_requests.find(
+            {"property_id": pid}, {"_id": 0, "booking_id": 1, "status": 1})}
+        for i in items:
+            c = conf.get(i["booking_id"])
+            i["confirmation_sent"] = bool(c)
+            i["confirmation_channel"] = (c or {}).get("channel")
+            i["deposit_status"] = deps.get(i["booking_id"])
         return {"date": target, "items": items,
                 "summary": {"total": len(items),
                             "high": sum(1 for i in items if i["level"] == "high"),
                             "medium": sum(1 for i in items if i["level"] == "medium")}}
+
+    @router.post("/{pid}/confirm/{booking_id}")
+    async def send_confirmation(pid: str, booking_id: str, data: Dict = None,
+                                u: dict = Depends(require_roles(*ROLES))):
+        """Tek tıkla teyit mesajı — e-posta (mailer) veya SMS (MOCK, sms_outbox)."""
+        from routes.platform_ext.mailer import send_email
+        data = data or {}
+        channel = data.get("channel", "email")
+        b = await db.bookings.find_one({"id": booking_id, "property_id": pid}, {"_id": 0})
+        if not b:
+            raise HTTPException(404, "Rezervasyon bulunamadı")
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+        msg = (f"Sayın {b.get('guest_name','Misafirimiz')}, {b.get('check_in')} tarihli "
+               f"{prop.get('name','otelimiz')} rezervasyonunuzu ({b.get('booking_ref','')}) teyit etmenizi rica ederiz. "
+               "Gelemeyecekseniz lütfen bize bildirin.")
+        status = "mocked"
+        if channel == "email":
+            if not (b.get("guest_email") or "").strip():
+                raise HTTPException(422, "Misafirin e-postası yok — SMS deneyin")
+            status = await send_email(
+                db, b["guest_email"], f"Rezervasyon teyidi rica ederiz — {b.get('booking_ref','')}",
+                f"<div style='font-family:sans-serif'><p>{msg}</p></div>",
+                kind="noshow_confirm", meta={"booking_id": booking_id})
+        else:
+            if not (b.get("guest_phone") or "").strip():
+                raise HTTPException(422, "Misafirin telefonu yok — e-posta deneyin")
+            await db.sms_outbox.insert_one({
+                "id": str(uuid.uuid4()), "to": b["guest_phone"], "body": msg,
+                "kind": "noshow_confirm", "booking_id": booking_id,
+                "status": "mocked", "created_at": _now().isoformat()})
+            status = "mocked"
+        await db.noshow_confirmations.update_one(
+            {"property_id": pid, "booking_id": booking_id},
+            {"$set": {"channel": channel, "status": status,
+                      "sent_by": u.get("name") or u.get("email", ""),
+                      "sent_at": _now().isoformat()}}, upsert=True)
+        return {"ok": True, "channel": channel, "status": status}
 
     return router

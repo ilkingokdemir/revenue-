@@ -1247,3 +1247,10 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - CANLI DUMAN TESTİ: Kullanıcı URL'yi hâlâ paylaşmadı — hazır bekliyor.
 - Test: iteration_585.json frontend %100 PASS.
 - Not (düşük öncelik, bakım): MorningKarnePanel 324 satır (5 kart) — ileride alt bileşenlere bölünebilir.
+
+## Güncelleme (2026-06, iter 586 — 3 özellik TAMAMLANDI, frontend %100 + backend curl PASS)
+- DEPOZİTO KURALI: /api/deposit-rule/{pid} (status/config/run). Skor >= min_score (50) + ödemesiz → otomatik %30 Stripe checkout depozito linki + misafire e-posta (MOCK) + dedupe. 6 saatlik loop (origin_url config'den). UI: NoShowRiskPanel'de deposit-rule-card (toggle AÇIK bırakıldı) + risk satırında 💳 rozeti. Test: Sven Lee GBP 51.08 gerçek Stripe URL.
+- NO-SHOW TEYİT MESAJI: POST /api/noshow-risk/{pid}/confirm/{booking_id} {channel: email|sms}. E-posta mailer'dan (MOCK), SMS sms_outbox'a MOCK. noshow_confirmations ile satırda '✓ Teyit gönderildi' durumu. UI: Aksiyon sütunu butonları.
+- BÜLTEN KARŞILAŞTIRMASI: weekly_digest build_digest artık önceki haftayı da hesaplar; deltas {revenue_pct, occupancy_pts, adr_pct, arrivals_diff} + HTML'de ▲/▼ okları + panel önizlemede renkli oklar (digest-delta-*).
+- CANLI DUMAN TESTİ: Kullanıcı URL'yi hâlâ paylaşmadı — hazır bekliyor.
+- Test: iteration_586.json frontend %100 PASS.

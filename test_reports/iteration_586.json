@@ -1,0 +1,19 @@
+{
+  "summary": "Frontend-only render + safe-click verification of 3 new features on Revenue → AI & Insights. All expected data-testids render with expected Turkish content. No-Show panel: Sven Lee row shows both '✓ Teyit gönderildi (email)' (confirm-sent-*) and '💳 Depozito: istendi' (deposit-badge-*). Other rows show confirm-email-* / confirm-sms-* buttons. Clicking confirm-email on an ORTA-risk row → toast 'Teyit e-postası MOCK kaydedildi (Resend anahtarı yok)' and the row flips to a confirm-sent badge (count 1→2). NEW deposit-rule-card renders with AÇIK toggle, 'Şimdi Tara' btn, and deposit-table containing 1 row: Sven Lee / skor 55 / GBP 51.08 (%30) / İSTENDİ / 'Stripe linki' anchor / 2026-08-26 21:04. Clicking deposit-run-btn → toast '0 depozito isteği oluşturuldu (Stripe linki + e-posta)' (dedupe OK). Morning Karne digest-preview now shows 4 red delta arrows: digest-delta-Gelir='▼ -51.2%', Doluluk='▼ -21.4 puan', ADR='▼ -10.6%', Giriş='▼ -36' (all color rgb(225,29,72)). Regression clean: noshow-stat-total=3, noshow-stat-high=1, email-settings-card OK, eod-report-card OK, digest-preview OK.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "NoShowRiskPanel.js now hosts both the risk table Aksiyon column and the deposit-rule-card — consider extracting DepositRuleCard into its own subcomponent to keep the panel focused on one responsibility.",
+    "Multiple parallel POSTs (confirm email / deposit run) rely solely on generic toast for feedback; consider disabling the clicked button briefly (loading state) to prevent double-fire — currently only backend dedupe protects against it."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "One confirm-email POST fired for an ORTA-risk row (MOCK mode → email_outbox entry only). deposit-run-btn triggered once (dedupe → 0 new requests). No Stripe link opened.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Navigation: login → nav-mode-pro → dept-sc-revenue → noshow-risk-btn opens noshow-risk-panel; morning-karne-btn opens Sabah Karnesi panel from the same left-nav shortcut. Confirmed testids: confirm-sent-{id}, deposit-badge-{id}, confirm-email-{id}, confirm-sms-{id}, deposit-rule-card, deposit-toggle-btn (label AÇIK), deposit-run-btn, deposit-table, digest-delta-Gelir (7g)/Doluluk/ADR/Giriş. After this run, 2 rows show confirm-sent badges (Sven Lee + one clicked ORTA row); only Anna Kowalska (or the remaining ORTA row) still exposes confirm-email/sms buttons.",
+  "rca of the issue": "N/A — all 3 features render and behave exactly per spec."
+}

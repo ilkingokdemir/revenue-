@@ -115,6 +115,10 @@ import {
   HurdleLrvPanel,
   ImportModulePanel,
   IntradayRepricePanel,
+  LastDayLadderPanel,
+  StorefrontVerifyPanel,
+  SecondWriterPanel,
+  AnnualPlanPanel,
   IpAllowlistPanel,
   KDSPanel,
   KeyFiguresPanel,
@@ -1658,6 +1662,10 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {activeView === "allotments" && <AllotmentsPanel propertyId={activePropertyId || "all"} />}
         {activeView === "forecast-plans" && <ForecastPlansPanel propertyId={activePropertyId || "all"} />}
         {activeView === "intraday-reprice" && <IntradayRepricePanel propertyId={activePropertyId || "all"} />}
+        {activeView === "lastday-ladder" && <LastDayLadderPanel propertyId={activePropertyId || "default"} />}
+        {activeView === "storefront-verify" && <StorefrontVerifyPanel propertyId={activePropertyId || "default"} />}
+        {activeView === "second-writer" && <SecondWriterPanel propertyId={activePropertyId || "default"} />}
+        {activeView === "annual-plan" && <AnnualPlanPanel propertyId={activePropertyId || "default"} />}
         {activeView === "restriction-advisor" && <RestrictionAdvisorPanel propertyId={activePropertyId || "all"} />}
         {activeView === "gap-filler" && <GapFillerPanel propertyId={activePropertyId || "all"} />}
         {activeView === "lost-demand" && <LostDemandPanel propertyId={activePropertyId || "all"} />}

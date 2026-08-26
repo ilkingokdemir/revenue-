@@ -1,0 +1,30 @@
+{
+  "summary": "RevenueIQ 4 gap MVP modülleri (Son-Gün Merdiveni, Vitrin Doğrulaması, İkinci Yazıcı, Yıllık Plan D90-365) tam kapsamlı backend+frontend testi. Backend 11/11 pytest PASS. Frontend tüm 4 panel yüklendi, tüm ana data-testid'ler mevcut, generate/scan/publish akışları çalıştı.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter580_revenue_iq_gaps.py",
+    "/app/test_reports/pytest/iter580.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "annual_plan.py generate endpoint kabul ediyor Dict body ama FastAPI ile Optional[Dict]=None açıkça belirtilmeli; data or {} güvenlik açısından zaten var. Küçük iyileştirme.",
+    "second_writer.py OUR_ACTOR sabiti dosyada hard-coded; env üzerinden yapılandırılabilir olsa çok kiracılı kurulumda yardımcı olur.",
+    "storefront_verify.py '_written_rate' room_type_id=\"\" (property-wide) veya en düşük base_price'a düşüyor — oda tipi bazlı override'ları kaçırabilir. Şu an paneldeki en düşük fiyata düştüğü için conservative ok; ileride roomtype başına satır göstermek istenirse revize gerekir.",
+    "lastday_ladder.py scan_property step_no==0 durumunda 'at_floor' kontrolünde 'step_no>0' koşulu ilk kademeyi floor'un ALTINA yazma riskine izin verebilir — ama new_rate<floor için üstteki max(new_rate,floor) koruma zaten var; sadece log gürültüsü."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter580_revenue_iq_gaps.py (yeni)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "İnjekte edilmiş drift'ler storefront-clear-drift-btn ile temizlendi. Annual plans v1..v4 birikti (test için normal). Second-writer alarmları prior scan/repush ile 'acked/repushed' durumda.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend testi /app/backend/tests/test_iter580_revenue_iq_gaps.py regresyon için kullanılabilir. Frontend testinde 'Revenue management' sidebar linkine tıklayıp ardından PRO menü altındaki 4 alt-menüyü hedeflemek gerekiyor. sw-repush-btn yalnızca s.open>0 iken görünür (conditional render, bug değil). annual-fail-closed-msg boş anchor ile 422 döndükten sonra doğru şekilde gösteriliyor.",
+  "rca of the issue": "Test edilen tüm senaryolar başarılı — RCA gerektiren bir hata bulunamadı. Ana ajanın curl smoke testleri doğrulandı, pytest ve Playwright ile end-to-end doğrulama tamam."
+}

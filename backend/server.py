@@ -1856,6 +1856,22 @@ async def _start_nightly_insights():
     import asyncio as _asyncio
     _spawn(_nightly_insights_loop(db))
 
+# ---- RevenueIQ gap modülleri (Son-Gün Merdiveni, Vitrin Doğrulama, İkinci Yazıcı, Yıllık Plan) ----
+from routes.revenue_ext.lastday_ladder import create_lastday_ladder_router, lastday_ladder_loop
+api_router.include_router(create_lastday_ladder_router(db, require_roles))
+from routes.revenue_ext.storefront_verify import create_storefront_verify_router, storefront_verify_loop
+api_router.include_router(create_storefront_verify_router(db, require_roles))
+from routes.revenue_ext.second_writer import create_second_writer_router, second_writer_loop
+api_router.include_router(create_second_writer_router(db, require_roles))
+from routes.revenue_ext.annual_plan import create_annual_plan_router
+api_router.include_router(create_annual_plan_router(db, require_roles))
+
+@app.on_event("startup")
+async def _start_reviq_gap_loops():
+    _spawn(lastday_ladder_loop(db))
+    _spawn(storefront_verify_loop(db))
+    _spawn(second_writer_loop(db))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

@@ -1199,3 +1199,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   - P1: Lease/Fencing yazım kilidi
   - P2: Kısmi yayın telafisi, günlük sabah karnesi e-postası, cold-start kardeş otel şekil ödünçü, asimetrik zaman kuralı, 2 yıl geçmiş otomatik import
 - Önceki backlog devam: Canlı duman testi (URL bekleniyor), Gün Sonu Rapor E-postası (P1), Hedef Aşım Kutlaması (P2), Resend/Cloudbeds/Mews anahtarları (BLOCKED).
+
+## Güncelleme (2026-06, iter 580 — RevenueIQ Gap P0+P1 MVP'leri TAMAMLANDI, 11/11 PASS)
+- SON-GÜN MERDİVENİ: /api/lastday-ladder/{pid} (config/scan). D0-D1 boş odalar 4 saatte ~%8 kademeli iner, satışta yön döner, min_rate_floors tabanına saygılı (fail-closed: taban yoksa dokunmaz), pin saygısı. 30dk loop. Panel: lastday-ladder.
+- VİTRİN DOĞRULAMASI: /api/storefront-verify/{pid} (scan/inject-drift/config). Yazılan + discount_layers → beklenen misafir fiyatı vs gözlenen; sapma bildirimli. MOCK mod (canlı scraper anahtarı bekleniyor). 6 saat loop. Panel: storefront-verify.
+- İKİNCİ YAZICI ALARMI: /api/second-writer/{pid} (push/scan/simulate-foreign-write/repush/ack). Aktör imzalı channel_price_ledger + mock_channel_rates kıyası; yabancı yazım → high alarm + onarım (repush). Saatlik loop. Panel: second-writer.
+- YILLIK PLAN D90-365: /api/annual-plan/{pid} (generate/versions/publish/latest). Şekil(730g, shrinkage)×seviye(30g medyan veya operatör çapası), fail-closed (<60 gece örneklem), sürüm arşivi, rakip sapma manşeti, yayın ayrı operatör eylemi (set_by annual-plan-vN). Panel: annual-plan.
+- Test: iteration_580.json PASS (backend 11/11 pytest + frontend Playwright %100). Regresyon dosyası: /app/backend/tests/test_iter580_revenue_iq_gaps.py
+- Kalan RevenueIQ gap backlog (P1/P2): Misafir-onaylı zam merdiveni, lease/fencing yazım kilidi, kısmi yayın telafisi, günlük sabah karnesi, cold-start kardeş otel şekil ödünçü, asimetrik zaman kuralı, 2 yıl geçmiş otomatik import.

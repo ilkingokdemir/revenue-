@@ -290,6 +290,7 @@ export function buildMenuSections(t, user) {
         { id: "write-lease", icon: ShieldCheck, name: "Yazım Kilidi (kira-çit)", testId: "write-lease-btn" },
         { id: "morning-karne", icon: CalendarBlank, name: "Sabah Karnesi (e-posta)", testId: "morning-karne-btn" },
         { id: "live-smoke", icon: ShieldCheck, name: "Canlı Duman Testi", testId: "live-smoke-btn" },
+        { id: "noshow-risk", icon: Eye, name: "No-Show Riski (yarın)", testId: "noshow-risk-btn" },
         { id: "storefront-verify", icon: Eye, name: "Vitrin Doğrulaması (Booking)", testId: "storefront-verify-btn" },
         { id: "second-writer", icon: ShieldCheck, name: "İkinci Yazıcı Alarmı", testId: "second-writer-btn" },
         { id: "annual-plan", icon: CalendarBlank, name: "Yıllık Plan D90-365 (sürüm arşivi)", testId: "annual-plan-btn" },

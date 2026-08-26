@@ -8,18 +8,29 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 
+async def resolve_key(db) -> str:
+    """Panelden girilen DB anahtarı env'e tercih edilir."""
+    s = await db.platform_settings.find_one({"id": "email"}, {"_id": 0}) or {}
+    key = (s.get("resend_api_key") or "").strip()
+    if not key:
+        key = os.environ.get("RESEND_API_KEY", "").strip()
+    if key in ("re_123456789", "your_key_here"):
+        key = ""
+    return key
+
+
 async def send_email(db, to: str, subject: str, html: str, kind: str = "generic", meta: dict = None) -> str:
     doc = {"id": str(uuid.uuid4()), "to": to, "subject": subject, "html": html, "kind": kind,
            **(meta or {}), "created_at": datetime.now(timezone.utc).isoformat()}
-    key = os.environ.get("RESEND_API_KEY", "").strip()
-    if key in ("re_123456789", "your_key_here"):
-        key = ""
+    key = await resolve_key(db)
     if key:
         try:
             import resend
             resend.api_key = key
+            settings = await db.platform_settings.find_one({"id": "email"}, {"_id": 0}) or {}
+            sender = settings.get("sender_email") or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
             r = await asyncio.to_thread(resend.Emails.send, {
-                "from": os.environ.get("SENDER_EMAIL", "onboarding@resend.dev"),
+                "from": sender,
                 "to": [to], "subject": subject, "html": html})
             doc["status"] = "sent"
             doc["provider_id"] = (r or {}).get("id")

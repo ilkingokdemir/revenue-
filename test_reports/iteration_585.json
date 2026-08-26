@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend-only render verification for the 3 new features (No-Show Riski panel, Weekly Executive Digest card, Resend Email Settings card) plus regression on Morning Karne. All expected data-testids render with the expected content and values; safe click actions (digest-send-now-btn, resend-test-btn with mock key) produced the correct Turkish toasts.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "MorningKarnePanel.js has grown to 324 lines and combines 5 distinct feature cards (Karne, Ladder, EOD, Weekly Digest, Email Settings). Consider splitting into subcomponents (EmailSettingsCard, WeeklyDigestCard, EodReportCard) for maintainability — file is still under 700 lines but responsibilities are getting mixed.",
+    "In MorningKarnePanel.load(), 6 requests are fired in parallel but a single failure fails the whole panel with a generic toast. Consider allSettled for graceful degradation."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "digest-send-now-btn triggered once (safe, backend has dedupe); resend-test-btn triggered with MOCK mode (email_outbox insert only).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Navigation confirmed: login → [data-testid=nav-mode-pro] → [data-testid=dept-sc-revenue]. No-Show Riski: [data-testid=noshow-risk-btn] opens panel; renders noshow-stat-total=3, noshow-stat-high=1, 3 rows (Sven Lee HIGH £170.26 reasons 'Ödeme alınmamış, Geçmişte 1 no-show' suggestion 'Bugün telefonla teyit alın + ön provizyon isteyin'; Noah Thomas & Anna Kowalska ORTA). noshow-date-input change to today re-fetches without error (still 3 rows on that date). Morning Karne: all regression elements intact (karne-grade='B', ladder-weekly-card, ladder-trend-chart, eod-report-card, karne-checks). NEW weekly-digest-card renders 6-box preview: £3715.11 / %25.7 / £103.2 / 13 / 0 / ≈£0; digest-last-sent='Son gönderim: 2026-08-19 haftası → 1 yönetici'; digest-send-now-btn click → toast 'Haftalık bülten gönderildi → 1 yönetici'. NEW email-settings-card renders email-mode-badge='MOCK — anahtar girilmedi'; resend-test-btn with admin@hotelbox.com → toast 'Anahtar yok — test MOCK kaydedildi (email_outbox)'. resend-key-input has HTML5 required attribute, so empty save is blocked at browser level (no request sent). No Resend key was submitted (per instructions).",
+  "rca of the issue": "N/A — all features render and behave as expected."
+}

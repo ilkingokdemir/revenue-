@@ -14,23 +14,62 @@ export default function MorningKarnePanel({ propertyId = "default" }) {
   const [eod, setEod] = useState(null);
   const [busy, setBusy] = useState(false);
   const [eodBusy, setEodBusy] = useState(false);
+  const [digest, setDigest] = useState(null);
+  const [digestBusy, setDigestBusy] = useState(false);
+  const [emailCfg, setEmailCfg] = useState(null);
+  const [keyInput, setKeyInput] = useState("");
+  const [testTo, setTestTo] = useState("");
   const pid = propertyId === "all" ? "default" : propertyId;
 
   const load = useCallback(async () => {
     try {
-      const [l, h, t, e] = await Promise.all([
+      const [l, h, t, e, d, ec] = await Promise.all([
         axios.get(`${API}/${pid}/latest`),
         axios.get(`${API}/${pid}/history`),
         axios.get(`${API}/${pid}/ladder-trend?days=14`),
         axios.get(`${EOD_API}/${pid}/latest`),
+        axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/weekly-digest/${pid}/latest`),
+        axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/email-settings`),
       ]);
       setData(l.data);
       setHistory(h.data.history || []);
       setTrend(t.data.trend || []);
       setEod(e.data);
+      setDigest(d.data);
+      setEmailCfg(ec.data);
     } catch { toast.error("Karne verisi yüklenemedi"); }
   }, [pid]);
   useEffect(() => { load(); }, [load]);
+
+  async function sendDigestNow() {
+    setDigestBusy(true);
+    try {
+      const r = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/weekly-digest/${pid}/send-now`);
+      toast.success(`Haftalık bülten gönderildi → ${r.data.sent_to.length} yönetici`);
+      load();
+    } catch { toast.error("Bülten gönderilemedi"); }
+    setDigestBusy(false);
+  }
+
+  async function saveResendKey(e) {
+    e.preventDefault();
+    try {
+      const r = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/email-settings`, { resend_api_key: keyInput });
+      toast.success(r.data.message || "Resend anahtarı kaydedildi");
+      setKeyInput(""); load();
+    } catch (err) { toast.error(err.response?.data?.detail || "Anahtar kaydedilemedi"); }
+  }
+
+  async function sendTestEmail() {
+    if (!testTo.includes("@")) { toast.error("Test için geçerli bir alıcı e-posta girin"); return; }
+    try {
+      const r = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/email-settings/test`, { to: testTo });
+      if (r.data.status === "sent") toast.success(`Test e-postası GERÇEKTEN gönderildi → ${testTo}`);
+      else if (r.data.status === "mocked") toast.info("Anahtar yok — test MOCK kaydedildi (email_outbox)");
+      else toast.error(r.data.message || "Gönderim başarısız");
+      load();
+    } catch (err) { toast.error(err.response?.data?.detail || "Test gönderilemedi"); }
+  }
 
   async function sendEodNow() {
     setEodBusy(true);
@@ -174,6 +213,75 @@ export default function MorningKarnePanel({ propertyId = "default" }) {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="weekly-digest-card">
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-stone-400 mb-1">📊 Haftalık Yönetici Bülteni</div>
+            <p className="text-sm text-stone-600">Her pazartesi ~10:00'da geçen haftanın özeti yöneticilere e-postalanır.</p>
+            {digest?.latest && (
+              <p className="text-xs text-stone-400 mt-1" data-testid="digest-last-sent">
+                Son gönderim: {digest.latest.digest?.week_start} haftası → {digest.latest.sent_to?.length} yönetici
+              </p>
+            )}
+          </div>
+          <button onClick={sendDigestNow} disabled={digestBusy} data-testid="digest-send-now-btn"
+            className="px-4 py-2 rounded-full bg-stone-900 hover:bg-stone-700 text-white text-sm font-semibold flex items-center gap-2 disabled:opacity-50">
+            <PaperPlaneTilt size={16} /> Bülteni Şimdi Gönder
+          </button>
+        </div>
+        {digest?.live_preview && (
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-center" data-testid="digest-preview">
+            {[
+              ["Gelir (7g)", `£${digest.live_preview.revenue}`],
+              ["Doluluk", `%${digest.live_preview.occupancy}`],
+              ["ADR", `£${digest.live_preview.adr}`],
+              ["Giriş", digest.live_preview.arrivals],
+              ["İptal", digest.live_preview.cancellations],
+              ["Merdiven", `≈£${digest.live_preview.ladder?.total_estimate}`],
+            ].map(([kk, v]) => (
+              <div key={kk} className="bg-stone-50 rounded-xl p-2">
+                <div className="text-base font-bold">{v}</div>
+                <div className="text-[10px] text-stone-500">{kk}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="email-settings-card">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+          <div className="text-xs uppercase tracking-wider text-stone-400">✉️ E-posta (Resend) Ayarları</div>
+          {emailCfg && (
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${(emailCfg.key_set || emailCfg.live) ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+              data-testid="email-mode-badge">
+              {(emailCfg.key_set || emailCfg.live) ? `✓ GERÇEK GÖNDERİM ${emailCfg.key_masked ? `(${emailCfg.key_masked})` : ""}` : "MOCK — anahtar girilmedi"}
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-stone-600 mb-3">
+          Resend API anahtarınızı girin; karne, EOD, kutlama ve bülten e-postaları gerçekten ulaşsın.
+          Anahtar: <a href="https://resend.com/api-keys" target="_blank" rel="noreferrer" className="text-indigo-600 underline">resend.com/api-keys</a>
+        </p>
+        <form onSubmit={saveResendKey} className="flex flex-wrap gap-2 items-center">
+          <input type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)}
+            placeholder="re_..." required data-testid="resend-key-input"
+            className="flex-1 min-w-[200px] border rounded-lg px-3 py-2 text-sm" />
+          <button type="submit" data-testid="resend-key-save-btn"
+            className="px-4 py-2 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold">
+            Anahtarı Kaydet
+          </button>
+        </form>
+        <div className="flex flex-wrap gap-2 items-center mt-2">
+          <input type="email" value={testTo} onChange={(e) => setTestTo(e.target.value)}
+            placeholder="test alıcısı (e-posta)" data-testid="resend-test-to-input"
+            className="flex-1 min-w-[200px] border rounded-lg px-3 py-2 text-sm" />
+          <button type="button" onClick={sendTestEmail} data-testid="resend-test-btn"
+            className="px-4 py-2 rounded-full border border-stone-300 text-sm font-semibold hover:bg-stone-50">
+            Test E-postası Gönder
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-stone-200 p-5">

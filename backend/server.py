@@ -1879,6 +1879,10 @@ from routes.platform_ext.mrr_celebration import create_mrr_celebration_router, m
 api_router.include_router(create_mrr_celebration_router(db, require_roles))
 from routes.hotel_ops.eod_report import create_eod_report_router
 api_router.include_router(create_eod_report_router(db, require_roles))
+from routes.hotel_ops.noshow_risk import create_noshow_risk_router, noshow_risk_loop
+api_router.include_router(create_noshow_risk_router(db, require_roles))
+from routes.revenue_ext.weekly_digest import create_weekly_digest_router, weekly_digest_loop
+api_router.include_router(create_weekly_digest_router(db, require_roles))
 
 @app.on_event("startup")
 async def _start_reviq_gap_loops():
@@ -1889,6 +1893,8 @@ async def _start_reviq_gap_loops():
     _spawn(morning_karne_loop(db))
     _spawn(history_import_loop(db))
     _spawn(mrr_celebration_loop(db))
+    _spawn(noshow_risk_loop(db))
+    _spawn(weekly_digest_loop(db))
 
 app.include_router(api_router)
 

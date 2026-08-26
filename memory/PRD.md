@@ -1239,3 +1239,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - React key uyarısı düzeltildi (PlatformAdminPanel txs/keys map).
 - CANLI DUMAN TESTİ: kullanıcı henüz canlı URL vermedi ('Devam et' dedi) — panel ve endpoint hazır, URL gelince koşulacak.
 - Test: iteration_584.json frontend %100 PASS.
+
+## Güncelleme (2026-06, iter 585 — 3 özellik TAMAMLANDI, frontend %100 + backend curl PASS)
+- RESEND ANAHTARI UI: Mevcut /api/email-settings (trial_emails.py — key doğrulamalı) endpointlerine bağlı yeni kart MorningKarnePanel'e eklendi (email-settings-card: anahtar kaydet + test e-postası + MOCK/GERÇEK rozeti). mailer.send_email artık DB anahtarını (platform_settings 'email') env'e tercih ediyor. NOT: Kullanıcı henüz gerçek anahtar girmedi — MOCK devam.
+- NO-SHOW TAHMİNİ: /api/noshow-risk/{pid}?day= — risk skoru (iletişim eksik +15/+15, ödeme yok +25, OTA +10, tek gece +10, geçmiş no-show +30, eski rezervasyon +5), high>=50. Günlük 14-18 UTC bildirimi (yarın için, dedupe'lu). Panel: noshow-risk (menü: No-Show Riski). Doğrulama: Sven Lee 55 HIGH.
+- HAFTALIK YÖNETİCİ BÜLTENİ: /api/weekly-digest/{pid} (latest/history/send-now). Pazartesi >=07 UTC otomatik; gelir/doluluk/ADR/giriş/iptal/merdiven katkısı şık HTML e-posta. rate=0 fallback: total_price/nights (düzeltildi — gelir £3715). Kart: MorningKarnePanel weekly-digest-card.
+- CANLI DUMAN TESTİ: Kullanıcı URL'yi hâlâ paylaşmadı — hazır bekliyor.
+- Test: iteration_585.json frontend %100 PASS.
+- Not (düşük öncelik, bakım): MorningKarnePanel 324 satır (5 kart) — ileride alt bileşenlere bölünebilir.

@@ -1186,3 +1186,16 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - PLAN GEÇMİŞİ: db.plan_changes {property_id, from_plan, to_plan, changed_by, changed_at, source}. Loglama: super-admin set_plan (source=super-admin) + trial-conversion convert (source=trial-conversion, from=önceki plan|trial). GET /api/super-admin/plan-history?property_id= (son 50). UI: Faturalama satırında '🕒 Geçmiş' toggle → indigo zaman çizelgesi (FROM → TO · kim · tarih · 'deneme dönüşümü' rozeti). testids: pa-history-btn-{id}, pa-history-{id}.
 - GELİR HEDEFİ: POST /api/super-admin/mrr-target {target} (422 doğrulama) → db.platform_settings{id:billing}.mrr_target; health-scores yanıtına mrr_target eklendi. UI: MRR banner'ında 🎯 hedef çubuğu (yeşil ≥%100 🎉 / amber ≥%60 / kırmızı altı) + % rozeti + hedef girişi/Kaydet. testids: pa-mrr-target, pa-target-pct/-bar/-input/-save.
 - Test: hedef 2500 kaydet → %80 amber çubuk UI'da; plan pro→full→pro değişimleri loglandı ve zaman çizelgesinde göründü; geçersiz hedef 422. aldgate-flats planı FULL olarak bırakıldı (orijinal değeri).
+
+## Güncelleme (2026-06, fork sonrası — RevenueIQ Gap Analizi TAMAMLANDI)
+- Kullanıcının yüklediği RevenueIQ-Motor-Ozellikleri.pptx (16 slayt) analiz edildi; tam rapor: /app/memory/GAP_ANALIZ_RevenueIQ.md
+- Sonuç: ~17 kalem bizde zaten var, 9 gerçek eksik tespit edildi.
+- YENİ BACKLOG (RevenueIQ gap):
+  - P0: Son-Gün Merdiveni (D0-D1, 4 saatte ~%8 kademeli otomatik indirim, satışta yön dönüşü)
+  - P0: Vitrin Doğrulaması (kendi Booking ilanını misafir gözüyle tarama, panele yazılan vs görünen kıyası)
+  - P0: İkinci-Yazıcı Tespiti (kanala yabancı yazım alarmı)
+  - P1: Misafir-Onaylı Zam Merdiveni (2. basamak = yeni rezervasyon şartı)
+  - P1: Yıllık Plan D90-365 (şekil×seviye, plan sürüm arşivi, rakip sapma manşeti)
+  - P1: Lease/Fencing yazım kilidi
+  - P2: Kısmi yayın telafisi, günlük sabah karnesi e-postası, cold-start kardeş otel şekil ödünçü, asimetrik zaman kuralı, 2 yıl geçmiş otomatik import
+- Önceki backlog devam: Canlı duman testi (URL bekleniyor), Gün Sonu Rapor E-postası (P1), Hedef Aşım Kutlaması (P2), Resend/Cloudbeds/Mews anahtarları (BLOCKED).

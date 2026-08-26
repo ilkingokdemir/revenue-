@@ -1,0 +1,6 @@
+# RevenueIQ vs Bizim Platform — Boşluk Analizi (2026-08)
+BİZDE OLANLAR (eşleşen): kurulum sihirbazı, rakip seti+harita, etkinlik sinyalleri, pickup/pace, taban/tavan+surge guard, kendi vitrin taraması (temel), çok kiracılı izolasyon, yıllık forecast, senaryo fiyat onay akışı, sağlık sayfası.
+BİZDE OLMAYANLAR (öncelik sırasıyla):
+P0: 1) Kanıt Zarfı (evidence hull, fail-closed, hücre başına gerekçe+güven skoru) 2) Merkezi Onay Kuyruğu + Pin/Override (pin dokunulmazlığı) 3) Yaz-Sonra-Doğrula her yayında (kuruş kıyası + ikinci-yazıcı alarmı) 4) Son-Gün Merdiveni (D0-D1, 4s/%8 kademe, satışta geri dönüş, tek-yazıcı kuralı)
+P1: 5) Misafir-onaylı zam merdiveni (basamak=yeni rezervasyon) + asimetrik zaman kuralı 6) Yön histerezisi + 72s kümülatif adım tavanı 7) Promo zinciri çözümü (Genius/mobil katman ölçümü) + net↔brüt domain disiplini 8) İptal/no-show 'tutma olasılığı' modeli (beklenen doluluk) 9) Günlük karne e-postası (bekçi zinciri özeti) — Gün Sonu Raporu backlog'uyla birleşir 10) Oda sırası koruması + manşetten oransal yayılım
+P2: 11) Randomize fiyat deneyleri (nedensel elastikiyet) + Golden Replay 12) Şekil×Seviye ayrımlı D90-365 plan + sürüm arşivi + uzak fırsat merdiveni 13) Cold-start: kardeş otelden mevsim şekli + tek çapa fiyat 14) Düşük-veri baskı skoru (−1..+1) + güç analizi politikası

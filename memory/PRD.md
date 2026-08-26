@@ -1223,3 +1223,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - KARDEŞ OTEL ÖDÜNÇÜ: annual_plan generate — kendi örneklemi <60 gece ise mevsim şekli kardeş otellerin toplamından öğrenilir (shape_source:'sibling', siblings_used); o da yetmezse çapa + nötr şekil, hiçbiri yoksa fail-closed. Doğrulandı: sentetik kardeş otelle shape_source='sibling' (sonra temizlendi). Panelde şekil kaynağı etiketi.
 - Test: iteration_582.json (frontend render PASS) + pytest 23/23. Bilinen not: backend hot-reload arka plan tarayıcı görevleri yüzünden bazen takılıyor → supervisorctl restart backend çözüyor.
 - Kalan RevenueIQ gap backlog (P2): asimetrik zaman kuralı, 2 yıl geçmiş otomatik import.
+
+## Güncelleme (2026-06, iter 583 — RevenueIQ gap listesi TAMAMEN KAPANDI + Canlı Duman Testi hazır)
+- ASİMETRİK ZAMAN KURALI: Motor kuralı açıkça işlendi ve panellerde görünür (ladder/ramp GET → rules.asymmetric_time; skip detayına eklendi). "Zam için zaman kanıt değildir, indirim için kanıttır."
+- 2 YIL GEÇMİŞ İÇE AKTARIMI: /api/history-import/{pid} (status/start/DELETE undo). D-731→D-31 (son 30 gün raporları kirletmemek için hariç), gerçekçi mevsimsel MOCK, deterministik. Auto-trigger: pms_connections status connected/live olunca 10dk döngü. default'a 8896 kayıt/701 gece aktarıldı → şekil örneklemi 47→725+, plan v16 shape_source:'own' çapasız üretildi. UI: AnnualPlanPanel'de history-import-card (geri al butonu var).
+- CANLI DUMAN TESTİ: /api/live-smoke/run {base_url,email,password} → sağlık→login→rezervasyon→Stripe checkout→iptal (5 adım). Preview'a karşı PASS 5/5. Panel: live-smoke (menü: Canlı Duman Testi). Kullanıcı canlı URL verdiğinde panelden koşulacak.
+- MERDİVEN HAFTALIK ÖZETİ: /api/morning-karne/{pid}/ladder-weekly + karneye 9. kalem 'Merdiven geliri (7g, tahmini)' + MorningKarnePanel'de ladder-weekly-card (kurtarılan/ek gelir/toplam).
+- Test: iteration_583.json frontend %100 PASS, backend curl ile tam doğrulandı.
+- RevenueIQ gap backlog: TAMAMI KAPANDI (9/9).

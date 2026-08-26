@@ -23,6 +23,28 @@ def _now():
     return datetime.now(timezone.utc)
 
 
+async def compute_ladder_weekly(db, pid: str) -> Dict:
+    """İki merdivenin son 7 günde kazandırdığı gelirin dürüst TAHMİNİ."""
+    since = (_now() - timedelta(days=7)).isoformat()
+    ld_steps = await db.ladder_steps.find(
+        {"property_id": pid, "created_at": {"$gte": since}}, {"_id": 0}).to_list(500)
+    rp_steps = await db.ramp_steps.find(
+        {"property_id": pid, "created_at": {"$gte": since}}, {"_id": 0}).to_list(500)
+    reversals = [s for s in ld_steps if s.get("direction") == "up"]
+    # kurtarılan: satışla sonuçlanan indirimli geceler (satış anındaki fiyat ~ reversal öncesi kademe)
+    recovered = round(sum(float(s.get("rate", 0)) for s in reversals), 2)
+    ramp_ups = [s for s in rp_steps if s.get("direction", "up") == "up"]
+    approved = [s for s in ramp_ups if s.get("guest_approved")]
+    cfg = await db.ramp_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+    p = float(cfg.get("step_pct", 5.0)) / 100.0
+    uplift = round(sum(float(s.get("rate", 0)) * (1 - 1 / (1 + p)) for s in approved), 2)
+    return {"lastday": {"steps": len(ld_steps), "sold_after_discount": len(reversals),
+                        "recovered_estimate": recovered},
+            "ramp": {"steps": len(ramp_ups), "guest_approved": len(approved),
+                     "uplift_estimate": uplift},
+            "total_estimate": round(recovered + uplift, 2)}
+
+
 async def build_karne(db, pid: str) -> Dict:
     now = _now()
     today = now.date().isoformat()
@@ -52,12 +74,16 @@ async def build_karne(db, pid: str) -> Dict:
         {"timestamp": {"$gte": since24}, "status_code": {"$gte": 500}})
     hi_notif = await db.notifications.count_documents(
         {"property_id": pid, "priority": "high", "read": False})
+    ladder_week = await compute_ladder_weekly(db, pid)
 
     checks = [
         ("Doluluk (bugün)", f"%{occ} — {in_house}/{total_rooms} oda", "ok"),
         ("Giriş / Çıkış (bugün)", f"{arrivals} giriş · {departures} çıkış", "ok"),
         ("Son-gün merdiveni (24s)", f"{ladder_steps} kademe, {ladder_reversals} satışla geri çıkış", "ok"),
         ("Zam merdiveni (24s)", f"{ramp_steps} misafir-onaylı/kanıtlı kademe", "ok"),
+        ("Merdiven geliri (7g, tahmini)",
+         f"≈{ladder_week['lastday']['recovered_estimate']} kurtarılan + ≈{ladder_week['ramp']['uplift_estimate']} ek gelir",
+         "ok"),
         ("İkinci yazıcı alarmı", f"{sw_open} açık alarm", "ok" if sw_open == 0 else "warn"),
         ("Vitrin doğrulaması", (f"{sf['flagged']}/{sf['total']} gün sapmalı" if sf else "henüz tarama yok"),
          "ok" if (not sf or sf.get("flagged", 0) == 0) else "warn"),
@@ -65,8 +91,9 @@ async def build_karne(db, pid: str) -> Dict:
         ("Okunmamış yüksek öncelik bildirim", f"{hi_notif} adet", "ok" if hi_notif < 5 else "warn"),
     ]
     grade = "A" if all(c[2] == "ok" for c in checks) else ("B" if sum(1 for c in checks if c[2] != "ok") <= 2 else "C")
-    return {"date": today, "grade": grade, "occ": occ, "checks":
-            [{"name": n, "value": v, "status": s} for n, v, s in checks]}
+    return {"date": today, "grade": grade, "occ": occ,
+            "ladder_weekly": ladder_week,
+            "checks": [{"name": n, "value": v, "status": s} for n, v, s in checks]}
 
 
 def _karne_html(prop_name: str, k: Dict) -> str:
@@ -138,6 +165,10 @@ def create_morning_karne_router(db, require_roles):
         preview = await build_karne(db, pid)
         return {"config": {"enabled": cfg.get("enabled", True), "send_hour_utc": SEND_HOUR_UTC},
                 "latest": card, "live_preview": preview}
+
+    @router.get("/{pid}/ladder-weekly")
+    async def ladder_weekly(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        return await compute_ladder_weekly(db, pid)
 
     @router.get("/{pid}/history")
     async def history(pid: str, _u: dict = Depends(require_roles(*ROLES))):

@@ -83,6 +83,26 @@ export default function MorningKarnePanel({ propertyId = "default" }) {
         </div>
       </div>
 
+      <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="ladder-weekly-card">
+        <div className="text-xs uppercase tracking-wider text-stone-400 mb-2">🪜 Merdiven Haftalık Özeti (son 7 gün, tahmini)</div>
+        {k.ladder_weekly ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="bg-emerald-50 rounded-xl p-3">
+              <div className="text-xl font-bold text-emerald-700">≈{k.ladder_weekly.lastday.recovered_estimate}</div>
+              <div className="text-xs text-stone-500">Son-gün merdiveni kurtarılan gelir — {k.ladder_weekly.lastday.sold_after_discount} gece indirimle satıldı ({k.ladder_weekly.lastday.steps} kademe)</div>
+            </div>
+            <div className="bg-amber-50 rounded-xl p-3">
+              <div className="text-xl font-bold text-amber-700">≈{k.ladder_weekly.ramp.uplift_estimate}</div>
+              <div className="text-xs text-stone-500">Zam merdiveni ek gelir — {k.ladder_weekly.ramp.guest_approved} misafir-onaylı kademe ({k.ladder_weekly.ramp.steps} zam)</div>
+            </div>
+            <div className="bg-stone-900 text-white rounded-xl p-3">
+              <div className="text-xl font-bold" data-testid="ladder-weekly-total">≈{k.ladder_weekly.total_estimate}</div>
+              <div className="text-xs text-stone-300">Toplam merdiven katkısı (7g)</div>
+            </div>
+          </div>
+        ) : <p className="text-sm text-stone-400">Veri yok.</p>}
+      </div>
+
       <div className="bg-white rounded-2xl border border-stone-200 p-5">
         <h2 className="text-lg font-semibold mb-3">Karne Kalemleri (canlı önizleme)</h2>
         <div className="space-y-2" data-testid="karne-checks">

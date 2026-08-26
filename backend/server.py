@@ -1871,6 +1871,10 @@ from routes.revenue_ext.ramp_ladder import create_ramp_ladder_router, ramp_ladde
 api_router.include_router(create_ramp_ladder_router(db, require_roles))
 from routes.revenue_ext.morning_karne import create_morning_karne_router, morning_karne_loop
 api_router.include_router(create_morning_karne_router(db, require_roles))
+from routes.platform_ext.live_smoke import create_live_smoke_router
+api_router.include_router(create_live_smoke_router(db, require_roles))
+from routes.distribution.history_import import create_history_import_router, history_import_loop
+api_router.include_router(create_history_import_router(db, require_roles))
 
 @app.on_event("startup")
 async def _start_reviq_gap_loops():
@@ -1879,6 +1883,7 @@ async def _start_reviq_gap_loops():
     _spawn(second_writer_loop(db))
     _spawn(ramp_ladder_loop(db))
     _spawn(morning_karne_loop(db))
+    _spawn(history_import_loop(db))
 
 app.include_router(api_router)
 

@@ -117,13 +117,14 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                 if elapsed < float(cfg["cadence_hours"]):
                     continue
 
-            # --- MİSAFİR ONAYI: 2. basamak ve sonrası yeni rezervasyon ister ---
+            # --- MİSAFİR ONAYI + ASİMETRİK ZAMAN KURALI: zam için geçen süre kanıt DEĞİLDİR ---
             if step_no >= 1:
                 if bookings_at_last is None or sold <= int(bookings_at_last):
                     skips.append({"date": day, "room_type": rt.get("name", ""),
                                   "reason": "awaiting_guest_approval",
                                   "detail": (f"Kademe {step_no} fiyatında henüz yeni rezervasyon yok "
-                                             f"({sold} = {bookings_at_last}) — misafir onayı gelmeden tırmanış KAPALI")})
+                                             f"({sold} = {bookings_at_last}) — asimetrik zaman kuralı: "
+                                             "geçen süre zam kanıtı DEĞİLDİR, tırmanış KAPALI")})
                     continue
 
             if anchor <= 0:
@@ -205,6 +206,9 @@ def create_ramp_ladder_router(db, require_roles):
         states = await db.ramp_state.find(q, {"_id": 0}).to_list(300)
         waiting = [s for s in states if s.get("step_no", 0) >= 1]
         return {"config": cfg, "steps": steps,
+                "rules": {"asymmetric_time": ("Zam için zaman geçmesi kanıt DEĞİLDİR — her basamak "
+                                              "talep kanıtı veya yeni rezervasyon (misafir onayı) ister. "
+                                              "İndirim yönü ise (son-gün merdiveni) bekleyen boş oda + geçen süreyle çalışır.")},
                 "summary": {"total_steps": len(steps),
                             "guest_approved_steps": sum(1 for s in steps if s.get("guest_approved")),
                             "reversals": sum(1 for s in steps if s.get("direction") == "down"),

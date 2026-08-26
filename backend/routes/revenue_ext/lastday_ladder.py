@@ -239,6 +239,9 @@ def create_lastday_ladder_router(db, require_roles):
         states = await db.ladder_state.find(q, {"_id": 0}).to_list(200)
         last24 = (_now() - timedelta(hours=24)).isoformat()
         return {"config": cfg, "steps": steps,
+                "rules": {"asymmetric_time": ("İndirim için zaman geçmesi kanıttır: D0-D1'de bekleyen boş oda "
+                                              "her ritimde bir kademe iner. Zam yönü ise yalnız SATIŞ kanıtıyla döner — "
+                                              "geçen süre asla fiyatı yukarı itmez.")},
                 "owned_dates": sorted({s["stay_date"] for s in states if s.get("step_no", 0) > 0}),
                 "summary": {"steps_24h": sum(1 for s in steps if s["created_at"] >= last24),
                             "reversals": sum(1 for s in steps if s["direction"] == "up"),

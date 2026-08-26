@@ -1,0 +1,22 @@
+{
+  "summary": "Frontend-only render verification (PRO mode → Revenue management → AI & Insights) for 4 new features: Live Smoke Test panel, Ladder Weekly Summary in Morning Karne, 2-Year History Import in Annual Plan, and Asymmetric Time Rule notes on both ladder panels. All expected data-testids render correctly with expected content. No destructive actions were triggered.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: history-shape-nights shows 756 nights while backend context said ~725; still meets >=725 requirement but worth confirming source-of-truth consistency between /api/history-import status and /api/annual-plan v16 shape sample."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None (used existing seeded data). One prior smoke run history row present as expected.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Correct testid for the Last-Day Ladder navigation button is 'lastday-ladder-btn' (no hyphen between 'last' and 'day'). All target testids verified: live-smoke-panel, smoke-url-input, smoke-email-input, smoke-password-input, smoke-run-btn, smoke-history-table (1 PASS row), smoke-result, smoke-verdict='PASS (5/5)'; morning-karne-panel, ladder-weekly-card (3 boxes: kurtarılan/ek gelir/toplam), ladder-weekly-total; annual-plan-panel, history-import-card ('şekil öğrenimi hazır', 'kendi geçmişi', 756 nights, 'İçe aktarımı geri al (8896)'), history-shape-nights='756', history-undo-btn (NOT clicked); ladder-asymmetric-rule and ramp-asymmetric-rule both display 'Asimetrik zaman kuralı' text. Morning Karne shows 9 items including 'Merdiven geliri (7g, tahmini)'. PRO mode toggle via [data-testid=nav-mode-pro], revenue nav via [data-testid=dept-sc-revenue].",
+  "rca of the issue": "N/A – no bugs found."
+}

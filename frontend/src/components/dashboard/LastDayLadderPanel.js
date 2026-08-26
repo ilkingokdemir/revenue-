@@ -89,6 +89,11 @@ export default function LastDayLadderPanel({ propertyId = "default" }) {
             <ShieldCheck size={14} /> Tek yazıcı — sahipli geceler: {owned_dates.join(", ")}
           </div>
         )}
+        {data.rules?.asymmetric_time && (
+          <div className="mt-3 text-[11px] text-stone-400 italic" data-testid="ladder-asymmetric-rule">
+            ⚖️ Asimetrik zaman kuralı: {data.rules.asymmetric_time}
+          </div>
+        )}
       </div>
 
       <form onSubmit={saveCfg} className="bg-white rounded-2xl border border-stone-200 p-5 grid grid-cols-2 md:grid-cols-5 gap-4 items-end" data-testid="ladder-config-form">

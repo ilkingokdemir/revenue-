@@ -12,19 +12,44 @@ export default function AnnualPlanPanel({ propertyId = "default" }) {
   const [busy, setBusy] = useState("");
   const [anchor, setAnchor] = useState("");
   const [failMsg, setFailMsg] = useState("");
+  const [hist, setHist] = useState(null);
   const pid = propertyId === "all" ? "default" : propertyId;
 
   const load = useCallback(async () => {
     try {
-      const [v, l] = await Promise.all([
+      const [v, l, h] = await Promise.all([
         axios.get(`${API}/${pid}/versions`),
         axios.get(`${API}/${pid}/latest`),
+        axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/history-import/${pid}/status`),
       ]);
       setVersions(v.data.versions || []);
       setPlan(l.data.latest || null);
+      setHist(h.data);
     } catch { toast.error("Yıllık plan verisi yüklenemedi"); }
   }, [pid]);
   useEffect(() => { load(); }, [load]);
+
+  async function startImport() {
+    setBusy("imp");
+    try {
+      const r = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/history-import/${pid}/start`);
+      if (r.data.skipped) toast.info("Geçmiş zaten içe aktarılmış");
+      else toast.success(`İçe aktarıldı: ${r.data.job.imported_bookings} rezervasyon, ${r.data.job.nights_covered} gece`);
+      load();
+    } catch (e) { toast.error(e.response?.data?.detail || "İçe aktarım başarısız"); }
+    setBusy("");
+  }
+
+  async function undoImport() {
+    if (!window.confirm("İçe aktarılan tüm geçmiş rezervasyonlar silinsin mi?")) return;
+    setBusy("undo");
+    try {
+      const r = await axios.delete(`${process.env.REACT_APP_BACKEND_URL}/api/history-import/${pid}`);
+      toast.success(`${r.data.deleted_bookings} içe aktarılmış kayıt silindi`);
+      load();
+    } catch { toast.error("Silinemedi"); }
+    setBusy("");
+  }
 
   async function generate() {
     setBusy("gen"); setFailMsg("");
@@ -120,6 +145,37 @@ export default function AnnualPlanPanel({ propertyId = "default" }) {
           </div>
         )}
       </div>
+
+      {hist && (
+        <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="history-import-card">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <div className="text-xs uppercase tracking-wider text-stone-400 mb-1">📥 2 Yıl Geçmiş İçe Aktarımı</div>
+              <p className="text-sm text-stone-600">
+                Şekil örneklemi: <b data-testid="history-shape-nights">{hist.shape_nights}</b> gece —{" "}
+                {hist.shape_ready
+                  ? <span className="text-emerald-600 font-semibold">✓ şekil öğrenimi hazır</span>
+                  : <span className="text-amber-600 font-semibold">⚠ 60 gece altı (kardeş ödünçü/çapa devrede)</span>}
+                {" · "}PMS bağlanır bağlanmaz otomatik tetiklenir (D-731→D-31, son 30 gün raporları kirletmemek için hariç).
+              </p>
+              {hist.job && <p className="text-xs text-stone-400 mt-1">Son iş: {hist.job.imported_bookings} rezervasyon, {hist.job.nights_covered} gece ({hist.job.range})</p>}
+            </div>
+            <div className="flex gap-2">
+              {hist.imported_bookings > 0 ? (
+                <button onClick={undoImport} disabled={busy === "undo"} data-testid="history-undo-btn"
+                  className="px-3 py-2 rounded-full border border-rose-300 text-rose-600 text-xs font-semibold hover:bg-rose-50 disabled:opacity-50">
+                  İçe aktarımı geri al ({hist.imported_bookings})
+                </button>
+              ) : (
+                <button onClick={startImport} disabled={busy === "imp"} data-testid="history-start-btn"
+                  className="px-4 py-2 rounded-full bg-stone-900 text-white text-sm font-semibold disabled:opacity-50">
+                  {busy === "imp" ? "Aktarılıyor…" : "Şimdi İçe Aktar (PMS mock)"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {plan && (
         <>

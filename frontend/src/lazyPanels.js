@@ -196,6 +196,7 @@ export const AnnualPlanPanel = L(() => import("./components/dashboard/AnnualPlan
 export const RampLadderPanel = L(() => import("./components/dashboard/RampLadderPanel"));
 export const WriteLeasePanel = L(() => import("./components/dashboard/WriteLeasePanel"));
 export const MorningKarnePanel = L(() => import("./components/dashboard/MorningKarnePanel"));
+export const LiveSmokePanel = L(() => import("./components/dashboard/LiveSmokePanel"));
 export const RestrictionAdvisorPanel = L(() => import("./components/dashboard/RestrictionAdvisorPanel"));
 export const GapFillerPanel = L(() => import("./components/dashboard/GapFillerPanel"));
 export const LostDemandPanel = L(() => import("./components/dashboard/LostDemandPanel"));

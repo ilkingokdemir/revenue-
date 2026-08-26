@@ -89,6 +89,11 @@ export default function RampLadderPanel({ propertyId = "default" }) {
             <div className="text-xs text-stone-300">Onay bekleyen gece</div>
           </div>
         </div>
+        {data.rules?.asymmetric_time && (
+          <div className="mt-3 text-[11px] text-stone-400 italic" data-testid="ramp-asymmetric-rule">
+            ⚖️ Asimetrik zaman kuralı: {data.rules.asymmetric_time}
+          </div>
+        )}
       </div>
 
       <form onSubmit={saveCfg} className="bg-white rounded-2xl border border-stone-200 p-5 grid grid-cols-2 md:grid-cols-5 gap-4 items-end" data-testid="ramp-config-form">

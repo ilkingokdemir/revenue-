@@ -122,6 +122,7 @@ import {
   RampLadderPanel,
   WriteLeasePanel,
   MorningKarnePanel,
+  LiveSmokePanel,
   IpAllowlistPanel,
   KDSPanel,
   KeyFiguresPanel,
@@ -1672,6 +1673,7 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {activeView === "ramp-ladder" && <RampLadderPanel propertyId={activePropertyId || "default"} />}
         {activeView === "write-lease" && <WriteLeasePanel propertyId={activePropertyId || "default"} />}
         {activeView === "morning-karne" && <MorningKarnePanel propertyId={activePropertyId || "default"} />}
+        {activeView === "live-smoke" && <LiveSmokePanel />}
         {activeView === "restriction-advisor" && <RestrictionAdvisorPanel propertyId={activePropertyId || "all"} />}
         {activeView === "gap-filler" && <GapFillerPanel propertyId={activePropertyId || "all"} />}
         {activeView === "lost-demand" && <LostDemandPanel propertyId={activePropertyId || "all"} />}

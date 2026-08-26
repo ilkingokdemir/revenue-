@@ -22,14 +22,17 @@ def _now():
     return datetime.now(timezone.utc)
 
 
-async def _learn_shape(db, pid: str) -> Dict:
-    """730 günlük geçmişten ay ve haftagünü endeksleri (büzülmeli/shrinkage)."""
+async def _learn_shape(db, pids) -> Dict:
+    """730 günlük geçmişten ay ve haftagünü endeksleri (büzülmeli/shrinkage).
+    pids: tek property id (str) veya kardeş otel listesi (list)."""
+    if isinstance(pids, str):
+        pids = [pids]
     today = _now().date()
     start = (today - timedelta(days=730)).isoformat()
     bks = await db.bookings.find(
-        {"property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
+        {"property_id": {"$in": pids}, "status": {"$nin": ["cancelled", "no_show"]},
          "check_in": {"$gte": start, "$lte": today.isoformat()}},
-        {"_id": 0, "check_in": 1, "check_out": 1}).to_list(10000)
+        {"_id": 0, "check_in": 1, "check_out": 1}).to_list(20000)
     night_counts = {}
     for b in bks:
         try:
@@ -112,6 +115,17 @@ async def _comp_deviation(db, pid: str, days: list) -> Dict:
 
 async def generate_plan(db, pid: str, anchor_level: float | None, notes: str, user_name: str) -> Dict:
     shape = await _learn_shape(db, pid)
+    shape_source = "own"
+    siblings_used = []
+    # --- KARDEŞ OTEL ÖDÜNÇÜ: kendi geçmişi yetmezse mevsim şekli kardeş otellerden alınır ---
+    if shape["sample_nights"] < MIN_SHAPE_NIGHTS:
+        sib_ids = [x for x in await db.properties.distinct("id") if x != pid]
+        if sib_ids:
+            sib_shape = await _learn_shape(db, sib_ids)
+            if sib_shape["sample_nights"] >= MIN_SHAPE_NIGHTS:
+                shape = sib_shape
+                shape_source = "sibling"
+                siblings_used = sib_ids
     level_source = "near_window"
     level = await _near_level(db, pid)
     if anchor_level:
@@ -121,9 +135,11 @@ async def generate_plan(db, pid: str, anchor_level: float | None, notes: str, us
     if shape["sample_nights"] < MIN_SHAPE_NIGHTS and not anchor_level:
         raise HTTPException(422, {
             "fail_closed": True,
-            "reason": (f"Şekil için yeterli örneklem yok ({shape['sample_nights']}/{MIN_SHAPE_NIGHTS} gece). "
-                       "Plan üretilmedi. Operatör başlangıç fiyat seviyesi (anchor_level) girerse "
-                       "nötr şekille plan kurulur.")})
+            "reason": (f"Şekil için yeterli örneklem yok (kendi: {shape['sample_nights']}/{MIN_SHAPE_NIGHTS} gece; "
+                       "kardeş otellerden de yeterli veri toplanamadı). Plan üretilmedi. "
+                       "Operatör başlangıç fiyat seviyesi (anchor_level) girerse nötr şekille plan kurulur.")})
+    if shape["sample_nights"] < MIN_SHAPE_NIGHTS:
+        shape_source = "neutral"
     if level <= 0:
         raise HTTPException(422, {"fail_closed": True,
                                   "reason": "Seviye bilinmiyor (yakın pencerede fiyat yok, çapa da verilmedi). Plan üretilmedi."})
@@ -152,6 +168,7 @@ async def generate_plan(db, pid: str, anchor_level: float | None, notes: str, us
             "created_at": _now().isoformat(), "created_by": user_name,
             "level": level, "level_source": level_source,
             "shape_sample_nights": shape["sample_nights"],
+            "shape_source": shape_source, "siblings_used": siblings_used,
             "month_idx": m_idx, "dow_idx": d_idx,
             "horizon": f"D{PLAN_START_DAY}–D{PLAN_END_DAY}",
             "days": days, "comp_deviation": comp,
@@ -192,28 +209,50 @@ def create_annual_plan_router(db, require_roles):
 
     @router.post("/{pid}/versions/{plan_id}/publish")
     async def publish(pid: str, plan_id: str, u: dict = Depends(require_roles(*ROLES))):
-        """Yayın plandan AYRI, açık operatör eylemidir — D90+ tarihlere override yazar."""
+        """Yayın plandan AYRI operatör eylemi — KISMİ TELAFİ: reddedilen hücreler
+        tekil geri alınır/atlanır, kalanı yayınlanır; hücre bazlı rapor döner."""
         p = await db.annual_plans.find_one({"id": plan_id, "property_id": pid}, {"_id": 0})
         if not p:
             raise HTTPException(404, "Plan sürümü bulunamadı")
         actor = f"annual-plan-v{p['version']}"
         now = _now().isoformat()
-        applied = 0
+        floors = await db.min_rate_floors.find_one(
+            {"property_id": pid, "room_type_id": "all"}, {"_id": 0}) or {}
+        fl = floors.get("standard_min_rate")
         # Operatör egemenliği: yayınlanan hücrelerdeki robot kiralarını iptal et
         await db.rate_cell_leases.delete_many(
             {"property_id": pid, "room_type_id": "",
              "date": {"$in": [d["date"] for d in p["days"]]}})
+        applied, rejected = 0, []
         for d in p["days"]:
-            await db.rate_overrides.update_one(
-                {"property_id": pid, "room_type_id": "", "date": d["date"]},
-                {"$set": {"custom_rate": d["price"], "set_by": actor,
-                          "reason": f"Yıllık plan v{p['version']} yayını",
-                          "updated_at": now}}, upsert=True)
-            applied += 1
+            cell = {"property_id": pid, "room_type_id": "", "date": d["date"]}
+            # Doğrulama: taban plan üretiminden sonra değişmiş olabilir — hücre tekil reddedilir
+            if fl is not None and d["price"] < float(fl):
+                rejected.append({"date": d["date"], "reason": "floor_violation",
+                                 "detail": f"Plan fiyatı {d['price']} güncel tabanın ({fl}) altında"})
+                continue
+            prev = await db.rate_overrides.find_one(cell, {"_id": 0})
+            try:
+                await db.rate_overrides.update_one(
+                    cell, {"$set": {"custom_rate": d["price"], "set_by": actor,
+                                    "reason": f"Yıllık plan v{p['version']} yayını",
+                                    "updated_at": now}}, upsert=True)
+                applied += 1
+            except Exception as ex:
+                # KISMİ TELAFİ: yalnız bu hücre eski haline döndürülür
+                if prev:
+                    await db.rate_overrides.update_one(cell, {"$set": prev}, upsert=True)
+                else:
+                    await db.rate_overrides.delete_one(cell)
+                rejected.append({"date": d["date"], "reason": "write_failed",
+                                 "detail": str(ex)[:100]})
+        report = {"applied": applied, "rejected": rejected,
+                  "rejected_count": len(rejected), "compensated": len(rejected) > 0}
         await db.annual_plans.update_one(
             {"id": plan_id},
             {"$set": {"published_at": now, "published_days": applied,
+                      "publish_report": report,
                       "published_by": u.get("name") or u.get("email", "")}})
-        return {"ok": True, "applied_days": applied, "actor": actor}
+        return {"ok": True, "applied_days": applied, "actor": actor, **report}
 
     return router

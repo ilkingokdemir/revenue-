@@ -1215,3 +1215,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - TAKVİM ROZETİ: RateCalendarEditable'da override_source lastday-ladder → 🪜, ramp-ladder → 📈 rozet + tooltip (ladder-badge-{date}). Room Type select'e data-testid + görünür değer eklendi.
 - Test: iteration_581.json PASS (22/22 pytest: 11 regresyon + 11 yeni; frontend %95→UX düzeltmesi yapıldı). Regresyon dosyaları: tests/test_iter580_*.py + tests/test_iter581_*.py
 - Kalan RevenueIQ gap backlog (P2): kısmi yayın telafisi, cold-start kardeş otel şekil ödünçü, asimetrik zaman kuralı, 2 yıl geçmiş otomatik import, ramp 'demand_faded' yön dönüşü (kademe geri alma).
+
+## Güncelleme (2026-06, iter 582 — RevenueIQ gap turu 3 TAMAMLANDI, 23/23 PASS)
+- EŞİK SIFIRLAMA: Zam merdiveni occ_threshold kalıcı olarak 70'e çekildi. Kök neden bulundu: iter581 pytest süiti eşiği 30'a düşürüp geri almıyordu → teste test_zz_restore_production_threshold eklendi (artık her koşuda 70'e döner).
+- ZAM YÖN DÖNÜŞÜ: ramp_ladder.py — talep eşik altına inince kademe geri alınır (direction:'down', reason:'demand_faded_reversal', cadence+lease korumalı). Panelde ramp-stat-reversals kartı + ▼ satırlar. Doğrulandı: 4 gece 126→120 geri indi.
+- KISMİ YAYIN TELAFİSİ: annual_plan publish — hücre bazlı doğrulama (floor_violation) + yazım hatasında yalnız o hücre eski haline döner; publish_report {applied, rejected[]} plana kaydedilir, panelde annual-publish-report bloğu (koşullu: red varsa görünür). Doğrulandı: 102 uygulandı / 174 tekil red.
+- KARDEŞ OTEL ÖDÜNÇÜ: annual_plan generate — kendi örneklemi <60 gece ise mevsim şekli kardeş otellerin toplamından öğrenilir (shape_source:'sibling', siblings_used); o da yetmezse çapa + nötr şekil, hiçbiri yoksa fail-closed. Doğrulandı: sentetik kardeş otelle shape_source='sibling' (sonra temizlendi). Panelde şekil kaynağı etiketi.
+- Test: iteration_582.json (frontend render PASS) + pytest 23/23. Bilinen not: backend hot-reload arka plan tarayıcı görevleri yüzünden bazen takılıyor → supervisorctl restart backend çözüyor.
+- Kalan RevenueIQ gap backlog (P2): asimetrik zaman kuralı, 2 yıl geçmiş otomatik import.

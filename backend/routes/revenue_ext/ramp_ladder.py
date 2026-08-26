@@ -83,8 +83,34 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
             if occ < float(cfg["occ_threshold"]):
                 if step_no == 0:
                     continue
-                skips.append({"date": day, "room_type": rt.get("name", ""), "reason": "demand_faded",
-                              "detail": f"Doluluk %{occ:.0f} eşiğin altına indi — tırmanış durdu"})
+                # --- YÖN DÖNÜŞÜ: talep söndü — kademeyi geri al, fiyatı indir ---
+                if not force and last_step_at:
+                    elapsed = (now - datetime.fromisoformat(last_step_at)).total_seconds() / 3600
+                    if elapsed < float(cfg["cadence_hours"]):
+                        continue
+                if await acquire_lease(db, pid, rt_id, day, ACTOR) is None:
+                    skips.append({"date": day, "room_type": rt.get("name", ""), "reason": "lease_held"})
+                    continue
+                new_step = step_no - 1
+                new_rate = round(anchor * ((1 + step_p) ** new_step), 2)
+                await db.rate_overrides.update_one(
+                    {"property_id": pid, "room_type_id": rt_id, "date": day},
+                    {"$set": {"custom_rate": new_rate, "set_by": ACTOR,
+                              "reason": f"Zam merdiveni yön dönüşü: doluluk %{occ:.0f} eşik altına indi — kademe {step_no}→{new_step}",
+                              "updated_at": now.isoformat()}}, upsert=True)
+                log = {"id": str(uuid.uuid4()), "property_id": pid, "stay_date": day,
+                       "room_type_id": rt_id, "room_type": rt.get("name", ""),
+                       "step_no": new_step, "from_step": step_no, "rate": new_rate,
+                       "occ": round(occ, 1), "sold": sold, "direction": "down",
+                       "guest_approved": False, "reason": "demand_faded_reversal",
+                       "created_at": now.isoformat()}
+                await db.ramp_steps.insert_one(dict(log))
+                await db.ramp_state.update_one(
+                    {"property_id": pid, "stay_date": day, "room_type_id": rt_id},
+                    {"$set": {"step_no": new_step, "bookings_at_last_step": sold,
+                              "last_step_at": now.isoformat()}}, upsert=True)
+                log.pop("_id", None)
+                actions.append(log)
                 continue
             if not force and last_step_at:
                 elapsed = (now - datetime.fromisoformat(last_step_at)).total_seconds() / 3600
@@ -130,6 +156,7 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                    "room_type_id": rt_id, "room_type": rt.get("name", ""),
                    "step_no": new_step, "from_step": step_no, "rate": new_rate,
                    "occ": round(occ, 1), "sold": sold, "ceiling": ceiling,
+                   "direction": "up",
                    "guest_approved": step_no >= 1,
                    "reason": "guest_approved_step" if step_no >= 1 else "demand_evidence_step",
                    "created_at": now.isoformat()}
@@ -180,6 +207,7 @@ def create_ramp_ladder_router(db, require_roles):
         return {"config": cfg, "steps": steps,
                 "summary": {"total_steps": len(steps),
                             "guest_approved_steps": sum(1 for s in steps if s.get("guest_approved")),
+                            "reversals": sum(1 for s in steps if s.get("direction") == "down"),
                             "awaiting_approval": len(waiting)},
                 "awaiting": [{"stay_date": s["stay_date"], "room_type_id": s["room_type_id"],
                               "step_no": s["step_no"], "bookings_at_last_step": s.get("bookings_at_last_step")}

@@ -67,7 +67,14 @@ class TestRampLadder:
         for s in d["steps"]:
             if s.get("ceiling"):
                 assert s["rate"] <= s["ceiling"] + 0.01
-            assert s.get("reason") in ("demand_evidence_step", "guest_approved_step")
+            assert s.get("reason") in ("demand_evidence_step", "guest_approved_step", "demand_faded_reversal")
+
+    def test_zz_restore_production_threshold(self):
+        # Testler eşiği 30'a düşürür; canlı varsayılan %70'e geri al
+        r = requests.put(f"{API}/ramp-ladder/{PID}/config", headers=H,
+                         json={"occ_threshold": 70}, timeout=15)
+        assert r.status_code == 200
+        assert r.json()["config"]["occ_threshold"] == 70.0
 
 
 # ============= WRITE LEASE (Fencing) =============

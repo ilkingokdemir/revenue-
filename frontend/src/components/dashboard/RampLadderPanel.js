@@ -71,14 +71,18 @@ export default function RampLadderPanel({ propertyId = "default" }) {
             <ArrowsClockwise size={16} className={scanning ? "animate-spin" : ""} /> Şimdi Tara
           </button>
         </div>
-        <div className="grid grid-cols-3 gap-3 mt-5">
+        <div className="grid grid-cols-4 gap-3 mt-5">
           <div className="bg-white/10 rounded-xl p-3" data-testid="ramp-stat-total">
             <div className="text-2xl font-bold">{s.total_steps}</div>
-            <div className="text-xs text-stone-300">Toplam zam kademesi</div>
+            <div className="text-xs text-stone-300">Toplam kademe</div>
           </div>
           <div className="bg-white/10 rounded-xl p-3" data-testid="ramp-stat-approved">
             <div className="text-2xl font-bold text-emerald-300">{s.guest_approved_steps}</div>
             <div className="text-xs text-stone-300">Misafir-onaylı kademe</div>
+          </div>
+          <div className="bg-white/10 rounded-xl p-3" data-testid="ramp-stat-reversals">
+            <div className="text-2xl font-bold text-rose-300">{s.reversals || 0}</div>
+            <div className="text-xs text-stone-300">Yön dönüşü (talep söndü)</div>
           </div>
           <div className="bg-white/10 rounded-xl p-3" data-testid="ramp-stat-awaiting">
             <div className="text-2xl font-bold text-amber-300">{s.awaiting_approval}</div>
@@ -140,9 +144,13 @@ export default function RampLadderPanel({ propertyId = "default" }) {
                   <td>{st.stay_date}</td>
                   <td>{st.room_type}</td>
                   <td>{st.from_step}→{st.step_no}</td>
-                  <td className="font-semibold text-emerald-700">▲ {st.rate}</td>
+                  <td className={`font-semibold ${st.direction === "down" ? "text-rose-600" : "text-emerald-700"}`}>
+                    {st.direction === "down" ? "▼" : "▲"} {st.rate}
+                  </td>
                   <td>%{st.occ}</td>
-                  <td>{st.guest_approved
+                  <td>{st.reason === "demand_faded_reversal"
+                    ? <span className="text-rose-600 text-xs font-semibold">↩ Talep söndü (yön dönüşü)</span>
+                    : st.guest_approved
                     ? <span className="text-emerald-600 text-xs font-semibold">✓ Yeni rezervasyon (misafir onayı)</span>
                     : <span className="text-stone-500 text-xs">Talep kanıtı (doluluk)</span>}</td>
                 </tr>

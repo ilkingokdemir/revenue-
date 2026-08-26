@@ -1,0 +1,29 @@
+{
+  "summary": "Iter 582 — FRONTEND-only UI render doğrulaması yapıldı. Zam Merdiveni panelinde YENİ 'ramp-stat-reversals' istatistik kartı = 4 (backend'deki 4 yön dönüşü kaydıyla eşleşti). Kademe günlüğü tablosunda ▼ satırlar ve '↩ Talep söndü (yön dönüşü)' etiketi görünüyor. Yıllık Plan panelinde 'Şekil örneklemi' kartı '🏨 kardeş otel ödünçü' etiketi ile render edildi ve annual-versions-table 12 sürüm gösterdi. Regression: lastday-ladder-panel, write-lease-panel, morning-karne-panel hepsi hatasız açıldı. İki sapma tespit edildi: (1) ramp-occth-input değeri 30 görünüyor, request 70 bekliyor; (2) annual-publish-report data-testid'i DOM'da bulunamadı (muhtemelen koşullu render).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "RampLadderPanel", "issue": "ramp-occth-input UI değeri 30 (backend'de kayıtlı config değeri); request 70'e resetlendiğini söylüyor ancak GET /api/ramp-ladder/config hâlâ 30 döndürüyor gibi görünüyor. Backend reset 70'e uygulanmamış ya da farklı property için uygulanmış olabilir.", "selector": "[data-testid=\"ramp-occth-input\"]", "priority": "MEDIUM"},
+      {"component": "AnnualPlanPanel", "issue": "annual-publish-report data-testid'i DOM'da bulunamadı. Beklenen 'kısmi yayın telafisi raporu' bloğu ya koşullu (mevcut sürümde partial publish yok) ya da render edilmiyor. Ana agent tarafından koşulun doğrulanması gerek.", "selector": "[data-testid=\"annual-publish-report\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Ramp Ladder eşiği: backend curl ile /api/ramp-ladder/config GET/PUT davranışını doğrula ve occ_threshold=70 gerçekten kalıcılaştı mı kontrol et (UI 30 gösteriyor).",
+    "AnnualPlanPanel: annual-publish-report bloğunun render koşulunu (partial publish + reject varlığı) belgele/UI'da 'boş durum' gösterimi ekle ki koşul karşılanmadığında testable olsun."
+  ],
+  "critical_code_review_comments": [
+    "RampLadderPanel: 4 istatistik kartı grid-cols-4 layout mobil viewport'ta sıkışabilir; sm/md breakpoint ile grid-cols-2 fallback önerilir.",
+    "AnnualPlanPanel: 'kısmi yayın telafisi raporu' bloğu koşullu render ediliyorsa boş-durum placeholder'ı eklenmeli (test edilebilirlik için)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skip)", "frontend": "90%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Yok",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Ramp Ladder ve Annual Plan panellerinin yeni UI eklentileri (ramp-stat-reversals kartı = 4, ▼ satırlar, 'Talep söndü' etiketi, Şekil örneklemi kaynak etiketi 'kardeş otel ödünçü') doğru render ediyor. İki minor sapma: (1) occ eşiği UI 30, request 70 diyor — backend config check gerek; (2) annual-publish-report koşullu render, DOM'da yok. Navigation reçetesi: Sign In → PRO toggle → 'Revenue management' departmanı → sidebar'da ramp-ladder-btn / annual-plan-btn scroll_into_view + click. Regression: lastday-ladder, write-lease, morning-karne hepsi çalışıyor.",
+  "rca of the issue": "ramp-occth-input=30 muhtemelen backend config PUT /api/ramp-ladder/config isteği yapıldı fakat DB'de reset kalıcı olmadı ya da farklı bir alan güncellendi. Frontend doğru: input value={config.occ_threshold} bind'i çalışıyor (30 döndürdüğü için görünüyor). annual-publish-report koşullu render (partial publish + reject varsa gösterilir); mevcut v12 tam yayın (276 gün) olduğundan blok DOM'da yok — bu bug değil, edge-case eksik test verisi."
+}

@@ -54,7 +54,11 @@ export default function AnnualPlanPanel({ propertyId = "default" }) {
     setBusy("pub");
     try {
       const r = await axios.post(`${API}/${pid}/versions/${plan.id}/publish`);
-      toast.success(`Yayınlandı: ${r.data.applied_days} gün (${r.data.actor})`);
+      if (r.data.rejected_count > 0) {
+        toast.warning(`Kısmi telafi: ${r.data.applied_days} gün yayınlandı, ${r.data.rejected_count} hücre tekil reddedildi (${r.data.rejected[0]?.reason})`);
+      } else {
+        toast.success(`Yayınlandı: ${r.data.applied_days} gün (${r.data.actor})`);
+      }
       load();
     } catch { toast.error("Yayın başarısız"); }
     setBusy("");
@@ -110,7 +114,7 @@ export default function AnnualPlanPanel({ propertyId = "default" }) {
             <div className="bg-white/10 rounded-xl p-3"><div className="text-2xl font-bold">{plan.level}</div>
               <div className="text-xs text-stone-300">Seviye ({plan.level_source === "operator_anchor" ? "operatör çapası" : "yakın pencere medyanı"})</div></div>
             <div className="bg-white/10 rounded-xl p-3"><div className="text-2xl font-bold">{plan.shape_sample_nights}</div>
-              <div className="text-xs text-stone-300">Şekil örneklemi (gece)</div></div>
+              <div className="text-xs text-stone-300">Şekil örneklemi — {plan.shape_source === "sibling" ? "🏨 kardeş otel ödünçü" : plan.shape_source === "neutral" ? "nötr şekil" : "kendi geçmişi"}</div></div>
             <div className="bg-white/10 rounded-xl p-3"><div className="text-2xl font-bold">{plan.days?.length}</div>
               <div className="text-xs text-stone-300">Planlanan gün (D90–365)</div></div>
           </div>
@@ -122,6 +126,14 @@ export default function AnnualPlanPanel({ propertyId = "default" }) {
           <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="annual-comp-headline">
             <div className="text-xs uppercase tracking-wider text-stone-400 mb-1">Rakip Sapma Manşeti</div>
             <p className="text-base font-semibold text-stone-800">📰 {plan.comp_deviation?.headline}</p>
+            {plan.publish_report?.rejected_count > 0 && (
+              <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm" data-testid="annual-publish-report">
+                🛡️ <b>Kısmi yayın telafisi:</b> {plan.publish_report.applied} gün yayınlandı,{" "}
+                {plan.publish_report.rejected_count} hücre tekil reddedildi/geri alındı:{" "}
+                {plan.publish_report.rejected.slice(0, 5).map((r) => `${r.date} (${r.reason})`).join(", ")}
+                {plan.publish_report.rejected_count > 5 && " …"}
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl border border-stone-200 p-5">

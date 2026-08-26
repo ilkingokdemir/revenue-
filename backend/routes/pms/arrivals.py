@@ -113,6 +113,7 @@ def create_arrivals_router(db, require_roles):
                 "source": b.get("source", "direct"),
                 "special_requests": b.get("special_requests", ""),
                 "damage_waiver": bool(b.get("damage_waiver")),
+                "noshow_secured": bool(b.get("noshow_secured")),
                 "id_verification": idv_map.get(b["id"], "none"),
                 "progress": {
                     "link_sent": bool(reg),

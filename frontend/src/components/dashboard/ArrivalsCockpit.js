@@ -345,7 +345,10 @@ export const ArrivalsCockpit = ({ propertyId, user }) => {
                         {(a.guest_name || "?").slice(0, 2).toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <p className="font-semibold text-stone-800 truncate">{a.guest_name || "Walk-in"}</p>
+                        <p className="font-semibold text-stone-800 truncate">
+                          {a.guest_name || "Walk-in"}
+                          {a.noshow_secured && <span className="ml-1" title="Depozito alındı — no-show'a karşı güvenceli" data-testid={`secured-badge-${a.booking_id}`}>🛡️</span>}
+                        </p>
                         <p className="text-[10px] text-stone-500 truncate">{a.booking_ref} · {a.source}{a.nights > 1 ? ` · ${a.nights}n` : ""}</p>
                       </div>
                     </div>

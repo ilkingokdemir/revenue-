@@ -16,24 +16,53 @@ export default function NoShowRiskPanel({ propertyId = "default" }) {
   const [confirmBusy, setConfirmBusy] = useState("");
   const [trend, setTrend] = useState(null);
   const [checkBusy, setCheckBusy] = useState(false);
+  const [model, setModel] = useState(null);
+  const [modelBusy, setModelBusy] = useState(false);
   const pid = propertyId === "all" ? "default" : propertyId;
 
   const load = useCallback(async (d) => {
     setLoading(true);
     try {
-      const [r, dr, tr] = await Promise.all([
+      const [r, dr, tr, mr] = await Promise.all([
         axios.get(`${API}/${pid}${d ? `?day=${d}` : ""}`),
         axios.get(`${DEP_API}/${pid}`),
         axios.get(`${API}/${pid}/trend?days=14`),
+        axios.get(`${API}/${pid}/model`),
       ]);
       setData(r.data);
       setDep(dr.data);
       setTrend(tr.data);
+      setModel(mr.data);
       if (!d) setDay(r.data.date);
     } catch { toast.error("No-show riski yüklenemedi"); }
     setLoading(false);
   }, [pid]);
   useEffect(() => { load(""); }, [load]);
+
+  async function saveModel(e) {
+    e.preventDefault();
+    setModelBusy(true);
+    try {
+      const f = e.target;
+      const weights = {};
+      Object.keys(model.weights).forEach((k) => { weights[k] = parseInt(f[`w_${k}`].value, 10); });
+      await axios.put(`${API}/${pid}/model`, {
+        weights,
+        thresholds: { high: parseInt(f.th_high.value, 10), medium: parseInt(f.th_medium.value, 10) },
+      });
+      toast.success("Risk modeli kaydedildi — skorlar yeniden hesaplandı");
+      load(day);
+    } catch (err) { toast.error(err.response?.data?.detail || "Model kaydedilemedi"); }
+    setModelBusy(false);
+  }
+
+  async function resetModel() {
+    try {
+      await axios.post(`${API}/${pid}/model/reset`);
+      toast.success("Risk modeli varsayılanlara döndü");
+      load(day);
+    } catch { toast.error("Sıfırlanamadı"); }
+  }
 
   async function checkPayments() {
     setCheckBusy(true);
@@ -147,7 +176,18 @@ export default function NoShowRiskPanel({ propertyId = "default" }) {
                   <td className="py-2">
                     <div className="flex flex-col gap-1">
                       {r.confirmation_sent ? (
-                        <span className="text-[10px] text-emerald-600 font-semibold" data-testid={`confirm-sent-${r.booking_id}`}>✓ Teyit gönderildi ({r.confirmation_channel})</span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] text-emerald-600 font-semibold" data-testid={`confirm-sent-${r.booking_id}`}>✓ Teyit gönderildi ({r.confirmation_channel})</span>
+                          {r.confirmation_response === "coming" && (
+                            <span className="text-[10px] font-black text-emerald-700" data-testid={`rsvp-${r.booking_id}`}>✅ Misafir: GELİYORUM</span>
+                          )}
+                          {r.confirmation_response === "not_coming" && (
+                            <span className="text-[10px] font-black text-rose-700" data-testid={`rsvp-${r.booking_id}`}>❌ Misafir: GELEMİYORUM — odayı satışa açın</span>
+                          )}
+                          {!r.confirmation_response && (
+                            <span className="text-[10px] text-stone-400" data-testid={`rsvp-${r.booking_id}`}>⏳ Yanıt bekleniyor</span>
+                          )}
+                        </div>
                       ) : (
                         <div className="flex gap-1">
                           <button onClick={() => sendConfirm(r.booking_id, "email")} disabled={confirmBusy === `${r.booking_id}-email`}
@@ -188,6 +228,37 @@ export default function NoShowRiskPanel({ propertyId = "default" }) {
               <Line type="monotone" dataKey="high" stroke="#d97706" strokeWidth={1.5} strokeDasharray="4 3" dot={false} name="high" />
             </LineChart>
           </ResponsiveContainer>
+        </div>
+      )}
+
+      {model && (
+        <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="risk-model-card">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs uppercase tracking-wider text-stone-400">⚙️ Risk Modeli Ayarları (faktör puanları)</div>
+            <button onClick={resetModel} data-testid="risk-model-reset-btn"
+              className="text-xs px-3 py-1 rounded-full border border-stone-300 hover:bg-stone-50">Varsayılana dön</button>
+          </div>
+          <form onSubmit={saveModel} className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+            {Object.entries(model.weights).map(([k, v]) => (
+              <label key={k} className="text-xs text-stone-500">{model.labels[k] || k}
+                <input name={`w_${k}`} type="number" min="0" max="60" defaultValue={v}
+                  data-testid={`risk-weight-${k}`}
+                  className="mt-1 w-full border rounded-lg px-2 py-1.5 text-sm font-semibold" />
+              </label>
+            ))}
+            <label className="text-xs text-rose-600 font-semibold">Yüksek risk eşiği
+              <input name="th_high" type="number" min="10" max="100" defaultValue={model.thresholds.high}
+                data-testid="risk-th-high" className="mt-1 w-full border border-rose-200 rounded-lg px-2 py-1.5 text-sm font-semibold" />
+            </label>
+            <label className="text-xs text-amber-600 font-semibold">Orta risk eşiği
+              <input name="th_medium" type="number" min="10" max="100" defaultValue={model.thresholds.medium}
+                data-testid="risk-th-medium" className="mt-1 w-full border border-amber-200 rounded-lg px-2 py-1.5 text-sm font-semibold" />
+            </label>
+            <button type="submit" disabled={modelBusy} data-testid="risk-model-save-btn"
+              className="col-span-2 px-4 py-2 rounded-full bg-stone-900 text-white text-sm font-semibold disabled:opacity-50">
+              {modelBusy ? "Kaydediliyor…" : "Modeli Kaydet"}
+            </button>
+          </form>
         </div>
       )}
 

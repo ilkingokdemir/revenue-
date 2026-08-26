@@ -1260,3 +1260,10 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - RİSK TRENDİ: noshow_risk_snapshots (günlük avg_score/high/medium) — loop'ta ve GET'te kaydedilir, trend endpoint bugün+yarını self-heal eder. GET /api/noshow-risk/{pid}/trend → 14 gün + weekly_avg. UI: risk-trend-card (recharts, 2 çizgi) + haftalık ortalama rozeti. Screenshot ile doğrulandı.
 - Testler: backend curl + mark_deposit_paid simülasyonu + UI screenshot (panel/trend/buton hepsi render).
 - CANLI DUMAN TESTİ: URL hâlâ bekleniyor.
+
+## Güncelleme (2026-06, iter 586++ — Risk Modeli + Güvenceli Rozet + RSVP Takibi TAMAMLANDI)
+- RİSK MODEL AYARI: risk_model_config {weights(7 faktör), thresholds(high/medium)}. GET/PUT/POST-reset /api/noshow-risk/{pid}/model. score_arrivals config'den okur. UI: risk-model-card (7 input + eşikler + kaydet/sıfırla). Test: unpaid 40 → Sven Lee 70 high, reset OK.
+- GÜVENCELİ ROZETİ: arrivals endpoint'ine noshow_secured alanı eklendi (routes/pms/arrivals.py); ArrivalsCockpit misafir adının yanında 🛡️ (secured-badge-*). Depozito ödenince otomatik görünür.
+- TEYİT YANIT TAKİBİ (RSVP): confirm e-postasında ✅ Geliyorum / ❌ Gelemiyorum butonları → PUBLIC GET /api/noshow-risk/rsvp/{token}?answer= (auth'suz HTML yanıt sayfası). 'Gelemiyorum' → high bildirim ('odayı satışa açın'). Panel satırında yanıt rozetleri (rsvp-*). Test: not_coming akışı uçtan uca doğrulandı (Sven Lee kaydı demo olarak not_coming durumunda bırakıldı).
+- Testler: backend curl uçtan uca + UI screenshot (model kartı, rsvp rozeti, trend, depozito kartı render).
+- CANLI DUMAN TESTİ: URL hâlâ bekleniyor.

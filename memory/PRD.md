@@ -1231,3 +1231,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - MERDİVEN HAFTALIK ÖZETİ: /api/morning-karne/{pid}/ladder-weekly + karneye 9. kalem 'Merdiven geliri (7g, tahmini)' + MorningKarnePanel'de ladder-weekly-card (kurtarılan/ek gelir/toplam).
 - Test: iteration_583.json frontend %100 PASS, backend curl ile tam doğrulandı.
 - RevenueIQ gap backlog: TAMAMI KAPANDI (9/9).
+
+## Güncelleme (2026-06, iter 584 — 3 özellik TAMAMLANDI, frontend %100 + backend curl PASS)
+- MRR HEDEF KUTLAMASI: /api/mrr-celebration (status/check/reset). Hedef (platform_settings billing.mrr_target) aşılınca ayda 1 kez admin bildirim + e-posta (MOCK). 6 saatlik loop. UI: PlatformAdminPanel hedef çubuğu altında pa-celebration-status + 'Şimdi kontrol et'. Test: tetiklendi+dedupe doğrulandı, sonra ay kaydı resetlendi (hedef £2500, MRR £1990 — gerçek aşımda otomatik gidecek).
+- MERDİVEN TREND GRAFİĞİ: /api/morning-karne/{pid}/ladder-trend?days=14 → günlük kurtarılan/ek gelir/toplam. UI: MorningKarnePanel'de recharts 3 çizgili grafik (ladder-trend-chart).
+- GÜN SONU RAPORU (EOD): /api/eod-report/{pid} (latest/history/send-now). night-audit close-day sonrası OTOMATİK e-posta kancası (immutable snapshot); kapanış yoksa canlı tahmin. UI: MorningKarnePanel'de eod-report-card + 'Bugünü Şimdi Gönder'. Kanca test edildi (2026-08-25 kapanışı → otomatik EOD, sonra gün geri açıldı).
+- React key uyarısı düzeltildi (PlatformAdminPanel txs/keys map).
+- CANLI DUMAN TESTİ: kullanıcı henüz canlı URL vermedi ('Devam et' dedi) — panel ve endpoint hazır, URL gelince koşulacak.
+- Test: iteration_584.json frontend %100 PASS.

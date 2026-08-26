@@ -106,6 +106,13 @@ def create_night_audit_close_router(db, require_roles):
         }
         await db.night_audit_closes.insert_one(record)
         record.pop("_id", None)
+        # Gün Sonu Raporu: kapanış sonrası otomatik e-posta (arka planda)
+        try:
+            import asyncio as _aio
+            from routes.hotel_ops.eod_report import send_eod
+            _aio.create_task(send_eod(db, property_id, business_date))
+        except Exception:
+            pass
         return record
 
     @router.post("/night-audit/reopen-day/{property_id}")

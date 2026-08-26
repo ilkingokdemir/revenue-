@@ -1875,6 +1875,10 @@ from routes.platform_ext.live_smoke import create_live_smoke_router
 api_router.include_router(create_live_smoke_router(db, require_roles))
 from routes.distribution.history_import import create_history_import_router, history_import_loop
 api_router.include_router(create_history_import_router(db, require_roles))
+from routes.platform_ext.mrr_celebration import create_mrr_celebration_router, mrr_celebration_loop
+api_router.include_router(create_mrr_celebration_router(db, require_roles))
+from routes.hotel_ops.eod_report import create_eod_report_router
+api_router.include_router(create_eod_report_router(db, require_roles))
 
 @app.on_event("startup")
 async def _start_reviq_gap_loops():
@@ -1884,6 +1888,7 @@ async def _start_reviq_gap_loops():
     _spawn(ramp_ladder_loop(db))
     _spawn(morning_karne_loop(db))
     _spawn(history_import_loop(db))
+    _spawn(mrr_celebration_loop(db))
 
 app.include_router(api_router)
 

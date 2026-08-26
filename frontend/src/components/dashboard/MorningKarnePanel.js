@@ -1,27 +1,46 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Sun, PaperPlaneTilt } from "@phosphor-icons/react";
+import { Sun, PaperPlaneTilt, MoonStars } from "@phosphor-icons/react";
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/morning-karne`;
+const EOD_API = `${process.env.REACT_APP_BACKEND_URL}/api/eod-report`;
 
 export default function MorningKarnePanel({ propertyId = "default" }) {
   const [data, setData] = useState(null);
   const [history, setHistory] = useState([]);
+  const [trend, setTrend] = useState([]);
+  const [eod, setEod] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [eodBusy, setEodBusy] = useState(false);
   const pid = propertyId === "all" ? "default" : propertyId;
 
   const load = useCallback(async () => {
     try {
-      const [l, h] = await Promise.all([
+      const [l, h, t, e] = await Promise.all([
         axios.get(`${API}/${pid}/latest`),
         axios.get(`${API}/${pid}/history`),
+        axios.get(`${API}/${pid}/ladder-trend?days=14`),
+        axios.get(`${EOD_API}/${pid}/latest`),
       ]);
       setData(l.data);
       setHistory(h.data.history || []);
+      setTrend(t.data.trend || []);
+      setEod(e.data);
     } catch { toast.error("Karne verisi yüklenemedi"); }
   }, [pid]);
   useEffect(() => { load(); }, [load]);
+
+  async function sendEodNow() {
+    setEodBusy(true);
+    try {
+      const r = await axios.post(`${EOD_API}/${pid}/send-now`, {});
+      toast.success(`Gün sonu raporu gönderildi → ${r.data.sent_to.length} yönetici`);
+      load();
+    } catch { toast.error("Gönderilemedi"); }
+    setEodBusy(false);
+  }
 
   async function sendNow() {
     setBusy(true);
@@ -101,6 +120,60 @@ export default function MorningKarnePanel({ propertyId = "default" }) {
             </div>
           </div>
         ) : <p className="text-sm text-stone-400">Veri yok.</p>}
+        {trend.length > 0 && (
+          <div className="mt-4" data-testid="ladder-trend-chart">
+            <div className="text-xs uppercase tracking-wider text-stone-400 mb-1">Günlük trend (14 gün, tahmini)</div>
+            <ResponsiveContainer width="100%" height={160}>
+              <LineChart data={trend} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={(d) => d.slice(5)} />
+                <YAxis tick={{ fontSize: 9 }} />
+                <Tooltip formatter={(v, n) => [`≈${v}`, n === "recovered" ? "Kurtarılan (son-gün)" : n === "uplift" ? "Ek gelir (zam)" : "Toplam"]}
+                  labelFormatter={(d) => `Tarih: ${d}`} />
+                <Line type="monotone" dataKey="recovered" stroke="#059669" strokeWidth={2} dot={false} name="recovered" />
+                <Line type="monotone" dataKey="uplift" stroke="#d97706" strokeWidth={2} dot={false} name="uplift" />
+                <Line type="monotone" dataKey="total" stroke="#1c1917" strokeWidth={2} strokeDasharray="4 3" dot={false} name="total" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="eod-report-card">
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-stone-400 mb-1 flex items-center gap-1">
+              <MoonStars size={14} /> Gün Sonu Raporu (EOD)
+            </div>
+            <p className="text-sm text-stone-600">
+              Gece denetimi (gün kapanışı) yapılınca otomatik e-postalanır — kapanış anındaki değişmez snapshot kullanılır.
+            </p>
+            {eod?.latest && (
+              <p className="text-xs text-stone-400 mt-1" data-testid="eod-last-sent">
+                Son gönderim: {eod.latest.business_date} → {eod.latest.sent_to?.length} yönetici ({eod.latest.report?.source === "night_audit_close" ? "kapanış snapshot" : "canlı tahmin"})
+              </p>
+            )}
+          </div>
+          <button onClick={sendEodNow} disabled={eodBusy} data-testid="eod-send-now-btn"
+            className="px-4 py-2 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold flex items-center gap-2 disabled:opacity-50">
+            <PaperPlaneTilt size={16} /> Bugünü Şimdi Gönder
+          </button>
+        </div>
+        {eod?.live_preview && (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-center" data-testid="eod-preview">
+            {[
+              ["Doluluk", `%${eod.live_preview.occupancy}`],
+              ["Gelir", `£${eod.live_preview.totals.charges}`],
+              ["Giriş/Çıkış", `${eod.live_preview.counts.arrivals}/${eod.live_preview.counts.departures}`],
+              ["No-show", eod.live_preview.no_shows],
+              ["Yarın giriş", eod.live_preview.tomorrow_arrivals],
+            ].map(([k, v]) => (
+              <div key={k} className="bg-stone-50 rounded-xl p-2">
+                <div className="text-base font-bold">{v}</div>
+                <div className="text-[10px] text-stone-500">{k}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl border border-stone-200 p-5">

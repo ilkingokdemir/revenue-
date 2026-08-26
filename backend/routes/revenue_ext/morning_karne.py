@@ -170,6 +170,34 @@ def create_morning_karne_router(db, require_roles):
     async def ladder_weekly(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         return await compute_ladder_weekly(db, pid)
 
+    @router.get("/{pid}/ladder-trend")
+    async def ladder_trend(pid: str, days: int = 14, _u: dict = Depends(require_roles(*ROLES))):
+        """Merdiven kazançlarının günlük trendi (son N gün, tahmini)."""
+        days = max(7, min(days, 30))
+        since = (_now() - timedelta(days=days)).isoformat()
+        cfg = await db.ramp_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+        p = float(cfg.get("step_pct", 5.0)) / 100.0
+        buckets = {}
+        for off in range(days - 1, -1, -1):
+            d = (_now() - timedelta(days=off)).date().isoformat()
+            buckets[d] = {"date": d, "recovered": 0.0, "uplift": 0.0}
+        async for s in db.ladder_steps.find(
+                {"property_id": pid, "created_at": {"$gte": since}, "direction": "up"}, {"_id": 0}):
+            d = s["created_at"][:10]
+            if d in buckets:
+                buckets[d]["recovered"] += float(s.get("rate", 0))
+        async for s in db.ramp_steps.find(
+                {"property_id": pid, "created_at": {"$gte": since},
+                 "guest_approved": True}, {"_id": 0}):
+            if s.get("direction", "up") != "up":
+                continue
+            d = s["created_at"][:10]
+            if d in buckets:
+                buckets[d]["uplift"] += float(s.get("rate", 0)) * (1 - 1 / (1 + p))
+        trend = [{**v, "recovered": round(v["recovered"], 2), "uplift": round(v["uplift"], 2),
+                  "total": round(v["recovered"] + v["uplift"], 2)} for v in buckets.values()]
+        return {"days": days, "trend": trend}
+
     @router.get("/{pid}/history")
     async def history(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         cards = await db.daily_report_cards.find(

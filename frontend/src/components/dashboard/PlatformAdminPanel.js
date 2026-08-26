@@ -26,6 +26,25 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
   const [targetInput, setTargetInput] = useState("");
   const [historyFor, setHistoryFor] = useState(null);
   const [historyItems, setHistoryItems] = useState([]);
+  const [celebration, setCelebration] = useState(null);
+
+  const loadCelebration = async () => {
+    try {
+      const r = await axios.get(`${API}/api/mrr-celebration/status`, cfg);
+      setCelebration(r.data);
+    } catch { /* sessiz */ }
+  };
+  useEffect(() => { loadCelebration(); }, []); // eslint-disable-line
+
+  const checkCelebration = async () => {
+    try {
+      const r = await axios.post(`${API}/api/mrr-celebration/check`, {}, cfg);
+      if (r.data.celebration) toast.success(`🎉 Kutlama gönderildi! £${r.data.mrr} / £${r.data.target}`);
+      else if (r.data.celebrated_this_month) toast.info("Bu ay zaten kutlandı");
+      else toast.info(`Hedef henüz aşılmadı: £${r.data.mrr} / £${r.data.target || "—"}`);
+      loadCelebration();
+    } catch { toast.error("Kontrol başarısız"); }
+  };
 
   const saveTarget = async () => {
     try {
@@ -189,6 +208,19 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
                 </div>
               );
             })() : <span className="text-[10px] text-stone-400">Henüz aylık hedef yok — sağdan belirleyin →</span>}
+            {celebration && (
+              <div className="mt-1 flex items-center gap-2" data-testid="pa-celebration-status">
+                {celebration.celebrated_this_month ? (
+                  <span className="text-[10px] font-black text-emerald-600">🎉 Bu ay kutlandı — yöneticilere e-posta gitti</span>
+                ) : celebration.reached ? (
+                  <span className="text-[10px] font-black text-amber-600">🏆 Hedef aşıldı — kutlama bir sonraki kontrolde gidecek</span>
+                ) : (
+                  <span className="text-[9px] text-stone-400">Hedef aşılınca otomatik kutlama bildirimi + e-postası gider</span>
+                )}
+                <button onClick={checkCelebration} data-testid="pa-celebration-check"
+                  className="px-2 py-0.5 rounded-full border border-stone-300 text-[9px] font-bold hover:bg-stone-50">Şimdi kontrol et</button>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <input value={targetInput} onChange={(e) => setTargetInput(e.target.value)} placeholder={mrrTarget ? `£${mrrTarget}` : "Hedef £"}
@@ -247,8 +279,8 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
           </div>
           {payLink && <a href={payLink} target="_blank" rel="noreferrer" className="text-[11px] text-indigo-600 break-all" data-testid="pa-pay-link">{payLink.slice(0, 80)}…</a>}
           <div className="mt-2 space-y-1 max-h-32 overflow-auto">
-            {txs.map((t) => (
-              <div key={t.id} className="flex justify-between text-[11px] bg-stone-50 rounded-lg px-2 py-1">
+            {txs.map((t, i) => (
+              <div key={t.id || i} className="flex justify-between text-[11px] bg-stone-50 rounded-lg px-2 py-1">
                 <span>{t.booking_id || "—"} · £{t.amount}</span>
                 <span className={t.payment_status === "paid" ? "text-emerald-600 font-bold" : "text-amber-600"}>{t.payment_status}</span>
               </div>
@@ -260,8 +292,8 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
           <button onClick={createKey} data-testid="pa-key-create" className="px-3 py-1.5 rounded-lg bg-stone-900 text-white text-xs font-bold mb-2">+ Anahtar Üret</button>
           {newKey && <div className="text-[11px] bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2 break-all font-mono" data-testid="pa-key-new">{newKey}</div>}
           <div className="space-y-1">
-            {keys.map((k) => (
-              <div key={k.id} className="flex justify-between text-[11px] bg-stone-50 rounded-lg px-2 py-1">
+            {keys.map((k, i) => (
+              <div key={k.id || k.key || i} className="flex justify-between text-[11px] bg-stone-50 rounded-lg px-2 py-1">
                 <span className="font-mono">{k.key}</span><span className="text-stone-400">{k.calls || 0} çağrı</span>
               </div>
             ))}

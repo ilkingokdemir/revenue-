@@ -36,6 +36,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
     )
     router = APIRouter()
     stripe_api_key = os.environ.get("STRIPE_API_KEY", "")
+    SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
 
     # ==================== BOOKING ENGINE ROUTES ====================
 
@@ -300,7 +301,6 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
 
     @router.post("/upsells")
     async def create_upsell(data: UpsellItemCreate, current_user: dict = Depends(require_perm("edit_bookings"))):
-        from models import UpsellItem
         item = UpsellItem(**data.model_dump())
         doc = item.model_dump()
         await db.upsell_items.insert_one(doc)
@@ -323,7 +323,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
     @router.post("/upsells/seed/{property_id}")
     async def seed_upsells(property_id: str, current_user: dict = Depends(require_perm("edit_bookings"))):
         """Seed default upsell items from templates"""
-        from models import UPSELL_TEMPLATES, UpsellItem
+        from models import UPSELL_TEMPLATES
         existing = await db.upsell_items.count_documents({"property_id": property_id})
         if existing > 0:
             return {"message": f"Property already has {existing} upsells", "count": existing}
@@ -715,7 +715,6 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
     @router.post("/group-booking/request")
     async def submit_group_booking(data: GroupBookingRequest):
         """Public: Submit a group/corporate booking request"""
-        from models import GroupBooking
         group = GroupBooking(**data.model_dump())
         doc = group.model_dump()
         await db.group_bookings.insert_one(doc)

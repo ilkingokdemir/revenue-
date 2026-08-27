@@ -514,5 +514,5 @@ def cleanup(admin_session):
                 if "TEST_" in agent.get("name", ""):
                     # Note: No delete endpoint, so we just leave them
                     pass
-    except:
+    except Exception:
         pass

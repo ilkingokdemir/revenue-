@@ -44,6 +44,43 @@ def _detect(series: List[Dict], cfg: Dict) -> List[Dict]:
     return out
 
 
+def robust_band_filter(rates: List[float], low_pct: float = 45.0,
+                       high_pct: float = 250.0):
+    """Saf fonksiyon: medyan bandı dışındaki fiyatları ayıklar → (temiz, atılan_sayısı)."""
+    vals = [float(r) for r in rates if r and float(r) > 0]
+    if len(vals) < 3:
+        return vals, 0
+    med = _median(vals)
+    clean = [v for v in vals if low_pct <= v / med * 100 <= high_pct]
+    return (clean or vals), len(vals) - len(clean or vals)
+
+
+async def clean_comp_entries(db, pid: str, date: str, entries: List[Dict]):
+    """entries: [{comp_name, rate}] → yoksayılanlar + bant dışılar ayıklanır.
+    Dönen: (temiz_rate_listesi, atılan_sayısı)."""
+    cfg = {**DEFAULTS, **(await db.comp_anomaly_config.find_one(
+        {"property_id": pid}, {"_id": 0}) or {})}
+    if not cfg.get("enabled", True):
+        return [e["rate"] for e in entries if e.get("rate")], 0
+    ignored = set()
+    async for i in db.comp_anomaly_ignores.find(
+            {"property_id": pid}, {"_id": 0, "key": 1}):
+        ignored.add(i["key"])
+    kept = []
+    dropped = 0
+    for e in entries:
+        r = float(e.get("rate") or 0)
+        if r <= 0:
+            continue
+        key = f"compset|{e.get('comp_name', '')}|{date}|{r:.0f}"
+        if key in ignored:
+            dropped += 1
+            continue
+        kept.append(r)
+    clean, band_dropped = robust_band_filter(kept, cfg["low_pct"], cfg["high_pct"])
+    return clean, dropped + band_dropped
+
+
 def create_comp_anomaly_router(db, require_roles):
     router = APIRouter(prefix="/comp-anomaly", tags=["comp-anomaly"])
     ROLES = ("admin", "manager")

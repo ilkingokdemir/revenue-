@@ -77,7 +77,7 @@ def test_booking(authenticated_client):
     # Cleanup - delete test booking
     try:
         authenticated_client.delete(f"{BASE_URL}/api/bookings/{booking.get('id')}")
-    except:
+    except Exception:
         pass
 
 

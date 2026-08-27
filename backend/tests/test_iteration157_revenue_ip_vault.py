@@ -351,7 +351,7 @@ def cleanup_ip_rules(admin_session):
         if resp.status_code == 200:
             for rule in resp.json().get("rules", []):
                 admin_session.delete(f"{BASE_URL}/api/ip-allowlist/{rule['id']}")
-    except:
+    except Exception:
         pass
 
 

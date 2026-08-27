@@ -302,6 +302,8 @@ export function buildMenuSections(t, user) {
         { id: "forecast-730", icon: CalendarBlank, name: "730 Gün Tahmin Ufku", testId: "forecast-730-btn" },
         { id: "comp-anomaly", icon: ShieldCheck, name: "Rakip Veri Anomali Düzeltme", testId: "comp-anomaly-btn" },
         { id: "profit-benchmark", icon: Coins, name: "Kâr Benchmark (GOPPAR ligi)", testId: "profit-benchmark-btn" },
+        { id: "sentiment-pricing", icon: Brain, name: "Sosyal Sentiment Fiyatı", testId: "sentiment-pricing-btn" },
+        { id: "mobile-approvals", icon: DeviceMobile, name: "Mobil Onay Merkezi", testId: "mobile-approvals-btn" },
         { id: "pricing-explain", icon: Brain, name: "AI pricing explainer", testId: "pricing-explain-btn" },
         { id: "anomaly", icon: Lightning, name: "Anomaly radar", testId: "anomaly-btn" },
         { id: "ai-predictions", icon: Sparkle, name: "AI predictions", testId: "ai-predictions-btn" },

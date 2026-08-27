@@ -47,7 +47,6 @@ from routes.hotel_ops.pos import create_pos_router
 from routes.hotel_ops.pos_advanced import create_pos_advanced_router
 from routes.hotel_ops.pos_ai import create_pos_ai_router
 from routes.finance_ext.payments import create_payments_router
-from routes.hotel_ops.terminal import create_terminal_router
 from routes.platform_ext.auth_routes import create_auth_router
 from routes.integrations_pkg.connections import create_connections_router
 from routes.guests.reviews import create_reviews_router
@@ -87,7 +86,7 @@ from routes.finance_ext.terminal import create_terminal_router
 from routes.ai.ai_copilot import create_ai_copilot_router
 from routes.platform_ext.presets import create_presets_router
 from routes.platform_ext.trial_emails import create_trial_emails_router, trial_email_loop
-from routes.platform_ext.system_health import create_system_health_router, record_request as _health_record, health_alert_loop, weekly_digest_loop
+from routes.platform_ext.system_health import create_system_health_router, record_request as _health_record, health_alert_loop
 from routes.hotel_ops.event_intelligence import create_event_intelligence_router
 from routes.revenue_ext.parity_analysis import create_parity_analysis_router
 from routes.distribution.channel_manager import create_channel_manager_router
@@ -1900,12 +1899,17 @@ from routes.revenue_ext.comp_anomaly import create_comp_anomaly_router
 api_router.include_router(create_comp_anomaly_router(db, require_roles))
 from routes.revenue_ext.profit_benchmark import create_profit_benchmark_router
 api_router.include_router(create_profit_benchmark_router(db, require_roles))
+from routes.revenue_ext.sentiment_pricing import create_sentiment_pricing_router
+api_router.include_router(create_sentiment_pricing_router(db, require_roles))
+from routes.revenue_ext.owner_weekly import create_owner_weekly_router, owner_weekly_loop
+api_router.include_router(create_owner_weekly_router(db, require_roles))
 from routes.hotel_ops.deposit_rule import create_deposit_rule_router, deposit_rule_loop
 api_router.include_router(create_deposit_rule_router(db, require_roles))
 
 @app.on_event("startup")
 async def _start_reviq_gap_loops():
     _spawn(rate_mix_weekly_loop(db))
+    _spawn(owner_weekly_loop(db))
     _spawn(lastday_ladder_loop(db))
     _spawn(storefront_verify_loop(db))
     _spawn(second_writer_loop(db))
@@ -2264,7 +2268,6 @@ async def startup_event():
         logger.warning("Tor startup failed: %s", e)
 
     # tick workers (workers.py — ROADMAP P1 refactor)
-    import asyncio
     from workers import scheduled_checkout_loop, reports_loop, otb_snapshot_loop, str_scan_loop, revenue_brain_loop, complaint_task_sync_loop, complaint_sla_loop, rating_trend_alert_loop, winback_reminder_loop, publish_day_alert_loop, praise_hunter_loop, profit_autopilot_loop, data_quality_sentinel_loop, open_pricing_optimizer_loop
     _spawn(scheduled_checkout_loop(db))
     _spawn(reports_loop(db))

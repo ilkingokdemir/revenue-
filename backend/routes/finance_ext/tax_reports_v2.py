@@ -88,6 +88,11 @@ async def _aggregate(db, q: Dict, days: int) -> Dict:
 def create_tax_reports_router(db, require_roles):
     router = APIRouter()
 
+    @router.get("/tax-reports/all")
+    async def all_props(days: int = 30,
+                          current_user: dict = Depends(require_roles("admin"))):
+        return await _aggregate(db, {}, days)
+
     @router.get("/tax-reports/{property_id}")
     async def report(property_id: str, days: int = 30,
                        current_user: dict = Depends(require_roles("admin", "manager"))):
@@ -96,11 +101,6 @@ def create_tax_reports_router(db, require_roles):
         if not bid_list:
             return await _aggregate(db, {"booking_id": {"$in": []}}, days)
         return await _aggregate(db, {"booking_id": {"$in": bid_list}}, days)
-
-    @router.get("/tax-reports/all")
-    async def all_props(days: int = 30,
-                          current_user: dict = Depends(require_roles("admin"))):
-        return await _aggregate(db, {}, days)
 
     @router.get("/tax-reports/{property_id}/export.csv", response_class=PlainTextResponse)
     async def export(property_id: str, days: int = 30,

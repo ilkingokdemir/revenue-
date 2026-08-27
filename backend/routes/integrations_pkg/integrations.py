@@ -13,9 +13,14 @@ import asyncio
 import httpx
 import logging
 
-from routes.helpers import serialize_review, log_sync, fire_webhooks
+from routes.helpers import serialize_review
+from models import Review
 
 logger = logging.getLogger(__name__)
+
+
+async def send_negative_review_notification(review_doc):
+    logger.info("Negatif yorum bildirimi (mock): %s", (review_doc or {}).get("guest_name", ""))
 
 
 def create_integrations_router(db, require_roles, resend):

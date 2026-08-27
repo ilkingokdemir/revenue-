@@ -12,6 +12,12 @@ def create_profit_benchmark_router(db, require_roles):
 
     @router.get("")
     async def league(months: int = 3, _u: dict = Depends(require_roles(*ROLES))):
+        return await compute_league(db, months)
+
+    return router
+
+
+async def compute_league(db, months: int = 3):
         months = max(1, min(months, 12))
         now = datetime.now(timezone.utc)
         # pencere: son N tam ay + içinde bulunulan ay
@@ -78,5 +84,3 @@ def create_profit_benchmark_router(db, require_roles):
         return {"window_start": start, "window_days": window_days,
                 "portfolio_goppar": port_goppar, "properties": rows,
                 "note": "GOPPAR = (toplam gelir − oda-gece×CPOR − %22 sabit gider) / müsait oda-gece. TRevPAR yan gelirleri (POS) içerir. Kaynak: HotStats metodolojisi."}
-
-    return router

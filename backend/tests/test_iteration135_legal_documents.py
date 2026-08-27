@@ -77,7 +77,7 @@ class TestLegalDocumentsCRUD:
         for doc_id in self.created_docs:
             try:
                 requests.delete(f"{BASE_URL}/api/legal-documents/{doc_id}", headers=self.headers)
-            except:
+            except Exception:
                 pass
     
     def test_create_document_basic(self):
@@ -379,7 +379,7 @@ class TestLegalDocumentsVersioning:
         for doc_id in self.created_docs:
             try:
                 requests.delete(f"{BASE_URL}/api/legal-documents/{doc_id}", headers=self.headers)
-            except:
+            except Exception:
                 pass
     
     def test_new_version_bumps_minor(self):
@@ -446,7 +446,7 @@ class TestLegalDocumentsAcceptance:
         for doc_id in self.created_docs:
             try:
                 requests.delete(f"{BASE_URL}/api/legal-documents/{doc_id}", headers=self.headers)
-            except:
+            except Exception:
                 pass
     
     def test_pending_me_returns_required_docs(self):

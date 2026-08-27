@@ -130,6 +130,8 @@ import {
   Forecast730Panel,
   CompAnomalyPanel,
   ProfitBenchmarkPanel,
+  SentimentPricingPanel,
+  MobileApprovalsPanel,
   IpAllowlistPanel,
   KDSPanel,
   KeyFiguresPanel,
@@ -1688,6 +1690,8 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {activeView === "forecast-730" && <Forecast730Panel propertyId={activePropertyId || "default"} />}
         {activeView === "comp-anomaly" && <CompAnomalyPanel propertyId={activePropertyId || "default"} />}
         {activeView === "profit-benchmark" && <ProfitBenchmarkPanel />}
+        {activeView === "sentiment-pricing" && <SentimentPricingPanel propertyId={activePropertyId || "default"} />}
+        {activeView === "mobile-approvals" && <MobileApprovalsPanel propertyId={activePropertyId || "default"} />}
         {activeView === "restriction-advisor" && <RestrictionAdvisorPanel propertyId={activePropertyId || "all"} />}
         {activeView === "gap-filler" && <GapFillerPanel propertyId={activePropertyId || "all"} />}
         {activeView === "lost-demand" && <LostDemandPanel propertyId={activePropertyId || "all"} />}

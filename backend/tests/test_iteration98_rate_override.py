@@ -45,7 +45,7 @@ class TestRateOverrideAPI:
                 "custom_rate": None,
                 "room_type_id": ""
             })
-        except:
+        except Exception:
             pass
     
     def test_01_login_success(self):

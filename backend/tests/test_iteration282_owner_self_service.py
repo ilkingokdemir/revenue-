@@ -64,7 +64,7 @@ class TestOwnerSelfService:
         # Cleanup: delete test owner
         try:
             requests.delete(f"{BASE_URL}/api/owners/{owner['id']}", headers=admin_headers)
-        except:
+        except Exception:
             pass
 
     # ============ Credentials Setup Tests ============

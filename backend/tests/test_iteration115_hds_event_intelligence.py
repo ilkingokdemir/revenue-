@@ -37,7 +37,7 @@ class TestHDSEventIntelligence:
                 for event in events:
                     if event.get("name", "").startswith("TEST_"):
                         self.session.delete(f"{BASE_URL}/api/revenue/events/{event.get('id')}")
-        except:
+        except Exception:
             pass
 
     # ==================== BACKEND API TESTS ====================

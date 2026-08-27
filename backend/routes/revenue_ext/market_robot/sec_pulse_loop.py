@@ -131,8 +131,9 @@ def register(router, db, require_roles, resend, S):
             else:
                 review_rank = None
 
-            # Median market price for context
-            market_prices = [h["price"] for h in comps_row]
+            # Median market price for context (anomali bandı ayıklanmış)
+            from routes.revenue_ext.comp_anomaly import robust_band_filter
+            market_prices, _dropped = robust_band_filter([h["price"] for h in comps_row])
             median = _stats.median(market_prices) if market_prices else None
 
             rankings.append({

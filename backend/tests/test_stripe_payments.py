@@ -41,7 +41,7 @@ class TestStripePaymentIntegration:
         for booking_id in self.test_booking_ids:
             try:
                 self.session.delete(f"{API}/bookings/{booking_id}")
-            except:
+            except Exception:
                 pass
     
     def create_test_booking(self, payment_method="card"):

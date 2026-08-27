@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LanguageProvider, useTranslation } from "@/i18n";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { PWAInstall } from "@/components/PWAInstall";
+import { NotificationBridge } from "@/components/NotificationBridge";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { installOfflineQueue } from "@/lib/offlineQueue";
 installOfflineQueue();
@@ -1493,6 +1494,7 @@ function AppWithLanguage() {
     <LanguageProvider>
       <App />
       <PWAInstall />
+      <NotificationBridge />
       <OfflineBanner />
     </LanguageProvider>
   );

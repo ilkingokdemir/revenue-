@@ -43,7 +43,7 @@ class TestNotificationCentre:
                 for n in notifications:
                     if n.get("title", "").startswith("TEST_"):
                         self.session.delete(f"{BASE_URL}/api/notifications/{n['id']}")
-        except:
+        except Exception:
             pass
     
     # === GET /api/notifications ===

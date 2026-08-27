@@ -32,9 +32,31 @@ def create_rms_uplift_router(db, require_roles):
 
     @router.get("/{pid}")
     async def uplift(pid: str, months: int = 12, _u: dict = Depends(require_roles(*ROLES))):
+        return await compute_uplift(db, pid, months)
+
+    return router
+
+
+async def compute_uplift(db, pid: str, months: int = 12):
+        async def _robot_start2(p):
+            d = await db.ai_pricing_decisions.find_one(
+                {"property_id": p, "decided_at": {"$exists": True}},
+                {"_id": 0, "decided_at": 1}, sort=[("decided_at", 1)])
+            if d and d.get("decided_at"):
+                return d["decided_at"][:10]
+            ov = await db.rate_overrides.find_one(
+                {"property_id": p, "set_by": {"$in": list(ROBOT_ACTORS)},
+                 "updated_at": {"$exists": True}},
+                {"_id": 0, "updated_at": 1}, sort=[("updated_at", 1)])
+            return (ov or {}).get("updated_at", "")[:10] or None
+
         months = max(4, min(months, 24))
-        cap = await _capacity(pid)
-        robot_start = await _robot_start(pid)
+        total = 0
+        for rt in await db.room_types.find({"property_id": pid},
+                                           {"_id": 0, "total_rooms": 1}).to_list(100):
+            total += int(rt.get("total_rooms", 0))
+        cap = total or await db.rooms.count_documents({"property_id": pid}) or 20
+        robot_start = await _robot_start2(pid)
         now = datetime.now(timezone.utc)
         rows = []
         for i in range(months - 1, -1, -1):
@@ -91,5 +113,3 @@ def create_rms_uplift_router(db, require_roles):
                 "total_uplift_gbp": round(total_uplift, 0), "uplift_pct": pct,
                 "robot_months": robot_months, "verdict": verdict,
                 "note": "Uplift = (aylık RevPAR − baz RevPAR) × oda × gün. Baz = robot öncesi ayların ortalaması (yoksa serinin ilk çeyreği, 'baz*' olarak işaretlenir)."}
-
-    return router

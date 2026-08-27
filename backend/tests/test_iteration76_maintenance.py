@@ -446,7 +446,7 @@ class TestMaintenanceModule:
             if issue_id:
                 try:
                     self.session.delete(f"{BASE_URL}/api/maintenance/issues/{issue_id}")
-                except:
+                except Exception:
                     pass
         
         # Delete recurring schedules
@@ -455,7 +455,7 @@ class TestMaintenanceModule:
             if schedule_id:
                 try:
                     self.session.delete(f"{BASE_URL}/api/maintenance/recurring/{schedule_id}")
-                except:
+                except Exception:
                     pass
         
         print("Test data cleanup completed")
@@ -483,7 +483,7 @@ class TestMaintenanceAutoAssignment:
         for issue_id in self.created_issues:
             try:
                 self.session.delete(f"{BASE_URL}/api/maintenance/issues/{issue_id}")
-            except:
+            except Exception:
                 pass
     
     def test_cleaning_category_assigns_to_housekeeping(self):

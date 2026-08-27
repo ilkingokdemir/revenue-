@@ -50,14 +50,14 @@ class TestShiftPayrollPipeline:
         for shift_id in self.test_shift_ids:
             try:
                 self.session.delete(f"{BASE_URL}/api/shifts/entries/{shift_id}")
-            except:
+            except Exception:
                 pass
         
         # Delete test staff
         if self.test_staff_id:
             try:
                 self.session.delete(f"{BASE_URL}/api/shifts/staff/{self.test_staff_id}")
-            except:
+            except Exception:
                 pass
     
     # ==================== SHIFT HOURS CALCULATION TESTS ====================
@@ -636,12 +636,12 @@ class TestShiftPayrollCalculationEdgeCases:
         for shift_id in self.test_shift_ids:
             try:
                 self.session.delete(f"{BASE_URL}/api/shifts/entries/{shift_id}")
-            except:
+            except Exception:
                 pass
         if self.test_staff_id:
             try:
                 self.session.delete(f"{BASE_URL}/api/shifts/staff/{self.test_staff_id}")
-            except:
+            except Exception:
                 pass
     
     def test_zero_pay_rate_shift(self):

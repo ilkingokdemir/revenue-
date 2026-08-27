@@ -30,25 +30,6 @@ def create_reviews_router(db, require_roles, get_current_user, verify_api_key, L
     SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
     NOTIFICATION_EMAIL = os.environ.get('NOTIFICATION_EMAIL', '')
 
-    async def analyze_sentiment(review_text: str, rating: int) -> dict:
-        """Analyze sentiment of a review using GPT-5.2"""
-        api_key = os.environ.get("EMERGENT_LLM_KEY")
-        if not api_key:
-            return {"sentiment": "neutral" if rating >= 3 else "negative", "key_phrases": [], "topics": []}
-        try:
-            chat = LlmChat(api_key=api_key, session_id=f"sentiment-{uuid.uuid4()}", system_message="Analyze hotel review sentiment. Return JSON only.").with_model("openai", "gpt-5.2")
-            prompt = f"""Analyze this hotel review. Return ONLY a JSON object:
-{{"sentiment": "positive|negative|neutral|mixed", "key_phrases": ["phrase1", "phrase2"], "topics": ["topic1"], "emotion": "happy|frustrated|disappointed|grateful|neutral", "urgency": "low|medium|high"}}
-Rating: {rating}/5
-Review: {review_text[:500]}"""
-            reply = await chat.send_message(UserMessage(text=prompt))
-            import json
-            cleaned = reply.strip().strip("```json").strip("```").strip()
-            return json.loads(cleaned)
-        except Exception as e:
-            logger.error(f"Sentiment analysis error: {e}")
-            return {"sentiment": "positive" if rating >= 4 else ("neutral" if rating >= 3 else "negative"), "key_phrases": [], "topics": []}
-
     # ==================== WIDGET API (API Key Auth) ====================
 
     @router.get("/widget/reviews")

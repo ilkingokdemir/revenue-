@@ -35,7 +35,7 @@ class TestSmartScannerWithEvents:
         # Cleanup: Stop scanner if running
         try:
             self.session.post(f"{BASE_URL}/api/revenue/market-robot/{self.property_id}/scanner/stop")
-        except:
+        except Exception:
             pass
     
     def test_01_scanner_start_returns_event_scanning_enabled(self):
@@ -236,7 +236,7 @@ class TestScannerStatsFields:
         # Cleanup
         try:
             self.session.post(f"{BASE_URL}/api/revenue/market-robot/{self.property_id}/scanner/stop")
-        except:
+        except Exception:
             pass
     
     def test_09_scanner_stats_structure(self):

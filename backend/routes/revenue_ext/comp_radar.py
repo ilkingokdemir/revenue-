@@ -44,10 +44,10 @@ def create_comp_radar_router(db, require_roles):
             await db.comp_radar_findings.delete_many({"property_id": pid})
             for i in range(days_ahead):
                 d = (date.today() + timedelta(days=i)).isoformat()
-                comp_rates = []
+                comp_entries = []
                 for c in comps:
                     r = _mock_comp_rate(c["id"], d, base)
-                    comp_rates.append(r)
+                    comp_entries.append({"comp_name": c.get("name"), "rate": r})
                     await db.comp_rate_snapshots.update_one(
                         {"property_id": pid, "comp_id": c["id"], "date": d},
                         {"$set": {"property_id": pid, "comp_id": c["id"],
@@ -56,6 +56,10 @@ def create_comp_radar_router(db, require_roles):
                         upsert=True)
                     total_scans += 1
                 own, own_src = await resolve_rate(db, pid, d)
+                from routes.revenue_ext.comp_anomaly import clean_comp_entries
+                comp_rates, excluded = await clean_comp_entries(db, pid, d, comp_entries)
+                if not comp_rates:
+                    continue
                 median = round(statistics.median(comp_rates), 2)
                 gap_pct = round((own - median) / median * 100, 1) if median else 0
                 finding = None
@@ -70,8 +74,8 @@ def create_comp_radar_router(db, require_roles):
                     await db.comp_radar_findings.insert_one({
                         "property_id": pid, "date": d, "own_rate": own,
                         "own_rate_source": own_src, "comp_median": median,
-                        "comp_count": len(comp_rates), "gap_pct": gap_pct,
-                        **finding, "created_at": now})
+                        "comp_count": len(comp_rates), "anomalies_excluded": excluded,
+                        **finding, "gap_pct": gap_pct, "created_at": now})
         return {"ok": True, "properties": len(pids), "scans": total_scans,
                 "findings": findings_count}
 

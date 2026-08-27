@@ -223,6 +223,8 @@ def create_bi_feed_router(db, require_roles):
         projection = {f: 1 for f in cfg["fields"]}
         projection["_id"] = 0
         rows = await db[cfg["collection"]].find(q, projection).skip(skip).limit(top).to_list(top)
+        for r in rows:
+            r.pop("_id", None)
         # Stamp last_used
         await db.bi_tokens.update_one(
             {"token": token},

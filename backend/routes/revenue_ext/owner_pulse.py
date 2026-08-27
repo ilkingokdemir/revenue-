@@ -1249,17 +1249,6 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
             {"property_id": pid}, {"_id": 0}).sort("sent_at", -1).to_list(20)
         return {"items": rows}
 
-    @router.get("/{pid}/digest/preview")
-    async def admin_digest_preview(pid: str,
-                                   current_user: dict = Depends(require_roles("admin", "manager"))):
-        q = {"$or": [{"property_id": pid}, {"property_ids": pid}]}
-        if pid == "default":
-            q["$or"].append({"property_id": {"$in": [None, ""]}})
-        owner = await db.unit_owners.find_one(q, {"_id": 0})
-        if not owner:
-            raise HTTPException(404, "Bu tesise bağlı sahip yok")
-        return {"html": await _build_digest_html(owner), "owner_email": owner.get("email")}
-
     router.digest_loop = _digest_loop
     router.autopilot_loop = _autopilot_loop
     return router

@@ -89,7 +89,6 @@ def _link_email_html(booking: dict, hotel: str, checkout_url: str, amount: float
 
 async def _deliver_email(to: str, subject: str, html: str) -> bool:
     """Returns True if actually sent, False if mocked/failed."""
-    import resend
     api_key = os.environ.get("RESEND_API_KEY", "")
     if not api_key or api_key == "re_123456789":
         return False

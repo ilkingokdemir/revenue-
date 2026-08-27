@@ -20,6 +20,9 @@ from typing import Optional, List, Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 CHANNEL_KINDS = {"property", "department", "direct", "general"}

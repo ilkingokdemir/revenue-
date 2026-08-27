@@ -125,6 +125,7 @@ import {
   LiveSmokePanel,
   NoShowRiskPanel,
   SegmentGroupPanel,
+  RateMixPanel,
   IpAllowlistPanel,
   KDSPanel,
   KeyFiguresPanel,
@@ -1678,6 +1679,7 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {activeView === "live-smoke" && <LiveSmokePanel />}
         {activeView === "noshow-risk" && <NoShowRiskPanel propertyId={activePropertyId || "default"} />}
         {activeView === "segment-group" && <SegmentGroupPanel propertyId={activePropertyId || "default"} />}
+        {activeView === "rate-mix" && <RateMixPanel propertyId={activePropertyId || "all"} />}
         {activeView === "restriction-advisor" && <RestrictionAdvisorPanel propertyId={activePropertyId || "all"} />}
         {activeView === "gap-filler" && <GapFillerPanel propertyId={activePropertyId || "all"} />}
         {activeView === "lost-demand" && <LostDemandPanel propertyId={activePropertyId || "all"} />}

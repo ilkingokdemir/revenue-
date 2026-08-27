@@ -1888,6 +1888,8 @@ api_router.include_router(create_reprice_bridge_router(db, require_roles))
 from routes.revenue_ext.segment_group import create_segment_pricing_router, create_group_approval_router
 api_router.include_router(create_segment_pricing_router(db, require_roles))
 api_router.include_router(create_group_approval_router(db, require_roles))
+from routes.revenue_ext.rate_mix import create_rate_mix_router
+api_router.include_router(create_rate_mix_router(db, require_roles))
 from routes.hotel_ops.deposit_rule import create_deposit_rule_router, deposit_rule_loop
 api_router.include_router(create_deposit_rule_router(db, require_roles))
 

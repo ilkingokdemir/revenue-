@@ -297,6 +297,7 @@ export function buildMenuSections(t, user) {
         { id: "restriction-advisor", icon: LockKey, name: "AI kısıtlama önerileri (MLOS/CTA)", testId: "restriction-advisor-btn" },
         { id: "lost-demand", icon: UserMinus, name: "Kayıp talep (denials & regrets)", testId: "lost-demand-btn" },
         { id: "segment-group", icon: UsersThree, name: "Segment fiyat & Grup onayı", testId: "segment-group-btn" },
+        { id: "rate-mix", icon: ChartLine, name: "Fiyat Karışımı (Rate Mix)", testId: "rate-mix-btn" },
         { id: "pricing-explain", icon: Brain, name: "AI pricing explainer", testId: "pricing-explain-btn" },
         { id: "anomaly", icon: Lightning, name: "Anomaly radar", testId: "anomaly-btn" },
         { id: "ai-predictions", icon: Sparkle, name: "AI predictions", testId: "ai-predictions-btn" },

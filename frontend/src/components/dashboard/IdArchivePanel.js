@@ -54,6 +54,17 @@ export default function IdArchivePanel({ propertyId = "all" }) {
     setBusy("");
   }
 
+  async function ocrVerify(it) {
+    setBusy(it.registration_id);
+    try {
+      const r = await axios.post(`${B}/api/id-archive/${it.registration_id}/ocr-verify`);
+      if (r.data.status === "verified") toast.success(`${r.data.verdict_tr} (%${Math.round((r.data.name_match || 0) * 100)} benzerlik)`);
+      else toast.error(r.data.verdict_tr);
+      load();
+    } catch (err) { toast.error(err.response?.data?.detail || "AI doğrulama başarısız"); }
+    setBusy("");
+  }
+
   if (!data) return <p className="p-5 text-sm text-stone-400" data-testid="id-archive-loading">Kimlik arşivi yükleniyor…</p>;
 
   return (
@@ -91,7 +102,7 @@ export default function IdArchivePanel({ propertyId = "all" }) {
         ) : (
           <table className="w-full text-sm" data-testid="id-archive-table">
             <thead><tr className="text-left text-[11px] text-stone-400 border-b">
-              <th className="p-3">Misafir</th><th className="p-3">Otel</th><th className="p-3">Çıkış</th><th className="p-3">İmha Tarihi</th><th className="p-3">Durum</th><th className="p-3">Belge</th>
+              <th className="p-3">Misafir</th><th className="p-3">Otel</th><th className="p-3">Çıkış</th><th className="p-3">İmha Tarihi</th><th className="p-3">Durum</th><th className="p-3">AI Doğrulama</th><th className="p-3">Belge</th>
             </tr></thead>
             <tbody>
               {data.items.map((it) => (
@@ -101,6 +112,22 @@ export default function IdArchivePanel({ propertyId = "all" }) {
                   <td className="p-3 font-mono text-xs">{it.check_out || "—"}</td>
                   <td className="p-3 font-mono text-xs">{it.expires_at || "—"}</td>
                   <td className="p-3"><span className={`text-[10px] font-bold border rounded-full px-2 py-0.5 ${BADGE[it.status]}`}>{it.status.toUpperCase()}</span></td>
+                  <td className="p-3" data-testid={`id-ocr-cell-${it.registration_id}`}>
+                    {it.verification ? (
+                      <div className="text-[10px]">
+                        {it.verification.status === "verified" && <span className="font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">✅ EŞLEŞTİ %{Math.round((it.verification.name_match || 0) * 100)}</span>}
+                        {it.verification.status === "mismatch" && <span className="font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-full px-2 py-0.5">❌ UYUŞMUYOR</span>}
+                        {it.verification.status === "unreadable" && <span className="font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">⚠️ OKUNAMADI</span>}
+                        {it.verification.extracted_name && <div className="text-stone-400 mt-0.5">Kimlikte: {it.verification.extracted_name}{it.verification.document_number ? ` · ${it.verification.document_number}` : ""}</div>}
+                      </div>
+                    ) : it.url ? (
+                      <button onClick={() => ocrVerify(it)} disabled={busy === it.registration_id}
+                        data-testid={`id-ocr-btn-${it.registration_id}`}
+                        className="px-2.5 py-1 rounded-full bg-indigo-600 text-white text-[10px] font-bold disabled:opacity-50">
+                        {busy === it.registration_id ? "AI okuyor…" : "🤖 AI Doğrula"}
+                      </button>
+                    ) : <span className="text-[10px] text-stone-300">—</span>}
+                  </td>
                   <td className="p-3">
                     {it.url ? (
                       <button onClick={() => setPreview(it)} data-testid={`id-preview-btn-${it.registration_id}`}

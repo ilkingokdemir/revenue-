@@ -35,6 +35,9 @@ def create_id_archive_router(db, require_roles):
         bookings = {b["id"]: b async for b in db.bookings.find(
             {"id": {"$in": bids}},
             {"_id": 0, "id": 1, "check_in": 1, "check_out": 1, "status": 1})}
+        verifications = {v["booking_id"]: v async for v in db.id_verifications.find(
+            {"booking_id": {"$in": bids}},
+            {"_id": 0, "booking_id": 1, "status": 1, "name_match": 1, "extracted": 1})}
         today = _now().date().isoformat()
         items = []
         for r in regs:
@@ -52,12 +55,18 @@ def create_id_archive_router(db, require_roles):
                       else "imha bekliyor" if expires and expires < today
                       else "saklamada")
             fname = os.path.basename(r.get("id_file_path") or "")
+            v = verifications.get(r.get("booking_id"))
             items.append({"registration_id": r["id"], "booking_id": r.get("booking_id"),
                           "property_id": r.get("property_id"),
                           "guest_name": r.get("guest_name", ""),
                           "original_filename": r.get("id_filename", ""),
                           "url": f"/api/uploads/ids/{fname}" if fname and not purged else None,
                           "check_out": co, "expires_at": expires, "status": status,
+                          "verification": ({"status": v["status"],
+                                            "name_match": v.get("name_match"),
+                                            "extracted_name": (v.get("extracted") or {}).get("full_name", ""),
+                                            "document_number": (v.get("extracted") or {}).get("document_number", "")}
+                                           if v else None),
                           "purged_at": r.get("id_purged_at")})
         items.sort(key=lambda x: (x["status"] != "imha bekliyor", x["expires_at"] or "9999"))
         pending = sum(1 for i in items if i["status"] == "imha bekliyor")
@@ -113,5 +122,40 @@ def create_id_archive_router(db, require_roles):
             "id": str(uuid.uuid4()), "purged": purged,
             "by": u.get("name") or u.get("email", ""), "created_at": _now().isoformat()})
         return {"ok": True, "purged": purged}
+
+    @router.post("/{registration_id}/ocr-verify")
+    async def ocr_verify(registration_id: str, u: dict = Depends(require_roles(*ROLES))):
+        """Arşivdeki kimliği AI ile okur, rezervasyon ismiyle karşılaştırır."""
+        import base64
+        reg = await db.guest_registrations.find_one(
+            {"id": registration_id}, {"_id": 0, "booking_id": 1, "id_file_path": 1,
+                                      "id_purged": 1})
+        if not reg:
+            raise HTTPException(404, "Kayıt bulunamadı")
+        if reg.get("id_purged"):
+            raise HTTPException(410, "Belge KVKK gereği imha edilmiş")
+        booking = await db.bookings.find_one({"id": reg.get("booking_id")}, {"_id": 0})
+        if not booking:
+            raise HTTPException(404, "Bağlı rezervasyon bulunamadı")
+        path = reg.get("id_file_path") or ""
+        data = None
+        if os.path.isfile(path):
+            data = open(path, "rb").read()
+        else:
+            from object_storage import fetch_upload
+            found = await fetch_upload(f"ids/{os.path.basename(path)}")
+            if found:
+                data = found[0]
+        if not data or len(data) < 500:
+            raise HTTPException(422, "Belge dosyası okunamadı veya görüntü değil")
+        from routes.guests.id_verification import run_id_verification
+        result = await run_id_verification(
+            db, booking, base64.b64encode(data).decode("ascii"),
+            u.get("email", ""))
+        tr = {"verified": "✅ Kimlik rezervasyonla EŞLEŞTİ",
+              "mismatch": "❌ Kimlik rezervasyondaki isimle UYUŞMUYOR — yanlış belge yüklenmiş olabilir",
+              "unreadable": "⚠️ Belge okunamadı — kimlik görüntüsü değil veya bulanık"}
+        return {**result, "verdict_tr": tr.get(result["status"], result["status"]),
+                "booking_guest": booking.get("guest_name", "")}
 
     return router

@@ -124,6 +124,7 @@ import {
   MorningKarnePanel,
   LiveSmokePanel,
   NoShowRiskPanel,
+  SegmentGroupPanel,
   IpAllowlistPanel,
   KDSPanel,
   KeyFiguresPanel,
@@ -1676,6 +1677,7 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {activeView === "morning-karne" && <MorningKarnePanel propertyId={activePropertyId || "default"} />}
         {activeView === "live-smoke" && <LiveSmokePanel />}
         {activeView === "noshow-risk" && <NoShowRiskPanel propertyId={activePropertyId || "default"} />}
+        {activeView === "segment-group" && <SegmentGroupPanel propertyId={activePropertyId || "default"} />}
         {activeView === "restriction-advisor" && <RestrictionAdvisorPanel propertyId={activePropertyId || "all"} />}
         {activeView === "gap-filler" && <GapFillerPanel propertyId={activePropertyId || "all"} />}
         {activeView === "lost-demand" && <LostDemandPanel propertyId={activePropertyId || "all"} />}

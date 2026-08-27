@@ -58,6 +58,11 @@ def create_lost_demand_router(db, require_roles):
     async def log_entry(property_id: str, data: Dict,
                         current_user: dict = Depends(require_roles(*STAFF))):
         doc = await log_lost_demand(db, property_id, data, source="manual")
+        try:
+            from routes.revenue_ext.reprice_bridge import fire_reprice
+            fire_reprice(db, property_id, f"lost_demand_{doc.get('reason','')}", doc.get("id", ""))
+        except Exception:
+            pass
         return {"ok": True, "entry": doc}
 
     @router.get("/{property_id}")

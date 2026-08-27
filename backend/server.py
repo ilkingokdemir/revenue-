@@ -1883,6 +1883,11 @@ from routes.hotel_ops.noshow_risk import create_noshow_risk_router, noshow_risk_
 api_router.include_router(create_noshow_risk_router(db, require_roles))
 from routes.revenue_ext.weekly_digest import create_weekly_digest_router, weekly_digest_loop
 api_router.include_router(create_weekly_digest_router(db, require_roles))
+from routes.revenue_ext.reprice_bridge import create_reprice_bridge_router
+api_router.include_router(create_reprice_bridge_router(db, require_roles))
+from routes.revenue_ext.segment_group import create_segment_pricing_router, create_group_approval_router
+api_router.include_router(create_segment_pricing_router(db, require_roles))
+api_router.include_router(create_group_approval_router(db, require_roles))
 from routes.hotel_ops.deposit_rule import create_deposit_rule_router, deposit_rule_loop
 api_router.include_router(create_deposit_rule_router(db, require_roles))
 

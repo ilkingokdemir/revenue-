@@ -1272,3 +1272,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Web araştırmasıyla 5 rakip tarandı; rapor: /app/memory/GAP_ANALIZ_RAKIPLER_2026.md
 - YENİ BACKLOG (rakip gap): P0: Regret&Denial takibi, Olay-tetiklemeli anlık re-price, Toplantı alanı fiyatlaması (büyük faz). P1: Segment/kanal Open Pricing offsetleri, Grup Wish&Walk+onay akışı, Grup wash tahmini, RMS etki ölçer. P2: 730g tahmin, sosyal sentiment, rakip veri anomali düzeltme, kâr benchmark, işbirlikçi tahmin, mobil PWA.
 - Bekleyen: Canlı duman testi URL'si + Resend anahtarı (kullanıcı girecek).
+
+## Güncelleme (2026-06 — Duetto/IDeaS Gap Fazı 1: 4 özellik TAMAMLANDI)
+- KAYIP TALEP → FİYAT MOTORU: lost_demand POST /{pid}/log artık fire_reprice tetikliyor (lost_demand_{reason} olayı). Duetto/IDeaS regret&denial paritesi.
+- ANLIK RE-PRICE KÖPRÜSÜ: routes/revenue_ext/reprice_bridge.py — fire_reprice() ateşle-unut; booking create (POST /api/bookings) + status change (PUT /api/bookings/{id}/status: cancelled/no_show/confirmed) hook'ları. Merdiven taramaları (lastday+ramp) saniyeler içinde koşuyor (~70-160ms). GET /api/reprice-bridge/{pid}/events, POST .../trigger. Collection: reprice_events.
+- SEGMENT FİYAT KATMANI: routes/revenue_ext/segment_group.py create_segment_pricing_router — GET/PUT /api/segment-pricing/{pid}. 4 varsayılan segment (direct 0, corporate -10, loyalty -5, ota +3), offset clamp ±50, baz fiyat rate_overrides/room_types'tan. Collection: segment_offsets.
+- GRUP ONAY AKIŞI: create_group_approval_router — POST /api/group-approval/{pid}/quotes (wish>walk>0 validasyonu), approve zinciri revenue→sales→approved (sıra dışı 422), reject. Collection: group_quotes.
+- UI: SegmentGroupPanel.js (view id: segment-group, menü: 'Segment fiyat & Grup onayı', Pro modda RMS bölümünde). Segment offset kartları + canlı fiyat, grup teklif formu + onay/red butonları, re-price olay çipleri.
+- TEST: iteration_587.json — backend 13/13 pytest, frontend %100 (offset kaydet, tam onay zinciri, reprice çipleri, regresyon lost-demand/noshow-risk OK).
+- KALAN BACKLOG (rakip gap): P0: Toplantı/etkinlik alanı fiyatlaması (Duetto OpenSpace). P1: Grup wash tahmini (BlockBuster), RMS etki ölçer (uplift raporu). P2: 730g tahmin, sosyal sentiment, rakip anomali düzeltme, kâr benchmark.

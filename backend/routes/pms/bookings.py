@@ -1553,6 +1553,11 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         }
         booking = {k: v for k, v in booking.items() if v is not None}
         await db.bookings.insert_one(dict(booking))
+        try:
+            from routes.revenue_ext.reprice_bridge import fire_reprice
+            fire_reprice(db, booking["property_id"], "booking_created", booking.get("id", ""))
+        except Exception:
+            pass
         booking.pop("_id", None)
         asyncio.create_task(fire_webhooks(db, "booking.created", booking))
         return booking
@@ -1616,6 +1621,14 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
             raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid}")
 
         result = await db.bookings.update_one({"id": booking_id}, {"$set": {"status": status, "updated_at": datetime.now(timezone.utc).isoformat()}})
+        if result.matched_count:
+            try:
+                from routes.revenue_ext.reprice_bridge import fire_reprice
+                _b = await db.bookings.find_one({"id": booking_id}, {"_id": 0, "property_id": 1})
+                if _b and status in ("cancelled", "no_show", "confirmed"):
+                    fire_reprice(db, _b["property_id"], f"booking_{status}", booking_id)
+            except Exception:
+                pass
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Booking not found")
 

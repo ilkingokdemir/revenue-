@@ -9,6 +9,18 @@ export default function SentimentPricingPanel({ propertyId = "default" }) {
   const pid = propertyId === "all" ? "default" : propertyId;
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [themes, setThemes] = useState(null);
+  const [themesBusy, setThemesBusy] = useState(false);
+
+  async function analyzeThemes() {
+    setThemesBusy(true);
+    try {
+      const r = await axios.post(`${B}/api/sentiment-pricing/${pid}/analyze-themes`);
+      setThemes(r.data);
+      toast.success(`${r.data.reviews_analyzed} yorum tema bazında analiz edildi`);
+    } catch (e) { toast.error(e.response?.data?.detail || "Tema analizi başarısız"); }
+    setThemesBusy(false);
+  }
 
   const load = useCallback(async () => {
     try {
@@ -61,8 +73,32 @@ export default function SentimentPricingPanel({ propertyId = "default" }) {
         )}
       </div>
 
-      {data.risk_reviews?.length > 0 && (
-        <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="sentiment-risk-card">
+      <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="sentiment-themes-card">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold">🧠 AI Tema Analizi (temizlik · personel · konum...)</h2>
+          <button onClick={analyzeThemes} disabled={themesBusy} data-testid="sentiment-themes-btn"
+            className="px-4 py-1.5 rounded-full bg-indigo-600 text-white text-xs font-bold disabled:opacity-50">
+            {themesBusy ? "Analiz ediliyor…" : "AI ile Analiz Et"}
+          </button>
+        </div>
+        {themes && (
+          <div className="mt-3" data-testid="sentiment-themes-result">
+            <div className="flex flex-wrap gap-2">
+              {themes.themes.map((t, i) => (
+                <div key={i} data-testid={`sentiment-theme-${t.theme}`}
+                  className={`rounded-xl border px-3 py-2 ${t.score >= 70 ? "bg-emerald-50 border-emerald-200" : t.score >= 45 ? "bg-amber-50 border-amber-200" : "bg-rose-50 border-rose-200"}`}>
+                  <div className="text-xs font-bold capitalize">{t.theme} <span className="font-black">{t.score}</span>/100</div>
+                  <div className="text-[10px] text-stone-500">{t.mentions} bahis · {t.summary}</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-indigo-700 bg-indigo-50 rounded-lg p-2.5 mt-3" data-testid="sentiment-pricing-note">💡 {themes.pricing_note}</p>
+          </div>
+        )}
+        {!themes && <p className="text-xs text-stone-400 mt-2">Son 90 günün yorum metinleri yapay zekâ ile tema bazında puanlanır ve fiyat gücüne etkisi yorumlanır.</p>}
+      </div>
+
+      {data.risk_reviews?.length > 0 && (        <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="sentiment-risk-card">
           <h2 className="text-base font-semibold mb-2">⚠️ Fiyat gücünü zayıflatan son yorumlar</h2>
           {data.risk_reviews.map((r, i) => (
             <div key={i} className="border-t border-stone-100 py-2 text-sm">

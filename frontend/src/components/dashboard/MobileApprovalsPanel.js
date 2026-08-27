@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { DeviceMobile, Bell, EnvelopeSimple } from "@phosphor-icons/react";
+import { DeviceMobile, Bell, EnvelopeSimple, SpeakerHigh, SpeakerSlash } from "@phosphor-icons/react";
 
 const B = process.env.REACT_APP_BACKEND_URL;
 const STATUS_TR = { pending_revenue: "Revenue onayı", pending_sales: "Satış onayı" };
@@ -13,6 +13,25 @@ export default function MobileApprovalsPanel({ propertyId = "default" }) {
   const [weekly, setWeekly] = useState(null);
   const [notifPerm, setNotifPerm] = useState(
     typeof Notification !== "undefined" ? Notification.permission : "denied");
+  const [soundOn, setSoundOn] = useState(() => localStorage.getItem("approvalSound") !== "off");
+  const pendingCount = useRef(null);
+
+  const chime = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [880, 1174.66].forEach((f, i) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = "sine"; o.frequency.value = f;
+        o.connect(g); g.connect(ctx.destination);
+        const t = ctx.currentTime + i * 0.18;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.25, t + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+        o.start(t); o.stop(t + 0.4);
+      });
+    } catch { /* ses desteklenmiyor */ }
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -21,12 +40,30 @@ export default function MobileApprovalsPanel({ propertyId = "default" }) {
         axios.get(`${B}/api/function-space/${pid}/proposals`),
         axios.get(`${B}/api/owner-weekly/history`),
       ]);
-      setQuotes((g.data.quotes || []).filter((q) => q.status?.startsWith("pending")));
-      setProposals((f.data.proposals || []).filter((p) => p.status === "sent"));
-      setWeekly(w.data);
+      const pq = (g.data.quotes || []).filter((q) => q.status?.startsWith("pending"));
+      const pp = (f.data.proposals || []).filter((p) => p.status === "sent");
+      const total = pq.length + pp.length;
+      if (pendingCount.current !== null && total > pendingCount.current) {
+        if (localStorage.getItem("approvalSound") !== "off") chime();
+        toast.info("🔔 Yeni onay bekleyen teklif var!");
+      }
+      pendingCount.current = total;
+      setQuotes(pq); setProposals(pp); setWeekly(w.data);
     } catch { toast.error("Onay verileri yüklenemedi"); }
-  }, [pid]);
-  useEffect(() => { load(); }, [load]);
+  }, [pid, chime]);
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 45000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  function toggleSound() {
+    const next = !soundOn;
+    setSoundOn(next);
+    localStorage.setItem("approvalSound", next ? "on" : "off");
+    if (next) chime();
+    toast.success(next ? "Ses + titreşim uyarısı açık" : "Ses uyarısı kapalı");
+  }
 
   async function askNotif() {
     if (typeof Notification === "undefined") { toast.error("Tarayıcı bildirim desteklemiyor"); return; }
@@ -77,6 +114,11 @@ export default function MobileApprovalsPanel({ propertyId = "default" }) {
           </button>
         )}
         {notifPerm === "granted" && <p className="mt-2 text-xs text-emerald-400" data-testid="notif-enabled-badge">🔔 Bildirimler etkin</p>}
+        <button onClick={toggleSound} data-testid="sound-toggle-btn"
+          className={`mt-2 px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 ${soundOn ? "bg-stone-800 text-emerald-300" : "bg-stone-800 text-stone-400"}`}>
+          {soundOn ? <SpeakerHigh size={14} /> : <SpeakerSlash size={14} />}
+          {soundOn ? "Ses + Titreşim Açık" : "Ses Uyarısı Kapalı"}
+        </button>
       </div>
 
       <div className="bg-white rounded-2xl border border-stone-200 p-4" data-testid="mobile-quotes-card">

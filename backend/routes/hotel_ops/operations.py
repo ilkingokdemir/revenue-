@@ -315,8 +315,8 @@ def create_operations_router(db, require_roles):
         filename = f"{check_id}_{uuid.uuid4().hex[:8]}.{ext}"
         filepath = os.path.join(COMPLIANCE_UPLOAD_DIR, filename)
         content = await file.read()
-        with open(filepath, "wb") as f:
-            f.write(content)
+        from object_storage import save_upload
+        await save_upload(filepath.split("/uploads/")[1], content)
         photo_url = f"/api/uploads/compliance/{filename}"
         photos = check.get("evidence_photos", [])
         photos.append({"url": photo_url, "filename": file.filename, "uploaded_by": current_user.get("name", "Staff"), "uploaded_at": datetime.now(timezone.utc).isoformat()})

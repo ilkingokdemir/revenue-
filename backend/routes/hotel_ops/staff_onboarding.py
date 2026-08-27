@@ -133,8 +133,8 @@ def create_staff_onboarding_router(db, require_roles, get_current_user, resend_l
         filename = f"passport_{user_id}_{uuid.uuid4().hex[:8]}.{ext}"
         filepath = os.path.join(UPLOAD_DIR, filename)
         content = await file.read()
-        with open(filepath, "wb") as f:
-            f.write(content)
+        from object_storage import save_upload
+        await save_upload(filepath.split("/uploads/")[1], content)
 
         await db.staff_onboarding.update_one(
             {"user_id": user_id},
@@ -165,8 +165,8 @@ def create_staff_onboarding_router(db, require_roles, get_current_user, resend_l
         filename = f"address_{user_id}_{uuid.uuid4().hex[:8]}.{ext}"
         filepath = os.path.join(UPLOAD_DIR, filename)
         content = await file.read()
-        with open(filepath, "wb") as f:
-            f.write(content)
+        from object_storage import save_upload
+        await save_upload(filepath.split("/uploads/")[1], content)
 
         await db.staff_onboarding.update_one(
             {"user_id": user_id},

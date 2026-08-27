@@ -1923,10 +1923,23 @@ async def _start_reviq_gap_loops():
 
 app.include_router(api_router)
 
-# Serve uploaded files (guest IDs etc)
-from fastapi.staticfiles import StaticFiles
+# Serve uploaded files (guest IDs etc) — önce yerel disk, yoksa kalıcı bulut depo
 os.makedirs("/app/backend/uploads/ids", exist_ok=True)
-app.mount("/api/uploads", StaticFiles(directory="/app/backend/uploads"), name="uploads")
+
+@app.get("/api/uploads/{upload_path:path}")
+async def serve_upload(upload_path: str):
+    from fastapi.responses import FileResponse, Response as _Resp
+    local = os.path.normpath(os.path.join("/app/backend/uploads", upload_path))
+    if not local.startswith("/app/backend/uploads") or ".." in upload_path:
+        raise HTTPException(status_code=400, detail="Geçersiz yol")
+    if os.path.isfile(local):
+        return FileResponse(local)
+    from object_storage import fetch_upload
+    found = await fetch_upload(upload_path)
+    if not found:
+        raise HTTPException(status_code=404, detail="Dosya bulunamadı")
+    data, ct = found
+    return _Resp(content=data, media_type=ct)
 
 app.add_middleware(
     CORSMiddleware,

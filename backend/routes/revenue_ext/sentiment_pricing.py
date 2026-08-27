@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone, timedelta, date as ddate
 from typing import Dict
+import os
 import uuid
 
 ACTOR = "sentiment-pricing"
@@ -108,5 +109,44 @@ def create_sentiment_pricing_router(db, require_roles):
             pass
         log.pop("_id", None)
         return {"ok": True, **log}
+
+    @router.post("/{pid}/analyze-themes")
+    async def analyze_themes(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Yorum metinlerini AI ile tema bazında analiz eder (temizlik, personel, konum...)."""
+        cached = await db.sentiment_themes.find_one(
+            {"property_id": pid, "day": _now().date().isoformat()}, {"_id": 0})
+        if cached:
+            return cached
+        since = (_now() - timedelta(days=90)).isoformat()
+        q = {"review_date": {"$gte": since}, "review_text": {"$ne": ""}}
+        if pid != "all":
+            q["property_id"] = pid
+        rows = await db.reviews.find(q, {"_id": 0, "rating": 1, "review_text": 1}).sort(
+            "review_date", -1).to_list(40)
+        if len(rows) < 3:
+            raise HTTPException(422, "Tema analizi için en az 3 metinli yorum gerekli")
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            raise HTTPException(503, "LLM anahtarı yok")
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        import json as _json
+        corpus = "\n".join(f"[{r.get('rating')}★] {(r.get('review_text') or '')[:220]}"
+                           for r in rows)
+        chat = LlmChat(api_key=api_key, session_id=f"themes-{uuid.uuid4()}",
+                       system_message="Otel yorumlarını tema bazında analiz et. SADECE JSON döndür.").with_model("openai", "gpt-5.2")
+        prompt = f"""Aşağıdaki otel yorumlarını analiz et. SADECE şu JSON'u döndür:
+{{"themes": [{{"theme": "temizlik|personel|konum|konfor|fiyat|kahvaltı", "score": 0-100, "mentions": sayı, "summary": "1 cümle Türkçe özet"}}], "pricing_note": "Bu temaların fiyat gücüne etkisi hakkında 1-2 cümle Türkçe değerlendirme"}}
+Yorumlar:
+{corpus}"""
+        reply = await chat.send_message(UserMessage(text=prompt))
+        cleaned = reply.strip().strip("```json").strip("```").strip()
+        parsed = _json.loads(cleaned)
+        doc = {"property_id": pid, "day": _now().date().isoformat(),
+               "themes": parsed.get("themes", []),
+               "pricing_note": parsed.get("pricing_note", ""),
+               "reviews_analyzed": len(rows), "created_at": _now().isoformat()}
+        await db.sentiment_themes.update_one(
+            {"property_id": pid, "day": doc["day"]}, {"$set": doc}, upsert=True)
+        return doc
 
     return router

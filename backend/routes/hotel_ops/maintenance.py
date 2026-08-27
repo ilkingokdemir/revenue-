@@ -296,8 +296,8 @@ def create_maintenance_router(db, require_roles):
         filename = f"{issue_id}_{uuid.uuid4().hex[:8]}.{ext}"
         filepath = os.path.join(MAINT_UPLOAD_DIR, filename)
         content = await file.read()
-        with open(filepath, "wb") as f:
-            f.write(content)
+        from object_storage import save_upload
+        await save_upload(filepath.split("/uploads/")[1], content)
 
         photo_url = f"/api/uploads/maintenance/{filename}"
         photo_entry = {"url": photo_url, "filename": file.filename, "uploaded_by": current_user.get("name", "Staff"), "uploaded_at": datetime.now(timezone.utc).isoformat(), "type": photo_type}
@@ -549,8 +549,8 @@ def create_maintenance_router(db, require_roles):
         filename = f"{issue_id}_{uuid.uuid4().hex[:8]}.{ext}"
         filepath = os.path.join(MAINT_UPLOAD_DIR, filename)
         content = await file.read()
-        with open(filepath, "wb") as f:
-            f.write(content)
+        from object_storage import save_upload
+        await save_upload(filepath.split("/uploads/")[1], content)
         photo_url = f"/api/uploads/maintenance/{filename}"
         photos = issue.get("photos_before", [])
         photos.append({"url": photo_url, "filename": file.filename, "uploaded_by": "Guest", "uploaded_at": datetime.now(timezone.utc).isoformat(), "type": "before"})

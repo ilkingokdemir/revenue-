@@ -451,8 +451,8 @@ def create_booking_widget_router(db, require_roles):
         filename = f"{room_id}_{uuid.uuid4().hex[:8]}.{ext}"
         filepath = os.path.join(ROOM_UPLOAD_DIR, filename)
         content = await file.read()
-        with open(filepath, "wb") as f:
-            f.write(content)
+        from object_storage import save_upload
+        await save_upload(filepath.split("/uploads/")[1], content)
         photo_url = f"/api/uploads/rooms/{filename}"
         # Update room_types doc
         result = await db.room_types.update_one({"id": room_id}, {"$set": {"photo": photo_url}})
@@ -468,8 +468,8 @@ def create_booking_widget_router(db, require_roles):
         filename = f"{room_id}_gallery_{uuid.uuid4().hex[:8]}.{ext}"
         filepath = os.path.join(ROOM_UPLOAD_DIR, filename)
         content = await file.read()
-        with open(filepath, "wb") as f:
-            f.write(content)
+        from object_storage import save_upload
+        await save_upload(filepath.split("/uploads/")[1], content)
         photo_url = f"/api/uploads/rooms/{filename}"
         await db.room_types.update_one({"id": room_id}, {"$push": {"gallery": photo_url}})
         return {"status": "uploaded", "url": photo_url}

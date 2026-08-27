@@ -239,8 +239,8 @@ def create_guest_journey_router(db, require_roles):
         filepath = os.path.join(UPLOAD_DIR, filename)
 
         content = await file.read()
-        with open(filepath, "wb") as f:
-            f.write(content)
+        from object_storage import save_upload
+        await save_upload(filepath.split("/uploads/")[1], content)
 
         await db.guest_registrations.update_one(
             {"token": token},
@@ -275,8 +275,8 @@ def create_guest_journey_router(db, require_roles):
         filename = f"{reg['id']}_{uuid.uuid4().hex[:8]}.{ext}"
         filepath = os.path.join(UPLOAD_DIR, filename)
         content = await file.read()
-        with open(filepath, "wb") as f:
-            f.write(content)
+        from object_storage import save_upload
+        await save_upload(filepath.split("/uploads/")[1], content)
 
         await db.guest_registrations.update_one(
             {"id": reg["id"]},

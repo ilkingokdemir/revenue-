@@ -201,6 +201,9 @@ export const NoShowRiskPanel = L(() => import("./components/dashboard/NoShowRisk
 export const SegmentGroupPanel = L(() => import("./components/dashboard/SegmentGroupPanel"));
 export const RateMixPanel = L(() => import("./components/dashboard/RateMixPanel"));
 export const RmsUpliftPanel = L(() => import("./components/dashboard/RmsUpliftPanel"));
+export const Forecast730Panel = L(() => import("./components/dashboard/Forecast730Panel"));
+export const CompAnomalyPanel = L(() => import("./components/dashboard/CompAnomalyPanel"));
+export const ProfitBenchmarkPanel = L(() => import("./components/dashboard/ProfitBenchmarkPanel"));
 export const RestrictionAdvisorPanel = L(() => import("./components/dashboard/RestrictionAdvisorPanel"));
 export const GapFillerPanel = L(() => import("./components/dashboard/GapFillerPanel"));
 export const LostDemandPanel = L(() => import("./components/dashboard/LostDemandPanel"));

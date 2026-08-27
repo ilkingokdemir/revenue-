@@ -1894,6 +1894,12 @@ from routes.revenue_ext.space_rms import create_space_rms_router
 api_router.include_router(create_space_rms_router(db, require_roles))
 from routes.revenue_ext.rms_uplift import create_rms_uplift_router
 api_router.include_router(create_rms_uplift_router(db, require_roles))
+from routes.revenue_ext.forecast_730 import create_forecast_730_router
+api_router.include_router(create_forecast_730_router(db, require_roles))
+from routes.revenue_ext.comp_anomaly import create_comp_anomaly_router
+api_router.include_router(create_comp_anomaly_router(db, require_roles))
+from routes.revenue_ext.profit_benchmark import create_profit_benchmark_router
+api_router.include_router(create_profit_benchmark_router(db, require_roles))
 from routes.hotel_ops.deposit_rule import create_deposit_rule_router, deposit_rule_loop
 api_router.include_router(create_deposit_rule_router(db, require_roles))
 

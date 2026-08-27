@@ -127,6 +127,9 @@ import {
   SegmentGroupPanel,
   RateMixPanel,
   RmsUpliftPanel,
+  Forecast730Panel,
+  CompAnomalyPanel,
+  ProfitBenchmarkPanel,
   IpAllowlistPanel,
   KDSPanel,
   KeyFiguresPanel,
@@ -1682,6 +1685,9 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {activeView === "segment-group" && <SegmentGroupPanel propertyId={activePropertyId || "default"} />}
         {activeView === "rate-mix" && <RateMixPanel propertyId={activePropertyId || "all"} />}
         {activeView === "rms-uplift" && <RmsUpliftPanel propertyId={activePropertyId || "default"} />}
+        {activeView === "forecast-730" && <Forecast730Panel propertyId={activePropertyId || "default"} />}
+        {activeView === "comp-anomaly" && <CompAnomalyPanel propertyId={activePropertyId || "default"} />}
+        {activeView === "profit-benchmark" && <ProfitBenchmarkPanel />}
         {activeView === "restriction-advisor" && <RestrictionAdvisorPanel propertyId={activePropertyId || "all"} />}
         {activeView === "gap-filler" && <GapFillerPanel propertyId={activePropertyId || "all"} />}
         {activeView === "lost-demand" && <LostDemandPanel propertyId={activePropertyId || "all"} />}

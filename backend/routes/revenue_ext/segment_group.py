@@ -61,6 +61,32 @@ def create_group_approval_router(db, require_roles):
     router = APIRouter(prefix="/group-approval", tags=["group-approval"])
     ROLES = ("admin", "manager")
     CHAIN = ["revenue", "sales"]
+    DEFAULT_STEP_DEPTS = {"revenue": ["revenue", "management"],
+                          "sales": ["sales", "management"]}
+
+    async def _step_depts(pid: str) -> Dict:
+        cfg = await db.group_approval_config.find_one({"property_id": pid}, {"_id": 0})
+        return (cfg or {}).get("steps") or DEFAULT_STEP_DEPTS
+
+    @router.get("/{pid}/config")
+    async def get_config(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        return {"steps": await _step_depts(pid), "chain": CHAIN,
+                "note": "Her onay adımını sadece listedeki departmanlar (veya admin) onaylayabilir."}
+
+    @router.put("/{pid}/config")
+    async def put_config(pid: str, data: Dict, u: dict = Depends(require_roles("admin"))):
+        steps = data.get("steps") or {}
+        clean = {}
+        for step in CHAIN:
+            depts = steps.get(step)
+            if not isinstance(depts, list) or not depts:
+                depts = DEFAULT_STEP_DEPTS[step]
+            clean[step] = [str(d).strip().lower()[:30] for d in depts[:8] if str(d).strip()]
+        await db.group_approval_config.update_one(
+            {"property_id": pid},
+            {"$set": {"steps": clean, "updated_by": u.get("name") or u.get("email", ""),
+                      "updated_at": _now().isoformat()}}, upsert=True)
+        return {"ok": True, "steps": clean}
 
     @router.get("/{pid}")
     async def list_quotes(pid: str, _u: dict = Depends(require_roles(*ROLES))):
@@ -99,6 +125,12 @@ def create_group_approval_router(db, require_roles):
         expected = f"pending_{role}"
         if q["status"] != expected:
             raise HTTPException(422, f"Sıra bu adımda değil (durum: {q['status']})")
+        if u.get("role") != "admin":
+            allowed = (await _step_depts(pid)).get(role, [])
+            if (u.get("department") or "").lower() not in allowed:
+                raise HTTPException(
+                    403, f"Bu adımı sadece {' / '.join(allowed)} departmanı onaylayabilir "
+                         f"(sizin departmanınız: {u.get('department') or 'tanımsız'})")
         approvals = q["approvals"] + [{"role": role, "by": u.get("name") or u.get("email", ""),
                                        "at": _now().isoformat()}]
         idx = CHAIN.index(role)

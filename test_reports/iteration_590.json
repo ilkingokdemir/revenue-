@@ -1,0 +1,24 @@
+{
+  "summary": "Iter 590 — all 4 new features verified end-to-end: (1) Approval RBAC with dept-scoped step permissions (sales→revenue step returns 403 with Turkish 'departmanı onaylayabilir', revenue→sales returns 403, correct order approves both, admin bypasses all steps, manager gets 403 on PUT config); (2) Forecast 730 (capacity=20, 24 months w/ seasonality_idx, projected_occ_pct, otb, Turkish stance, auth required); (3) Comp Anomaly (61 detected, config clamps z_threshold 1.5-6 / low 10-90 / high 120-500, ignore + ignore-all + clean-median all working); (4) Profit Benchmark (5 properties ranked by GOPPAR desc, months clamp 1-12, badges lider/ortalama üstü/altı, insight text). UI verified in PRO mode: forecast-730-panel (24 month cards colored by seasonality), profit-benchmark-panel (medals + months selector reloads from 5→6 rows), comp-anomaly-panel (61 rows, Yoksay button toggles first row to YOKSAYILDI state), segment-group-panel approval-config-card (save shows 'Onay yetkileri güncellendi' toast). Regression: rate-mix/all, rms-uplift/default, group-approval/default, segment-pricing/default all 200. Backend: 17/17 pytest passing. Approval config restored to defaults (revenue,management / sales,management) after tests.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter590_new_features.py",
+    "/app/test_reports/pytest/iter590.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "comp_anomaly.py: `mad = _median([abs(r - med) for r in rates]) or med * 0.05 or 1` — if med=0 and mad=0 this falls to 1 which is intended, but result z-scores against a mad=1 basis can flood anomalies. Consider min-mad floor tied to std or return early when mad is zero.",
+    "profit_benchmark.py: `agg[0]['rev'] or 0` inside f-string with two ternaries is fine but `min(round(rn/avail*100,1),100.0)` mixes float rounding with 100.0 cap — a booking with rooms=5 nights=10 (rn=50) on cap*days=45 caps to 100 correctly. OK.",
+    "forecast_730.py: For each of 24 months the code linearly walks each day inside python for OTB accumulation from all future bookings (2 nested loops on bookings). For a very large hotel with many bookings this could be slow; consider aggregation pipeline.",
+    "segment_group.py PUT /{pid}/config admin-only guard is correct; but if payload steps is missing a key entirely (e.g., only revenue), the sales list silently reverts to default — acceptable but should be documented in response."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter590_new_features.py"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% (4/4 panels verified with data + interaction)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!; revenue@hotelbox.com / Test2026!; sales@hotelbox.com / Test2026!",
+  "seed_data_creation": "Two group_quotes created via API: TEST_RBAC (5×2, wish £200/walk £150) — went through full revenue→sales chain; TEST_ADMIN_BYPASS — admin bypassed. One comp_anomaly_ignore record created (first active anomaly). Approval config was temporarily changed but restored to defaults (revenue,management / sales,management).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "17 backend tests in /app/backend/tests/test_iter590_new_features.py cover: TestApprovalRBAC (5 tests incl. RBAC chain, 403 Turkish message, admin bypass, manager 403 on config PUT), TestForecast730 (2 tests), TestCompAnomaly (4 tests incl. clamp, ignore, clean-median), TestProfitBenchmark (2 tests), TestRegression (4). UI navigation: /login → click PRO button → click nav-section-'Revenue & rates' to expand → direct data-testid clicks work. All 4 new nav items appear only in PRO mode. Panels use testids: forecast-730-panel + f730-month-{YYYY-MM}, profit-benchmark-panel + benchmark-row-{pid} + benchmark-months-select, comp-anomaly-panel + anomaly-row-{i} + anomaly-ignore-{i} + anomaly-ignore-all-btn + anomaly-active-count, segment-group-panel + approval-config-card + approval-rev-depts-input/approval-sales-depts-input/approval-config-save-btn.",
+  "rca of the issue": "N/A — no bugs."
+}

@@ -62,9 +62,11 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
   const [inviteKit, setInviteKit] = useState(null);
   const [kitLang, setKitLang] = useState("tr");
   const [reminderCfg, setReminderCfg] = useState(null);
+  const [impact, setImpact] = useState(null);
 
   useEffect(() => {
     axios.get(`${API}/guest-journey/reminder-config`).then((r) => setReminderCfg(r.data)).catch(() => {});
+    axios.get(`${API}/guest-journey/reminder-impact`).then((r) => setImpact(r.data)).catch(() => {});
   }, []);
 
   const saveReminderCfg = async (enabled, lead) => {
@@ -608,6 +610,17 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
           <button onClick={runReminders} data-testid="reminder-run-btn"
             className="px-3 py-1.5 rounded-full bg-stone-900 text-white text-[11px] font-bold">Şimdi Çalıştır</button>
           <span className="text-[10px] text-stone-400">Check-in'i tamamlamayan misafire otomatik e-posta hatırlatması</span>
+          {impact && impact.reminded > 0 && (
+            <div className="w-full flex items-center gap-4 mt-1 pt-2 border-t border-stone-100" data-testid="reminder-impact-stats">
+              <span className="text-xs"><b className="text-lg">{impact.reminded}</b> hatırlatıldı</span>
+              <span className="text-xs text-emerald-600"><b className="text-lg">{impact.completed_after}</b> check-in tamamladı</span>
+              <span className="text-xs text-amber-600"><b className="text-lg">{impact.still_pending}</b> hâlâ bekliyor</span>
+              <span className="text-xs font-black text-[#1e3a5f]" data-testid="reminder-conversion-pct">Dönüşüm: %{impact.conversion_pct}</span>
+              <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden min-w-[80px]">
+                <div className="h-2 bg-emerald-500 rounded-full" style={{ width: `${impact.conversion_pct}%` }} />
+              </div>
+            </div>
+          )}
         </div>
       )}
 

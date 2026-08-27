@@ -227,6 +227,29 @@ def create_guest_journey_router(db, require_roles):
         n = await run_precheckin_reminders(db, forced=True)
         return {"ok": True, "reminded": n}
 
+    @router.get("/guest-journey/reminder-impact")
+    async def reminder_impact(current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Hatırlatma sonrası check-in tamamlama dönüşüm raporu."""
+        reminded = await db.bookings.find(
+            {"precheckin_reminder_sent": True},
+            {"_id": 0, "id": 1, "guest_name": 1, "check_in": 1}).to_list(300)
+        rows, completed = [], 0
+        for b in reminded:
+            reg = await db.guest_registrations.find_one(
+                {"booking_id": b["id"]},
+                {"_id": 0, "status": 1, "id_uploaded": 1, "completed_at": 1})
+            done = bool(reg and (reg.get("status") == "completed" or reg.get("id_uploaded")))
+            if done:
+                completed += 1
+            rows.append({"booking_id": b["id"], "guest_name": b.get("guest_name", ""),
+                         "check_in": b.get("check_in", ""), "completed": done})
+        total = len(rows)
+        pct = round(completed / total * 100, 1) if total else 0.0
+        return {"reminded": total, "completed_after": completed,
+                "still_pending": total - completed, "conversion_pct": pct,
+                "items": rows[:50],
+                "note": "Dönüşüm = hatırlatma gönderilen misafirlerden check-in'i (kayıt formu veya kimlik yükleme) tamamlayanların oranı."}
+
     # ==================== SHARE REGISTRATION LINK ====================
 
     @router.post("/guest-journey/share-link/{registration_id}")

@@ -200,6 +200,7 @@ export const LiveSmokePanel = L(() => import("./components/dashboard/LiveSmokePa
 export const NoShowRiskPanel = L(() => import("./components/dashboard/NoShowRiskPanel"));
 export const SegmentGroupPanel = L(() => import("./components/dashboard/SegmentGroupPanel"));
 export const RateMixPanel = L(() => import("./components/dashboard/RateMixPanel"));
+export const RmsUpliftPanel = L(() => import("./components/dashboard/RmsUpliftPanel"));
 export const RestrictionAdvisorPanel = L(() => import("./components/dashboard/RestrictionAdvisorPanel"));
 export const GapFillerPanel = L(() => import("./components/dashboard/GapFillerPanel"));
 export const LostDemandPanel = L(() => import("./components/dashboard/LostDemandPanel"));

@@ -196,7 +196,7 @@ export default function LosWashMetricsPanel({ activePropertyId, properties = [] 
             <div className="bg-white border border-stone-200 rounded-xl overflow-x-auto">
               <table className="w-full text-sm" data-testid="wash-table">
                 <thead><tr className="text-left text-[11px] text-stone-400 border-b border-stone-100">
-                  <th className="p-2.5">Blok</th><th className="p-2.5">Tarih</th><th className="p-2.5">Tahsis</th><th className="p-2.5">Pickup</th><th className="p-2.5">Beklenen Pickup</th><th className="p-2.5">Şimdi Salınabilir</th><th className="p-2.5">Tavsiye</th>
+                  <th className="p-2.5">Blok</th><th className="p-2.5">Tarih</th><th className="p-2.5">Tahsis</th><th className="p-2.5">Pickup</th><th className="p-2.5">Pace</th><th className="p-2.5">Tahmini Final</th><th className="p-2.5">Wash Tahmini</th><th className="p-2.5">Şimdi Salınabilir</th><th className="p-2.5">Tavsiye</th>
                 </tr></thead>
                 <tbody>
                   {wash.active_blocks.map((b, i) => (
@@ -205,7 +205,9 @@ export default function LosWashMetricsPanel({ activePropertyId, properties = [] 
                       <td className="p-2.5 text-[12px]">{b.from_date} → {b.to_date}</td>
                       <td className="p-2.5">{b.allocated}</td>
                       <td className="p-2.5">{b.picked_up}</td>
-                      <td className="p-2.5">{b.expected_pickup}</td>
+                      <td className="p-2.5 text-[12px]" data-testid={`wash-pace-${i}`}>%{b.pace_pct}<div className="text-[10px] text-stone-400">güven: {b.confidence}</div></td>
+                      <td className="p-2.5 font-semibold" data-testid={`wash-projected-${i}`}>{b.projected_final_pickup}</td>
+                      <td className={`p-2.5 font-black ${b.wash_forecast_pct >= 25 ? "text-rose-600" : "text-emerald-600"}`} data-testid={`wash-forecast-${i}`}>%{b.wash_forecast_pct}</td>
                       <td className={`p-2.5 font-black ${b.releasable_now >= 1 ? "text-rose-600" : "text-emerald-600"}`}>{b.releasable_now}</td>
                       <td className="p-2.5 text-[12px] text-stone-600">{b.advice}</td>
                     </tr>

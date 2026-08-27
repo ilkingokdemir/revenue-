@@ -213,4 +213,79 @@ def create_rate_mix_router(db, require_roles):
             {"_id": 0}).sort("created_at", -1).to_list(20)
         return {"applies": rows}
 
+    @router.get("/{pid}/weekly")
+    async def weekly(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        q = {} if pid == "all" else {"property_id": pid}
+        snaps = await db.rate_mix_snapshots.find(q, {"_id": 0}).sort("week", -1).to_list(120)
+        applies = await db.rate_mix_applies.find(q, {"_id": 0}).sort("created_at", -1).to_list(20)
+        by_prop: Dict[str, Dict] = {}
+        for s in snaps:
+            p = by_prop.setdefault(s["property_id"], {"property_id": s["property_id"],
+                                                      "name": s.get("name", s["property_id"]),
+                                                      "weeks": []})
+            if len(p["weeks"]) < 12:
+                p["weeks"].append(s)
+        for p in by_prop.values():
+            p["weeks"].sort(key=lambda x: x["week"])
+            last_apply = next((a for a in applies
+                               if a["property_id"] == p["property_id"]), None)
+            p["last_apply"] = last_apply
+            verdict = None
+            if last_apply and len(p["weeks"]) >= 2:
+                aw = _week_key(last_apply["created_at"][:10])
+                before = [w for w in p["weeks"] if w["week"] <= aw]
+                after = [w for w in p["weeks"] if w["week"] > aw]
+                if before and after:
+                    b, a = before[-1]["floor_share"], after[-1]["floor_share"]
+                    d = round(b - a, 1)
+                    verdict = (f"Sweet-spot sonrası taban satış payı %{b} → %{a} ({d:+.1f} puan) — "
+                               + ("karışım düzeliyor ✓" if d > 0 else "henüz düzelme yok, birkaç hafta daha izleyin"))
+            p["verdict"] = verdict
+        return {"properties": sorted(by_prop.values(), key=lambda x: x["name"]),
+                "note": "Her hafta otomatik anlık görüntü (son 90 gün penceresi). Taban payının düşmesi = karışımın düzelmesi."}
+
+    @router.post("/{pid}/weekly/snapshot")
+    async def manual_snapshot(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        n = await snapshot_rate_mix(db)
+        return {"ok": True, "snapshots": n}
+
     return router
+
+
+def _week_key(day_iso: str) -> str:
+    d = ddate.fromisoformat(day_iso)
+    y, w, _ = d.isocalendar()
+    return f"{y}-W{w:02d}"
+
+
+async def snapshot_rate_mix(db) -> int:
+    week = _week_key(ddate.today().isoformat())
+    n = 0
+    for p in await db.properties.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(50):
+        a = await analyze_property(db, p["id"], days=90)
+        if not a:
+            continue
+        t = {x["tier"]: x for x in a["tiers"]}
+        await db.rate_mix_snapshots.update_one(
+            {"property_id": p["id"], "week": week},
+            {"$set": {"name": p.get("name", p["id"]),
+                      "floor_share": t["floor"]["share_pct"],
+                      "mid_share": t["mid"]["share_pct"],
+                      "high_share": t["high"]["share_pct"],
+                      "floor_rate": t["floor"]["avg_rate"],
+                      "adr": a["adr"], "lmf": a["lmf"],
+                      "created_at": _now().isoformat()}}, upsert=True)
+        n += 1
+    return n
+
+
+async def rate_mix_weekly_loop(db):
+    import asyncio
+    while True:
+        try:
+            week = _week_key(ddate.today().isoformat())
+            if not await db.rate_mix_snapshots.find_one({"week": week}, {"_id": 1}):
+                await snapshot_rate_mix(db)
+        except Exception:
+            pass
+        await asyncio.sleep(6 * 3600)

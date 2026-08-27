@@ -21,6 +21,26 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
   const [winData, setWinData] = useState(null);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState("fiyat");
+  const [dyn, setDyn] = useState(null);
+  const [dynBusy, setDynBusy] = useState(false);
+
+  const loadDyn = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/api/function-space/${pid}/dynamic-pricing?days=30`, { withCredentials: true });
+      setDyn(r.data);
+    } catch { setDyn(null); }
+  }, [pid]);
+  useEffect(() => { loadDyn(); }, [loadDyn]);
+
+  const applyDyn = async () => {
+    if (!window.confirm(`${dyn?.suggestions?.length || 0} dinamik fiyat önerisi salon takvimine yazılacak. Onaylıyor musunuz?`)) return;
+    setDynBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/function-space/${pid}/dynamic-pricing/apply`, { days: 30 }, { withCredentials: true });
+      toast.success(`${r.data.written} salon-gün fiyatı güncellendi`);
+      loadDyn(); load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Uygulanamadı"); } finally { setDynBusy(false); }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -133,6 +153,43 @@ export default function FunctionSpacePanel({ activePropertyId, properties = [] }
             {revpam.spaces.length === 0 && <div className="col-span-full bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-500">meeting_room türünde salon yok — Spaces panelinden ekleyin/seed edin.</div>}
           </div>
           <p className="text-[11px] text-stone-400 mt-2">{revpam.note}</p>
+        </section>
+      )}
+
+      {dyn && (
+        <section data-testid="fs-dynamic-pricing-section">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-base font-bold text-stone-800">⚡ Dinamik Salon Fiyatlaması — {dyn.suggestions.length} öneri (30 gün)</h2>
+            {dyn.suggestions.length > 0 && (
+              <button onClick={applyDyn} disabled={dynBusy} data-testid="fs-dyn-apply-btn"
+                className="px-4 py-1.5 rounded-full bg-indigo-600 text-white text-xs font-bold disabled:opacity-50">
+                {dynBusy ? "Uygulanıyor…" : "Tümünü Uygula"}
+              </button>
+            )}
+          </div>
+          {dyn.suggestions.length === 0 ? (
+            <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-500" data-testid="fs-dyn-empty">Şu an fiyat değişikliği önerisi yok — mevcut fiyatlar talebe uygun.</div>
+          ) : (
+            <div className="bg-white border border-stone-200 rounded-xl overflow-x-auto max-h-72 overflow-y-auto">
+              <table className="w-full text-sm" data-testid="fs-dyn-table">
+                <thead className="sticky top-0 bg-white"><tr className="text-left text-[11px] text-stone-400 border-b border-stone-100">
+                  <th className="p-2.5">Salon</th><th className="p-2.5">Tarih</th><th className="p-2.5">Mevcut</th><th className="p-2.5">Öneri</th><th className="p-2.5">Neden</th>
+                </tr></thead>
+                <tbody>
+                  {dyn.suggestions.map((s, i) => (
+                    <tr key={i} className="border-t border-stone-100" data-testid={`fs-dyn-row-${i}`}>
+                      <td className="p-2.5 font-semibold">{s.space_name}</td>
+                      <td className="p-2.5 font-mono text-[12px]">{s.date} {s.dow}</td>
+                      <td className="p-2.5">£{s.current_rate}/sa</td>
+                      <td className={`p-2.5 font-black ${s.change_pct > 0 ? "text-emerald-600" : "text-rose-600"}`}>£{s.suggested_rate} ({s.change_pct > 0 ? "+" : ""}{s.change_pct}%)</td>
+                      <td className="p-2.5 text-[11px] text-stone-500">{s.why}{s.fnb_credit && " 🍽️"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="text-[11px] text-stone-400 mt-2">{dyn.note}</p>
         </section>
       )}
 

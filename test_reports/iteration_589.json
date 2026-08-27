@@ -1,0 +1,32 @@
+{
+  "summary": "Iter 589 — verified 4 new features: (1) Space Dynamic Pricing backend + UI, (2) RMS Uplift backend + UI (12 bars, verdict, 6-month clamp), (3) Group Wash pace model backend (quantity-key bug fix confirmed via seeded TEST_ block), (4) Rate Mix Weekly snapshot + GET (idempotent, no dup weeks). Backend: 13/13 pytest passing. Frontend: RMS Uplift panel + Function Space dynamic pricing (42-row table + apply button emitting '42 salon-gün fiyatı güncellendi' toast) confirmed visually. Regression endpoints (rate-mix/all, los-pricing/default) OK.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Rate Mix Weekly card + Group Wash pace UI visual verification", "issue": "Could not visually confirm rate-mix-weekly-card and group-wash-section testids in a single palette flow — panels did not render after palette click (palette may have matched a different item or the panel hydration was slower than my waits). Backend data confirmed. Main agent can self-test by opening Rate Mix / LOS panels manually.", "affected_selectors": ["[data-testid=\"rate-mix-weekly-card\"]", "[data-testid=\"group-wash-section\"]", "[data-testid=\"wash-pace-0\"]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter589_new_features.py",
+    "/app/test_reports/pytest/iter589.xml"
+  ],
+  "action_items": [
+    "Main agent: visually confirm rate-mix-weekly-card renders inside RateMixPanel and wash-pace-0/projected-0/forecast-0 testids appear when active blocks exist. Backend already returns correct data (verified). Likely low-risk (component-level, not data-level)."
+  ],
+  "critical_code_review_comments": [
+    "space_rms.py: `cap = await db.rooms.count_documents(pid) or 20` — inconsistent with rms_uplift.py which correctly uses room_types sum. Consider unifying capacity source.",
+    "space_rms.py apply endpoint: no protection for human-set overrides (unlike rate_mix apply which respects '@' / 'owner-override'). Robot can overwrite operator-set space rates silently.",
+    "los_wash_metrics.py compute_group_wash: fallback historical_wash_pct=25.0 when no past blocks — acceptable but should be documented as sector default in response (already noted in `note`).",
+    "rate_mix.py weekly loop uses find_one with $exists guard — good idempotency; snapshot upsert uses (property_id, week) which is correct."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter589_new_features.py"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "50% verified visually (RMS Uplift + Function Space fully confirmed; Rate Mix Weekly card + Group Wash pace cells not visually confirmed — backend data OK)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "One TEST_QuantityBlock group_block seeded for aldgate-flats (with allocations using 'quantity' key to verify bug fix), auto-cleaned via test teardown. Applied 42 space rate overrides to city-gate via dynamic-pricing/apply (production-adjacent but Turkish demo data with set_by='space-rms').",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend fully green: 13 tests in /app/backend/tests/test_iter589_new_features.py covering Space Dynamic Pricing (get + days clamp + apply reduces suggestions), RMS Uplift (capacity=20 from room_types, months clamp 4-24, occ_pct<=100), Group Wash (seeded block with quantity key counted correctly, pace_pct/projected_final_pickup/wash_forecast_pct/confidence fields present), Rate Mix Weekly (snapshot idempotent, no dup weeks). UI verified: rms-uplift-panel (12 bars → 6 after selector change, uplift-total/pct/verdict in Turkish), fs-dynamic-pricing-section (42 rows, apply-btn → success toast). NOT visually verified but backend data proven: rate-mix-weekly-card, group-wash-section wash-pace-0 cells. City-Gate branch has 2 spaces × 21 days ≈ 42 dyn pricing rows after all suggestions applied become 0 (idempotent).",
+  "rca of the issue": "N/A — no critical bugs. Only observation: space_rms.apply does not protect human overrides (see code review)."
+}

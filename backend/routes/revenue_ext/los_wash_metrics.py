@@ -42,32 +42,62 @@ async def compute_los_tiers(db, pid: str) -> dict:
 async def compute_group_wash(db, pid: str) -> dict:
     blocks = await db.group_blocks.find(
         {"property_id": pid}, {"_id": 0}).sort("from_date", -1).to_list(100)
-    today = datetime.now(timezone.utc).date().isoformat()
+    today_d = datetime.now(timezone.utc).date()
+    today = today_d.isoformat()
     past = [b for b in blocks if (b.get("to_date") or "") < today]
+
+    def _alloc(b):
+        return sum(int(a.get("rooms") or a.get("quantity") or 0)
+                   for a in (b.get("allocations") or []))
+
+    def _picked(b):
+        return sum(int(a.get("picked_up") or 0) for a in (b.get("allocations") or []))
+
     washes = []
     for b in past:
-        alloc = sum(int(a.get("rooms") or 0) for a in (b.get("allocations") or []))
-        picked = sum(int(a.get("picked_up") or 0) for a in (b.get("allocations") or []))
+        alloc = _alloc(b)
         if alloc > 0:
-            washes.append(1 - picked / alloc)
+            washes.append(1 - _picked(b) / alloc)
     hist_wash = round(sum(washes) / len(washes) * 100, 1) if washes else 25.0
     out = []
     for b in blocks:
         if (b.get("to_date") or "") < today or b.get("status") in ("cancelled",):
             continue
-        alloc = sum(int(a.get("rooms") or 0) for a in (b.get("allocations") or []))
-        picked = sum(int(a.get("picked_up") or 0) for a in (b.get("allocations") or []))
+        alloc, picked = _alloc(b), _picked(b)
+        if alloc <= 0:
+            continue
+        # pace modeli: bloğun kendi pickup temposu + tarihsel wash harmanı
+        try:
+            start = datetime.fromisoformat(b.get("created_at", "")[:10]).date()
+        except Exception:
+            start = today_d - timedelta(days=30)
+        try:
+            cutoff = datetime.strptime(b.get("cutoff_date") or b.get("from_date"), "%Y-%m-%d").date()
+        except Exception:
+            cutoff = today_d + timedelta(days=14)
+        window = max((cutoff - start).days, 1)
+        pace = min(max((today_d - start).days / window, 0.05), 1.0)
+        pace_projection = min(picked / pace, alloc) if pace > 0 else picked
+        hist_expected = alloc * (1 - hist_wash / 100)
+        projected_final = round(pace * pace_projection + (1 - pace) * hist_expected, 1)
+        wash_forecast = round(max(1 - projected_final / alloc, 0) * 100, 1)
         expected = round(alloc * (1 - hist_wash / 100), 1)
-        releasable = max(round(alloc - expected - picked, 1), 0)
+        releasable = max(round(alloc - projected_final, 1), 0)
+        confidence = "yüksek" if pace >= 0.6 else "orta" if pace >= 0.3 else "düşük"
         out.append({"name": b.get("name"), "code": b.get("code"),
                     "from_date": b.get("from_date"), "to_date": b.get("to_date"),
                     "cutoff_date": b.get("cutoff_date"), "allocated": alloc,
                     "picked_up": picked, "expected_pickup": expected,
+                    "pace_pct": round(pace * 100, 0),
+                    "projected_final_pickup": projected_final,
+                    "wash_forecast_pct": wash_forecast,
+                    "confidence": confidence,
                     "projected_wash_pct": hist_wash, "releasable_now": releasable,
-                    "advice": (f"{releasable:.0f} oda erimeye gidecek görünüyor — cutoff beklemeden transient satışa açın"
-                               if releasable >= 1 else "Blok sağlıklı ilerliyor")})
+                    "advice": (f"Pace modeline göre {releasable:.0f} oda erimeye gidecek (güven: {confidence}) — cutoff beklemeden transient satışa açın"
+                               if releasable >= 1 else "Blok sağlıklı ilerliyor — pickup temposu bekleneni karşılıyor")})
     return {"historical_wash_pct": hist_wash, "measured_blocks": len(washes),
-            "active_blocks": out}
+            "active_blocks": out,
+            "model": "pace+hist harman: erken dönemde tarihsel wash, cutoff yaklaştıkça bloğun kendi pickup temposu ağır basar"}
 
 
 def create_los_wash_metrics_router(db, require_roles):

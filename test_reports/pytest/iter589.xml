@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="13" time="7.524" timestamp="2026-08-27T16:23:50.062391+00:00" hostname="agent-env-a9d7a5c1-de72-4617-a5b9-ed7dde4401f0"><testcase classname="backend.tests.test_iter589_new_features.TestSpaceDynamicPricing" name="test_dynamic_pricing_get" time="3.649" /><testcase classname="backend.tests.test_iter589_new_features.TestSpaceDynamicPricing" name="test_days_clamp_low" time="0.277" /><testcase classname="backend.tests.test_iter589_new_features.TestSpaceDynamicPricing" name="test_days_clamp_high" time="0.241" /><testcase classname="backend.tests.test_iter589_new_features.TestSpaceDynamicPricing" name="test_apply_and_reduce_suggestions" time="0.741" /><testcase classname="backend.tests.test_iter589_new_features.TestRmsUplift" name="test_uplift_default" time="0.251" /><testcase classname="backend.tests.test_iter589_new_features.TestRmsUplift" name="test_months_clamp" time="0.638" /><testcase classname="backend.tests.test_iter589_new_features.TestGroupWash" name="test_wash_aldgate" time="0.153" /><testcase classname="backend.tests.test_iter589_new_features.TestGroupWash" name="test_wash_with_seeded_active_block_quantity_key" time="0.001"><failure message="pymongo.errors.InvalidURI: Invalid URI scheme: URI must begin with 'mongodb://' or 'mongodb+srv://'">backend/tests/test_iter589_new_features.py:145: in test_wash_with_seeded_active_block_quantity_key
+    bid = asyncio.get_event_loop().run_until_complete(_seed_and_check())
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+backend/tests/test_iter589_new_features.py:118: in _seed_and_check
+    client = AsyncIOMotorClient(MONGO_URL)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/motor/core.py:148: in __init__
+    delegate = self.__delegate_class__(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/pymongo/mongo_client.py:766: in __init__
+    res = uri_parser.parse_uri(
+/root/.venv/lib/python3.11/site-packages/pymongo/uri_parser.py:496: in parse_uri
+    raise InvalidURI(f"Invalid URI scheme: URI must begin with '{SCHEME}' or '{SRV_SCHEME}'")
+E   pymongo.errors.InvalidURI: Invalid URI scheme: URI must begin with 'mongodb://' or 'mongodb+srv://'</failure></testcase><testcase classname="backend.tests.test_iter589_new_features.TestRateMixWeekly" name="test_snapshot" time="0.224" /><testcase classname="backend.tests.test_iter589_new_features.TestRateMixWeekly" name="test_weekly_get" time="0.194" /><testcase classname="backend.tests.test_iter589_new_features.TestRateMixWeekly" name="test_snapshot_idempotent" time="0.516" /><testcase classname="backend.tests.test_iter589_new_features.TestRegression" name="test_rate_mix_all" time="0.219" /><testcase classname="backend.tests.test_iter589_new_features.TestRegression" name="test_los_default" time="0.187" /></testsuite></testsuites>

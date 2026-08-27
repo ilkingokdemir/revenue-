@@ -55,14 +55,18 @@ function PropertyRow({ p, onApply, busy }) {
 
 export default function RateMixPanel({ propertyId = "all" }) {
   const [data, setData] = useState(null);
+  const [weekly, setWeekly] = useState(null);
   const [days, setDays] = useState(365);
   const [busy, setBusy] = useState("");
   const pid = propertyId === "default" ? "all" : propertyId;
 
   const load = useCallback(async () => {
     try {
-      const r = await axios.get(`${B}/api/rate-mix/${pid}?days=${days}`);
-      setData(r.data);
+      const [r, w] = await Promise.all([
+        axios.get(`${B}/api/rate-mix/${pid}?days=${days}`),
+        axios.get(`${B}/api/rate-mix/${pid}/weekly`),
+      ]);
+      setData(r.data); setWeekly(w.data);
     } catch { toast.error("Rate mix verisi yüklenemedi"); }
   }, [pid, days]);
   useEffect(() => { load(); }, [load]);
@@ -112,6 +116,30 @@ export default function RateMixPanel({ propertyId = "all" }) {
           ? <p className="text-sm text-stone-400 p-4" data-testid="rate-mix-empty">Yeterli rezervasyon verisi yok.</p>
           : <div className="space-y-3">{data.properties.map((p) => (
               <PropertyRow key={p.property_id} p={p} onApply={apply} busy={busy} />))}</div>
+      )}
+
+      {weekly && weekly.properties.length > 0 && (
+        <div className="bg-stone-950 rounded-2xl p-5 border border-stone-800" data-testid="rate-mix-weekly-card">
+          <h2 className="text-lg font-bold text-white">Haftalık Takip — karışım düzeliyor mu?</h2>
+          <p className="text-xs text-stone-400 mb-3">{weekly.note}</p>
+          <div className="space-y-3">
+            {weekly.properties.map((p) => (
+              <div key={p.property_id} data-testid={`rate-mix-weekly-${p.property_id}`}>
+                <div className="text-sm font-semibold text-stone-200 mb-1">{p.name}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {p.weeks.map((w) => (
+                    <div key={w.week} className="bg-stone-900 border border-stone-800 rounded-lg px-2 py-1 text-center">
+                      <div className="text-[9px] text-stone-500 font-mono">{w.week}</div>
+                      <div className="text-xs font-bold text-red-400">%{w.floor_share}</div>
+                      <div className="text-[9px] text-stone-400">ADR £{w.adr}</div>
+                    </div>
+                  ))}
+                </div>
+                {p.verdict && <p className="text-xs text-amber-300 mt-1" data-testid={`rate-mix-verdict-${p.property_id}`}>{p.verdict}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

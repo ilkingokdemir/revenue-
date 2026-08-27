@@ -1267,3 +1267,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - TEYİT YANIT TAKİBİ (RSVP): confirm e-postasında ✅ Geliyorum / ❌ Gelemiyorum butonları → PUBLIC GET /api/noshow-risk/rsvp/{token}?answer= (auth'suz HTML yanıt sayfası). 'Gelemiyorum' → high bildirim ('odayı satışa açın'). Panel satırında yanıt rozetleri (rsvp-*). Test: not_coming akışı uçtan uca doğrulandı (Sven Lee kaydı demo olarak not_coming durumunda bırakıldı).
 - Testler: backend curl uçtan uca + UI screenshot (model kartı, rsvp rozeti, trend, depozito kartı render).
 - CANLI DUMAN TESTİ: URL hâlâ bekleniyor.
+
+## Güncelleme (2026-06 — Rakip Analizi 2: Duetto/IDeaS/Atomize/RoomPriceGenie/FLYR)
+- Web araştırmasıyla 5 rakip tarandı; rapor: /app/memory/GAP_ANALIZ_RAKIPLER_2026.md
+- YENİ BACKLOG (rakip gap): P0: Regret&Denial takibi, Olay-tetiklemeli anlık re-price, Toplantı alanı fiyatlaması (büyük faz). P1: Segment/kanal Open Pricing offsetleri, Grup Wish&Walk+onay akışı, Grup wash tahmini, RMS etki ölçer. P2: 730g tahmin, sosyal sentiment, rakip veri anomali düzeltme, kâr benchmark, işbirlikçi tahmin, mobil PWA.
+- Bekleyen: Canlı duman testi URL'si + Resend anahtarı (kullanıcı girecek).

@@ -15,6 +15,64 @@ import resend
 logger = logging.getLogger(__name__)
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 UPLOAD_DIR = "/app/backend/uploads/ids"
+
+
+async def run_precheckin_reminders(db, forced: bool = False) -> int:
+    """Check-in'i tamamlamayan misafirlere varış öncesi hatırlatma gönderir."""
+    cfg = await db.precheckin_reminder_config.find_one({}, {"_id": 0}) or {}
+    if not forced and not cfg.get("enabled"):
+        return 0
+    lead = int(cfg.get("lead_hours", 48))
+    now = datetime.now(timezone.utc)
+    horizon = (now + timedelta(hours=lead)).date().isoformat()
+    today = now.date().isoformat()
+    sent = 0
+    async for b in db.bookings.find(
+            {"status": {"$in": ["confirmed", "pending"]},
+             "check_in": {"$gte": today, "$lte": horizon},
+             "guest_email": {"$nin": [None, ""]},
+             "precheckin_reminder_sent": {"$ne": True}},
+            {"_id": 0}).limit(50):
+        reg = await db.guest_registrations.find_one(
+            {"booking_id": b["id"]}, {"_id": 0, "status": 1, "id_uploaded": 1, "token": 1})
+        if reg and (reg.get("status") == "completed" or reg.get("id_uploaded")):
+            continue
+        token = (reg or {}).get("token")
+        if not token:
+            token = secrets.token_urlsafe(32)
+            await db.guest_registrations.insert_one({
+                "id": str(uuid.uuid4()), "booking_id": b["id"],
+                "booking_ref": b.get("booking_ref", ""), "property_id": b.get("property_id", ""),
+                "guest_name": b.get("guest_name", ""), "guest_email": b.get("guest_email", ""),
+                "guest_phone": b.get("guest_phone", ""), "token": token, "status": "pending",
+                "form_data": {}, "id_uploaded": False, "id_file_path": "",
+                "terms_accepted": False, "signature": "", "welcome_sent": False,
+                "satisfaction_check_sent": False, "created_at": now.isoformat(), "completed_at": ""})
+        base = os.environ.get("PUBLIC_BASE_URL") or os.environ.get("BASE_URL", "")
+        url = f"{base}/register/{token}"
+        html = (f"<p>Merhaba {b.get('guest_name', '')},</p><p>Varışınıza az kaldı! Online check-in'inizi "
+                f"henüz tamamlamadınız. 2 dakikanızı ayırıp kimliğinizi yükleyin, varışta anahtarınız hazır olsun:</p>"
+                f"<p><a href='{url}'>{url}</a></p><p>Görüşmek üzere!</p>")
+        try:
+            from routes.platform_ext.mailer import send_email
+            await send_email(db, b["guest_email"],
+                             "⏰ Hatırlatma: Online check-in'inizi tamamlayın",
+                             html, kind="precheckin_reminder", meta={"booking_id": b["id"]})
+        except Exception:
+            continue
+        await db.bookings.update_one({"id": b["id"]},
+                                     {"$set": {"precheckin_reminder_sent": True}})
+        sent += 1
+    return sent
+
+
+async def precheckin_reminder_loop(db):
+    while True:
+        try:
+            await run_precheckin_reminders(db)
+        except Exception:
+            pass
+        await asyncio.sleep(3600)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
@@ -147,6 +205,27 @@ def create_guest_journey_router(db, require_roles):
                 "message_tr": msg_tr, "message_en": msg_en,
                 "whatsapp_link_tr": wa, "whatsapp_link_en": wa_en, "mailto_link": mailto,
                 "id_uploaded": reg.get("id_uploaded", False), "status": reg.get("status")}
+
+    @router.get("/guest-journey/reminder-config")
+    async def get_reminder_config(current_user: dict = Depends(require_roles("admin", "manager"))):
+        cfg = await db.precheckin_reminder_config.find_one({}, {"_id": 0})
+        return {"enabled": bool((cfg or {}).get("enabled", False)),
+                "lead_hours": int((cfg or {}).get("lead_hours", 48)),
+                "note": "Check-in'i tamamlamayan misafire varıştan X saat önce otomatik hatırlatma e-postası gönderilir (24/48/72 saat seçilebilir)."}
+
+    @router.put("/guest-journey/reminder-config")
+    async def put_reminder_config(data: dict, current_user: dict = Depends(require_roles("admin"))):
+        lead = max(1, min(int(data.get("lead_hours", 48) or 48), 168))
+        enabled = bool(data.get("enabled", False))
+        await db.precheckin_reminder_config.update_one(
+            {}, {"$set": {"enabled": enabled, "lead_hours": lead,
+                          "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        return {"ok": True, "enabled": enabled, "lead_hours": lead}
+
+    @router.post("/guest-journey/reminder-run-now")
+    async def reminder_run_now(current_user: dict = Depends(require_roles("admin", "manager"))):
+        n = await run_precheckin_reminders(db, forced=True)
+        return {"ok": True, "reminded": n}
 
     # ==================== SHARE REGISTRATION LINK ====================
 

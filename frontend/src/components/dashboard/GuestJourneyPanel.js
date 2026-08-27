@@ -61,6 +61,27 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
 
   const [inviteKit, setInviteKit] = useState(null);
   const [kitLang, setKitLang] = useState("tr");
+  const [reminderCfg, setReminderCfg] = useState(null);
+
+  useEffect(() => {
+    axios.get(`${API}/guest-journey/reminder-config`).then((r) => setReminderCfg(r.data)).catch(() => {});
+  }, []);
+
+  const saveReminderCfg = async (enabled, lead) => {
+    try {
+      const { data } = await axios.put(`${API}/guest-journey/reminder-config`, { enabled, lead_hours: lead });
+      setReminderCfg((c) => ({ ...c, ...data }));
+      toast.success(enabled ? `Hatırlatma robotu açık — varıştan ${lead} saat önce` : "Hatırlatma robotu kapalı");
+    } catch (e) { toast.error(e.response?.data?.detail || "Kaydedilemedi (sadece admin)"); }
+  };
+
+  const runReminders = async () => {
+    try {
+      const { data } = await axios.post(`${API}/guest-journey/reminder-run-now`);
+      toast.success(`${data.reminded} misafire hatırlatma gönderildi (Resend yoksa MOCK)`);
+    } catch { toast.error("Çalıştırılamadı"); }
+  };
+
 
   const openInviteKit = async (bookingId) => {
     try {
@@ -568,6 +589,27 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
           </motion.div>
         )}
       </AnimatePresence>
+
+      {reminderCfg && (
+        <div className="bg-white rounded-2xl border border-stone-200 p-4 mt-4 flex flex-wrap items-center gap-3" data-testid="reminder-config-card">
+          <span className="text-sm font-bold">⏰ Varış Öncesi Hatırlatma Robotu</span>
+          <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+            <input type="checkbox" checked={reminderCfg.enabled} data-testid="reminder-enabled-toggle"
+              onChange={(e) => saveReminderCfg(e.target.checked, reminderCfg.lead_hours)} className="accent-emerald-600 w-4 h-4" />
+            Aktif
+          </label>
+          <select value={reminderCfg.lead_hours} data-testid="reminder-lead-select"
+            onChange={(e) => saveReminderCfg(reminderCfg.enabled, +e.target.value)}
+            className="border rounded-lg px-2 py-1.5 text-xs">
+            <option value={24}>Varıştan 24 saat önce</option>
+            <option value={48}>Varıştan 48 saat önce</option>
+            <option value={72}>Varıştan 3 gün önce</option>
+          </select>
+          <button onClick={runReminders} data-testid="reminder-run-btn"
+            className="px-3 py-1.5 rounded-full bg-stone-900 text-white text-[11px] font-bold">Şimdi Çalıştır</button>
+          <span className="text-[10px] text-stone-400">Check-in'i tamamlamayan misafire otomatik e-posta hatırlatması</span>
+        </div>
+      )}
 
       {inviteKit && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setInviteKit(null)} data-testid="invite-kit-modal">

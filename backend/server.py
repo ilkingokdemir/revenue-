@@ -53,7 +53,7 @@ from routes.guests.reviews import create_reviews_router
 from routes.integrations_pkg.integrations import create_integrations_router
 from routes.pms.bookings import create_bookings_router
 from routes.pms.guest_payment import create_guest_payment_router
-from routes.pms.guest_journey import create_guest_journey_router
+from routes.pms.guest_journey import create_guest_journey_router, precheckin_reminder_loop
 from routes.hotel_ops.maintenance import create_maintenance_router
 from routes.revenue_ext.rate_manager import create_rate_manager_router
 from routes.integrations_pkg.reports import create_reports_router
@@ -1914,6 +1914,7 @@ async def _start_reviq_gap_loops():
     _spawn(owner_weekly_loop(db))
     _spawn(sentiment_theme_loop(db))
     _spawn(id_auto_purge_loop(db))
+    _spawn(precheckin_reminder_loop(db))
     _spawn(lastday_ladder_loop(db))
     _spawn(storefront_verify_loop(db))
     _spawn(second_writer_loop(db))

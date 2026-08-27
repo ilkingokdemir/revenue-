@@ -1713,6 +1713,16 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
               catch { toast.error("Failed to send"); }
               setQuickActions(null);
             } },
+          { id: "invitekit", label: "Davet Kiti", icon: Send, color: "text-emerald-700 bg-emerald-50 hover:bg-emerald-100",
+            onClick: async () => {
+              try {
+                const { data } = await axios.get(`${API}/guest-journey/invite-kit/${bk.id}`);
+                await navigator.clipboard.writeText(data.message_tr);
+                window.open(data.whatsapp_link_tr, "_blank");
+                toast.success("Davet mesajı kopyalandı, WhatsApp açıldı — kimlik yükleme linki içeriyor");
+              } catch { toast.error("Davet kiti oluşturulamadı"); }
+              setQuickActions(null);
+            } },
         ];
         return (
           <>

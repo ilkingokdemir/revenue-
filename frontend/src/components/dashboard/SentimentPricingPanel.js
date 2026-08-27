@@ -11,6 +11,15 @@ export default function SentimentPricingPanel({ propertyId = "default" }) {
   const [busy, setBusy] = useState(false);
   const [themes, setThemes] = useState(null);
   const [themesBusy, setThemesBusy] = useState(false);
+  const [trends, setTrends] = useState(null);
+
+  const loadTrends = useCallback(async () => {
+    try {
+      const r = await axios.get(`${B}/api/sentiment-pricing/${pid}/theme-trends`);
+      setTrends(r.data);
+    } catch { /* trend yoksa sessiz */ }
+  }, [pid]);
+  useEffect(() => { loadTrends(); }, [loadTrends]);
 
   async function analyzeThemes() {
     setThemesBusy(true);
@@ -18,6 +27,7 @@ export default function SentimentPricingPanel({ propertyId = "default" }) {
       const r = await axios.post(`${B}/api/sentiment-pricing/${pid}/analyze-themes`);
       setThemes(r.data);
       toast.success(`${r.data.reviews_analyzed} yorum tema bazında analiz edildi`);
+      loadTrends();
     } catch (e) { toast.error(e.response?.data?.detail || "Tema analizi başarısız"); }
     setThemesBusy(false);
   }
@@ -97,6 +107,35 @@ export default function SentimentPricingPanel({ propertyId = "default" }) {
         )}
         {!themes && <p className="text-xs text-stone-400 mt-2">Son 90 günün yorum metinleri yapay zekâ ile tema bazında puanlanır ve fiyat gücüne etkisi yorumlanır.</p>}
       </div>
+
+      {trends && trends.trends.length > 0 && (
+        <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="theme-trends-card">
+          <h2 className="text-base font-semibold mb-1">📈 Tema Trend Takibi ({trends.snapshots} analiz)</h2>
+          <p className="text-[11px] text-stone-400 mb-3">{trends.note}</p>
+          <div className="space-y-2">
+            {trends.trends.map((t) => {
+              const max = Math.max(...t.points.map((p) => p.score), 100);
+              return (
+                <div key={t.theme} className="flex items-center gap-3" data-testid={`theme-trend-${t.theme}`}>
+                  <span className="w-20 text-xs font-bold capitalize">{t.theme}</span>
+                  <div className="flex items-end gap-1 flex-1 h-9">
+                    {t.points.map((p) => (
+                      <div key={p.day} title={`${p.day}: ${p.score}`}
+                        className={`w-6 rounded-t ${p.score >= 70 ? "bg-emerald-400" : p.score >= 45 ? "bg-amber-300" : "bg-rose-400"}`}
+                        style={{ height: `${(p.score / max) * 100}%` }} />
+                    ))}
+                  </div>
+                  <span className="w-12 text-right text-sm font-black">{t.latest}</span>
+                  <span className={`w-16 text-right text-xs font-bold ${t.delta > 0 ? "text-emerald-600" : t.delta < 0 ? "text-rose-500" : "text-stone-400"}`}>
+                    {t.delta != null ? `${t.delta > 0 ? "▲" : t.delta < 0 ? "▼" : "•"} ${Math.abs(t.delta)}` : "—"}
+                  </span>
+                  {t.alert && <span className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-full px-2 py-0.5" data-testid={`theme-alert-${t.theme}`}>⚠️ ERKEN UYARI</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {data.risk_reviews?.length > 0 && (        <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="sentiment-risk-card">
           <h2 className="text-base font-semibold mb-2">⚠️ Fiyat gücünü zayıflatan son yorumlar</h2>

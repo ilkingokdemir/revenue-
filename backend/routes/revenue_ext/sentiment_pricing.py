@@ -49,6 +49,85 @@ async def analyze_sentiment(db, pid: str) -> Dict:
                               "platform": r.get("platform", "")} for r in low_recent]}
 
 
+async def run_theme_analysis(db, pid: str) -> Dict:
+    """Yorum metinlerini LLM ile tema bazında analiz eder ve günlük cache'ler."""
+    from fastapi import HTTPException as _HE
+    cached = await db.sentiment_themes.find_one(
+        {"property_id": pid, "day": _now().date().isoformat()}, {"_id": 0})
+    if cached:
+        return cached
+    since = (_now() - timedelta(days=90)).isoformat()
+    q = {"review_date": {"$gte": since}, "review_text": {"$ne": ""}}
+    if pid != "all":
+        q["property_id"] = pid
+    rows = await db.reviews.find(q, {"_id": 0, "rating": 1, "review_text": 1}).sort(
+        "review_date", -1).to_list(40)
+    if len(rows) < 3:
+        raise _HE(422, "Tema analizi için en az 3 metinli yorum gerekli")
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise _HE(503, "LLM anahtarı yok")
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    import json as _json
+    corpus = "\n".join(f"[{r.get('rating')}★] {(r.get('review_text') or '')[:220]}"
+                       for r in rows)
+    chat = LlmChat(api_key=api_key, session_id=f"themes-{uuid.uuid4()}",
+                   system_message="Otel yorumlarını tema bazında analiz et. SADECE JSON döndür.").with_model("openai", "gpt-5.2")
+    prompt = f"""Aşağıdaki otel yorumlarını analiz et. SADECE şu JSON'u döndür:
+{{"themes": [{{"theme": "temizlik|personel|konum|konfor|fiyat|kahvaltı", "score": 0-100, "mentions": sayı, "summary": "1 cümle Türkçe özet"}}], "pricing_note": "Bu temaların fiyat gücüne etkisi hakkında 1-2 cümle Türkçe değerlendirme"}}
+Yorumlar:
+{corpus}"""
+    reply = await chat.send_message(UserMessage(text=prompt))
+    cleaned = reply.strip().strip("```json").strip("```").strip()
+    parsed = _json.loads(cleaned)
+    prev = await db.sentiment_themes.find_one(
+        {"property_id": pid, "day": {"$lt": _now().date().isoformat()}},
+        {"_id": 0, "themes": 1, "day": 1}, sort=[("day", -1)])
+    themes = parsed.get("themes", [])
+    alerts = []
+    if prev:
+        prev_scores = {t["theme"]: t.get("score", 0) for t in prev.get("themes", [])}
+        for t in themes:
+            old = prev_scores.get(t["theme"])
+            if old is not None:
+                t["delta"] = round(t.get("score", 0) - old, 0)
+                if t["delta"] <= -10:
+                    alerts.append(f"{t['theme']} puanı {old}→{t['score']} düştü")
+    doc = {"property_id": pid, "day": _now().date().isoformat(),
+           "week": _now().strftime("%G-W%V"), "themes": themes,
+           "pricing_note": parsed.get("pricing_note", ""),
+           "alerts": alerts, "reviews_analyzed": len(rows),
+           "created_at": _now().isoformat()}
+    await db.sentiment_themes.update_one(
+        {"property_id": pid, "day": doc["day"]}, {"$set": doc}, upsert=True)
+    if alerts:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "title": "⚠️ Yorum teması düşüşte",
+            "message": f"{pid}: " + "; ".join(alerts) + " — fiyat gücünü etkileyebilir.",
+            "category": "revenue", "priority": "high", "read": False,
+            "created_at": _now().isoformat()})
+    return doc
+
+
+async def sentiment_theme_loop(db):
+    """Haftada bir tüm oteller için tema analizini otomatik koşar (ISO hafta idempotent)."""
+    import asyncio
+    while True:
+        try:
+            week = _now().strftime("%G-W%V")
+            for p in await db.properties.find({}, {"_id": 0, "id": 1}).to_list(50):
+                if await db.sentiment_themes.find_one(
+                        {"property_id": p["id"], "week": week}, {"_id": 1}):
+                    continue
+                try:
+                    await run_theme_analysis(db, p["id"])
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        await asyncio.sleep(12 * 3600)
+
+
 def create_sentiment_pricing_router(db, require_roles):
     router = APIRouter(prefix="/sentiment-pricing", tags=["sentiment-pricing"])
     ROLES = ("admin", "manager")
@@ -113,40 +192,26 @@ def create_sentiment_pricing_router(db, require_roles):
     @router.post("/{pid}/analyze-themes")
     async def analyze_themes(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         """Yorum metinlerini AI ile tema bazında analiz eder (temizlik, personel, konum...)."""
-        cached = await db.sentiment_themes.find_one(
-            {"property_id": pid, "day": _now().date().isoformat()}, {"_id": 0})
-        if cached:
-            return cached
-        since = (_now() - timedelta(days=90)).isoformat()
-        q = {"review_date": {"$gte": since}, "review_text": {"$ne": ""}}
-        if pid != "all":
-            q["property_id"] = pid
-        rows = await db.reviews.find(q, {"_id": 0, "rating": 1, "review_text": 1}).sort(
-            "review_date", -1).to_list(40)
-        if len(rows) < 3:
-            raise HTTPException(422, "Tema analizi için en az 3 metinli yorum gerekli")
-        api_key = os.environ.get("EMERGENT_LLM_KEY")
-        if not api_key:
-            raise HTTPException(503, "LLM anahtarı yok")
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        import json as _json
-        corpus = "\n".join(f"[{r.get('rating')}★] {(r.get('review_text') or '')[:220]}"
-                           for r in rows)
-        chat = LlmChat(api_key=api_key, session_id=f"themes-{uuid.uuid4()}",
-                       system_message="Otel yorumlarını tema bazında analiz et. SADECE JSON döndür.").with_model("openai", "gpt-5.2")
-        prompt = f"""Aşağıdaki otel yorumlarını analiz et. SADECE şu JSON'u döndür:
-{{"themes": [{{"theme": "temizlik|personel|konum|konfor|fiyat|kahvaltı", "score": 0-100, "mentions": sayı, "summary": "1 cümle Türkçe özet"}}], "pricing_note": "Bu temaların fiyat gücüne etkisi hakkında 1-2 cümle Türkçe değerlendirme"}}
-Yorumlar:
-{corpus}"""
-        reply = await chat.send_message(UserMessage(text=prompt))
-        cleaned = reply.strip().strip("```json").strip("```").strip()
-        parsed = _json.loads(cleaned)
-        doc = {"property_id": pid, "day": _now().date().isoformat(),
-               "themes": parsed.get("themes", []),
-               "pricing_note": parsed.get("pricing_note", ""),
-               "reviews_analyzed": len(rows), "created_at": _now().isoformat()}
-        await db.sentiment_themes.update_one(
-            {"property_id": pid, "day": doc["day"]}, {"$set": doc}, upsert=True)
-        return doc
+        return await run_theme_analysis(db, pid)
+
+    @router.get("/{pid}/theme-trends")
+    async def theme_trends(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        snaps = await db.sentiment_themes.find(
+            {"property_id": pid}, {"_id": 0}).sort("day", -1).to_list(12)
+        snaps.reverse()
+        series: Dict = {}
+        for s in snaps:
+            for t in s.get("themes", []):
+                series.setdefault(t["theme"], []).append(
+                    {"day": s["day"], "score": t.get("score", 0)})
+        trends = []
+        for theme, pts in series.items():
+            delta = round(pts[-1]["score"] - pts[-2]["score"], 0) if len(pts) >= 2 else None
+            trends.append({"theme": theme, "points": pts,
+                           "latest": pts[-1]["score"], "delta": delta,
+                           "alert": delta is not None and delta <= -10})
+        trends.sort(key=lambda x: (x["delta"] if x["delta"] is not None else 0))
+        return {"property_id": pid, "snapshots": len(snaps), "trends": trends,
+                "note": "Haftalık otomatik analiz + manuel analizler. 10+ puan düşüş yüksek öncelikli bildirim üretir."}
 
     return router

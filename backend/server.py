@@ -1899,7 +1899,7 @@ from routes.revenue_ext.comp_anomaly import create_comp_anomaly_router
 api_router.include_router(create_comp_anomaly_router(db, require_roles))
 from routes.revenue_ext.profit_benchmark import create_profit_benchmark_router
 api_router.include_router(create_profit_benchmark_router(db, require_roles))
-from routes.revenue_ext.sentiment_pricing import create_sentiment_pricing_router
+from routes.revenue_ext.sentiment_pricing import create_sentiment_pricing_router, sentiment_theme_loop
 api_router.include_router(create_sentiment_pricing_router(db, require_roles))
 from routes.revenue_ext.owner_weekly import create_owner_weekly_router, owner_weekly_loop
 api_router.include_router(create_owner_weekly_router(db, require_roles))
@@ -1910,6 +1910,7 @@ api_router.include_router(create_deposit_rule_router(db, require_roles))
 async def _start_reviq_gap_loops():
     _spawn(rate_mix_weekly_loop(db))
     _spawn(owner_weekly_loop(db))
+    _spawn(sentiment_theme_loop(db))
     _spawn(lastday_ladder_loop(db))
     _spawn(storefront_verify_loop(db))
     _spawn(second_writer_loop(db))
@@ -1927,8 +1928,26 @@ app.include_router(api_router)
 os.makedirs("/app/backend/uploads/ids", exist_ok=True)
 
 @app.get("/api/uploads/{upload_path:path}")
-async def serve_upload(upload_path: str):
+async def serve_upload(upload_path: str, request: Request, auth: str = None):
     from fastapi.responses import FileResponse, Response as _Resp
+    # Hassas dosyalar (kimlikler, personel/uyum belgeleri) sadece giriş yapmış yetkililere
+    SENSITIVE_PREFIXES = ("ids/", "onboarding/", "compliance/")
+    if upload_path.startswith(SENSITIVE_PREFIXES):
+        token = request.cookies.get("access_token")
+        if not token:
+            ah = request.headers.get("Authorization", "")
+            token = ah[7:] if ah.startswith("Bearer ") else (auth or None)
+        if not token:
+            raise HTTPException(status_code=401, detail="Bu dosya için giriş gerekli")
+        try:
+            from auth import get_jwt_secret, JWT_ALGORITHM
+            payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+            if payload.get("type") != "access":
+                raise HTTPException(status_code=401, detail="Geçersiz token")
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=401, detail="Geçersiz veya süresi dolmuş token")
     local = os.path.normpath(os.path.join("/app/backend/uploads", upload_path))
     if not local.startswith("/app/backend/uploads") or ".." in upload_path:
         raise HTTPException(status_code=400, detail="Geçersiz yol")

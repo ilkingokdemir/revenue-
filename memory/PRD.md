@@ -1319,3 +1319,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - ONAY SESLİ BİLDİRİMİ: MobileApprovalsPanel — 45sn poll; bekleyen sayısı artınca WebAudio çift ton + navigator.vibrate + toast. Ses toggle (sound-toggle-btn) localStorage'da kalıcı.
 - TEST: iteration_592.json — backend 13/13, frontend %100. Kod inceleme düzeltmeleri uygulandı: save_upload artık hata yükseltiyor (sahte 'uploaded' dönmüyor), upload_path '..' reddi.
 - NOT: /api/uploads auth'suz servis (booking widget görselleri kamuya açık olmalı); hassas alt yollar (ids/) için auth kapısı backlog'a eklendi (P2).
+
+## Güncelleme (2026-06 — Faz 6: Hassas Dosya Kilidi + Tema Trend Takibi TAMAMLANDI)
+- HASSAS DOSYA KİLİDİ: server.py serve_upload — ids/, onboarding/, compliance/ önekleri JWT zorunlu (cookie access_token otomatik <img> ile gider; Bearer header ve ?auth=token da destekli). Token yok → 401, geçersiz → 401. rooms/ vb. kamuya açık kalır (booking widget). Doğrulandı: ids dosyası token'sız 401, token'la 200.
+- TEMA TREND TAKİBİ: sentiment_pricing.py — run_theme_analysis modül fonksiyonu (delta hesabı: önceki analize göre; ≥10 puan düşüş → alerts + db.notifications high priority → NotificationBridge tarayıcı bildirimi). sentiment_theme_loop: haftalık otomatik analiz (ISO hafta idempotent, 12 saatte bir kontrol) startup'ta spawn. GET /{pid}/theme-trends: son 12 analiz, tema başına seri + delta + alert. UI: SentimentPricingPanel 'Tema Trend Takibi' kartı (bar grafik + ▼delta + ⚠️ ERKEN UYARI rozeti — temizlik 85→70 senaryosu görsel doğrulandı).
+- BEKLEYEN (kullanıcı girdisi): Resend API anahtarı (e-postalar MOCK), canlı yayın URL (duman testi için).

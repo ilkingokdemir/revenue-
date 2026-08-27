@@ -132,6 +132,7 @@ import {
   ProfitBenchmarkPanel,
   SentimentPricingPanel,
   MobileApprovalsPanel,
+  IdArchivePanel,
   IpAllowlistPanel,
   KDSPanel,
   KeyFiguresPanel,
@@ -1692,6 +1693,7 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {activeView === "profit-benchmark" && <ProfitBenchmarkPanel />}
         {activeView === "sentiment-pricing" && <SentimentPricingPanel propertyId={activePropertyId || "default"} />}
         {activeView === "mobile-approvals" && <MobileApprovalsPanel propertyId={activePropertyId || "default"} />}
+        {activeView === "id-archive" && <IdArchivePanel propertyId={activePropertyId || "all"} />}
         {activeView === "restriction-advisor" && <RestrictionAdvisorPanel propertyId={activePropertyId || "all"} />}
         {activeView === "gap-filler" && <GapFillerPanel propertyId={activePropertyId || "all"} />}
         {activeView === "lost-demand" && <LostDemandPanel propertyId={activePropertyId || "all"} />}

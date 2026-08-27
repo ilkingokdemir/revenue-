@@ -106,6 +106,18 @@ Yorumlar:
             "message": f"{pid}: " + "; ".join(alerts) + " — fiyat gücünü etkileyebilir.",
             "category": "revenue", "priority": "high", "read": False,
             "created_at": _now().isoformat()})
+        # Tema-Fiyat Otomasyonu: sinyali otomatik yeniden hesapla, öneri olarak düşür
+        try:
+            a = await analyze_sentiment(db, pid)
+            reco = {"id": str(uuid.uuid4()), "property_id": pid,
+                    "index": a.get("index"), "suggested_adj_pct": a.get("suggested_adj_pct"),
+                    "signal": a.get("signal"), "trigger_alerts": alerts,
+                    "status": "new", "created_at": _now().isoformat()}
+            await db.sentiment_recos.insert_one(dict(reco))
+            from routes.revenue_ext.reprice_bridge import fire_reprice
+            fire_reprice(db, pid, "sentiment_theme_alert", reco["id"])
+        except Exception:
+            pass
     return doc
 
 
@@ -137,8 +149,19 @@ def create_sentiment_pricing_router(db, require_roles):
         a = await analyze_sentiment(db, pid)
         applies = await db.sentiment_pricing_applies.find(
             {"property_id": pid}, {"_id": 0}).sort("created_at", -1).to_list(5)
-        return {"property_id": pid, **a, "applies": applies,
+        recos = await db.sentiment_recos.find(
+            {"property_id": pid, "status": "new"}, {"_id": 0}).sort(
+            "created_at", -1).to_list(5)
+        return {"property_id": pid, **a, "applies": applies, "recos": recos,
                 "note": "Endeks = ortalama puan (%80 ağırlık) + 30 günlük trend + hacim bonusu. Sinyal fiyat motoruna önümüzdeki 30 gün için % ayar olarak uygulanabilir."}
+
+    @router.post("/{pid}/recos/{rid}/dismiss")
+    async def dismiss_reco(pid: str, rid: str, _u: dict = Depends(require_roles(*ROLES))):
+        r = await db.sentiment_recos.update_one(
+            {"id": rid, "property_id": pid}, {"$set": {"status": "dismissed"}})
+        if not r.matched_count:
+            raise HTTPException(404, "Öneri bulunamadı")
+        return {"ok": True}
 
     @router.post("/{pid}/apply")
     async def apply(pid: str, data: Dict = None, u: dict = Depends(require_roles(*ROLES))):

@@ -1903,6 +1903,8 @@ from routes.revenue_ext.sentiment_pricing import create_sentiment_pricing_router
 api_router.include_router(create_sentiment_pricing_router(db, require_roles))
 from routes.revenue_ext.owner_weekly import create_owner_weekly_router, owner_weekly_loop
 api_router.include_router(create_owner_weekly_router(db, require_roles))
+from routes.hotel_ops.id_archive import create_id_archive_router
+api_router.include_router(create_id_archive_router(db, require_roles))
 from routes.hotel_ops.deposit_rule import create_deposit_rule_router, deposit_rule_loop
 api_router.include_router(create_deposit_rule_router(db, require_roles))
 
@@ -1948,6 +1950,8 @@ async def serve_upload(upload_path: str, request: Request, auth: str = None):
             raise
         except Exception:
             raise HTTPException(status_code=401, detail="Geçersiz veya süresi dolmuş token")
+        if await db.upload_blocklist.find_one({"path": upload_path}):
+            raise HTTPException(status_code=410, detail="Bu belge KVKK gereği imha edildi")
     local = os.path.normpath(os.path.join("/app/backend/uploads", upload_path))
     if not local.startswith("/app/backend/uploads") or ".." in upload_path:
         raise HTTPException(status_code=400, detail="Geçersiz yol")

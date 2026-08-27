@@ -83,6 +83,29 @@ export default function SentimentPricingPanel({ propertyId = "default" }) {
         )}
       </div>
 
+      {data.recos?.length > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-5" data-testid="sentiment-recos-card">
+          <h2 className="text-base font-semibold mb-2">🤖 Otomatik Öneriler (tema erken uyarısı tetikledi)</h2>
+          {data.recos.map((r) => (
+            <div key={r.id} className="flex items-start justify-between gap-3 border-t border-amber-200 py-2" data-testid={`sentiment-reco-${r.id}`}>
+              <div className="text-xs">
+                <b>Endeks {r.index}</b> · sinyal: {r.signal}
+                <div className="text-[10px] text-stone-500">Tetikleyen: {(r.trigger_alerts || []).join("; ")} · {r.created_at?.slice(0, 16).replace("T", " ")}</div>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                {r.suggested_adj_pct !== 0 && (
+                  <button onClick={apply} data-testid={`sentiment-reco-apply-${r.id}`}
+                    className="px-3 py-1 rounded-full bg-rose-500 text-white text-[10px] font-bold">{r.suggested_adj_pct > 0 ? "+" : ""}{r.suggested_adj_pct}% Uygula</button>
+                )}
+                <button onClick={async () => { await axios.post(`${B}/api/sentiment-pricing/${pid}/recos/${r.id}/dismiss`); toast.success("Öneri kapatıldı"); load(); }}
+                  data-testid={`sentiment-reco-dismiss-${r.id}`}
+                  className="px-3 py-1 rounded-full border border-stone-300 text-stone-600 text-[10px] font-bold">Kapat</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-stone-200 p-5" data-testid="sentiment-themes-card">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold">🧠 AI Tema Analizi (temizlik · personel · konum...)</h2>

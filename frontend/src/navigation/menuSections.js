@@ -2,6 +2,7 @@
 // `core: true` marks items visible in Simple mode (~30 essential screens).
 import {
   Coins,
+  IdentificationCard,
   Pulse,
   Handshake,
   AddressBook,
@@ -304,6 +305,7 @@ export function buildMenuSections(t, user) {
         { id: "profit-benchmark", icon: Coins, name: "Kâr Benchmark (GOPPAR ligi)", testId: "profit-benchmark-btn" },
         { id: "sentiment-pricing", icon: Brain, name: "Sosyal Sentiment Fiyatı", testId: "sentiment-pricing-btn" },
         { id: "mobile-approvals", icon: DeviceMobile, name: "Mobil Onay Merkezi", testId: "mobile-approvals-btn" },
+        { id: "id-archive", icon: IdentificationCard, name: "Misafir Kimlik Arşivi (KVKK)", testId: "id-archive-btn" },
         { id: "pricing-explain", icon: Brain, name: "AI pricing explainer", testId: "pricing-explain-btn" },
         { id: "anomaly", icon: Lightning, name: "Anomaly radar", testId: "anomaly-btn" },
         { id: "ai-predictions", icon: Sparkle, name: "AI predictions", testId: "ai-predictions-btn" },

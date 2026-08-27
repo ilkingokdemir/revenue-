@@ -38,8 +38,8 @@ export default function IdArchivePanel({ propertyId = "all" }) {
   async function saveRetention(e) {
     e.preventDefault(); setBusy("cfg");
     try {
-      await axios.put(`${B}/api/id-archive/config`, { retention_days: parseInt(e.target.days.value, 10) });
-      toast.success("Saklama süresi güncellendi"); load();
+      await axios.put(`${B}/api/id-archive/config`, { retention_days: parseInt(e.target.days.value, 10), auto_purge: e.target.auto.checked });
+      toast.success("Saklama ayarları güncellendi"); load();
     } catch (err) { toast.error(err.response?.data?.detail || "Kaydedilemedi (sadece admin)"); }
     setBusy("");
   }
@@ -81,10 +81,14 @@ export default function IdArchivePanel({ propertyId = "all" }) {
       </div>
 
       <div className="bg-white rounded-2xl border border-stone-200 p-4 flex flex-wrap items-end gap-3" data-testid="id-archive-config">
-        <form onSubmit={saveRetention} className="flex items-end gap-2">
+        <form onSubmit={saveRetention} className="flex items-end gap-2 flex-wrap">
           <label className="text-xs text-stone-500">Saklama süresi (gün, çıkıştan itibaren)
             <input name="days" type="number" min="30" max="3650" defaultValue={data.retention_days}
               data-testid="id-retention-input" className="block border rounded-lg px-2 py-1.5 text-sm w-32 mt-1" /></label>
+          <label className="text-xs text-stone-500 flex items-center gap-1.5 pb-2 cursor-pointer">
+            <input name="auto" type="checkbox" defaultChecked={data.auto_purge} data-testid="id-auto-purge-toggle" className="accent-rose-600 w-4 h-4" />
+            Otomatik imha (her gece)
+          </label>
           <button type="submit" disabled={busy === "cfg"} data-testid="id-retention-save-btn"
             className="px-4 py-2 rounded-full bg-stone-900 text-white text-xs font-bold disabled:opacity-50">Kaydet</button>
         </form>

@@ -1336,3 +1336,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - UI: IdArchivePanel 'AI Doğrulama' kolonu — '🤖 AI Doğrula' butonu (id-ocr-btn-{rid}), sonuç rozetleri (✅ EŞLEŞTİ %xx / ❌ UYUŞMUYOR / ⚠️ OKUNAMADI) + kimlikten okunan ad ve belge no.
 - TEST: Demo kimlik (JOHN SMITH / 12345678901) AI ile okundu, rezervasyon 'John Smith' ile %100 eşleşti (verified). UI rozetleri ekran görüntüsüyle doğrulandı.
 - BEKLEYEN: Canlı URL (duman testi — kullanıcı 2 kez istedi ama URL vermedi), Resend anahtarı.
+
+## Güncelleme (2026-06 — Faz 9: Ön Check-in Davet Kiti + Otomatik OCR + KVKK Oto-İmha TAMAMLANDI)
+- ÖN CHECK-İN DAVET KİTİ (kullanıcının referans ekranları birebir): guest_journey.py GET /api/guest-journey/invite-kit/{booking_id} — kayıt yoksa token üretir, PUBLIC_BASE_URL/register/{token} linki, TR+EN hazır mesaj, wa.me linki (misafir telefonuyla), mailto linki döner. UI: GuestJourneyPanel 'Send Registration Link' dialogunda her rezervasyona '📲 Davet Kiti' butonu → modal (link+Kopyala, TR/EN sekme, mesaj kopyala, WhatsApp ile Gönder, E-posta ile Gönder, QR kod). BASE_URL fix: PUBLIC_BASE_URL env önceliği (cluster iç URL sorunu çözüldü).
+- OTOMATİK OCR DOĞRULAMA (Check-in OCR kısayolu): guest_journey.py _auto_ocr_verify — misafir linkten (upload-id/{token}) veya resepsiyondan (reception-upload-id) kimlik yükleyince asyncio.create_task ile AI doğrulama otomatik koşar; UYUŞMAZLIK/OKUNAMADI → yüksek öncelikli bildirim ('Chen Thomas: kimlikte JOHN SMITH okundu — kontrol edin' senaryosu uçtan uca doğrulandı).
+- KVKK OTO-İMHA (opsiyonlu): id_archive.py purge_expired_ids modül fonksiyonu + id_auto_purge_loop (12 saatte bir, sadece auto_purge=true iken; imha sonrası bildirim). PUT /config artık auto_purge kabul ediyor; GET auto_purge döner. UI: IdArchivePanel 'Otomatik imha (her gece)' checkbox. Manuel imha + süre ayarı korundu.
+- BEKLEYEN: Canlı URL (3 kez istendi, verilmedi), Resend anahtarı.

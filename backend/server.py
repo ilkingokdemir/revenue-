@@ -1903,7 +1903,7 @@ from routes.revenue_ext.sentiment_pricing import create_sentiment_pricing_router
 api_router.include_router(create_sentiment_pricing_router(db, require_roles))
 from routes.revenue_ext.owner_weekly import create_owner_weekly_router, owner_weekly_loop
 api_router.include_router(create_owner_weekly_router(db, require_roles))
-from routes.hotel_ops.id_archive import create_id_archive_router
+from routes.hotel_ops.id_archive import create_id_archive_router, id_auto_purge_loop
 api_router.include_router(create_id_archive_router(db, require_roles))
 from routes.hotel_ops.deposit_rule import create_deposit_rule_router, deposit_rule_loop
 api_router.include_router(create_deposit_rule_router(db, require_roles))
@@ -1913,6 +1913,7 @@ async def _start_reviq_gap_loops():
     _spawn(rate_mix_weekly_loop(db))
     _spawn(owner_weekly_loop(db))
     _spawn(sentiment_theme_loop(db))
+    _spawn(id_auto_purge_loop(db))
     _spawn(lastday_ladder_loop(db))
     _spawn(storefront_verify_loop(db))
     _spawn(second_writer_loop(db))

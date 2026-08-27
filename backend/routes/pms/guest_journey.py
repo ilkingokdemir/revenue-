@@ -19,6 +19,37 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 def create_guest_journey_router(db, require_roles):
+    async def _auto_ocr_verify(booking_id: str, file_path: str):
+        """Kimlik yüklenir yüklenmez AI doğrulaması — uyuşmazlıkta anında bildirim."""
+        try:
+            booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+            if not booking:
+                return
+            data = None
+            if os.path.isfile(file_path):
+                data = open(file_path, "rb").read()
+            else:
+                from object_storage import fetch_upload
+                found = await fetch_upload(f"ids/{os.path.basename(file_path)}")
+                if found:
+                    data = found[0]
+            if not data or len(data) < 500:
+                return
+            from routes.guests.id_verification import run_id_verification
+            result = await run_id_verification(
+                db, booking, base64.b64encode(data).decode("ascii"), "auto-ocr")
+            if result.get("status") != "verified":
+                title = ("❌ Kimlik rezervasyonla uyuşmuyor" if result.get("status") == "mismatch"
+                         else "⚠️ Kimlik okunamadı")
+                await db.notifications.insert_one({
+                    "id": str(uuid.uuid4()), "title": title,
+                    "message": f"{booking.get('guest_name', '')} ({booking.get('booking_ref') or booking_id[:8]}): "
+                               f"kimlikte '{(result.get('extracted') or {}).get('full_name', '?')}' okundu — kontrol edin.",
+                    "category": "front_desk", "priority": "high", "read": False,
+                    "created_at": datetime.now(timezone.utc).isoformat()})
+        except Exception:
+            pass
+
     router = APIRouter()
 
     # ==================== SEND REGISTRATION LINK ====================
@@ -55,7 +86,7 @@ def create_guest_journey_router(db, require_roles):
         reg.pop("_id", None)
 
         host_url = str(request.base_url).rstrip("/")
-        base_url = os.environ.get("BASE_URL", os.environ.get("REACT_APP_BACKEND_URL", host_url))
+        base_url = os.environ.get("PUBLIC_BASE_URL") or os.environ.get("BASE_URL", host_url)
         reg_url = f"{base_url}/register/{token}"
 
         # Get property info
@@ -67,6 +98,55 @@ def create_guest_journey_router(db, require_roles):
         asyncio.create_task(_send_registration_email(reg, hotel_name, reg_url, booking))
 
         return {"status": "sent", "token": token, "url": reg_url}
+
+    @router.get("/guest-journey/invite-kit/{booking_id}")
+    async def invite_kit(booking_id: str, request: Request, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Ön check-in davet kiti: link + TR/EN mesaj şablonu + WhatsApp/e-posta linkleri."""
+        booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(404, "Booking not found")
+        reg = await db.guest_registrations.find_one(
+            {"booking_id": booking_id}, {"_id": 0}, sort=[("created_at", -1)])
+        if not reg:
+            token = secrets.token_urlsafe(32)
+            reg = {"id": str(uuid.uuid4()), "booking_id": booking_id,
+                   "booking_ref": booking.get("booking_ref", ""),
+                   "property_id": booking.get("property_id", ""),
+                   "guest_name": booking.get("guest_name", ""),
+                   "guest_email": booking.get("guest_email", ""),
+                   "guest_phone": booking.get("guest_phone", ""),
+                   "token": token, "status": "pending", "form_data": {},
+                   "id_uploaded": False, "id_file_path": "", "terms_accepted": False,
+                   "signature": "", "welcome_sent": False,
+                   "satisfaction_check_sent": False,
+                   "created_at": datetime.now(timezone.utc).isoformat(), "completed_at": ""}
+            await db.guest_registrations.insert_one(dict(reg))
+        base_url = os.environ.get("PUBLIC_BASE_URL") or os.environ.get("BASE_URL", str(request.base_url).rstrip("/"))
+        url = f"{base_url}/register/{reg['token']}"
+        prop = await db.properties.find_one({"id": booking.get("property_id")}, {"_id": 0})
+        hotel = (prop or {}).get("name", "Otelimiz")
+        guest = booking.get("guest_name", "Misafirimiz")
+        ci, co = booking.get("check_in", ""), booking.get("check_out", "")
+        msg_tr = (f"Merhaba {guest},\n\n{hotel}'e hoş geldiniz! Gelişinizden önce online check-in'inizi "
+                  f"tamamlayabilirsiniz — sadece 2 dakika sürer.\n\nKonaklama: {ci} → {co}\n\nNasıl yapılır:\n"
+                  f"1. Bu linki açın: {url}\n2. Bilgilerinizi doldurun ve pasaport/kimlik fotoğrafınızı yükleyin.\n"
+                  f"3. Form tamamlanınca varışta anahtarınız hazır olacak.\n\nGörüşmek üzere!\n{hotel}")
+        msg_en = (f"Hello {guest},\n\nWelcome to {hotel}! You can complete your check-in online before "
+                  f"you arrive — it only takes 2 minutes.\n\nStay: {ci} → {co}\n\nHow to check in:\n"
+                  f"1. Open this link: {url}\n2. Fill in your details and upload a photo of your passport / ID.\n"
+                  f"3. Once complete, your key will be ready on arrival.\n\nSee you soon!\n{hotel}")
+        phone = "".join(c for c in (booking.get("guest_phone") or "") if c.isdigit())
+        import urllib.parse as _up
+        wa = f"https://wa.me/{phone}?text={_up.quote(msg_tr)}" if phone else f"https://wa.me/?text={_up.quote(msg_tr)}"
+        wa_en = f"https://wa.me/{phone}?text={_up.quote(msg_en)}" if phone else f"https://wa.me/?text={_up.quote(msg_en)}"
+        mailto = (f"mailto:{booking.get('guest_email', '')}?subject={_up.quote('Online Check-in — ' + hotel)}"
+                  f"&body={_up.quote(msg_en)}")
+        return {"registration_id": reg["id"], "url": url, "guest_name": guest,
+                "guest_phone": booking.get("guest_phone", ""),
+                "guest_email": booking.get("guest_email", ""),
+                "message_tr": msg_tr, "message_en": msg_en,
+                "whatsapp_link_tr": wa, "whatsapp_link_en": wa_en, "mailto_link": mailto,
+                "id_uploaded": reg.get("id_uploaded", False), "status": reg.get("status")}
 
     # ==================== SHARE REGISTRATION LINK ====================
 
@@ -82,7 +162,7 @@ def create_guest_journey_router(db, require_roles):
         email_addr = data.get("email", reg.get("guest_email", ""))
 
         host_url = str(request.base_url).rstrip("/")
-        base_url = os.environ.get("BASE_URL", os.environ.get("REACT_APP_BACKEND_URL", host_url))
+        base_url = os.environ.get("PUBLIC_BASE_URL") or os.environ.get("BASE_URL", host_url)
         reg_url = f"{base_url}/register/{reg['token']}"
 
         prop = await db.properties.find_one({"id": reg.get("property_id")}, {"_id": 0})
@@ -246,7 +326,8 @@ def create_guest_journey_router(db, require_roles):
             {"token": token},
             {"$set": {"id_uploaded": True, "id_file_path": filepath, "id_filename": file.filename}}
         )
-        return {"status": "uploaded", "filename": file.filename}
+        asyncio.create_task(_auto_ocr_verify(reg["booking_id"], filepath))
+        return {"status": "uploaded", "filename": file.filename, "ocr": "auto"}
 
     # ==================== RECEPTION: UPLOAD ID FOR GUEST ====================
 
@@ -282,7 +363,8 @@ def create_guest_journey_router(db, require_roles):
             {"id": reg["id"]},
             {"$set": {"id_uploaded": True, "id_file_path": filepath, "id_filename": file.filename, "uploaded_by": current_user.get("email", "")}}
         )
-        return {"status": "uploaded", "filename": file.filename}
+        asyncio.create_task(_auto_ocr_verify(booking_id, filepath))
+        return {"status": "uploaded", "filename": file.filename, "ocr": "auto"}
 
     # ==================== LIST REGISTRATIONS ====================
 
@@ -541,7 +623,7 @@ def create_guest_journey_router(db, require_roles):
         }, {"_id": 0}).to_list(100)
 
         host_url = str(request.base_url).rstrip("/")
-        base_url = os.environ.get("BASE_URL", os.environ.get("REACT_APP_BACKEND_URL", host_url))
+        base_url = os.environ.get("PUBLIC_BASE_URL") or os.environ.get("BASE_URL", host_url)
         prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
         ts = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
         hotel_name = ts.get("hotel_name") or (prop or {}).get("name", "Hotel")

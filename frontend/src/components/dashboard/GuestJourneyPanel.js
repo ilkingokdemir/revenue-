@@ -59,6 +59,16 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
 
   useEffect(() => { fetchRegistrations(); fetchBookings(); }, [fetchRegistrations, fetchBookings]);
 
+  const [inviteKit, setInviteKit] = useState(null);
+  const [kitLang, setKitLang] = useState("tr");
+
+  const openInviteKit = async (bookingId) => {
+    try {
+      const { data } = await axios.get(`${API}/guest-journey/invite-kit/${bookingId}`);
+      setInviteKit(data);
+    } catch (e) { toast.error(e.response?.data?.detail || "Davet kiti oluşturulamadı"); }
+  };
+
   const sendRegistrationLink = async (bookingId) => {
     setSendingLink(bookingId);
     try {
@@ -336,10 +346,15 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
                           {alreadySent ? (
                             <span className="text-xs text-emerald-600 font-medium flex items-center gap-1"><CheckCircle size={14} weight="fill" /> Sent</span>
                           ) : (
-                            <button data-testid={`btn-send-link-${b.id}`} onClick={() => sendRegistrationLink(b.id)} disabled={sendingLink === b.id || !b.guest_email} className="px-3 py-1.5 bg-[#1e3a5f] text-white text-xs font-medium rounded-lg hover:bg-[#15304f] disabled:opacity-40 transition flex items-center gap-1.5">
+                            <div className="flex gap-1.5">
+                              <button data-testid={`btn-invite-kit-${b.id}`} onClick={() => openInviteKit(b.id)} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700 transition">
+                                📲 Davet Kiti
+                              </button>
+                              <button data-testid={`btn-send-link-${b.id}`} onClick={() => sendRegistrationLink(b.id)} disabled={sendingLink === b.id || !b.guest_email} className="px-3 py-1.5 bg-[#1e3a5f] text-white text-xs font-medium rounded-lg hover:bg-[#15304f] disabled:opacity-40 transition flex items-center gap-1.5">
                               <Send size={12} />
                               {sendingLink === b.id ? "Sending..." : "Send Link"}
                             </button>
+                            </div>
                           )}
                         </div>
                       );
@@ -553,6 +568,41 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
           </motion.div>
         )}
       </AnimatePresence>
+
+      {inviteKit && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setInviteKit(null)} data-testid="invite-kit-modal">
+          <div className="bg-white rounded-2xl p-5 max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-bold">📲 Ön Check-in Daveti — {inviteKit.guest_name}</h3>
+              <button onClick={() => setInviteKit(null)} className="text-stone-400" data-testid="invite-kit-close">✕</button>
+            </div>
+            <div className="bg-stone-50 rounded-xl p-2.5 flex items-center gap-2 mb-2">
+              <code className="text-[11px] text-stone-600 truncate flex-1" data-testid="invite-kit-url">{inviteKit.url}</code>
+              <button onClick={() => { navigator.clipboard.writeText(inviteKit.url); toast.success("Link kopyalandı"); }} className="text-[10px] font-bold text-[#1e3a5f]" data-testid="invite-kit-copy-url">Kopyala</button>
+            </div>
+            <div className="flex gap-1.5 mb-2">
+              <button onClick={() => setKitLang("tr")} className={`px-3 py-1 rounded-full text-[11px] font-bold ${kitLang === "tr" ? "bg-[#1e3a5f] text-white" : "bg-stone-100 text-stone-500"}`} data-testid="invite-kit-lang-tr">Türkçe</button>
+              <button onClick={() => setKitLang("en")} className={`px-3 py-1 rounded-full text-[11px] font-bold ${kitLang === "en" ? "bg-[#1e3a5f] text-white" : "bg-stone-100 text-stone-500"}`} data-testid="invite-kit-lang-en">English</button>
+            </div>
+            <textarea readOnly value={kitLang === "tr" ? inviteKit.message_tr : inviteKit.message_en} rows={9}
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs text-stone-600 resize-none" data-testid="invite-kit-message" />
+            <div className="flex flex-wrap gap-2 mt-2">
+              <button onClick={() => { navigator.clipboard.writeText(kitLang === "tr" ? inviteKit.message_tr : inviteKit.message_en); toast.success("Mesaj kopyalandı"); }}
+                className="px-3 py-2 rounded-lg bg-stone-900 text-white text-xs font-bold" data-testid="invite-kit-copy-msg">📋 Mesajı Kopyala</button>
+              <a href={kitLang === "tr" ? inviteKit.whatsapp_link_tr : inviteKit.whatsapp_link_en} target="_blank" rel="noopener noreferrer"
+                className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold" data-testid="invite-kit-whatsapp">💬 WhatsApp ile Gönder</a>
+              {inviteKit.guest_email && (
+                <a href={inviteKit.mailto_link} className="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold" data-testid="invite-kit-mail">✉️ E-posta ile Gönder</a>
+              )}
+            </div>
+            <div className="flex flex-col items-center mt-3 bg-stone-50 rounded-xl p-3" data-testid="invite-kit-qr">
+              <QRCodeSVG value={inviteKit.url} size={110} level="M" includeMargin />
+              <p className="text-[10px] text-stone-400 mt-1">Misafir QR'ı okutup kimliğini yükleyebilir · Yükleme sonrası AI otomatik doğrular</p>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

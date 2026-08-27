@@ -12,6 +12,69 @@ def _now():
     return datetime.now(timezone.utc)
 
 
+async def purge_expired_ids(db, by: str = "auto-kvkk") -> int:
+    """Saklama süresi dolan kimlikleri imha eder (yerel sil + blocklist + işaretle)."""
+    cfg = await db.id_archive_config.find_one({}, {"_id": 0})
+    retention = int((cfg or {}).get("retention_days", DEFAULT_RETENTION_DAYS))
+    regs = await db.guest_registrations.find(
+        {"id_uploaded": True, "id_purged": {"$ne": True}},
+        {"_id": 0, "id": 1, "booking_id": 1, "id_file_path": 1}).to_list(500)
+    today = _now().date()
+    purged = 0
+    for r in regs:
+        b = await db.bookings.find_one({"id": r.get("booking_id")},
+                                       {"_id": 0, "check_out": 1})
+        co = ((b or {}).get("check_out") or "")[:10]
+        if not co:
+            continue
+        try:
+            expires = datetime.strptime(co, "%Y-%m-%d").date() + timedelta(days=retention)
+        except Exception:
+            continue
+        if expires >= today:
+            continue
+        path = r.get("id_file_path") or ""
+        fname = os.path.basename(path)
+        if os.path.isfile(path):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+        if fname:
+            await db.upload_blocklist.update_one(
+                {"path": f"ids/{fname}"},
+                {"$set": {"reason": "KVKK imha", "by": by,
+                          "created_at": _now().isoformat()}}, upsert=True)
+        await db.guest_registrations.update_one(
+            {"id": r["id"]},
+            {"$set": {"id_purged": True, "id_purged_at": _now().isoformat()}})
+        purged += 1
+    if purged:
+        await db.id_archive_purge_log.insert_one({
+            "id": str(uuid.uuid4()), "purged": purged, "by": by,
+            "created_at": _now().isoformat()})
+    return purged
+
+
+async def id_auto_purge_loop(db):
+    """Gece otomatik KVKK imhası — sadece auto_purge açıksa çalışır."""
+    import asyncio
+    while True:
+        try:
+            cfg = await db.id_archive_config.find_one({}, {"_id": 0})
+            if (cfg or {}).get("auto_purge"):
+                n = await purge_expired_ids(db, by="auto-kvkk")
+                if n:
+                    await db.notifications.insert_one({
+                        "id": str(uuid.uuid4()), "title": "🗑️ KVKK otomatik imha",
+                        "message": f"Saklama süresi dolan {n} kimlik belgesi otomatik imha edildi.",
+                        "category": "compliance", "priority": "normal", "read": False,
+                        "created_at": _now().isoformat()})
+        except Exception:
+            pass
+        await asyncio.sleep(12 * 3600)
+
+
 def create_id_archive_router(db, require_roles):
     router = APIRouter(prefix="/id-archive", tags=["id-archive"])
     ROLES = ("admin", "manager")
@@ -70,57 +133,25 @@ def create_id_archive_router(db, require_roles):
                           "purged_at": r.get("id_purged_at")})
         items.sort(key=lambda x: (x["status"] != "imha bekliyor", x["expires_at"] or "9999"))
         pending = sum(1 for i in items if i["status"] == "imha bekliyor")
-        return {"retention_days": retention, "items": items,
+        cfg = await db.id_archive_config.find_one({}, {"_id": 0})
+        return {"retention_days": retention, "auto_purge": bool((cfg or {}).get("auto_purge", False)),
+                "items": items,
                 "total": len(items), "pending_purge": pending,
                 "note": f"KVKK: kimlik belgeleri çıkış tarihinden itibaren {retention} gün saklanır, süre dolunca imha edilmelidir. İmha edilen dosyalara erişim kalıcı olarak kapanır (410)."}
 
     @router.put("/config")
     async def put_config(data: Dict, u: dict = Depends(require_roles("admin"))):
         days = max(30, min(int(data.get("retention_days", DEFAULT_RETENTION_DAYS) or DEFAULT_RETENTION_DAYS), 3650))
+        auto = bool(data.get("auto_purge", False))
         await db.id_archive_config.update_one(
-            {}, {"$set": {"retention_days": days, "updated_at": _now().isoformat(),
+            {}, {"$set": {"retention_days": days, "auto_purge": auto,
+                          "updated_at": _now().isoformat(),
                           "updated_by": u.get("name") or u.get("email", "")}}, upsert=True)
-        return {"ok": True, "retention_days": days}
+        return {"ok": True, "retention_days": days, "auto_purge": auto}
 
     @router.post("/purge-expired")
     async def purge_expired(u: dict = Depends(require_roles("admin"))):
-        retention = await _retention()
-        regs = await db.guest_registrations.find(
-            {"id_uploaded": True, "id_purged": {"$ne": True}},
-            {"_id": 0, "id": 1, "booking_id": 1, "id_file_path": 1}).to_list(500)
-        today = _now().date()
-        purged = 0
-        for r in regs:
-            b = await db.bookings.find_one({"id": r.get("booking_id")},
-                                           {"_id": 0, "check_out": 1})
-            co = ((b or {}).get("check_out") or "")[:10]
-            if not co:
-                continue
-            try:
-                expires = datetime.strptime(co, "%Y-%m-%d").date() + timedelta(days=retention)
-            except Exception:
-                continue
-            if expires >= today:
-                continue
-            path = r.get("id_file_path") or ""
-            fname = os.path.basename(path)
-            if os.path.isfile(path):
-                try:
-                    os.remove(path)
-                except Exception:
-                    pass
-            if fname:
-                await db.upload_blocklist.update_one(
-                    {"path": f"ids/{fname}"},
-                    {"$set": {"reason": "KVKK imha", "by": u.get("name", ""),
-                              "created_at": _now().isoformat()}}, upsert=True)
-            await db.guest_registrations.update_one(
-                {"id": r["id"]},
-                {"$set": {"id_purged": True, "id_purged_at": _now().isoformat()}})
-            purged += 1
-        await db.id_archive_purge_log.insert_one({
-            "id": str(uuid.uuid4()), "purged": purged,
-            "by": u.get("name") or u.get("email", ""), "created_at": _now().isoformat()})
+        purged = await purge_expired_ids(db, by=u.get("name") or u.get("email", ""))
         return {"ok": True, "purged": purged}
 
     @router.post("/{registration_id}/ocr-verify")

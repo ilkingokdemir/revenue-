@@ -1352,3 +1352,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - HATIRLATMA ETKİ RAPORU: GET /api/guest-journey/reminder-impact — hatırlatılan/tamamlayan/bekleyen + dönüşüm %. UI: GuestJourneyPanel hatırlatma kartında istatistik satırı + dönüşüm barı (reminder-impact-stats). Test: 6 hatırlatıldı / 0 tamamladı / %0 (dürüst veri).
 - TAKVİM MENÜ GAP ANALİZİ: /app/memory/TAKVIM_MENU_GAP_ANALIZI.md — 7 eksik tespit (oda taşı, split, onay yeniden gönder, mesaj kısayolu, ödeme linki kısayolu, tarih düzenle, kayıt kartı popover). P0: Oda Değiştir + Ödeme Linki kısayolu.
 - BEKLEYEN: Twilio anahtarları, Canlı URL, Resend anahtarı (kullanıcı hiçbirini henüz paylaşmadı).
+
+## Güncelleme (2026-06 — Faz 12: Takvim Hızlı İşlemleri — Oda Değiştir / Ödeme Linki / Onayı Gönder TAMAMLANDI)
+- ODA DEĞİŞTİR: BookingTimeline popover'a 'Oda Değiştir' aksiyonu (qa-changeroom) → change-room-modal: müsait odalar (aynı tip önce, OOS bloklu odalar hariç), tıklayınca PUT /bookings/timeline/{pid}/reassign/{bid}. Backend reassign conflict check artık no_show/checked_out'u hariç tutuyor (yanlış blok düzeltildi).
+- ÖDEME LİNKİ KISAYOLU: popover 'Ödeme Linki' (qa-paylink) → POST /payments/checkout (balance_due ?? total_price), Stripe checkout_url panoya kopyalanır; bakiye 0 → 'Ödenmemiş bakiye yok'.
+- ONAY YENİDEN GÖNDER: popover 'Onayı Gönder' (qa-resend, guest_email yoksa disabled) → POST /bookings/{id}/resend-confirmation (MOCK mailer). 60sn cooldown eklendi (429 'Lütfen 1 dakika bekleyin'), confirmation_resent_at booking'e yazılır.
+- TEST: iteration_593.json — backend 7/7, frontend %100 (popover + 3 buton + modal + regresyon). Cooldown curl ile doğrulandı (200 → 429).
+- KÖK LINT FIX: /app/eslint.config.js oluşturuldu (platform linter /app kökünden koşuyordu, config yoktu → engine error). react-hooks plugin frontend/node_modules'ten yükleniyor, reportUnusedDisableDirectives kapalı.
+- BEKLEYEN: Twilio anahtarları (kullanıcı 'birazdan paylaşacağım' dedi — gelince integration_expert çağır), Resend anahtarı, Canlı URL.

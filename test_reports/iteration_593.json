@@ -1,0 +1,34 @@
+{
+  "summary": "Iter 593 — Calendar Quick Actions (Cloudbeds parity: Oda Değiştir / Ödeme Linki / Onayı Gönder). Backend 7/7 passing in test_iter593_quickactions.py. Frontend visually and programmatically verified: popover renders on click of booking-bar, all 3 new buttons (qa-changeroom, qa-paylink, qa-resend) are present alongside regression actions (qa-checkin, qa-details, qa-invitekit). Change-Room modal opens with 4 change-room-option-* rows on same/other room types. Paylink click reaches /api/payments/checkout (backend returns valid stripe checkout_url). Resend confirmation backend contract validated (200/{ok,to}, 422 no-email, 404 not-found). Note: qa-resend is DISABLED on all currently-visible demo bookings because they have empty guest_email (correct behavior — disabled when !bk.guest_email); backend endpoint verified with a seeded TEST_QA_ booking with real email.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Calendar quick-actions popover", "issues": ["12 actions crammed into a 3-col grid without an explicit last-row border-bottom fix (`last-3:border-b-0` is not a real Tailwind selector — line 1795). Minor cosmetic only."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter593_quickactions.py",
+    "/app/test_reports/pytest/iter593.xml"
+  ],
+  "action_items": [
+    "(Optional cosmetic) BookingTimeline.js:1795 — replace non-existent `last-3:border-b-0` class with a proper Tailwind utility (e.g., grid-based nth-child) so the popover grid bottom border renders cleanly."
+  ],
+  "critical_code_review_comments": [
+    "BookingTimeline.js:1812 — change-room availability filter uses `!rm.bookings.some(b => isActive(b) && b.check_in < bk.check_out && bk.check_in < b.check_out)`. This is correct interval overlap, but does NOT check oos_blocks or housekeeping-dirty rooms; a guest could be re-assigned to a room with an open OOS/Deep-Clean block. Consider also filtering by rm.status !== 'blocked' and outstanding OOS.",
+    "booking_timeline.py:518 — reassign conflict check does NOT exclude 'no_show' or 'checked_out' statuses (only excludes 'cancelled'). A checked-out prior guest for overlapping dates would falsely block a valid future reassignment. Compare with move_booking_room in pms/bookings.py which excludes ['cancelled','no_show','checked_out'].",
+    "booking_timeline.py:495-503 — endpoint returns 200 with `{error:...}` for validation failures (room_id required, booking not found, room not found). Non-idiomatic REST; should raise HTTPException(422/404). Frontend currently ignores errors here — silent failure risk.",
+    "p0_pack.py:60-66 — Stripe checkout uses metadata.booking_id but does NOT verify the booking actually exists or belongs to property_id. An attacker with edit_bookings permission on property A could generate a Stripe session tied to a booking of property B. Add a booking ownership check.",
+    "pms/bookings.py:1637 (resend-confirmation) — no rate-limit; a malicious admin/receptionist could spam a guest's mailbox. Consider a 60s cooldown per booking (store last_sent_at).",
+    "BookingTimeline.js:1732 — `amount = Number(bk.balance_due ?? bk.total_price ?? 0)`. If balance_due is 0 (fully paid) the button shows 'Ödenmemiş bakiye yok' correctly. But if balance_due is null and total_price is 0 you'd also short-circuit — OK, but consider disabling the button in that case for clearer UX."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter593_quickactions.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (popover + 3 new buttons render, change-room modal works, paylink integration reaches backend). qa-resend UI-click not exercised because demo bookings lack guest_email, but backend contract tested."},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "2 TEST_QA_* bookings created via POST /api/bookings (with and without guest_email) at check-in ~200 days in future. Consumed by tests; not cleaned up (small footprint).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Physical rooms are exposed via GET /api/bookings/timeline/{property_id} → groups[].rooms[] (each `id` = room UUID like '<room_type>-r<N>'). /api/booking/rooms/{pid} returns ROOM TYPES not physical rooms. /api/bookings/{id} GET endpoint does not exist — use timeline with ?start= to verify persistence. Backend endpoints: POST /api/bookings/{id}/resend-confirmation (200/422/404), PUT /api/bookings/timeline/{pid}/reassign/{bid} (200 with {status:'reassigned'} or {error}), POST /api/payments/checkout (returns Stripe URL). Test file: /app/backend/tests/test_iter593_quickactions.py.",
+  "rca of the issue": "N/A — no bugs. Only code-review nits documented above."
+}

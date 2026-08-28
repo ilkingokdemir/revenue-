@@ -511,7 +511,7 @@ def create_booking_timeline_router(db, require_roles):
         conflict = await db.bookings.find_one({
             "room_id": new_room_id,
             "id": {"$ne": booking_id},
-            "status": {"$nin": ["cancelled"]},
+            "status": {"$nin": ["cancelled", "no_show", "checked_out"]},
             "check_in": {"$lt": co},
             "check_out": {"$gt": ci},
         })

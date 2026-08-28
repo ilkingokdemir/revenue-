@@ -7,7 +7,7 @@ import {
   Search, Plus, X, User, Phone, Mail, CreditCard, Bed, Clock, MapPin,
   GripVertical, CheckSquare, Square, LogIn, LogOut, Users, AlertTriangle,
   FileText, Send, Receipt, Home, Globe, PhoneCall, Share2, UserCheck, UserX, Lock, StickyNote, LayoutList, Copy, Filter,
-  Bell, Building2, Wrench, Printer, Edit3, Banknote, Landmark,
+  Bell, Building2, Wrench, Printer, Edit3, Banknote, Landmark, ArrowLeftRight, MailCheck,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -216,6 +216,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [collapsed, setCollapsed] = useState({});
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [quickActions, setQuickActions] = useState(null); // { booking, anchorRect } — click popover
+  const [changeRoomFor, setChangeRoomFor] = useState(null); // { booking, roomName } — oda değiştir modalı
   const [createBooking, setCreateBookingState] = useState(null); // { room_id, room_name, room_type_id, check_in } | null
   const [createForm, setCreateForm] = useState({ guest_name: "", guest_email: "", guest_phone: "", nights: 1, adults: 2, children: 0 });
   const [creating, setCreating] = useState(false);
@@ -1672,7 +1673,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
         const { booking: bk, rect, roomName } = quickActions;
         const sc = STATUS_COLORS[resolveDisplayStatus(bk)] || STATUS_COLORS.confirmed;
         // Position below bar, center-aligned, clamped to viewport
-        const popoverW = 320, popoverH = 370;
+        const popoverW = 320, popoverH = 440;
         let left = rect.left + rect.width / 2 - popoverW / 2;
         let top = rect.bottom + 8;
         if (left < 8) left = 8;
@@ -1723,6 +1724,35 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
               } catch { toast.error("Davet kiti oluşturulamadı"); }
               setQuickActions(null);
             } },
+          { id: "changeroom", label: "Oda Değiştir", icon: ArrowLeftRight, color: "text-teal-700 bg-teal-50 hover:bg-teal-100",
+            disabled: bk.status === "checked_out" || bk.status === "cancelled",
+            onClick: () => { setChangeRoomFor({ booking: bk, roomName }); setQuickActions(null); } },
+          { id: "paylink", label: "Ödeme Linki", icon: CreditCard, color: "text-fuchsia-700 bg-fuchsia-50 hover:bg-fuchsia-100",
+            onClick: async () => {
+              const amount = Number(bk.balance_due ?? bk.total_price ?? 0);
+              if (amount <= 0) { toast.info("Ödenmemiş bakiye yok"); setQuickActions(null); return; }
+              try {
+                const { data } = await axios.post(`${API}/payments/checkout`, {
+                  amount, currency: "gbp",
+                  property_id: bk.property_id || (pid !== "all" ? pid : "default"),
+                  booking_id: bk.id,
+                  description: `Konaklama ödemesi — ${bk.guest_name}`,
+                  origin_url: window.location.origin,
+                });
+                try { await navigator.clipboard.writeText(data.checkout_url); toast.success(`Ödeme linki (${cur(amount)}) panoya kopyalandı`); }
+                catch { toast.success("Ödeme linki üretildi"); }
+              } catch (e) { toast.error(e.response?.data?.detail || "Ödeme linki üretilemedi"); }
+              setQuickActions(null);
+            } },
+          { id: "resend", label: "Onayı Gönder", icon: MailCheck, color: "text-blue-700 bg-blue-50 hover:bg-blue-100",
+            disabled: !bk.guest_email,
+            onClick: async () => {
+              try {
+                const { data } = await axios.post(`${API}/bookings/${bk.id}/resend-confirmation`);
+                toast.success(`Onay e-postası yeniden gönderildi → ${data.to}`);
+              } catch (e) { toast.error(e.response?.data?.detail || "Onay e-postası gönderilemedi"); }
+              setQuickActions(null);
+            } },
         ];
         return (
           <>
@@ -1762,7 +1792,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                     onClick={a.onClick}
                     disabled={a.disabled}
                     data-testid={`qa-${a.id}`}
-                    className={`flex flex-col items-center justify-center gap-1 py-3 transition-colors border-r last:border-r-0 border-b last-3:border-b-0 border-stone-100 disabled:opacity-40 disabled:cursor-not-allowed ${a.color}`}
+                    className={`flex flex-col items-center justify-center gap-1 py-3 transition-colors border-r last:border-r-0 border-b border-stone-100 disabled:opacity-40 disabled:cursor-not-allowed ${a.color}`}
                   >
                     <a.icon className="w-4 h-4" />
                     <span className="text-[10px] font-semibold">{a.label}</span>
@@ -1771,6 +1801,68 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
               </div>
             </div>
           </>
+        );
+      })()}
+
+      {/* Oda Değiştir Modal — müsait odalar listesi */}
+      {changeRoomFor && (() => {
+        const bk = changeRoomFor.booking;
+        const isActive = (b) => !["cancelled", "checked_out", "no_show"].includes(b.status);
+        const allRooms = groups.flatMap(g => g.rooms.map(r => ({ ...r, room_type_id: g.room_type_id, room_type_name: g.room_type_name })));
+        const hasOos = (rm) => oosBlocks.some(o => o.room_id === rm.id && o.start < bk.check_out && bk.check_in < o.end);
+        const isFree = (rm) => rm.id !== bk.room_id && !hasOos(rm) && !rm.bookings.some(b => isActive(b) && b.id !== bk.id && b.check_in < bk.check_out && bk.check_in < b.check_out);
+        const freeRooms = allRooms.filter(isFree);
+        const sameType = freeRooms.filter(r => r.room_type_id === bk.room_type_id);
+        const otherType = freeRooms.filter(r => r.room_type_id !== bk.room_type_id);
+        const RoomBtn = ({ rm, highlight }) => (
+          <button
+            key={rm.id}
+            onClick={async () => { await applySuggestedMove(bk, rm.id, rm.name); setChangeRoomFor(null); }}
+            data-testid={`change-room-option-${rm.id}`}
+            className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl border text-left transition-all hover:shadow-md ${highlight ? "border-teal-300 bg-teal-50/60 hover:bg-teal-50" : "border-stone-200 bg-white hover:bg-stone-50"}`}
+          >
+            <span className="flex items-center gap-2">
+              <Bed className={`w-4 h-4 ${highlight ? "text-teal-600" : "text-stone-400"}`} />
+              <span className="text-xs font-bold text-stone-800">{rm.name}</span>
+            </span>
+            <span className="text-[10px] font-semibold text-stone-500">{rm.room_type_name}</span>
+          </button>
+        );
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setChangeRoomFor(null)} data-testid="change-room-modal">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-teal-600 to-emerald-500 rounded-t-2xl">
+                <div>
+                  <h3 className="text-sm font-black text-white flex items-center gap-2"><ArrowLeftRight className="w-4 h-4" /> Oda Değiştir</h3>
+                  <p className="text-[11px] text-teal-50 mt-0.5">{bk.guest_name} — {changeRoomFor.roomName} · {bk.check_in} → {bk.check_out}</p>
+                </div>
+                <button onClick={() => setChangeRoomFor(null)} className="p-1 hover:bg-white/20 rounded-lg" data-testid="change-room-close"><X className="w-4 h-4 text-white" /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {freeRooms.length === 0 ? (
+                  <div className="text-center py-8" data-testid="change-room-empty">
+                    <AlertTriangle className="w-6 h-6 text-amber-500 mx-auto mb-2" />
+                    <p className="text-sm font-bold text-stone-700">Bu tarihlerde müsait oda yok</p>
+                  </div>
+                ) : (
+                  <>
+                    {sameType.length > 0 && (
+                      <>
+                        <div className="text-[10px] font-black text-teal-700 uppercase tracking-wide">Aynı Oda Tipi</div>
+                        {sameType.map(rm => <RoomBtn key={rm.id} rm={rm} highlight />)}
+                      </>
+                    )}
+                    {otherType.length > 0 && (
+                      <>
+                        <div className="text-[10px] font-black text-stone-500 uppercase tracking-wide pt-2">Diğer Oda Tipleri</div>
+                        {otherType.map(rm => <RoomBtn key={rm.id} rm={rm} />)}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
         );
       })()}
 

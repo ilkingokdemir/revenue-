@@ -1612,6 +1612,57 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
             b["balance_due"] = max(0.0, round(gross - paid, 2))
         return bookings
 
+    @router.put("/bookings/{booking_id}/room")
+    async def move_booking_room(booking_id: str, data: dict, current_user: dict = Depends(require_perm("edit_bookings"))):
+        """Oda değiştir/taşı — Cloudbeds paritesi."""
+        room = str(data.get("room_number", "")).strip()[:20]
+        if not room:
+            raise HTTPException(status_code=422, detail="Oda numarası gerekli")
+        b = await db.bookings.find_one({"id": booking_id}, {"_id": 0, "room_number": 1, "property_id": 1, "check_in": 1, "check_out": 1})
+        if not b:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        clash = await db.bookings.find_one({
+            "id": {"$ne": booking_id}, "property_id": b.get("property_id"),
+            "room_number": room, "status": {"$nin": ["cancelled", "no_show", "checked_out"]},
+            "check_in": {"$lt": b.get("check_out", "")}, "check_out": {"$gt": b.get("check_in", "")}},
+            {"_id": 0, "guest_name": 1})
+        if clash:
+            raise HTTPException(status_code=409, detail=f"Oda {room} bu tarihlerde dolu ({clash.get('guest_name', '')})")
+        await db.bookings.update_one({"id": booking_id},
+                                     {"$set": {"room_number": room,
+                                               "room_moved_by": current_user.get("email", ""),
+                                               "room_moved_at": datetime.now(timezone.utc).isoformat()}})
+        return {"ok": True, "old_room": b.get("room_number"), "new_room": room}
+
+    @router.post("/bookings/{booking_id}/resend-confirmation")
+    async def resend_confirmation(booking_id: str, current_user: dict = Depends(require_perm("edit_bookings"))):
+        """Rezervasyon onay e-postasını yeniden gönderir."""
+        b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        if not b:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        if not b.get("guest_email"):
+            raise HTTPException(status_code=422, detail="Misafirin e-posta adresi yok")
+        html = (f"<h3>Rezervasyon Onayı — {b.get('booking_ref') or booking_id[:8]}</h3>"
+                f"<p>Sayın {b.get('guest_name', '')},</p>"
+                f"<p>Rezervasyonunuz onaylıdır:</p>"
+                f"<ul><li>Giriş: {b.get('check_in')}</li><li>Çıkış: {b.get('check_out')}</li>"
+                f"<li>Oda: {b.get('room_number') or b.get('room_type_id', '')}</li>"
+                f"<li>Tutar: {b.get('currency', 'GBP')} {b.get('total_price')}</li></ul>"
+                f"<p>Görüşmek üzere!</p>")
+        from routes.platform_ext.mailer import send_email
+        last = b.get("confirmation_resent_at")
+        if last:
+            try:
+                if (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() < 60:
+                    raise HTTPException(status_code=429, detail="Lütfen 1 dakika bekleyin — onay az önce gönderildi")
+            except ValueError:
+                pass
+        await send_email(db, b["guest_email"],
+                         f"✅ Rezervasyon Onayı — {b.get('booking_ref') or booking_id[:8]}",
+                         html, kind="booking_confirmation_resend", meta={"booking_id": booking_id})
+        await db.bookings.update_one({"id": booking_id}, {"$set": {"confirmation_resent_at": datetime.now(timezone.utc).isoformat()}})
+        return {"ok": True, "to": b["guest_email"]}
+
     @router.put("/bookings/{booking_id}/status")
     async def update_booking_status(booking_id: str, status: str, current_user: dict = Depends(require_perm("edit_bookings", "cancel_bookings", "checkin_bookings", "checkout_bookings", "confirm_bookings", mode="any"))):
         """Update booking status"""

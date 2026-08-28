@@ -120,6 +120,7 @@ export default function BookingWidgetPage({ propertyId }) {
   const [coupon, setCoupon] = useState({ code: "", applied: null, checking: false, error: null });
   const [absAttrs, setAbsAttrs] = useState([]);
   const [absSelected, setAbsSelected] = useState([]);
+  const [absAvail, setAbsAvail] = useState(null); // { per_attribute, combined_free_rooms }
   const [ab, setAb] = useState({ assigned: false, variant: null, experiment_id: null, show_badge: true });
 
   const abSessionId = (() => {
@@ -131,6 +132,15 @@ export default function BookingWidgetPage({ propertyId }) {
   useEffect(() => {
     axios.get(`${API}/abs/public/${propertyId}`).then(({ data }) => setAbsAttrs(data.attributes || [])).catch(() => {});
   }, [propertyId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ABS müsaitlik: tarih veya seçim değişince özellik bazlı boş oda sayısını çek
+  useEffect(() => {
+    if (!checkIn || !checkOut || absAttrs.length === 0) { setAbsAvail(null); return; }
+    axios.post(`${API}/abs/public/${propertyId}/availability`, {
+      check_in: checkIn, check_out: checkOut, attr_ids: absSelected,
+    }).then(({ data }) => setAbsAvail(data)).catch(() => setAbsAvail(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId, checkIn, checkOut, absSelected, absAttrs.length]);
 
   useEffect(() => {
     axios.post(`${API}/ab/assign`, { property_id: propertyId, key: "social_proof_badge", session_id: abSessionId })
@@ -819,15 +829,22 @@ export default function BookingWidgetPage({ propertyId }) {
                 <div className="mt-5" data-testid="abs-section">
                   <label className="text-xs font-semibold text-stone-500 mb-2 block">Room Preferences <span className="text-stone-400 font-normal">(paid extras)</span></label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {absAttrs.map(a => { const on = absSelected.includes(a.id); return (
+                    {absAttrs.map(a => {
+                      const on = absSelected.includes(a.id);
+                      const freeCount = absAvail?.per_attribute?.[a.id];
+                      const soldOut = freeCount === 0 && !on;
+                      return (
                       <button key={a.id} type="button" data-testid={`abs-attr-${a.id}`}
+                        disabled={soldOut}
                         onClick={() => setAbsSelected(p => on ? p.filter(x => x !== a.id) : [...p, a.id])}
-                        className={`flex items-center gap-3 p-2.5 rounded-xl border-2 text-left transition-all ${on ? "border-sky-500 bg-sky-50" : "border-stone-200 hover:border-stone-300"}`}>
+                        className={`flex items-center gap-3 p-2.5 rounded-xl border-2 text-left transition-all ${on ? "border-sky-500 bg-sky-50" : soldOut ? "border-stone-100 opacity-50 cursor-not-allowed" : "border-stone-200 hover:border-stone-300"}`}>
                         {a.image_url && <img src={a.image_url} alt={a.name} className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />}
                         <span className="flex-1 min-w-0">
                           <span className="text-xs font-bold text-stone-800 block">
                             {a.name}
                             {a.popular && <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-bold align-middle" data-testid={`abs-popular-${a.id}`}>Popüler</span>}
+                            {soldOut && <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-600 text-[9px] font-bold align-middle" data-testid={`abs-soldout-${a.id}`}>Müsait oda yok</span>}
+                            {typeof freeCount === "number" && freeCount > 0 && freeCount <= 2 && !on && <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 text-[9px] font-bold align-middle" data-testid={`abs-scarce-${a.id}`}>Son {freeCount} oda</span>}
                           </span>
                           {a.description && <span className="text-[10px] text-stone-400">{a.description}</span>}
                         </span>
@@ -835,6 +852,13 @@ export default function BookingWidgetPage({ propertyId }) {
                       </button>
                     ); })}
                   </div>
+                  {absSelected.length > 0 && absAvail && (
+                    <p className={`text-[10px] mt-1.5 font-semibold ${absAvail.combined_free_rooms > 0 ? "text-emerald-600" : "text-rose-600"}`} data-testid="abs-combined-availability">
+                      {absAvail.combined_free_rooms > 0
+                        ? `✓ Seçtiğiniz özelliklerin tamamına sahip ${absAvail.combined_free_rooms} oda müsait — odanız garanti edilir`
+                        : "⚠ Bu özellik kombinasyonuna uygun müsait oda yok — bir özelliği kaldırın"}
+                    </p>
+                  )}
                 </div>
               )}
               {/* Payment mode picker — guest chooses Pay Now (Stripe) vs Pay At Property */}

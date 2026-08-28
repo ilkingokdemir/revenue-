@@ -115,4 +115,64 @@ def create_abs_router(db, require_roles):
             d.pop("_id", None)
         return {"ok": True, "seeded": len(docs), "attributes": docs}
 
+    # ---------- ABS Çekirdek: Oda–Özellik eşlemesi + müsaitlik garantisi ----------
+
+    @router.get("/{property_id}/room-matrix")
+    async def room_matrix(property_id: str,
+                          _: dict = Depends(require_roles("admin", "manager"))):
+        rooms = await db.rooms.find({"property_id": property_id},
+                                    {"_id": 0, "id": 1, "name": 1, "room_type_id": 1, "abs_attrs": 1}).to_list(200)
+        attrs = await db.abs_attributes.find({"property_id": property_id, "active": {"$ne": False}},
+                                             {"_id": 0, "id": 1, "name": 1, "price": 1}).sort("sort", 1).to_list(50)
+        return {"rooms": rooms, "attributes": attrs}
+
+    @router.put("/{property_id}/room-attrs/{room_id}")
+    async def set_room_attrs(property_id: str, room_id: str, body: Dict,
+                             _: dict = Depends(require_roles("admin", "manager"))):
+        attr_ids = [str(a) for a in (body.get("attr_ids") or [])][:20]
+        res = await db.rooms.update_one({"id": room_id, "property_id": property_id},
+                                        {"$set": {"abs_attrs": attr_ids}})
+        if res.matched_count == 0:
+            raise HTTPException(404, "Oda bulunamadı")
+        return {"ok": True, "room_id": room_id, "attr_ids": attr_ids}
+
+    @router.post("/{property_id}/room-attrs/auto-seed")
+    async def auto_seed_room_attrs(property_id: str,
+                                   _: dict = Depends(require_roles("admin", "manager"))):
+        """Demo/hızlı kurulum: özellikleri odalara dönüşümlü dağıtır."""
+        rooms = await db.rooms.find({"property_id": property_id}, {"_id": 0, "id": 1}).to_list(200)
+        attrs = await db.abs_attributes.find({"property_id": property_id, "active": {"$ne": False}},
+                                             {"_id": 0, "id": 1}).to_list(50)
+        if not rooms or not attrs:
+            raise HTTPException(400, "Oda veya özellik yok")
+        mapped = 0
+        for i, r in enumerate(rooms):
+            assigned = [a["id"] for j, a in enumerate(attrs) if (i + j) % 2 == 0]
+            await db.rooms.update_one({"id": r["id"]}, {"$set": {"abs_attrs": assigned}})
+            mapped += 1
+        return {"ok": True, "rooms_mapped": mapped}
+
+    @router.post("/public/{property_id}/availability")
+    async def abs_availability(property_id: str, body: Dict):
+        """Widget: seçili tarihlerde her özellik için müsait oda sayısı (auth yok)."""
+        ci, co = str(body.get("check_in", "")), str(body.get("check_out", ""))
+        if not ci or not co:
+            raise HTTPException(422, "check_in ve check_out zorunlu")
+        rooms = await db.rooms.find({"property_id": property_id},
+                                    {"_id": 0, "id": 1, "abs_attrs": 1}).to_list(200)
+        busy = set()
+        async for b in db.bookings.find(
+                {"property_id": property_id, "room_id": {"$ne": None},
+                 "status": {"$nin": ["cancelled", "no_show", "checked_out"]},
+                 "check_in": {"$lt": co}, "check_out": {"$gt": ci}},
+                {"_id": 0, "room_id": 1}):
+            busy.add(b.get("room_id"))
+        free_rooms = [r for r in rooms if r["id"] not in busy]
+        attrs = await db.abs_attributes.find({"property_id": property_id, "active": {"$ne": False}},
+                                             {"_id": 0, "id": 1}).to_list(50)
+        per_attr = {a["id"]: sum(1 for r in free_rooms if a["id"] in (r.get("abs_attrs") or [])) for a in attrs}
+        sel = [str(a) for a in (body.get("attr_ids") or [])]
+        combined = sum(1 for r in free_rooms if all(x in (r.get("abs_attrs") or []) for x in sel)) if sel else len(free_rooms)
+        return {"per_attribute": per_attr, "combined_free_rooms": combined, "total_free_rooms": len(free_rooms)}
+
     return router

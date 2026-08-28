@@ -1370,3 +1370,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - KÖK LINT: /app/eslint.config.js stub react-hooks plugin ile (platform linter /app kökünden koşuyor).
 - TEST: iteration_594.json (16/16 backend + %100 frontend), iteration_595.json (10/10 backend + %100 frontend).
 - BEKLEYEN: Twilio anahtarları (kullanıcı paylaşacak — gelince integration_expert çağır), Resend anahtarı, Canlı URL.
+
+## Güncelleme (2026-06 — Faz 14: Rebase Deney Takibi + ABS Çekirdek TAMAMLANDI)
+- REBASE DENEY TAKİBİ: rebase_impact.py — POST /experiment/start {report_id} (çalışan varsa 409), GET /experiments (progress: elapsed_days, pickup_before/after simetrik pencere, pickup_change_pct, adr_change_pct, katkı before/after, verdict_tr: ✅/⚠️/❌/⏳ ilk 24 saat), POST /experiment/{id}/stop. db.rebase_experiments. UI: RebaseImpactPanel 'Deneyi Başlat' butonu + 'Deney Takibi — Tahmin vs Gerçek' kartları (pickup/ADR/katkı/başabaş + verdict + Durdur).
+- ABS ÇEKİRDEK: abs_selling.py — GET /{pid}/room-matrix, PUT /{pid}/room-attrs/{room_id}, POST /room-attrs/auto-seed (demo dağıtım), POST /public/{pid}/availability (auth yok; per_attribute + combined_free_rooms). booking_widget.py: ABS seçiminde TÜM özelliklere sahip müsait oda otomatik atanır (room_id + abs_room_guaranteed:true); uygun oda yoksa 409; eşleme hiç yoksa legacy (ek ücret, atamasız). UI: AbsPanel 'Oda–Özellik Matrisi' (checkbox grid + otomatik dağıt), BookingWidgetPage canlı müsaitlik ('Son N oda' / 'Müsait oda yok' rozetleri + kombine garanti satırı abs-combined-availability).
+- TEST: iteration_596.json — backend 11/11 + %100 frontend. Deneyler durduruldu.
+- BEKLEYEN: Twilio anahtarları, Resend anahtarı, Canlı URL.

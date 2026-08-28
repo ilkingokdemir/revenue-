@@ -287,6 +287,7 @@ const tabs = [
 
 /* ─── EMBED CODE GENERATOR — copy-paste snippet for the hotel's own website ─── */
 const EmbedCodePanel = ({ propertyId }) => {
+  const [width, setWidth] = useState("100%");
   const [height, setHeight] = useState(900);
   const [variant, setVariant] = useState("iframe"); // "iframe" | "popup-button"
   const baseUrl = `${window.location.origin}/book/${propertyId}?embed=1`;

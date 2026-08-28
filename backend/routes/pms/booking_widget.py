@@ -243,6 +243,29 @@ def create_booking_widget_router(db, require_roles):
             abs_total = round(abs_total * nights * int(data.get("rooms", 1)), 2)
             total = round(total + abs_total, 2)
 
+        # ABS oda garantisi — seçilen özelliklerin TAMAMINA sahip müsait oda ata
+        abs_room = None
+        if abs_selected:
+            sel_ids = [a["id"] for a in abs_selected]
+            cand_rooms = await db.rooms.find(
+                {"property_id": data["property_id"], "abs_attrs": {"$all": sel_ids}},
+                {"_id": 0, "id": 1, "name": 1, "room_type_id": 1}).to_list(100)
+            if cand_rooms:
+                busy = set()
+                async for bb in db.bookings.find(
+                        {"property_id": data["property_id"],
+                         "room_id": {"$in": [r["id"] for r in cand_rooms]},
+                         "status": {"$nin": ["cancelled", "no_show", "checked_out"]},
+                         "check_in": {"$lt": data["check_out"]},
+                         "check_out": {"$gt": data["check_in"]}},
+                        {"_id": 0, "room_id": 1}):
+                    busy.add(bb.get("room_id"))
+                free = [r for r in cand_rooms if r["id"] not in busy]
+                if not free:
+                    raise HTTPException(409, "Seçilen oda özelliklerine uygun müsait oda kalmadı — lütfen bir özelliği kaldırıp tekrar deneyin")
+                abs_room = free[0]
+            # cand_rooms boşsa oda-özellik eşlemesi yapılmamış demektir — eski davranış (ek ücret, atama yok)
+
         # Direct conversion kuponu (iter 376) — total üzerinden indirim
         coupon_code = (data.get("coupon_code") or "").strip().upper()
         coupon_info = None
@@ -295,6 +318,8 @@ def create_booking_widget_router(db, require_roles):
             "source": "website_widget",
             "abs_attributes": abs_selected,
             "abs_total": abs_total,
+            **({"room_id": abs_room["id"], "room_number": abs_room.get("name", ""),
+                "room_type_id": abs_room.get("room_type_id", ""), "abs_room_guaranteed": True} if abs_room else {}),
             "special_requests": data.get("special_requests", ""),
             "guests": int(data.get("guests", 1)),
             "created_at": now,

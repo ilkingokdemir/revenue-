@@ -17,6 +17,32 @@ export default function RebaseImpactPanel({ propertyId = "aldgate-flats" }) {
   const [report, setReport] = useState(null);
   const [busy, setBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
+  const [experiments, setExperiments] = useState([]);
+
+  const loadExperiments = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/revenue/rebase-impact/${pid}/experiments`);
+      setExperiments(data.experiments || []);
+    } catch { /* sessiz */ }
+  }, [pid]);
+  useEffect(() => { loadExperiments(); }, [loadExperiments]);
+
+  const startExperiment = async () => {
+    if (!report) return;
+    try {
+      await axios.post(`${API}/revenue/rebase-impact/${pid}/experiment/start`, { report_id: report.id });
+      toast.success("Deney başlatıldı — pickup artık ölçülüyor");
+      loadExperiments();
+    } catch (e) { toast.error(e.response?.data?.detail || "Deney başlatılamadı"); }
+  };
+
+  const stopExperiment = async (eid) => {
+    try {
+      await axios.post(`${API}/revenue/rebase-impact/${pid}/experiment/${eid}/stop`);
+      toast.success("Deney durduruldu");
+      loadExperiments();
+    } catch (e) { toast.error(e.response?.data?.detail || "Durdurulamadı"); }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -69,6 +95,10 @@ export default function RebaseImpactPanel({ propertyId = "aldgate-flats" }) {
         <div className="flex gap-2">
           {report && (
             <>
+              <button onClick={startExperiment} data-testid="rebase-experiment-start-btn"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100">
+                <Target className="w-3.5 h-3.5" /> Deneyi Başlat
+              </button>
               <button onClick={aiComment} disabled={aiBusy} data-testid="rebase-ai-btn"
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-50">
                 <Sparkles className="w-3.5 h-3.5" /> {aiBusy ? "Yorumluyor…" : "AI Yorum"}
@@ -130,6 +160,54 @@ export default function RebaseImpactPanel({ propertyId = "aldgate-flats" }) {
           </tbody>
         </table>
       </div>
+
+      {/* Deney Takibi — tahmin vs gerçek */}
+      {experiments.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-2xl p-4" data-testid="rebase-experiments">
+          <h2 className="text-sm font-black text-stone-800 mb-3">Deney Takibi — Tahmin vs Gerçek</h2>
+          <div className="space-y-3">
+            {experiments.map((e) => (
+              <div key={e.id} className={`border rounded-xl p-3 ${e.status === "running" ? "border-emerald-200 bg-emerald-50/40" : "border-stone-200"}`} data-testid={`rebase-exp-${e.id}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-bold text-stone-800">
+                    {new Date(e.started_at).toLocaleDateString("tr-TR")} başlangıç · {e.progress.elapsed_days} gün
+                    <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[9px] font-black ${e.status === "running" ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>
+                      {e.status === "running" ? "ÇALIŞIYOR" : "DURDU"}
+                    </span>
+                  </div>
+                  {e.status === "running" && (
+                    <button onClick={() => stopExperiment(e.id)} data-testid={`rebase-exp-stop-${e.id}`}
+                      className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1 hover:bg-rose-100">Durdur</button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                  <div className="bg-white border border-stone-100 rounded-lg p-2">
+                    <div className="text-[9px] uppercase font-bold text-stone-400">Pickup (oda-gece)</div>
+                    <div className="font-black text-stone-800">{e.progress.pickup_before.room_nights} → {e.progress.pickup_after.room_nights}
+                      {e.progress.pickup_change_pct !== null && <span className={`ml-1 ${e.progress.pickup_change_pct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>({e.progress.pickup_change_pct > 0 ? "+" : ""}%{e.progress.pickup_change_pct})</span>}
+                    </div>
+                  </div>
+                  <div className="bg-white border border-stone-100 rounded-lg p-2">
+                    <div className="text-[9px] uppercase font-bold text-stone-400">ADR</div>
+                    <div className="font-black text-stone-800">{gbp(e.progress.pickup_before.adr)} → {gbp(e.progress.pickup_after.adr)}
+                      {e.progress.adr_change_pct !== null && <span className={`ml-1 ${e.progress.adr_change_pct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>({e.progress.adr_change_pct > 0 ? "+" : ""}%{e.progress.adr_change_pct})</span>}
+                    </div>
+                  </div>
+                  <div className="bg-white border border-stone-100 rounded-lg p-2">
+                    <div className="text-[9px] uppercase font-bold text-stone-400">Katkı (pencere)</div>
+                    <div className="font-black text-stone-800">{gbp0(e.progress.contribution_before)} → {gbp0(e.progress.contribution_after)}</div>
+                  </div>
+                  <div className="bg-white border border-stone-100 rounded-lg p-2">
+                    <div className="text-[9px] uppercase font-bold text-stone-400">Tahmin (başabaş)</div>
+                    <div className="font-black text-stone-800">pickup +%{e.predicted.breakeven_rn_increase_pct} gerekli</div>
+                  </div>
+                </div>
+                <p className="text-xs font-semibold text-stone-700 mt-2" data-testid={`rebase-exp-verdict-${e.id}`}>{e.progress.verdict_tr}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {report && (
         <div className="space-y-5" data-testid="rebase-report">

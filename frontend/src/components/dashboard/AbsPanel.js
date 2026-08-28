@@ -12,6 +12,32 @@ export default function AbsPanel({ propertyId }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: "", price: "", description: "", image_url: "" });
+  const [matrix, setMatrix] = useState(null); // { rooms, attributes }
+
+  const loadMatrix = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/abs/${pid}/room-matrix`);
+      setMatrix(data);
+    } catch { /* sessiz */ }
+  }, [pid]);
+  useEffect(() => { loadMatrix(); }, [loadMatrix]);
+
+  const toggleRoomAttr = async (room, attrId) => {
+    const cur = room.abs_attrs || [];
+    const next = cur.includes(attrId) ? cur.filter((x) => x !== attrId) : [...cur, attrId];
+    try {
+      await axios.put(`${API}/abs/${pid}/room-attrs/${room.id}`, { attr_ids: next });
+      setMatrix((m) => ({ ...m, rooms: m.rooms.map((r) => (r.id === room.id ? { ...r, abs_attrs: next } : r)) }));
+    } catch { toast.error("Kaydedilemedi"); }
+  };
+
+  const autoSeedMatrix = async () => {
+    try {
+      const { data } = await axios.post(`${API}/abs/${pid}/room-attrs/auto-seed`);
+      toast.success(`${data.rooms_mapped} odaya özellik dağıtıldı`);
+      loadMatrix();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Dağıtım başarısız"); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -145,6 +171,48 @@ export default function AbsPanel({ propertyId }) {
                 className="text-stone-300 hover:text-rose-500"><Trash size={15} /></button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Oda–Özellik Matrisi — ABS çekirdek: hangi oda hangi özelliğe sahip */}
+      {matrix && matrix.attributes.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-2xl p-4" data-testid="abs-room-matrix">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-sm font-black text-stone-800">Oda–Özellik Matrisi</h2>
+              <p className="text-[11px] text-stone-500">Misafir bir özellik seçtiğinde sistem o özelliğe sahip <b>müsait</b> odayı otomatik atar ve garanti eder. Uygun oda kalmazsa satış engellenir.</p>
+            </div>
+            <button onClick={autoSeedMatrix} data-testid="abs-matrix-autoseed-btn"
+              className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-2.5 py-1.5 hover:bg-sky-100">Otomatik dağıt (demo)</button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-[10px] uppercase text-stone-400 border-b border-stone-100">
+                  <th className="py-1.5 pr-2">Oda</th>
+                  {matrix.attributes.map((a) => <th key={a.id} className="py-1.5 px-2 whitespace-nowrap">{a.name}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {matrix.rooms.map((r) => (
+                  <tr key={r.id} className="border-b border-stone-50" data-testid={`abs-matrix-row-${r.id}`}>
+                    <td className="py-1.5 pr-2 font-semibold text-stone-800 whitespace-nowrap">{r.name}</td>
+                    {matrix.attributes.map((a) => {
+                      const on = (r.abs_attrs || []).includes(a.id);
+                      return (
+                        <td key={a.id} className="py-1.5 px-2">
+                          <button onClick={() => toggleRoomAttr(r, a.id)} data-testid={`abs-matrix-${r.id}-${a.id}`}
+                            className={`w-6 h-6 rounded-md border text-[11px] font-black transition-colors ${on ? "bg-sky-600 border-sky-600 text-white" : "bg-white border-stone-200 text-transparent hover:border-sky-300"}`}>
+                            ✓
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

@@ -259,4 +259,91 @@ def create_rebase_impact_router(db, require_roles):
         rows = await db.rebase_reports.find({"property_id": property_id}, {"_id": 0, "rows": 0}).sort("created_at", -1).to_list(10)
         return {"reports": rows}
 
+    # ---------- Deney Takibi: rebase sonrası gerçek pickup vs tahmin ----------
+
+    async def _pickup_stats(pid: str, start_iso: str, end_iso: str):
+        """Verilen oluşturulma penceresindeki rezervasyonların oda-gece + ADR'si."""
+        rn, revenue = 0, 0.0
+        async for b in db.bookings.find(
+                {"property_id": pid, "status": ACTIVE,
+                 "created_at": {"$gte": start_iso, "$lt": end_iso}},
+                {"_id": 0, "nights": 1, "total_price": 1}):
+            n = int(b.get("nights") or 0)
+            rn += n
+            revenue += float(b.get("total_price") or 0)
+        adr = round(revenue / rn, 2) if rn else 0
+        return {"room_nights": rn, "revenue": round(revenue, 2), "adr": adr}
+
+    @router.post("/revenue/rebase-impact/{property_id}/experiment/start")
+    async def experiment_start(property_id: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        report_id = data.get("report_id", "")
+        rep = await db.rebase_reports.find_one({"id": report_id, "property_id": property_id}, {"_id": 0})
+        if not rep:
+            raise HTTPException(status_code=404, detail="Rapor bulunamadı")
+        running = await db.rebase_experiments.find_one({"property_id": property_id, "status": "running"}, {"_id": 0, "id": 1})
+        if running:
+            raise HTTPException(status_code=409, detail="Zaten çalışan bir deney var — önce onu durdurun")
+        exp = {
+            "id": str(uuid.uuid4()), "property_id": property_id, "report_id": report_id,
+            "started_at": _now().isoformat(), "status": "running",
+            "started_by": _u.get("email", ""),
+            "predicted": {
+                "per_night_contrib_after": rep["contribution"]["per_night_after"],
+                "per_night_contrib_today": rep["contribution"]["per_night_today"],
+                "loss_90d": rep["contribution"]["loss"],
+                "breakeven_rn_increase_pct": rep["breakeven"]["rn_increase_pct"],
+                "weighted_change_pct": rep["weighted_change_pct"],
+            },
+            "commission_pct": rep["commission_pct"], "variable_cost": rep["variable_cost"],
+        }
+        await db.rebase_experiments.insert_one(dict(exp))
+        exp.pop("_id", None)
+        return exp
+
+    @router.post("/revenue/rebase-impact/{property_id}/experiment/{exp_id}/stop")
+    async def experiment_stop(property_id: str, exp_id: str, _u: dict = Depends(require_roles(*ROLES))):
+        res = await db.rebase_experiments.update_one(
+            {"id": exp_id, "property_id": property_id},
+            {"$set": {"status": "stopped", "stopped_at": _now().isoformat()}})
+        if res.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Deney bulunamadı")
+        return {"ok": True}
+
+    @router.get("/revenue/rebase-impact/{property_id}/experiments")
+    async def experiments_list(property_id: str, _u: dict = Depends(require_roles(*ROLES))):
+        exps = await db.rebase_experiments.find({"property_id": property_id}, {"_id": 0}).sort("started_at", -1).to_list(10)
+        out = []
+        for e in exps:
+            start = datetime.fromisoformat(e["started_at"])
+            end = datetime.fromisoformat(e["stopped_at"]) if e.get("stopped_at") else _now()
+            elapsed_days = max(0.05, round((end - start).total_seconds() / 86400, 2))
+            baseline_start = (start - timedelta(days=elapsed_days)).isoformat()
+            after = await _pickup_stats(property_id, e["started_at"], end.isoformat())
+            before = await _pickup_stats(property_id, baseline_start, e["started_at"])
+            comm, vc = float(e.get("commission_pct", 15)), float(e.get("variable_cost", 15))
+            contrib_after = round((after["adr"] * (1 - comm / 100) - vc) * after["room_nights"], 2) if after["room_nights"] else 0
+            contrib_before = round((before["adr"] * (1 - comm / 100) - vc) * before["room_nights"], 2) if before["room_nights"] else 0
+            pickup_chg = round(100 * (after["room_nights"] - before["room_nights"]) / before["room_nights"], 1) if before["room_nights"] else None
+            adr_chg = round(100 * (after["adr"] - before["adr"]) / before["adr"], 1) if before["adr"] else None
+            needed = float(e["predicted"].get("breakeven_rn_increase_pct") or 0)
+            if elapsed_days < 1:
+                verdict = f"⏳ Deney yeni başladı ({elapsed_days} gün) — ilk 24 saatte sonuç değerlendirilmez."
+            elif pickup_chg is None:
+                verdict = "Baz dönem verisi yok — karşılaştırma yapılamıyor."
+            elif pickup_chg >= needed and contrib_after >= contrib_before:
+                verdict = f"✅ Deney hedefte: pickup %{pickup_chg} (gereken %{needed}) ve katkı korundu."
+            elif pickup_chg >= needed:
+                verdict = f"⚠️ Pickup hedefi tuttu (%{pickup_chg} ≥ %{needed}) ama katkı hâlâ geride — ADR düşüşü hacimle kapanmadı."
+            else:
+                verdict = f"❌ Pickup %{pickup_chg}, gereken %{needed} — mevcut hızla rebase katkıyı geri kazanamıyor."
+            out.append({**e, "progress": {
+                "elapsed_days": elapsed_days,
+                "pickup_before": before, "pickup_after": after,
+                "pickup_change_pct": pickup_chg, "adr_change_pct": adr_chg,
+                "contribution_before": contrib_before, "contribution_after": contrib_after,
+                "contribution_delta": round(contrib_after - contrib_before, 2),
+                "verdict_tr": verdict,
+            }})
+        return {"experiments": out}
+
     return router

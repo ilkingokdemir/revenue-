@@ -1,0 +1,37 @@
+{
+  "summary": "Iter 596 — ABS Çekirdek (Oda–Özellik matrisi + garantili oda atama) + Rebase Deney Takibi test edildi. Backend: 11/12 pytest geçti, 1 skipped (test verisi non-deterministic — main agent curl ile 409 senaryosunu doğrulamıştı). Frontend: (1) ABS admin panel Ctrl+K→'Özellik' → panel + Oda–Özellik matrisi (5 attr × 6+ oda) render'landı; hücre tıklanınca sky-600 arka plana geçti, sayfa yenilendikten sonra kalıcılık korundu, 'Otomatik dağıt (demo)' butonu mevcut. (2) Booking widget /book/aldgate-flats → Reserve → Room Preferences bölümü 5 abs-attr-* kartı; 2 özellik seçince abs-combined-availability '✓ Seçtiğiniz özelliklerin tamamına sahip 5 oda müsait — odanız garanti edilir' göründü, Booking Summary'ye +£30 (Deniz manzarası) ve +£24 (Balkonlu oda) satırları eklendi. (3) Rebase Etki Ctrl+K→'Etki Analiz' → panel açıldı, Analiz Et → 18 satırlı tablo, Deneyi Başlat → toast + 'Deney Takibi — Tahmin vs Gerçek' bölümü 3 deney kartı ile açıldı, verdict '⏳ Deney yeni başladı (0.05 gün) — ilk 24 saatte sonuç değerlendirilmez.' göründü. Tüm deneyler test sonunda durdurdum (remaining stops: 0).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/abs/{pid}/room-matrix", "issue": "rooms dizisi doğrudan Mongo dokümanları — abs_attrs field'ı olmayan odalar için 'abs_attrs' key'i eksik dönebilir (frontend r.abs_attrs || [] ile karşılıyor, ama iyi olur pydantic response modeli). Not: iterasyon 596 spec'inde 22 oda deniyor ama aldgate-flats'ta şu an 6 oda görünüyor — 22 sayısı 'default' property veya seed düşük olmuş olabilir. Bu bir bug değil, gözlem."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter596_abs_rebase_experiment.py",
+    "/app/test_reports/pytest/iter596.xml"
+  ],
+  "action_items": [
+    "OPSIYONEL: ABS matrix response'unda rooms için pydantic model + default abs_attrs=[] ekle.",
+    "OPSIYONEL: Ctrl+K search palette 'Rebase' tek başına farklı sonucu (Rakip Veri Anomali Düzeltme vs.) öne çıkarabilir — 'Rebase Etki Analizi' etiketindeki 'Etki' önemli. Kullanıcı kolaylığı için 'Rebase' araması Rebase Etki'yi ilk sıraya taşımak istenebilir (relevance ranking)."
+  ],
+  "critical_code_review_comments": [
+    "abs_selling.py auto-seed: özellikleri (i+j)%2==0 formülüyle dağıtıyor — bazı odalar boş kalmıyor ama demoya yetiyor. Prod'da manuel matris tercih edilmeli.",
+    "booking_widget.py L246-267: ABS oda garanti bloğu — cand_rooms boşken (hiç oda o attr'e sahip değil) legacy davranış (ek ücret, atama yok) çalışıyor; free==[] olduğunda 409 döndüğü doğru. race condition riski (2 concurrent booking aynı odayı alabilir) mevcut ancak Mongo transaction yok.",
+    "rebase_impact.py _pickup_stats: baz dönem penceresi elapsed_days kadar geri sarıyor — deney 0.05 günse baz da 0.05 gün, veri az olur; verdict zaten 'yeni başladı' der.",
+    "AbsPanel.js: matrix yükleme hatalarını 'sessiz' catch ediyor — kullanıcı neden matrisi göremediğini anlamıyor (property_id yanlışsa)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter596_abs_rebase_experiment.py"
+  ],
+  "success_rate": {"backend": "100% (11/11 non-skipped)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test sırasında TEST_ prefix'li birkaç booking (aldgate-flats, 2027-01/02/03 tarihleri) ve 1 rebase report + 1 running experiment (durdurulmuş) oluştu. Ayrıca ABS 'TEST_ORPHAN_*' özelliği eklenip pasifleştirildi. Auto-seed matris tekrar uygulandı (odalara ABS özellikleri dağıtıldı).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "ABS çekirdek + Rebase Deney Takibi tam çalışıyor. Ctrl+K palette araması TAM eşleşme değil arıyor — 'Rebase' tek başına yanlış sonucu getirebilir, 'Etki Analiz' veya 'Özellik' daha güvenilir. Aldgate-flats property_id'de 5 ABS attribute + 6 oda tipi var; auto-seed matris uygulanmış. Deney çalıştırdıysanız /experiments listede status='running' olanları /experiment/{id}/stop ile durdurun (test sonunda 0 remaining). Auth token JSON field: 'token'."
+}

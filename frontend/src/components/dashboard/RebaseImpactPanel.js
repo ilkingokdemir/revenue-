@@ -18,6 +18,19 @@ export default function RebaseImpactPanel({ propertyId = "aldgate-flats" }) {
   const [busy, setBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [experiments, setExperiments] = useState([]);
+  const [emailTo, setEmailTo] = useState("");
+  const [showEmail, setShowEmail] = useState(false);
+
+  const sendEmailReport = async () => {
+    if (!report || !emailTo.includes("@")) { toast.error("Geçerli bir e-posta girin"); return; }
+    try {
+      const { data } = await axios.post(`${API}/revenue/rebase-impact/${pid}/email-report`, {
+        report_id: report.id, to: emailTo,
+      });
+      toast.success(`Rapor e-postası gönderildi → ${data.to}`);
+      setShowEmail(false);
+    } catch (e) { toast.error(e.response?.data?.detail || "Gönderilemedi"); }
+  };
 
   const loadExperiments = useCallback(async () => {
     try {
@@ -103,6 +116,10 @@ export default function RebaseImpactPanel({ propertyId = "aldgate-flats" }) {
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-50">
                 <Sparkles className="w-3.5 h-3.5" /> {aiBusy ? "Yorumluyor…" : "AI Yorum"}
               </button>
+              <button onClick={() => setShowEmail((v) => !v)} data-testid="rebase-email-btn"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded-xl hover:bg-sky-100">
+                ✉ E-posta
+              </button>
               <button onClick={() => window.print()} data-testid="rebase-print-btn"
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-stone-700 bg-white border border-stone-200 rounded-xl hover:bg-stone-50">
                 <Printer className="w-3.5 h-3.5" /> Yazdır / PDF
@@ -111,6 +128,17 @@ export default function RebaseImpactPanel({ propertyId = "aldgate-flats" }) {
           )}
         </div>
       </div>
+
+      {/* E-posta gönderme satırı */}
+      {report && showEmail && (
+        <div className="flex items-center gap-2 bg-sky-50 border border-sky-200 rounded-xl p-3 print:hidden" data-testid="rebase-email-row">
+          <input type="email" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} placeholder="yonetici@otel.com"
+            data-testid="rebase-email-input"
+            className="flex-1 border border-sky-200 rounded-lg px-3 py-2 text-sm bg-white" />
+          <button onClick={sendEmailReport} data-testid="rebase-email-send"
+            className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold">Raporu Gönder</button>
+        </div>
+      )}
 
       {/* Girdi tablosu */}
       <div className="bg-white border border-stone-200 rounded-2xl p-4 print:hidden" data-testid="rebase-inputs">

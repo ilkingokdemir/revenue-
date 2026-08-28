@@ -1340,7 +1340,7 @@ api_router.include_router(comp_radar_router)
 # Iter 508: Profit-first pricing + ABS + RevPAM (Total Revenue Management)
 from routes.revenue_ext.profit_pricing import create_profit_pricing_router
 api_router.include_router(create_profit_pricing_router(db, require_roles))
-from routes.revenue_ext.abs_selling import create_abs_router
+from routes.revenue_ext.abs_selling import create_abs_router, abs_auto_pricing_loop
 api_router.include_router(create_abs_router(db, require_roles))
 from routes.revenue_ext.revpam import create_revpam_router
 api_router.include_router(create_revpam_router(db, require_roles))
@@ -1920,6 +1920,7 @@ async def _start_reviq_gap_loops():
     _spawn(id_auto_purge_loop(db))
     _spawn(precheckin_reminder_loop(db))
     _spawn(rebase_experiment_loop(db))
+    _spawn(abs_auto_pricing_loop(db))
     _spawn(lastday_ladder_loop(db))
     _spawn(storefront_verify_loop(db))
     _spawn(second_writer_loop(db))

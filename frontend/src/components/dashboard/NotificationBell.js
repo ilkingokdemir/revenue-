@@ -36,12 +36,50 @@ export const NotificationBell = ({ onNavigate }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [filter, setFilter] = useState("all");
   const panelRef = useRef(null);
+  const seenHighIds = useRef(null);
+  const soundOnRef = useRef(localStorage.getItem("notifSound") !== "off");
+  const [soundOn, setSoundOn] = useState(soundOnRef.current);
+
+  const playAlertSound = () => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [880, 1174.66].forEach((f, i) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "sine"; o.frequency.value = f;
+        g.gain.setValueAtTime(0.001, ctx.currentTime + i * 0.18);
+        g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + i * 0.18 + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.16);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(ctx.currentTime + i * 0.18);
+        o.stop(ctx.currentTime + i * 0.18 + 0.18);
+      });
+      setTimeout(() => ctx.close(), 600);
+    } catch { /* sessiz */ }
+  };
+
+  const toggleSound = () => {
+    const next = !soundOnRef.current;
+    soundOnRef.current = next;
+    setSoundOn(next);
+    localStorage.setItem("notifSound", next ? "on" : "off");
+    if (next) playAlertSound();
+  };
 
   const load = useCallback(async () => {
     try {
       const { data } = await axios.get(`${API}/notifications?limit=30`);
-      setNotifications(data.notifications || []);
+      const list = data.notifications || [];
+      setNotifications(list);
       setUnreadCount(data.unread_count || 0);
+      // Kritik (high) yeni bildirim geldiyse sesli uyarı çal
+      const highs = new Set(list.filter((n) => !n.read && n.priority === "high").map((n) => n.id));
+      if (seenHighIds.current !== null && soundOnRef.current) {
+        for (const id of highs) {
+          if (!seenHighIds.current.has(id)) { playAlertSound(); break; }
+        }
+      }
+      seenHighIds.current = highs;
     } catch {
       // silent
     }
@@ -112,6 +150,10 @@ export const NotificationBell = ({ onNavigate }) => {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-bold text-stone-800 text-sm">Notifications</h3>
                 <div className="flex items-center gap-2">
+                  <button onClick={toggleSound} title={soundOn ? "Sesli uyarı açık" : "Sesli uyarı kapalı"}
+                    className={`text-sm ${soundOn ? "opacity-100" : "opacity-40"}`} data-testid="notif-sound-toggle">
+                    {soundOn ? "🔊" : "🔇"}
+                  </button>
                   {unreadCount > 0 && (
                     <button onClick={markAllRead} className="text-[11px] text-blue-600 hover:text-blue-700 font-medium" data-testid="mark-all-read-btn">
                       Mark all read

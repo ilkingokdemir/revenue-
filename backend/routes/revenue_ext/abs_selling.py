@@ -30,6 +30,90 @@ STARTER = [
 ]
 
 
+async def compute_price_suggestions(db, property_id: str) -> Dict:
+    """Son 90 gün satış verisine göre her özellik için ideal ek ücret önerisi."""
+    attrs = await db.abs_attributes.find({"property_id": property_id, "active": {"$ne": False}},
+                                         {"_id": 0, "id": 1, "name": 1, "price": 1}).to_list(50)
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
+    total, sold, adr_sum, adr_n = 0, {}, 0.0, 0
+    async for b in db.bookings.find(
+            {"property_id": property_id, "created_at": {"$gte": cutoff},
+             "status": {"$nin": ["cancelled", "no_show"]}},
+            {"_id": 0, "abs_attributes.id": 1, "total_price": 1, "nights": 1}):
+        total += 1
+        n = int(b.get("nights") or 0)
+        if n > 0 and float(b.get("total_price") or 0) > 0:
+            adr_sum += float(b["total_price"]) / n
+            adr_n += 1
+        for a in (b.get("abs_attributes") or []):
+            if a.get("id"):
+                sold[a["id"]] = sold.get(a["id"], 0) + 1
+    adr = round(adr_sum / adr_n, 2) if adr_n else 100.0
+    cap = round(adr * 0.15, 2)
+    out = []
+    for a in attrs:
+        s = sold.get(a["id"], 0)
+        attach = round(s / total, 3) if total else 0
+        price = float(a.get("price") or 0)
+        if total < 20:
+            suggested, reason = price, f"Yetersiz veri ({total} rezervasyon) — mevcut fiyat korunmalı."
+        elif attach >= 0.30:
+            suggested = min(round(price * 1.15, 2), cap)
+            reason = f"Güçlü talep: rezervasyonların %{round(attach*100)}'i bu özelliği alıyor — %15 zam kaldırır (tavan: ADR'nin %15'i = £{cap})."
+        elif attach <= 0.05:
+            suggested = max(round(price * 0.85, 2), 2.0)
+            reason = f"Düşük dönüşüm: sadece %{round(attach*100)} — %15 indirim denemesi dönüşümü artırabilir."
+        else:
+            suggested, reason = price, f"Dönüşüm dengeli (%{round(attach*100)}) — fiyat doğru bantta."
+        out.append({"id": a["id"], "name": a["name"], "current_price": price,
+                    "suggested_price": suggested, "attach_rate_pct": round(attach * 100, 1),
+                    "sold_90d": s, "reason_tr": reason,
+                    "action": "raise" if suggested > price else ("lower" if suggested < price else "keep")})
+    return {"suggestions": out, "blended_adr_90d": adr, "price_cap": cap, "total_bookings_90d": total}
+
+
+async def abs_auto_pricing_run(db, property_id: str) -> Dict:
+    """Otomatik mod: önerileri güvenlik korkuluklarıyla uygular ve loglar."""
+    result = await compute_price_suggestions(db, property_id)
+    applied = []
+    for s in result["suggestions"]:
+        if s["action"] == "keep":
+            continue
+        await db.abs_attributes.update_one(
+            {"id": s["id"], "property_id": property_id},
+            {"$set": {"price": s["suggested_price"], "updated_at": datetime.now(timezone.utc).isoformat()}})
+        await db.abs_price_log.insert_one({
+            "id": str(uuid.uuid4()), "property_id": property_id, "attr_id": s["id"],
+            "attr_name": s["name"], "old_price": s["current_price"], "new_price": s["suggested_price"],
+            "reason": s["reason_tr"], "mode": "auto", "at": datetime.now(timezone.utc).isoformat()})
+        applied.append(f"{s['name']}: £{s['current_price']} → £{s['suggested_price']}")
+    await db.abs_settings.update_one(
+        {"property_id": property_id},
+        {"$set": {"last_auto_run": datetime.now(timezone.utc).isoformat(), "last_applied_count": len(applied)}},
+        upsert=True)
+    if applied:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "title": "🤖 ABS otomatik fiyat güncellendi",
+            "message": f"{property_id}: " + " · ".join(applied[:5]),
+            "category": "revenue", "priority": "medium", "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat()})
+    return {"ok": True, "applied": applied, "applied_count": len(applied)}
+
+
+async def abs_auto_pricing_loop(db):
+    """Saatlik kontrol: otomatik mod açık mülklerde 24 saatte bir fiyatları uygular."""
+    import asyncio
+    while True:
+        try:
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+            async for st in db.abs_settings.find({"auto_pricing": True}, {"_id": 0}):
+                if not st.get("last_auto_run") or st["last_auto_run"] < cutoff:
+                    await abs_auto_pricing_run(db, st["property_id"])
+        except Exception:
+            pass
+        await asyncio.sleep(3600)
+
+
 def create_abs_router(db, require_roles):
     router = APIRouter(prefix="/abs", tags=["abs-selling"])
 
@@ -179,43 +263,31 @@ def create_abs_router(db, require_roles):
     async def price_suggestions(property_id: str,
                                 _: dict = Depends(require_roles("admin", "manager"))):
         """Robot: son 90 gün satış verisine göre her özellik için ideal ek ücret önerisi."""
-        attrs = await db.abs_attributes.find({"property_id": property_id, "active": {"$ne": False}},
-                                             {"_id": 0, "id": 1, "name": 1, "price": 1}).to_list(50)
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
-        total, sold, adr_sum, adr_n = 0, {}, 0.0, 0
-        async for b in db.bookings.find(
-                {"property_id": property_id, "created_at": {"$gte": cutoff},
-                 "status": {"$nin": ["cancelled", "no_show"]}},
-                {"_id": 0, "abs_attributes.id": 1, "total_price": 1, "nights": 1}):
-            total += 1
-            n = int(b.get("nights") or 0)
-            if n > 0 and float(b.get("total_price") or 0) > 0:
-                adr_sum += float(b["total_price"]) / n
-                adr_n += 1
-            for a in (b.get("abs_attributes") or []):
-                if a.get("id"):
-                    sold[a["id"]] = sold.get(a["id"], 0) + 1
-        adr = round(adr_sum / adr_n, 2) if adr_n else 100.0
-        cap = round(adr * 0.15, 2)
-        out = []
-        for a in attrs:
-            s = sold.get(a["id"], 0)
-            attach = round(s / total, 3) if total else 0
-            price = float(a.get("price") or 0)
-            if total < 20:
-                suggested, reason = price, f"Yetersiz veri ({total} rezervasyon) — mevcut fiyat korunmalı."
-            elif attach >= 0.30:
-                suggested = min(round(price * 1.15, 2), cap)
-                reason = f"Güçlü talep: rezervasyonların %{round(attach*100)}'i bu özelliği alıyor — %15 zam kaldırır (tavan: ADR'nin %15'i = £{cap})."
-            elif attach <= 0.05:
-                suggested = max(round(price * 0.85, 2), 2.0)
-                reason = f"Düşük dönüşüm: sadece %{round(attach*100)} — %15 indirim denemesi dönüşümü artırabilir."
-            else:
-                suggested, reason = price, f"Dönüşüm dengeli (%{round(attach*100)}) — fiyat doğru bantta."
-            out.append({"id": a["id"], "name": a["name"], "current_price": price,
-                        "suggested_price": suggested, "attach_rate_pct": round(attach * 100, 1),
-                        "sold_90d": s, "reason_tr": reason,
-                        "action": "raise" if suggested > price else ("lower" if suggested < price else "keep")})
-        return {"suggestions": out, "blended_adr_90d": adr, "price_cap": cap, "total_bookings_90d": total}
+        result = await compute_price_suggestions(db, property_id)
+        settings = await db.abs_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        result["auto_pricing"] = bool(settings.get("auto_pricing"))
+        result["last_auto_run"] = settings.get("last_auto_run")
+        return result
+
+    @router.put("/{property_id}/auto-pricing")
+    async def set_auto_pricing(property_id: str, body: Dict,
+                               _: dict = Depends(require_roles("admin", "manager"))):
+        enabled = bool(body.get("enabled"))
+        await db.abs_settings.update_one({"property_id": property_id},
+                                         {"$set": {"auto_pricing": enabled,
+                                                   "updated_at": datetime.now(timezone.utc).isoformat()}},
+                                         upsert=True)
+        return {"ok": True, "auto_pricing": enabled}
+
+    @router.post("/{property_id}/auto-pricing/run")
+    async def run_auto_pricing(property_id: str,
+                               _: dict = Depends(require_roles("admin", "manager"))):
+        return await abs_auto_pricing_run(db, property_id)
+
+    @router.get("/{property_id}/price-log")
+    async def price_log(property_id: str,
+                        _: dict = Depends(require_roles("admin", "manager"))):
+        rows = await db.abs_price_log.find({"property_id": property_id}, {"_id": 0}).sort("at", -1).to_list(30)
+        return {"log": rows}
 
     return router

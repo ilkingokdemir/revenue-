@@ -23,6 +23,24 @@ export default function AbsPanel({ propertyId }) {
   }, [pid]);
   useEffect(() => { loadSuggestions(); }, [loadSuggestions]);
 
+  const toggleAutoPricing = async () => {
+    const next = !suggestions?.auto_pricing;
+    try {
+      await axios.put(`${API}/abs/${pid}/auto-pricing`, { enabled: next });
+      toast.success(next ? "Otomatik fiyat modu AÇIK — robot 24 saatte bir uygulayacak" : "Otomatik fiyat modu kapatıldı");
+      loadSuggestions();
+    } catch { toast.error("Ayar kaydedilemedi"); }
+  };
+
+  const runAutoNow = async () => {
+    try {
+      const { data } = await axios.post(`${API}/abs/${pid}/auto-pricing/run`);
+      toast.success(data.applied_count > 0 ? `${data.applied_count} fiyat güncellendi: ${data.applied.slice(0, 2).join(" · ")}` : "Değişiklik gerekmedi — fiyatlar doğru bantta");
+      load();
+      loadSuggestions();
+    } catch { toast.error("Çalıştırılamadı"); }
+  };
+
   const applySuggestion = async (s) => {
     try {
       const attr = attrs.find((a) => a.id === s.id);
@@ -196,9 +214,21 @@ export default function AbsPanel({ propertyId }) {
       {/* Robot Fiyat Önerileri */}
       {suggestions && suggestions.suggestions.length > 0 && (
         <div className="bg-white border border-stone-200 rounded-2xl p-4" data-testid="abs-price-suggestions">
-          <h2 className="text-sm font-black text-stone-800 mb-1">🤖 Robot Fiyat Önerileri</h2>
+          <div className="flex items-start justify-between gap-3 mb-1">
+            <h2 className="text-sm font-black text-stone-800">🤖 Robot Fiyat Önerileri</h2>
+            <div className="flex items-center gap-2">
+              <button onClick={runAutoNow} data-testid="abs-auto-run-btn"
+                className="text-[10px] font-bold text-stone-700 bg-white border border-stone-200 rounded-lg px-2.5 py-1.5 hover:bg-stone-50">Şimdi çalıştır</button>
+              <button onClick={toggleAutoPricing} data-testid="abs-auto-toggle"
+                className={`flex items-center gap-1.5 text-[10px] font-bold rounded-lg px-2.5 py-1.5 border transition-colors ${suggestions.auto_pricing ? "text-emerald-700 bg-emerald-50 border-emerald-300" : "text-stone-500 bg-white border-stone-200 hover:bg-stone-50"}`}>
+                <span className={`w-2 h-2 rounded-full ${suggestions.auto_pricing ? "bg-emerald-500 animate-pulse" : "bg-stone-300"}`} />
+                Otomatik mod {suggestions.auto_pricing ? "AÇIK" : "KAPALI"}
+              </button>
+            </div>
+          </div>
           <p className="text-[11px] text-stone-500 mb-3">
             Son 90 gün · {suggestions.total_bookings_90d} rezervasyon · ADR £{suggestions.blended_adr_90d} · özellik tavanı £{suggestions.price_cap} (ADR'nin %15'i)
+            {suggestions.last_auto_run && <span className="ml-2 text-emerald-600 font-semibold">Son otomatik koşu: {new Date(suggestions.last_auto_run).toLocaleString("tr-TR")}</span>}
           </p>
           <div className="space-y-2">
             {suggestions.suggestions.map((s) => (

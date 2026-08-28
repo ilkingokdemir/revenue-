@@ -398,4 +398,59 @@ def create_rebase_impact_router(db, require_roles):
         sent = await check_experiment_alerts(db)
         return {"ok": True, "notifications_sent": sent}
 
+    @router.post("/revenue/rebase-impact/{property_id}/email-report")
+    async def rebase_email_report(property_id: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        """Rebase raporunu şık HTML e-postayla yöneticiye gönderir."""
+        report_id = data.get("report_id", "")
+        to = str(data.get("to", "")).strip()
+        if not to or "@" not in to:
+            raise HTTPException(status_code=422, detail="Geçerli bir e-posta adresi girin")
+        rep = await db.rebase_reports.find_one({"id": report_id, "property_id": property_id}, {"_id": 0})
+        if not rep:
+            raise HTTPException(status_code=404, detail="Rapor bulunamadı")
+        exps = await db.rebase_experiments.find({"property_id": property_id}, {"_id": 0}).sort("started_at", -1).to_list(1)
+        exp_html = ""
+        if exps:
+            prog = await compute_experiment_progress(db, exps[0])
+            exp_html = f"""
+            <h3 style="margin:24px 0 8px;color:#1c1917">Deney Takibi ({prog['elapsed_days']} gün)</h3>
+            <p style="margin:0 0 6px;font-size:13px">Pickup: <b>{prog['pickup_before']['room_nights']} → {prog['pickup_after']['room_nights']} oda-gece</b> · ADR: <b>£{prog['pickup_before']['adr']} → £{prog['pickup_after']['adr']}</b></p>
+            <p style="margin:0;font-size:13px;font-weight:bold">{prog['verdict_tr']}</p>"""
+        c, be = rep["contribution"], rep["breakeven"]
+        rows_html = "".join(
+            f"<tr><td style='padding:6px 10px;border-bottom:1px solid #f5f5f4'>{r['room_type']} · {r['horizon']} gün</td>"
+            f"<td style='padding:6px 10px;border-bottom:1px solid #f5f5f4'>£{r['net_today']}</td>"
+            f"<td style='padding:6px 10px;border-bottom:1px solid #f5f5f4'><b>£{r['net_after']}</b></td>"
+            f"<td style='padding:6px 10px;border-bottom:1px solid #f5f5f4;color:{'#dc2626' if r['change_pct']<0 else '#059669'}'>%{r['change_pct']}</td></tr>"
+            for r in rep["rows"])
+        narrative_html = "".join(f"<li style='margin-bottom:6px;font-size:13px'>{l}</li>" for l in rep.get("narrative_tr", []))
+        import html as html_mod
+        ai_html = f"<h3 style='margin:24px 0 8px;color:#1c1917'>AI Danışman Yorumu</h3><p style='font-size:13px;white-space:pre-wrap'>{html_mod.escape(rep['ai_comment'])}</p>" if rep.get("ai_comment") else ""
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#292524">
+          <div style="background:linear-gradient(90deg,#e11d48,#f97316);border-radius:12px 12px 0 0;padding:20px 24px;color:#fff">
+            <h1 style="margin:0;font-size:18px">Rebase Etki Analizi — {property_id}</h1>
+            <p style="margin:4px 0 0;font-size:12px;opacity:.9">{rep['created_at'][:10]} · Otel geneli değişim: %{rep['weighted_change_pct']}</p>
+          </div>
+          <div style="border:1px solid #e7e5e4;border-top:none;border-radius:0 0 12px 12px;padding:20px 24px">
+            <h3 style="margin:0 0 8px;color:#1c1917">Kategori bazında öncesi / sonrası</h3>
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <tr style="text-align:left;color:#a8a29e"><th style="padding:6px 10px">Kategori / ufuk</th><th style="padding:6px 10px">Net bugün</th><th style="padding:6px 10px">Net sonra</th><th style="padding:6px 10px">Değişim</th></tr>
+              {rows_html}
+            </table>
+            <h3 style="margin:24px 0 8px;color:#1c1917">Katkı ve Başabaş</h3>
+            <p style="margin:0 0 6px;font-size:13px">Aynı dolulukta (%{rep['occupancy_90d']}) 90 günde katkı kaybı: <b style="color:#dc2626">£{c['loss']:,}</b></p>
+            <p style="margin:0;font-size:13px">Başabaş: {be['rn_today']} → <b>{be['rn_needed']}</b> oda-gece (müsait {be['rn_available']}) · gereken doluluk <b>%{be['occ_needed_pct']}</b> {'✅' if be['feasible'] else '⛔ İMKÂNSIZ'}</p>
+            <h3 style="margin:24px 0 8px;color:#1c1917">Kısacası</h3>
+            <ul style="margin:0;padding-left:18px">{narrative_html}</ul>
+            {exp_html}
+            {ai_html}
+            <p style="margin:24px 0 0;font-size:11px;color:#a8a29e">Bu rapor RMS robotu tarafından otomatik oluşturuldu.</p>
+          </div>
+        </div>"""
+        from routes.platform_ext.mailer import send_email
+        await send_email(db, to, f"Rebase Etki Analizi — {property_id} ({rep['created_at'][:10]})",
+                         html, kind="rebase_report", meta={"report_id": report_id})
+        return {"ok": True, "to": to}
+
     return router

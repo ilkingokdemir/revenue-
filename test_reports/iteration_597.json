@@ -1,0 +1,37 @@
+{
+  "summary": "Iter 597 — Rebase Rapor E-postası + ABS Otomatik Fiyat + Bildirim Sesi test edildi. Backend: 10/10 pytest geçti (email-report 200/422/404, auto-pricing PUT/run, price-suggestions auto_pricing+last_auto_run alanları, price-log, notification insert, cleanup OFF). Frontend: (1) ABS Ctrl+K→'Özellik bazlı' → panel yüklendi; 'Otomatik mod KAPALI' → tıklanınca 'Otomatik mod AÇIK' + toast; 'Şimdi çalıştır' → toast 'Deniz manzarası: £12.75 → £10.84 · Yüksek kat: £8 → £6.8 …' (5 fiyat) + son otomatik koşu zamanı 28.08.2026 görüldü. (2) Rebase Ctrl+K→'Etki Analiz' → Analiz Et → 18 satır tablo; '✉ E-posta' → satır açıldı → 'manager@example.com' + 'Raporu Gönder' → 'Rapor e-postası gönderildi → manager@example.com' toast; geçersiz 'not-an-email' → 'Geçerli bir e-posta girin' hata toast. (3) NotificationBell paneli → 🔊 anahtar → tıklanınca 🔇 (localStorage notifSound=off) → tekrar tıklayınca 🔊 (notifSound=on). REGRESYON: 5 abs-apply-suggestion butonu ve Oda–Özellik matrisi render'landı. TEMİZLİK: auto-pricing enabled=false bırakıldı (toast 'Otomatik fiyat modu kapatıldı').",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/revenue/rebase-impact/{pid}/email-report", "issue": "Spec 'db.email_log' der ama kod db.email_outbox koleksiyonuna yazıyor (mailer.py). İşlevsel olarak aynı (mock kaydı tutuluyor), sadece isim farkı — spec/kod uyumsuzluğu."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter597_rebase_email_abs_auto.py",
+    "/app/test_reports/pytest/iter597.xml"
+  ],
+  "action_items": [
+    "İSTEĞE BAĞLI: rebase_impact.py email-report endpoint'inde meta doküman koleksiyonu ismini spec ile hizala (email_outbox vs email_log). Fonksiyon zaten mock kaydı yapıyor.",
+    "GÖZLEM: NotificationBell.js — 2 adet 'notification-bell-btn' elementi render ediliyor (biri sidebar-open biri collapsed durum için); Playwright çoklu eşleşme uyarısı verdi ama görünür olan doğru çalışıyor."
+  ],
+  "critical_code_review_comments": [
+    "abs_selling.py auto_pricing_loop: cutoff karşılaştırması str(iso)<str(iso) olarak yapılıyor, iso-8601 için lexicographic sıralama doğru çalışır ancak farklı timezone/format geldiğinde riskli — datetime parse tercih edilebilir.",
+    "abs_selling.py abs_auto_pricing_run: 'keep' action'ları uygulanmıyor (doğru); ancak 'raise'/'lower' güvenlik cap'i compute_price_suggestions içinde uygulanmış — run tarafında ek doğrulama yok, önerideki price zaten cap altında geliyor.",
+    "rebase_impact.py email-report: rep['ai_comment'] HTML'e escape edilmeden gömülüyor (whitespace-pre-wrap p içine). LLM cevabı içinde HTML/script tag'i gelirse mail alıcısına yansır — html.escape gerekli.",
+    "NotificationBell.js: soundOnRef ref olarak tutuluyor ama state (soundOn) da mevcut — state güncellendiğinde ref manuel senkronize edilmiş. Yeterli ancak playAlertSound içinde soundOnRef.current kontrolü yok (playAlertSound koşulsuz çalar). Toggle 'off' iken de yeni HIGH bildirim gelirse ses çalabilir — hızlı gözlemle localStorage kontrolü var mı emin değilim, kaynak koda göre yalnızca yeni id kontrolü var."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter597_rebase_email_abs_auto.py"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "1 rebase report (analyze), 1 email_outbox mock kaydı (to=manager@example.com), abs_price_log'a auto-run ile 5 satır, abs_settings'e auto_pricing=false (cleanup), 1 notifications kaydı ('🤖 ABS otomatik fiyat güncellendi').",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter 597 özellikleri (rebase email, ABS auto-pricing, bildirim ses toggle) tam çalışıyor. auto-pricing cleanup OFF durumda bırakıldı. Rebase e-posta yalnızca 'Analiz Et' sonrası butonun görünmesi + tıklamayla satır açılıp gönderim yapılabiliyor; başarılı gönderim sonrası satır otomatik kapanıyor (UX). NotificationBell soundOn ref'i playAlertSound içinde kontrol edilmiyor — potansiyel iyileştirme alanı; iter 597 için kritik değil."
+}

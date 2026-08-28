@@ -207,6 +207,8 @@ export const ProfitBenchmarkPanel = L(() => import("./components/dashboard/Profi
 export const SentimentPricingPanel = L(() => import("./components/dashboard/SentimentPricingPanel"));
 export const MobileApprovalsPanel = L(() => import("./components/dashboard/MobileApprovalsPanel"));
 export const IdArchivePanel = L(() => import("./components/dashboard/IdArchivePanel"));
+export const ModuleManagerPanel = L(() => import("./components/dashboard/ModuleManagerPanel"));
+export const RebaseImpactPanel = L(() => import("./components/dashboard/RebaseImpactPanel"));
 export const RestrictionAdvisorPanel = L(() => import("./components/dashboard/RestrictionAdvisorPanel"));
 export const GapFillerPanel = L(() => import("./components/dashboard/GapFillerPanel"));
 export const LostDemandPanel = L(() => import("./components/dashboard/LostDemandPanel"));

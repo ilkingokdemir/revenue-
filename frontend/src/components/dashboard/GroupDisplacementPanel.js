@@ -114,12 +114,12 @@ export function GroupDisplacementPanel({ activePropertyId }) {
         <div>
           <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Oda sayısı</label>
           <input type="number" min="1" value={form.rooms_requested} onChange={e => setForm({ ...form, rooms_requested: e.target.value })} data-testid="gd-rooms-input"
-            data-testid="gd-rooms" className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
+            className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
         </div>
         <div>
           <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Teklif (gecelik)</label>
           <input type="number" min="0" value={form.offered_rate} onChange={e => setForm({ ...form, offered_rate: e.target.value })} data-testid="gd-rate-input"
-            data-testid="gd-rate" className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
+            className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm" />
         </div>
         <button onClick={analyze} disabled={loading} data-testid="gd-analyze-btn"
           className="col-span-2 md:col-span-4 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-br from-violet-600 to-purple-700 hover:from-violet-500 hover:to-purple-600 text-white text-sm font-bold disabled:opacity-50 shadow">

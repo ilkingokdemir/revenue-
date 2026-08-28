@@ -309,6 +309,30 @@ def create_booking_timeline_router(db, require_roles):
                 b["folio_charged"] = charged
                 b["balance_due"] = max(0.0, round(gross - paid, 2))
 
+            # Ödeme linki takibi — rezervasyon başına en iyi durum (paid > opened > sent)
+            tx_map = {}
+            if booking_ids:
+                async for tx in db.payment_transactions.find(
+                        {"booking_id": {"$in": booking_ids}},
+                        {"_id": 0, "booking_id": 1, "payment_status": 1, "status": 1}):
+                    tx_map.setdefault(tx["booking_id"], []).append(tx)
+            rank = {"paid": 3, "opened": 2, "sent": 1}
+            for b in bookings:
+                txs = tx_map.get(b.get("id"), [])
+                if not txs:
+                    continue
+                best = "sent"
+                for tx in txs:
+                    if tx.get("payment_status") in ("paid", "refunded") or tx.get("status") == "completed":
+                        st = "paid"
+                    elif tx.get("status") == "opened":
+                        st = "opened"
+                    else:
+                        st = "sent"
+                    if rank[st] > rank[best]:
+                        best = st
+                b["pay_link"] = {"status": best, "count": len(txs)}
+
         # Group rooms by type
         rooms_by_type = {}
         for r in rooms:
@@ -374,6 +398,12 @@ def create_booking_timeline_router(db, require_roles):
                         "adults": b.get("adults", 1),
                         "children": b.get("children", 0),
                         "payment_status": b.get("payment_status", "pending"),
+                        "guest_email": b.get("guest_email", ""),
+                        "guest_phone": b.get("guest_phone", ""),
+                        "room_id": b.get("room_id", ""),
+                        "room_type_id": b.get("room_type_id", ""),
+                        "property_id": b.get("property_id", ""),
+                        "pay_link": b.get("pay_link"),
                         # Live folio values so the flashing balance pill reflects partial payments
                         "balance_due": b.get("balance_due"),
                         "folio_paid": b.get("folio_paid", 0),

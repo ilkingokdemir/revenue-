@@ -1841,6 +1841,10 @@ api_router.include_router(create_provisioning_router(db, require_roles))
 # ===== P0 Paketi: Stripe, Public API, Süper Admin, Migration =====
 from routes.platform_ext.p0_pack import create_p0_router
 api_router.include_router(create_p0_router(db, require_roles))
+from routes.platform_ext.menu_manager import create_menu_manager_router
+api_router.include_router(create_menu_manager_router(db, require_roles))
+from routes.revenue_ext.rebase_impact import create_rebase_impact_router
+api_router.include_router(create_rebase_impact_router(db, require_roles))
 
 @app.on_event("startup")
 async def _start_journey_engine():

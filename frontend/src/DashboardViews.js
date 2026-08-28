@@ -133,6 +133,8 @@ import {
   SentimentPricingPanel,
   MobileApprovalsPanel,
   IdArchivePanel,
+  ModuleManagerPanel,
+  RebaseImpactPanel,
   IpAllowlistPanel,
   KDSPanel,
   KeyFiguresPanel,
@@ -1694,6 +1696,8 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {activeView === "sentiment-pricing" && <SentimentPricingPanel propertyId={activePropertyId || "default"} />}
         {activeView === "mobile-approvals" && <MobileApprovalsPanel propertyId={activePropertyId || "default"} />}
         {activeView === "id-archive" && <IdArchivePanel propertyId={activePropertyId || "all"} />}
+        {activeView === "module-manager" && <ModuleManagerPanel />}
+        {activeView === "rebase-impact" && <RebaseImpactPanel propertyId={activePropertyId || "all"} />}
         {activeView === "restriction-advisor" && <RestrictionAdvisorPanel propertyId={activePropertyId || "all"} />}
         {activeView === "gap-filler" && <GapFillerPanel propertyId={activePropertyId || "all"} />}
         {activeView === "lost-demand" && <LostDemandPanel propertyId={activePropertyId || "all"} />}

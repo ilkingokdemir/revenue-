@@ -97,6 +97,33 @@ import {
   UserMinus,
 } from "@phosphor-icons/react";
 
+// Modül Yöneticisi: admin tanımlı taşıma/gizleme kurallarını menüye uygular
+export function applyMenuOverrides(sections, overrides) {
+  if (!overrides || Object.keys(overrides).length === 0) return sections;
+  const moved = {};
+  const result = sections.map(s => ({
+    ...s,
+    items: s.items.filter(it => {
+      if (it.divider || !it.id) return true;
+      const ov = overrides[it.id];
+      if (!ov) return true;
+      if (ov.hidden) return false;
+      if (ov.section && ov.section !== s.label) {
+        if (!moved[ov.section]) moved[ov.section] = [];
+        moved[ov.section].push(it);
+        return false;
+      }
+      return true;
+    }),
+  }));
+  result.forEach(s => {
+    if (moved[s.label] && moved[s.label].length > 0) {
+      s.items = [...s.items, { divider: true, label: "Taşınan Modüller" }, ...moved[s.label]];
+    }
+  });
+  return result.filter(s => s.items.some(it => !it.divider));
+}
+
 export function buildMenuSections(t, user) {
   return [
     {
@@ -315,6 +342,7 @@ export function buildMenuSections(t, user) {
         { id: "morning-report", icon: Sparkle, name: "Gece Denetim Robotu (Gün Sonu Raporu)", testId: "morning-report-btn" },
         { id: "trust-center", icon: Coins, name: "Robot Güven Merkezi (Guardrail · Kabul · Shadow)", testId: "trust-center-btn" },
         { id: "rm-simulator", icon: Coins, name: "Talep Simülatörü & Replay Backtest", testId: "rm-simulator-btn" },
+        { id: "rebase-impact", icon: TrendUp, name: "Rebase Etki Analizi (Robot)", testId: "rebase-impact-btn" },
         { id: "bi-chat", icon: Sparkle, name: "Veriye Sor (BI Chat)", testId: "bi-chat-btn" },
         { id: "parking-rms", icon: ChartLine, name: "Otopark RMS", testId: "parking-rms-btn" },
 
@@ -533,6 +561,7 @@ export function buildMenuSections(t, user) {
         ...(user?.role === "admin" ? [{ id: "settings-hub", icon: Gear, name: "Settings hub", testId: "settings-hub-btn", core: true }] : []),
         ...(user?.role === "admin" ? [{ id: "error-sentinel", icon: Gear, name: "Hata Nöbetçisi", testId: "error-sentinel-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "super-admin", icon: Gear, name: "👑 Platform Yönetimi (Süper Admin)", testId: "super-admin-btn", core: true }] : []),
+        ...(user?.role === "admin" ? [{ id: "module-manager", icon: GridFour, name: "🧩 Modül Yöneticisi", testId: "module-manager-btn", core: true }] : []),
         ...(user?.role === "admin" ? [{ id: "system-health", icon: Gear, name: "🩺 Sistem Sağlığı", testId: "system-health-btn", core: true }] : []),
 
         { divider: true, label: "Team & Access" },

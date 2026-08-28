@@ -64,14 +64,53 @@ def create_p0_router(db, require_roles):
             success_url=f"{origin}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{origin}/payment/cancel",
             metadata={"property_id": pid, "booking_id": booking_id, "kind": data.get("kind", "payment")})
+        tx_id = str(uuid.uuid4())
         await db.payment_transactions.insert_one({
-            "id": str(uuid.uuid4()), "session_id": session.id, "property_id": pid,
+            "id": tx_id, "session_id": session.id, "property_id": pid,
             "booking_id": booking_id, "amount": amount, "currency": currency,
             "description": desc, "kind": data.get("kind", "payment"),
+            "stripe_url": session.url,
             "status": "initiated", "payment_status": "pending",
             "created_by": str(_u.get("email") or ""), "created_at": now_iso(), "updated_at": now_iso()})
-        return {"checkout_url": session.url, "session_id": session.id,
+        # İzlenebilir link: misafir açınca 'opened' işaretlenir, sonra Stripe'a yönlenir
+        tracking_url = f"{origin}/api/pay/r/{tx_id}"
+        return {"checkout_url": tracking_url, "stripe_url": session.url, "session_id": session.id,
+                "tx_id": tx_id,
                 "note": "Bu linki misafire gönderin (pay-by-link) veya yönlendirin."}
+
+    @router.get("/pay/r/{tx_id}")
+    async def pay_link_redirect(tx_id: str):
+        """Public: ödeme linki açıldı → 'opened' işaretle, Stripe'a yönlendir."""
+        from fastapi.responses import RedirectResponse
+        tx = await db.payment_transactions.find_one({"id": tx_id}, {"_id": 0})
+        if not tx or not tx.get("stripe_url"):
+            raise HTTPException(404, "Ödeme linki bulunamadı")
+        if tx.get("payment_status") != "paid" and tx.get("status") in ("initiated", "opened"):
+            sets = {"status": "opened", "updated_at": now_iso()}
+            if not tx.get("opened_at"):
+                sets["opened_at"] = now_iso()
+            await db.payment_transactions.update_one({"id": tx_id}, {"$set": sets})
+        return RedirectResponse(tx["stripe_url"], status_code=302)
+
+    @router.get("/payments/booking-links/{booking_id}")
+    async def booking_pay_links(booking_id: str,
+                                _u: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Rezervasyonun ödeme linkleri + canlı durum (Stripe lazy poll)."""
+        rows = await db.payment_transactions.find(
+            {"booking_id": booking_id}, {"_id": 0}).sort("created_at", -1).to_list(20)
+        for r in rows[:5]:
+            if r.get("payment_status") != "paid" and r.get("session_id"):
+                try:
+                    s = stripe.checkout.Session.retrieve(r["session_id"])
+                    if s.payment_status == "paid" or s.status == "complete":
+                        await db.payment_transactions.update_one(
+                            {"session_id": r["session_id"]},
+                            {"$set": {"status": "completed", "payment_status": "paid",
+                                      "stripe_payment_intent_id": s.payment_intent, "updated_at": now_iso()}})
+                        r["status"], r["payment_status"] = "completed", "paid"
+                except Exception:
+                    pass
+        return {"links": rows}
 
     @router.post("/payments/email-link")
     async def email_payment_link(data: dict,

@@ -1,0 +1,32 @@
+{
+  "summary": "Iter 594 — 4 new features fully validated end-to-end. Backend: 16/16 pytest passing (test_iter594_dates_split_paylinks_menu.py) covering PUT /bookings/{id}/dates (200/422/409), POST /bookings/{id}/split (200 with proportional total_price + '-B' booking_ref + split_from linkage, 422 for out-of-range, 409 for target-room conflict), POST /payments/checkout returning /api/pay/r/{tx_id} tracking URL + stripe_url, GET /pay/r/{tx_id} 302 redirect marking tx 'opened', GET /payments/booking-links/{bid} listing, timeline enrichment (pay_link{status,count}, guest_email, room_id on every bar), and menu-overrides CRUD (GET open to any auth user, PUT/DELETE/reset admin-only). Extra manual curl verified non-admin (sales@hotelbox.com) gets 403 on PUT and 200 on GET. Frontend (Playwright, admin login, /calendar): booking-bar click via dispatch_event opens quick-actions-popover exposing all 12 buttons (qa-editdates, qa-split PLUS qa-changeroom/qa-paylink/qa-resend/qa-checkin/qa-checkout/qa-noshow/qa-addnote/qa-copy/qa-lock/qa-details/qa-cancel/qa-sendlink/qa-invitekit). qa-editdates opens edit-dates-modal (2 date inputs + Kaydet). qa-split opens split-modal (split-date-input + split-no-rooms fallback + split-submit correctly disabled until a room is chosen). paylink-dot-{id} badges visible on 17 bars in demo data; qa-paylink-status chip renders 'Link gönderildi' when bk.pay_link present. Module Manager: module-manager-btn visible in sidebar for admin, opens module-manager-panel (312 modules across sections, search 'takvim' filters to 2, 312 mm-hide-* buttons + 312 mm-move-* selects + module-manager-reset). Cleanup: /api/menu-overrides/reset invoked from both backend test (test_zzz_cleanup_reset) and frontend flow.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter594_dates_split_paylinks_menu.py",
+    "/app/test_reports/pytest/iter594.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "bookings.py:1637 (update_booking_dates) — recomputes total_price = rate * nights * rooms, but does NOT touch balance_due or the folio. If the guest has already been charged for the original nights and dates are extended, folio balance will silently drift out of sync with the new total_price. Consider recomputing balance_due = total_price - folio_paid, or emit a folio adjustment.",
+    "bookings.py:1687 (split conflict check) — same defect flagged in iter593: excludes only ['cancelled','no_show','checked_out']. A future 'checked_out' status for the same room+dates would falsely allow a split into a still-in-use room. Prefer strict {status: {$nin:['cancelled']}} + explicit occupancy view.",
+    "bookings.py:1723 (split) — original booking's payment_status/folio are NOT split proportionally. If original was 'paid' for 500, after split first=200 and second=300 are both marked 'paid' (inherited), meaning first booking looks 250% over-paid and second is 'paid' without any real charge. Recommend: keep folio on original booking, mark second as payment_status='pending' with note.",
+    "p0_pack.py:81 (pay redirect) — endpoint is unauthenticated (correct for public link) but has NO rate-limit or per-IP abuse protection. A scraper could rapidly flip statuses to 'opened'. Consider a cheap in-memory rate-limit per tx_id (e.g. only first hit counts).",
+    "p0_pack.py:60 (checkout) — still lacks the property_id/booking_id ownership check flagged iter593; iteration didn't address it.",
+    "menu_manager.py:26 — `if hidden: ov['hidden'] = True` — a PUT with {hidden:false} sends no changes and returns 422 'section veya hidden gerekli'. This makes it impossible to un-hide a module via PUT; you must DELETE the override. Non-intuitive; consider accepting {hidden:false} to remove the hidden flag.",
+    "BookingTimeline.js:1236 — booking-bar has draggable={!bulkMode} which interferes with programmatic click (Playwright mousedown starts a drag not a click). Real users are fine, but automated tests must use dispatch_event('click'). Not a bug, but note for future test authors.",
+    "BookingTimeline.js:1997 — split-modal falls back to 'split-no-rooms' when no room is available for the second half, but does NOT expose an option to keep the same room (e.g., a soft split just for accounting). Consider allowing 'same room' selection when the user just wants to split the folio."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter594_dates_split_paylinks_menu.py"],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100% (popover, edit-dates modal, split modal, paylink chip, module manager panel + search + reset all verified)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! ; sales@hotelbox.com / Test2026! (RBAC 403 check)",
+  "seed_data_creation": "3 TEST_594_* bookings created via POST /api/bookings on property aldgate-flats (Splitter + Clash + Blocker), at randomized check-in offsets (~500-700 days out) to avoid cross-run conflicts. Each carries guest_email 'test594@example.com' for reuse. Small footprint; cleanup not automated (bookings are far in the future).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Playwright: booking-bar has draggable={true}; use page.dispatch_event('[data-testid=\"booking-bar-...\"]', 'click') to open the popover — element.click(force=True) and mouse.click both fail silently due to drag interception. Timeline window is ~14 days; when testing bookings created far in the future, pass ?start=<yyyy-mm-dd>&days=14 to /api/bookings/timeline/{pid}. Bars are in room.bookings[] (NOT room.bars[]). property_id for TEST bookings is 'aldgate-flats'; UI shows all properties by default under 'All Branches'. Module Manager button (module-manager-btn) is admin-only under Settings & Admin section and requires scrolling the sidebar; module-manager-panel houses 312 modules split by section with search + mm-hide-{id} + mm-move-{id} + module-manager-reset. Always POST /api/menu-overrides/reset at end of session so subsequent users have default menu.",
+  "rca of the issue": "N/A — no bugs. All 4 new features work end-to-end. Test-file evolution: bar iteration uses `room.bookings` not `room.bars`; timeline needs explicit start=<future_date> to include far-future TEST bookings; seeded booking dates randomized per-run to eliminate cross-run booking-clash flakiness."
+}

@@ -1,0 +1,36 @@
+{
+  "summary": "Iter 595 — Rebase Etki Analizi (Robot) modülü + split payment_status + menu-overrides fix'leri test edildi. Backend: 10/10 pytest geçti (defaults, analyze default+manuel targets, ai-comment success+404, history, split→pending, menu-overrides PUT hidden:false→200+silme). Frontend: Ctrl+K → 'Rebase' → panel açıldı; 18 target input, komisyon/varcost, Analiz Et, sonuç tablosu, katkı+loss, breakeven, caveats, narrative, AI Yorum (Türkçe, 862 char geldi ~15sn), Yazdır/PDF buton mevcut. Hedef fiyatı 10 £'a çekince tablo doğru güncellendi (Standard Double 0-30 → £10, değişim -%91.9).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/revenue/rebase-impact/{pid}/defaults", "issue": "require_roles('admin','manager') department-agnostic — sales@ (dept=sales, role=manager) 200 döner. Amaçlanan davranış revenue/management dışı receptionist/staff için 403; şu anda dept scoping yok."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter595_rebase_impact.py",
+    "/app/test_reports/pytest/iter595.xml"
+  ],
+  "action_items": [
+    "OPSIYONEL: Rebase endpoint RBAC'ini department-aware yap (revenue/management/admin) — sales manager şu anda erişebiliyor. Görev sözünde 'receptionist → 403' denmiş; receptionist zaten role='staff' olur ve 403 alır, ama dept sızıntısı riskini kapatmak için department filter eklenebilir."
+  ],
+  "critical_code_review_comments": [
+    "rebase_impact.py analyze: net_today=0 kenar durumu weighted_change_pct=0 döner (silent) — küçük property'de bilgi/ikaz üretmiyor.",
+    "ai-comment: rate limit / timeout için retry yok; ~10-20sn LLM çağrısı sırasında concurrent istek koruması eksik.",
+    "narrative_tr: rebase['multiplier']['range'] tuple JSON serileşiyor ama frontend'te list olarak gelir (uyarı yok)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter595_rebase_impact.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! ; sales@hotelbox.com / Test2026!",
+  "seed_data_creation": "Analyze çalışması sırasında db.rebase_reports'a birkaç TEST_ raporu yazıldı (property_id=aldgate-flats). Ayrıca split testinde geçici booking oluşturulup ikiye bölündü ve silindi.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Rebase modülü backend+frontend tam çalışıyor. Erişim: Ctrl+K → 'Rebase'. Property_id=aldgate-flats için 6 oda tipi × 3 ufuk = 18 satır dönüyor. AI yorum ~15sn sürüyor. Auth JSON field 'token' (access_token DEĞİL). Split endpoint 'new_room_id' + 'split_date' zorunlu (422 yerine 200 dönmesi için).",
+  "rca_of_the_issue": "Yok — tüm test edilen özellikler çalışıyor. Minor RBAC gözlemi: rebase endpoint'i departman kısıtı yerine sadece role tabanlı (admin,manager) — sales manager 200 alır; potansiyel iyileştirme."
+}

@@ -7,7 +7,7 @@ import {
   Search, Plus, X, User, Phone, Mail, CreditCard, Bed, Clock, MapPin,
   GripVertical, CheckSquare, Square, LogIn, LogOut, Users, AlertTriangle,
   FileText, Send, Receipt, Home, Globe, PhoneCall, Share2, UserCheck, UserX, Lock, StickyNote, LayoutList, Copy, Filter,
-  Bell, Building2, Wrench, Printer, Edit3, Banknote, Landmark, ArrowLeftRight, MailCheck,
+  Bell, Building2, Wrench, Printer, Edit3, Banknote, Landmark, ArrowLeftRight, MailCheck, Scissors, Link2,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -217,6 +217,8 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [quickActions, setQuickActions] = useState(null); // { booking, anchorRect } — click popover
   const [changeRoomFor, setChangeRoomFor] = useState(null); // { booking, roomName } — oda değiştir modalı
+  const [editDatesFor, setEditDatesFor] = useState(null); // { booking, check_in, check_out } — tarih düzenle
+  const [splitFor, setSplitFor] = useState(null); // { booking, roomName, date } — rezervasyon böl
   const [createBooking, setCreateBookingState] = useState(null); // { room_id, room_name, room_type_id, check_in } | null
   const [createForm, setCreateForm] = useState({ guest_name: "", guest_email: "", guest_phone: "", nights: 1, adults: 2, children: 0 });
   const [creating, setCreating] = useState(false);
@@ -1263,7 +1265,16 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                   <span className={`absolute bottom-0.5 left-1.5 w-1.5 h-1.5 rounded-full ring-1 ring-white ${bk.payment_status === "paid" ? "bg-emerald-500" : bk.payment_status === "partial" ? "bg-amber-500" : "bg-rose-500"}`}
                                     data-testid={`pay-dot-${bk.id}`} title={`Payment: ${bk.payment_status || "unpaid"}`}></span>
                                 )}
-                                {/* Notes indicator — if booking has notes, show sticky-note icon top-right */}
+                {/* Pay-link tracking badge — bottom-right corner */}
+                {bk.pay_link && width > 60 && (
+                  <span className={`absolute bottom-0.5 right-1 w-2.5 h-2.5 rounded-full ring-1 ring-white flex items-center justify-center ${
+                      bk.pay_link.status === "paid" ? "bg-emerald-400" : bk.pay_link.status === "opened" ? "bg-amber-400" : "bg-stone-400"}`}
+                    data-testid={`paylink-dot-${bk.id}`}
+                    title={`Ödeme linki: ${bk.pay_link.status === "paid" ? "ödendi" : bk.pay_link.status === "opened" ? "açıldı" : "gönderildi"}`}>
+                    <Link2 className="w-1.5 h-1.5 text-white" />
+                  </span>
+                )}
+                {/* Notes indicator — if booking has notes, show sticky-note icon top-right */}
                                 {bk.notes && width > 80 && (
                                   <StickyNote className="absolute top-0.5 right-3.5 w-2.5 h-2.5 text-white/90 drop-shadow" data-testid={`note-icon-${bk.id}`} />
                                 )}
@@ -1673,7 +1684,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
         const { booking: bk, rect, roomName } = quickActions;
         const sc = STATUS_COLORS[resolveDisplayStatus(bk)] || STATUS_COLORS.confirmed;
         // Position below bar, center-aligned, clamped to viewport
-        const popoverW = 320, popoverH = 440;
+        const popoverW = 320, popoverH = 500;
         let left = rect.left + rect.width / 2 - popoverW / 2;
         let top = rect.bottom + 8;
         if (left < 8) left = 8;
@@ -1753,6 +1764,17 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
               } catch (e) { toast.error(e.response?.data?.detail || "Onay e-postası gönderilemedi"); }
               setQuickActions(null);
             } },
+          { id: "editdates", label: "Tarih Düzenle", icon: Edit3, color: "text-orange-700 bg-orange-50 hover:bg-orange-100",
+            disabled: bk.status === "checked_out" || bk.status === "cancelled",
+            onClick: () => { setEditDatesFor({ booking: bk, check_in: bk.check_in, check_out: bk.check_out }); setQuickActions(null); } },
+          { id: "split", label: "Böl", icon: Scissors, color: "text-cyan-700 bg-cyan-50 hover:bg-cyan-100",
+            disabled: (bk.nights || 1) < 2 || bk.status === "checked_out" || bk.status === "cancelled",
+            onClick: () => {
+              const ci = new Date(bk.check_in), co = new Date(bk.check_out);
+              const mid = new Date(ci.getTime() + (co.getTime() - ci.getTime()) / 2);
+              setSplitFor({ booking: bk, roomName, date: mid.toISOString().slice(0, 10), room_id: "" });
+              setQuickActions(null);
+            } },
         ];
         return (
           <>
@@ -1767,6 +1789,16 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                 </div>
                 <div className="flex items-center gap-1 text-[11px] text-stone-500">
                   <Bed className="w-3 h-3" /> <span className="truncate">{roomName}</span>
+                  {bk.pay_link && (
+                    <span data-testid="qa-paylink-status"
+                      className={`ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                        bk.pay_link.status === "paid" ? "bg-emerald-100 text-emerald-700"
+                          : bk.pay_link.status === "opened" ? "bg-amber-100 text-amber-700"
+                                                            : "bg-stone-100 text-stone-600"}`}>
+                      <Link2 className="w-2.5 h-2.5" />
+                      {bk.pay_link.status === "paid" ? "Link ödendi" : bk.pay_link.status === "opened" ? "Link açıldı" : "Link gönderildi"}
+                    </span>
+                  )}
                 </div>
               </div>
               {/* IN / OUT / TOTAL row */}
@@ -1860,6 +1892,127 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                     )}
                   </>
                 )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Tarih Düzenle Modal */}
+      {editDatesFor && (() => {
+        const bk = editDatesFor.booking;
+        const save = async () => {
+          try {
+            const { data } = await axios.put(`${API}/bookings/${bk.id}/dates`, {
+              check_in: editDatesFor.check_in, check_out: editDatesFor.check_out,
+            });
+            toast.success(`Tarihler güncellendi: ${data.check_in} → ${data.check_out} (${data.nights} gece)`);
+            setEditDatesFor(null);
+            load();
+          } catch (e) { toast.error(e.response?.data?.detail || "Tarihler güncellenemedi"); }
+        };
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setEditDatesFor(null)} data-testid="edit-dates-modal">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-orange-500 to-amber-500 rounded-t-2xl">
+                <div>
+                  <h3 className="text-sm font-black text-white flex items-center gap-2"><Edit3 className="w-4 h-4" /> Tarih Düzenle</h3>
+                  <p className="text-[11px] text-orange-50 mt-0.5">{bk.guest_name} — {bk.check_in} → {bk.check_out}</p>
+                </div>
+                <button onClick={() => setEditDatesFor(null)} className="p-1 hover:bg-white/20 rounded-lg" data-testid="edit-dates-close"><X className="w-4 h-4 text-white" /></button>
+              </div>
+              <div className="p-5 space-y-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Giriş</label>
+                  <input type="date" value={editDatesFor.check_in}
+                    onChange={e => setEditDatesFor({ ...editDatesFor, check_in: e.target.value })}
+                    data-testid="edit-dates-checkin"
+                    className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Çıkış</label>
+                  <input type="date" value={editDatesFor.check_out} min={editDatesFor.check_in}
+                    onChange={e => setEditDatesFor({ ...editDatesFor, check_out: e.target.value })}
+                    data-testid="edit-dates-checkout"
+                    className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <button onClick={save} data-testid="edit-dates-save"
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-sm font-bold shadow">
+                  Kaydet
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Rezervasyon Böl Modal */}
+      {splitFor && (() => {
+        const bk = splitFor.booking;
+        const isActive = (b) => !["cancelled", "checked_out", "no_show"].includes(b.status);
+        const allRooms = groups.flatMap(g => g.rooms.map(r => ({ ...r, room_type_id: g.room_type_id, room_type_name: g.room_type_name })));
+        const hasOos = (rm) => oosBlocks.some(o => o.room_id === rm.id && o.start < bk.check_out && splitFor.date < o.end);
+        const freeRooms = allRooms.filter(rm =>
+          rm.id !== bk.room_id && !hasOos(rm) &&
+          !rm.bookings.some(b => isActive(b) && b.id !== bk.id && b.check_in < bk.check_out && b.check_out > splitFor.date)
+        );
+        const minDate = (() => { const d = new Date(bk.check_in); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); })();
+        const maxDate = (() => { const d = new Date(bk.check_out); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+        const doSplit = async () => {
+          if (!splitFor.room_id) { toast.error("Hedef oda seçin"); return; }
+          try {
+            const { data } = await axios.post(`${API}/bookings/${bk.id}/split`, {
+              split_date: splitFor.date, new_room_id: splitFor.room_id,
+            });
+            toast.success(`Konaklama bölündü ✓ 2. kısım: ${data.second.room_number} (${data.second.check_in} → ${data.second.check_out})`);
+            setSplitFor(null);
+            load();
+          } catch (e) { toast.error(e.response?.data?.detail || "Bölme başarısız"); }
+        };
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setSplitFor(null)} data-testid="split-modal">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-cyan-600 to-sky-500 rounded-t-2xl">
+                <div>
+                  <h3 className="text-sm font-black text-white flex items-center gap-2"><Scissors className="w-4 h-4" /> Rezervasyonu Böl</h3>
+                  <p className="text-[11px] text-cyan-50 mt-0.5">{bk.guest_name} — {splitFor.roomName} · {bk.check_in} → {bk.check_out}</p>
+                </div>
+                <button onClick={() => setSplitFor(null)} className="p-1 hover:bg-white/20 rounded-lg" data-testid="split-close"><X className="w-4 h-4 text-white" /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-5 space-y-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">Bölme Tarihi (2. kısım bu tarihte başlar)</label>
+                  <input type="date" value={splitFor.date} min={minDate} max={maxDate}
+                    onChange={e => setSplitFor({ ...splitFor, date: e.target.value, room_id: "" })}
+                    data-testid="split-date-input"
+                    className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">2. Kısım İçin Hedef Oda ({splitFor.date} → {bk.check_out})</label>
+                  {freeRooms.length === 0 ? (
+                    <p className="text-xs text-amber-600 font-semibold py-2" data-testid="split-no-rooms">Bu tarihlerde müsait oda yok</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {freeRooms.map(rm => (
+                        <button key={rm.id}
+                          onClick={() => setSplitFor({ ...splitFor, room_id: rm.id })}
+                          data-testid={`split-room-option-${rm.id}`}
+                          className={`flex items-center justify-between w-full px-3 py-2 rounded-xl border text-left transition-all ${
+                            splitFor.room_id === rm.id ? "border-cyan-400 bg-cyan-50 ring-1 ring-cyan-300" : "border-stone-200 bg-white hover:bg-stone-50"}`}>
+                          <span className="flex items-center gap-2">
+                            <Bed className={`w-4 h-4 ${splitFor.room_id === rm.id ? "text-cyan-600" : "text-stone-400"}`} />
+                            <span className="text-xs font-bold text-stone-800">{rm.name}</span>
+                          </span>
+                          <span className="text-[10px] font-semibold text-stone-500">{rm.room_type_name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button onClick={doSplit} disabled={!splitFor.room_id} data-testid="split-submit"
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-sky-500 hover:from-cyan-700 hover:to-sky-600 text-white text-sm font-bold shadow disabled:opacity-40">
+                  Konaklamayı Böl
+                </button>
               </div>
             </div>
           </div>

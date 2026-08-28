@@ -60,7 +60,7 @@ import DashboardViews from "./DashboardViews";
 import { StarRating, PlatformBadge, StatsCard, ReviewCard } from "@/components/dashboard/ReviewComponents";
 import { AIResponsePanel, TemplatesManager, ApprovalQueuePanel } from "@/panels/ReviewToolsPanels";
 import { UserManagementPanel, ApiConnectionPanel, WebhooksPanel, } from "@/panels/SystemToolsPanels";
-import { buildMenuSections } from "./navigation/menuSections";
+import { buildMenuSections, applyMenuOverrides } from "./navigation/menuSections";
 import { isModuleAllowed, requiredPlanFor } from "./navigation/planGate";
 import PlanUpsellModal from "@/components/dashboard/PlanUpsellModal";
 import SignupPage from "@/components/dashboard/SignupPage";
@@ -510,7 +510,22 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     return out && out !== key ? out : label;
   }, [t]);
 
-  const menuSections = buildMenuSections(t, user);
+  // Modül Yöneticisi: admin tanımlı menü taşıma/gizleme kuralları
+  const [menuOverrides, setMenuOverrides] = useState(null);
+  useEffect(() => {
+    let mounted = true;
+    const fetchOverrides = () => {
+      axios.get(`${API}/menu-overrides`)
+        .then(({ data }) => { if (mounted) setMenuOverrides(data.overrides || {}); })
+        .catch(() => { /* sessiz */ });
+    };
+    fetchOverrides();
+    window.addEventListener("menu-overrides-changed", fetchOverrides);
+    return () => { mounted = false; window.removeEventListener("menu-overrides-changed", fetchOverrides); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const menuSections = applyMenuOverrides(buildMenuSections(t, user), menuOverrides);
 
   // Plan kilitleri — aktif otelin planına göre modül erişimi
   const activePlan = activePropertyId === "all"

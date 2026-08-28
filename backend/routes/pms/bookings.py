@@ -1634,6 +1634,100 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
                                                "room_moved_at": datetime.now(timezone.utc).isoformat()}})
         return {"ok": True, "old_room": b.get("room_number"), "new_room": room}
 
+    @router.put("/bookings/{booking_id}/dates")
+    async def update_booking_dates(booking_id: str, data: dict, current_user: dict = Depends(require_perm("edit_bookings"))):
+        """Tarih düzenle — giriş/çıkış tarihlerini çakışma kontrolüyle günceller."""
+        try:
+            ci = datetime.strptime(str(data.get("check_in", "")), "%Y-%m-%d")
+            co = datetime.strptime(str(data.get("check_out", "")), "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Tarih formatı YYYY-MM-DD olmalı")
+        nights = (co - ci).days
+        if nights < 1:
+            raise HTTPException(status_code=422, detail="Çıkış tarihi girişten sonra olmalı")
+        b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        if not b:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        ci_s, co_s = ci.strftime("%Y-%m-%d"), co.strftime("%Y-%m-%d")
+        if b.get("room_id"):
+            clash = await db.bookings.find_one({
+                "id": {"$ne": booking_id}, "room_id": b["room_id"],
+                "status": {"$nin": ["cancelled", "no_show", "checked_out"]},
+                "check_in": {"$lt": co_s}, "check_out": {"$gt": ci_s}},
+                {"_id": 0, "guest_name": 1, "check_in": 1, "check_out": 1})
+            if clash:
+                raise HTTPException(status_code=409,
+                                    detail=f"Çakışma: {clash.get('guest_name', '')} ({clash.get('check_in')} → {clash.get('check_out')})")
+        rate = float(b.get("rate") or 0)
+        updates = {"check_in": ci_s, "check_out": co_s, "nights": nights,
+                   "updated_at": datetime.now(timezone.utc).isoformat(),
+                   "dates_changed_by": current_user.get("email", "")}
+        if rate > 0:
+            updates["total_price"] = round(rate * nights * int(b.get("rooms", 1) or 1), 2)
+        await db.bookings.update_one({"id": booking_id}, {"$set": updates})
+        return {"ok": True, "check_in": ci_s, "check_out": co_s, "nights": nights,
+                "total_price": updates.get("total_price", b.get("total_price"))}
+
+    @router.post("/bookings/{booking_id}/split")
+    async def split_booking(booking_id: str, data: dict, current_user: dict = Depends(require_perm("edit_bookings"))):
+        """Rezervasyonu böl — split_date'te ikiye ayır, ikinci kısım yeni odaya taşınır."""
+        split_date = str(data.get("split_date", "")).strip()
+        new_room_id = str(data.get("new_room_id", "")).strip()
+        if not split_date or not new_room_id:
+            raise HTTPException(status_code=422, detail="split_date ve new_room_id zorunlu")
+        b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        if not b:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        ci, co = b.get("check_in", ""), b.get("check_out", "")
+        if not (ci < split_date < co):
+            raise HTTPException(status_code=422, detail=f"Bölme tarihi {ci} ile {co} arasında olmalı")
+        new_room = await db.rooms.find_one({"id": new_room_id}, {"_id": 0})
+        if not new_room:
+            raise HTTPException(status_code=404, detail="Hedef oda bulunamadı")
+        clash = await db.bookings.find_one({
+            "id": {"$ne": booking_id}, "room_id": new_room_id,
+            "status": {"$nin": ["cancelled", "no_show", "checked_out"]},
+            "check_in": {"$lt": co}, "check_out": {"$gt": split_date}},
+            {"_id": 0, "guest_name": 1})
+        if clash:
+            raise HTTPException(status_code=409, detail=f"Hedef oda bu tarihlerde dolu ({clash.get('guest_name', '')})")
+        total = float(b.get("total_price") or 0)
+        orig_nights = max(1, (datetime.strptime(co, "%Y-%m-%d") - datetime.strptime(ci, "%Y-%m-%d")).days)
+        first_nights = (datetime.strptime(split_date, "%Y-%m-%d") - datetime.strptime(ci, "%Y-%m-%d")).days
+        second_nights = orig_nights - first_nights
+        first_total = round(total * first_nights / orig_nights, 2)
+        second_total = round(total - first_total, 2)
+        now = datetime.now(timezone.utc).isoformat()
+        second = {
+            "id": str(uuid.uuid4()),
+            "booking_ref": f"{b.get('booking_ref') or booking_id[:6].upper()}-B",
+            "property_id": b.get("property_id"),
+            "room_type_id": new_room.get("room_type_id"),
+            "room_id": new_room_id,
+            "room_number": new_room.get("name", ""),
+            "guest_name": b.get("guest_name"),
+            "guest_email": b.get("guest_email", ""),
+            "guest_phone": b.get("guest_phone", ""),
+            "check_in": split_date, "check_out": co, "nights": second_nights,
+            "adults": b.get("adults", 2), "children": b.get("children", 0),
+            "rooms": b.get("rooms", 1), "rate": b.get("rate", 0),
+            "total_price": second_total, "currency": b.get("currency", "GBP"),
+            "status": "confirmed" if b.get("status") == "checked_in" else b.get("status", "confirmed"),
+            "payment_status": "pending",
+            "source": b.get("source", "manual"), "channel": b.get("channel", "direct"),
+            "notes": f"Bölünmüş konaklama (2/2) — {b.get('booking_ref', '')}. {b.get('notes', '')}".strip(),
+            "split_from": booking_id,
+            "created_by": current_user.get("name", ""), "created_at": now, "updated_at": now,
+        }
+        await db.bookings.insert_one(dict(second))
+        await db.bookings.update_one({"id": booking_id}, {"$set": {
+            "check_out": split_date, "nights": first_nights, "total_price": first_total,
+            "split_into": second["id"], "updated_at": now,
+            "notes": f"Bölünmüş konaklama (1/2). {b.get('notes', '')}".strip()}})
+        second.pop("_id", None)
+        return {"ok": True, "first": {"id": booking_id, "check_out": split_date, "nights": first_nights, "total_price": first_total},
+                "second": second}
+
     @router.post("/bookings/{booking_id}/resend-confirmation")
     async def resend_confirmation(booking_id: str, current_user: dict = Depends(require_perm("edit_bookings"))):
         """Rezervasyon onay e-postasını yeniden gönderir."""

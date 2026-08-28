@@ -100,8 +100,49 @@ async def abs_auto_pricing_run(db, property_id: str) -> Dict:
     return {"ok": True, "applied": applied, "applied_count": len(applied)}
 
 
+async def check_abs_target_alerts(db, force_pid: str = None) -> int:
+    """Ay sonuna ≤5 gün kala ABS hedefi geride kalan mülklere uyarı bildirimi (ayda bir kez)."""
+    import calendar
+    now = datetime.now(timezone.utc)
+    days_in_month = calendar.monthrange(now.year, now.month)[1]
+    in_window = (days_in_month - now.day) <= 5
+    if not in_window and not force_pid:
+        return 0
+    month_key = now.strftime("%Y-%m")
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    q = {"abs_monthly_target": {"$gt": 0}}
+    if force_pid:
+        q["property_id"] = force_pid
+    sent = 0
+    async for st in db.abs_settings.find(q, {"_id": 0}):
+        pid = st["property_id"]
+        if st.get("abs_target_warned") == month_key and not force_pid:
+            continue
+        rev = 0.0
+        async for b in db.bookings.find(
+                {"property_id": pid, "created_at": {"$gte": month_start},
+                 "status": {"$nin": ["cancelled", "no_show"]}, "abs_total": {"$gt": 0}},
+                {"_id": 0, "abs_total": 1}):
+            rev += float(b.get("abs_total") or 0)
+        target = float(st["abs_monthly_target"])
+        projected = round(rev / max(1, now.day) * days_in_month, 2)
+        if projected >= target:
+            continue
+        pct = round(100 * rev / target, 1)
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "title": "🎯 ABS hedefi geride kalıyor",
+            "message": (f"{pid}: Ay sonuna {max(0, days_in_month - now.day)} gün kala ABS geliri "
+                        f"£{round(rev, 2):,} / £{target:,} (%{pct}). Mevcut hızla ay sonu tahmini £{projected:,} — "
+                        f"hedefin altında. Özellik fiyatlarını veya görünürlüğü gözden geçirin."),
+            "category": "revenue", "priority": "high", "read": False,
+            "created_at": now.isoformat()})
+        await db.abs_settings.update_one({"property_id": pid}, {"$set": {"abs_target_warned": month_key}})
+        sent += 1
+    return sent
+
+
 async def abs_auto_pricing_loop(db):
-    """Saatlik kontrol: otomatik mod açık mülklerde 24 saatte bir fiyatları uygular."""
+    """Saatlik kontrol: otomatik mod açık mülklerde 24 saatte bir fiyatları uygular + hedef uyarısı."""
     import asyncio
     while True:
         try:
@@ -109,6 +150,7 @@ async def abs_auto_pricing_loop(db):
             async for st in db.abs_settings.find({"auto_pricing": True}, {"_id": 0}):
                 if not st.get("last_auto_run") or st["last_auto_run"] < cutoff:
                     await abs_auto_pricing_run(db, st["property_id"])
+            await check_abs_target_alerts(db)
         except Exception:
             pass
         await asyncio.sleep(3600)
@@ -348,5 +390,12 @@ def create_abs_router(db, require_roles):
                                                    "updated_at": datetime.now(timezone.utc).isoformat()}},
                                          upsert=True)
         return {"ok": True, "monthly_target": target}
+
+    @router.post("/{property_id}/target-alert/check")
+    async def target_alert_check(property_id: str,
+                                 _: dict = Depends(require_roles("admin", "manager"))):
+        """Hedef uyarısı kontrolünü elle tetikle (5 gün penceresini beklemeden)."""
+        sent = await check_abs_target_alerts(db, force_pid=property_id)
+        return {"ok": True, "notifications_sent": sent}
 
     return router

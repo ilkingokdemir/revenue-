@@ -31,6 +31,19 @@ export const WeeklyDigest = ({ propertyId }) => {
     } catch { /* silent */ }
   };
 
+  const downloadPdf = async (item, e) => {
+    e.stopPropagation();
+    try {
+      const { data: d } = await axios.get(`${API}/weekly-digest/${dpid}/render/${item.id}`);
+      const w = window.open("", "_blank");
+      if (!w) return;
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>bulten-${d.week_key}</title></head><body style="margin:0;padding:24px;background:#fff">${d.html}</body></html>`);
+      w.document.close();
+      w.focus();
+      setTimeout(() => w.print(), 400);
+    } catch { /* silent */ }
+  };
+
   const sendNow = async () => {
     setSending(true);
     try {
@@ -127,8 +140,13 @@ export const WeeklyDigest = ({ propertyId }) => {
                   className={`flex items-center gap-3 w-full text-left px-3 py-2 rounded-xl border transition-colors ${openDigest?.id === item.id ? "border-indigo-300 bg-indigo-50" : "border-stone-100 hover:bg-stone-50"}`}>
                   <Calendar className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" />
                   <span className="text-xs font-bold text-stone-800">{item.week_key}</span>
-                  <span className="text-[10px] text-stone-400">{new Date(item.created_at).toLocaleString("tr-TR")}</span>
+                  <span className="text-[10px] text-stone-400">{item.created_at ? new Date(item.created_at).toLocaleString("tr-TR") : "—"}</span>
                   <span className="ml-auto text-[10px] font-semibold text-stone-500">{(item.sent_to || []).length} alıcı{item.forced ? " · elle" : ""}</span>
+                  <span onClick={(e) => downloadPdf(item, e)} role="button" tabIndex={0} data-testid={`digest-pdf-${item.id}`}
+                    title="PDF olarak indir"
+                    className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg px-2 py-1 hover:bg-indigo-100">
+                    PDF
+                  </span>
                 </button>
                 {openDigest?.id === item.id && (
                   <div className="border border-indigo-100 rounded-xl mt-1 p-3 bg-stone-50 overflow-x-auto" data-testid="digest-archive-preview">

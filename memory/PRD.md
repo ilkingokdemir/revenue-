@@ -1400,3 +1400,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - BÜLTEN ARŞİVİ: weekly_digest.py GET /{pid}/render/{digest_id} — arşivdeki bülteni e-postadaki HTML haliyle döndürür. UI: WeeklyDigest.js '📬 Bülten Arşivi' bölümü (Revenue management > Weekly Digest sekmesi) — geçmiş bültenler listesi (week_key, tarih, alıcı sayısı, elle/otomatik), tıklayınca inline HTML önizleme, 'Şimdi Gönder' butonu. Screenshot ile doğrulandı (4 arşiv kaydı, önizlemede Rebase/Deney/ABS bölümleri görünüyor).
 - TEST: Self-test (curl + 2 screenshot) — testing agent kullanılmadı (küçük eklemeler, mevcut test edilmiş modüller üzerine).
 - BEKLEYEN: Resend anahtarı + Twilio SID/Token (kullanıcı 3. kez action item seçti, değer yapıştırmadı).
+
+## Güncelleme (2026-06 — Faz 19: Hedef Bildirimi + Bülten PDF İndirme TAMAMLANDI)
+- HEDEF BİLDİRİMİ: abs_selling.py check_abs_target_alerts(db, force_pid) — ay sonuna ≤5 gün kala hedefi olan mülklerde bu ay ABS geliri + lineer ay sonu projeksiyonu hedefin altındaysa HIGH bildirim (ayda 1 kez, abs_target_warned=YYYY-MM flag). abs_auto_pricing_loop içinde saatlik koşuyor. POST /{pid}/target-alert/check elle tetikleme (force). Doğrulandı: bildirim + flag + doğru matematik (£140/£500 %28, projeksiyon £155).
+- BÜLTEN PDF: WeeklyDigest.js arşiv satırlarına 'PDF' butonu — render endpoint'ten HTML alıp yeni pencerede yazdırma diyaloğu (tarayıcı Save as PDF). Popup başlığı bulten-{week_key}. Screenshot ile doğrulandı. 'Invalid Date' koruması eklendi.
+- BEKLEYEN: Resend anahtarı + Twilio SID/Token.

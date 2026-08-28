@@ -13,6 +13,25 @@ export default function AbsPanel({ propertyId }) {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: "", price: "", description: "", image_url: "" });
   const [matrix, setMatrix] = useState(null); // { rooms, attributes }
+  const [suggestions, setSuggestions] = useState(null);
+
+  const loadSuggestions = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/abs/${pid}/price-suggestions`);
+      setSuggestions(data);
+    } catch { /* sessiz */ }
+  }, [pid]);
+  useEffect(() => { loadSuggestions(); }, [loadSuggestions]);
+
+  const applySuggestion = async (s) => {
+    try {
+      const attr = attrs.find((a) => a.id === s.id);
+      await axios.post(`${API}/abs/${pid}`, { ...attr, price: s.suggested_price });
+      toast.success(`${s.name}: fiyat £${s.suggested_price} olarak güncellendi`);
+      load();
+      loadSuggestions();
+    } catch { toast.error("Uygulanamadı"); }
+  };
 
   const loadMatrix = useCallback(async () => {
     try {
@@ -171,6 +190,36 @@ export default function AbsPanel({ propertyId }) {
                 className="text-stone-300 hover:text-rose-500"><Trash size={15} /></button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Robot Fiyat Önerileri */}
+      {suggestions && suggestions.suggestions.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-2xl p-4" data-testid="abs-price-suggestions">
+          <h2 className="text-sm font-black text-stone-800 mb-1">🤖 Robot Fiyat Önerileri</h2>
+          <p className="text-[11px] text-stone-500 mb-3">
+            Son 90 gün · {suggestions.total_bookings_90d} rezervasyon · ADR £{suggestions.blended_adr_90d} · özellik tavanı £{suggestions.price_cap} (ADR'nin %15'i)
+          </p>
+          <div className="space-y-2">
+            {suggestions.suggestions.map((s) => (
+              <div key={s.id} className="flex items-center gap-3 border border-stone-100 rounded-xl px-3 py-2" data-testid={`abs-suggestion-${s.id}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold text-stone-800">{s.name}
+                    <span className="ml-2 text-[10px] font-semibold text-stone-400">%{s.attach_rate_pct} dönüşüm · {s.sold_90d} satış</span>
+                  </div>
+                  <div className="text-[10px] text-stone-500">{s.reason_tr}</div>
+                </div>
+                <div className="text-xs font-black whitespace-nowrap">
+                  £{s.current_price} →{" "}
+                  <span className={s.action === "raise" ? "text-emerald-600" : s.action === "lower" ? "text-rose-600" : "text-stone-500"}>£{s.suggested_price}</span>
+                </div>
+                {s.action !== "keep" && (
+                  <button onClick={() => applySuggestion(s)} data-testid={`abs-apply-suggestion-${s.id}`}
+                    className="text-[10px] font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-lg px-2.5 py-1.5">Uygula</button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

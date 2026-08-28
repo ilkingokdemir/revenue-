@@ -175,4 +175,47 @@ def create_abs_router(db, require_roles):
         combined = sum(1 for r in free_rooms if all(x in (r.get("abs_attrs") or []) for x in sel)) if sel else len(free_rooms)
         return {"per_attribute": per_attr, "combined_free_rooms": combined, "total_free_rooms": len(free_rooms)}
 
+    @router.get("/{property_id}/price-suggestions")
+    async def price_suggestions(property_id: str,
+                                _: dict = Depends(require_roles("admin", "manager"))):
+        """Robot: son 90 gün satış verisine göre her özellik için ideal ek ücret önerisi."""
+        attrs = await db.abs_attributes.find({"property_id": property_id, "active": {"$ne": False}},
+                                             {"_id": 0, "id": 1, "name": 1, "price": 1}).to_list(50)
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
+        total, sold, adr_sum, adr_n = 0, {}, 0.0, 0
+        async for b in db.bookings.find(
+                {"property_id": property_id, "created_at": {"$gte": cutoff},
+                 "status": {"$nin": ["cancelled", "no_show"]}},
+                {"_id": 0, "abs_attributes.id": 1, "total_price": 1, "nights": 1}):
+            total += 1
+            n = int(b.get("nights") or 0)
+            if n > 0 and float(b.get("total_price") or 0) > 0:
+                adr_sum += float(b["total_price"]) / n
+                adr_n += 1
+            for a in (b.get("abs_attributes") or []):
+                if a.get("id"):
+                    sold[a["id"]] = sold.get(a["id"], 0) + 1
+        adr = round(adr_sum / adr_n, 2) if adr_n else 100.0
+        cap = round(adr * 0.15, 2)
+        out = []
+        for a in attrs:
+            s = sold.get(a["id"], 0)
+            attach = round(s / total, 3) if total else 0
+            price = float(a.get("price") or 0)
+            if total < 20:
+                suggested, reason = price, f"Yetersiz veri ({total} rezervasyon) — mevcut fiyat korunmalı."
+            elif attach >= 0.30:
+                suggested = min(round(price * 1.15, 2), cap)
+                reason = f"Güçlü talep: rezervasyonların %{round(attach*100)}'i bu özelliği alıyor — %15 zam kaldırır (tavan: ADR'nin %15'i = £{cap})."
+            elif attach <= 0.05:
+                suggested = max(round(price * 0.85, 2), 2.0)
+                reason = f"Düşük dönüşüm: sadece %{round(attach*100)} — %15 indirim denemesi dönüşümü artırabilir."
+            else:
+                suggested, reason = price, f"Dönüşüm dengeli (%{round(attach*100)}) — fiyat doğru bantta."
+            out.append({"id": a["id"], "name": a["name"], "current_price": price,
+                        "suggested_price": suggested, "attach_rate_pct": round(attach * 100, 1),
+                        "sold_90d": s, "reason_tr": reason,
+                        "action": "raise" if suggested > price else ("lower" if suggested < price else "keep")})
+        return {"suggestions": out, "blended_adr_90d": adr, "price_cap": cap, "total_bookings_90d": total}
+
     return router

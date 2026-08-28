@@ -140,6 +140,94 @@ def _narrative_tr(rep):
     return lines
 
 
+async def _pickup_window(db, pid: str, start_iso: str, end_iso: str):
+    rn, revenue = 0, 0.0
+    async for b in db.bookings.find(
+            {"property_id": pid, "status": ACTIVE,
+             "created_at": {"$gte": start_iso, "$lt": end_iso}},
+            {"_id": 0, "nights": 1, "total_price": 1}):
+        n = int(b.get("nights") or 0)
+        rn += n
+        revenue += float(b.get("total_price") or 0)
+    return {"room_nights": rn, "revenue": round(revenue, 2), "adr": round(revenue / rn, 2) if rn else 0}
+
+
+async def compute_experiment_progress(db, e: dict) -> dict:
+    """Deney ilerlemesi: baz dönem vs deney dönemi pickup/ADR/katkı + karar cümlesi."""
+    pid = e["property_id"]
+    start = datetime.fromisoformat(e["started_at"])
+    end = datetime.fromisoformat(e["stopped_at"]) if e.get("stopped_at") else _now()
+    elapsed_days = max(0.05, round((end - start).total_seconds() / 86400, 2))
+    baseline_start = (start - timedelta(days=elapsed_days)).isoformat()
+    after = await _pickup_window(db, pid, e["started_at"], end.isoformat())
+    before = await _pickup_window(db, pid, baseline_start, e["started_at"])
+    comm, vc = float(e.get("commission_pct", 15)), float(e.get("variable_cost", 15))
+    contrib_after = round((after["adr"] * (1 - comm / 100) - vc) * after["room_nights"], 2) if after["room_nights"] else 0
+    contrib_before = round((before["adr"] * (1 - comm / 100) - vc) * before["room_nights"], 2) if before["room_nights"] else 0
+    pickup_chg = round(100 * (after["room_nights"] - before["room_nights"]) / before["room_nights"], 1) if before["room_nights"] else None
+    adr_chg = round(100 * (after["adr"] - before["adr"]) / before["adr"], 1) if before["adr"] else None
+    needed = float(e["predicted"].get("breakeven_rn_increase_pct") or 0)
+    outcome = None
+    if elapsed_days < 1:
+        verdict = f"⏳ Deney yeni başladı ({elapsed_days} gün) — ilk 24 saatte sonuç değerlendirilmez."
+    elif pickup_chg is None:
+        verdict = "Baz dönem verisi yok — karşılaştırma yapılamıyor."
+    elif pickup_chg >= needed and contrib_after >= contrib_before:
+        verdict = f"✅ Deney hedefte: pickup %{pickup_chg} (gereken %{needed}) ve katkı korundu."
+        outcome = "success"
+    elif pickup_chg >= needed:
+        verdict = f"⚠️ Pickup hedefi tuttu (%{pickup_chg} ≥ %{needed}) ama katkı hâlâ geride — ADR düşüşü hacimle kapanmadı."
+        outcome = "partial"
+    else:
+        verdict = f"❌ Pickup %{pickup_chg}, gereken %{needed} — mevcut hızla rebase katkıyı geri kazanamıyor."
+        outcome = "failing"
+    return {
+        "elapsed_days": elapsed_days,
+        "pickup_before": before, "pickup_after": after,
+        "pickup_change_pct": pickup_chg, "adr_change_pct": adr_chg,
+        "contribution_before": contrib_before, "contribution_after": contrib_after,
+        "contribution_delta": round(contrib_after - contrib_before, 2),
+        "verdict_tr": verdict, "outcome": outcome,
+    }
+
+
+async def check_experiment_alerts(db) -> int:
+    """Çalışan deneyleri değerlendir; başabaş tuttu/tutmadı bildirimini bir kez gönder."""
+    sent = 0
+    async for e in db.rebase_experiments.find({"status": "running"}, {"_id": 0}):
+        prog = await compute_experiment_progress(db, e)
+        outcome = prog.get("outcome")
+        if not outcome or prog["elapsed_days"] < 1:
+            continue
+        if outcome == "failing" and prog["elapsed_days"] < 3:
+            continue  # başarısızlık kararı için en az 3 gün bekle
+        flag = f"notified_{outcome}"
+        if e.get(flag):
+            continue
+        title = {"success": "✅ Rebase deneyi hedefte",
+                 "partial": "⚠️ Rebase deneyi: pickup tuttu, katkı geride",
+                 "failing": "❌ Rebase deneyi başabaşı tutturamıyor"}[outcome]
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "title": title,
+            "message": f"{e['property_id']}: {prog['verdict_tr']}",
+            "category": "revenue", "priority": "high", "read": False,
+            "created_at": _now().isoformat()})
+        await db.rebase_experiments.update_one({"id": e["id"]}, {"$set": {flag: True}})
+        sent += 1
+    return sent
+
+
+async def rebase_experiment_loop(db):
+    """Saatte bir çalışan deneyleri kontrol eder ve bildirim gönderir."""
+    import asyncio
+    while True:
+        try:
+            await check_experiment_alerts(db)
+        except Exception:
+            pass
+        await asyncio.sleep(3600)
+
+
 def create_rebase_impact_router(db, require_roles):
     router = APIRouter(tags=["rebase-impact"])
     ROLES = ("admin", "manager")
@@ -261,19 +349,6 @@ def create_rebase_impact_router(db, require_roles):
 
     # ---------- Deney Takibi: rebase sonrası gerçek pickup vs tahmin ----------
 
-    async def _pickup_stats(pid: str, start_iso: str, end_iso: str):
-        """Verilen oluşturulma penceresindeki rezervasyonların oda-gece + ADR'si."""
-        rn, revenue = 0, 0.0
-        async for b in db.bookings.find(
-                {"property_id": pid, "status": ACTIVE,
-                 "created_at": {"$gte": start_iso, "$lt": end_iso}},
-                {"_id": 0, "nights": 1, "total_price": 1}):
-            n = int(b.get("nights") or 0)
-            rn += n
-            revenue += float(b.get("total_price") or 0)
-        adr = round(revenue / rn, 2) if rn else 0
-        return {"room_nights": rn, "revenue": round(revenue, 2), "adr": adr}
-
     @router.post("/revenue/rebase-impact/{property_id}/experiment/start")
     async def experiment_start(property_id: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
         report_id = data.get("report_id", "")
@@ -314,36 +389,13 @@ def create_rebase_impact_router(db, require_roles):
         exps = await db.rebase_experiments.find({"property_id": property_id}, {"_id": 0}).sort("started_at", -1).to_list(10)
         out = []
         for e in exps:
-            start = datetime.fromisoformat(e["started_at"])
-            end = datetime.fromisoformat(e["stopped_at"]) if e.get("stopped_at") else _now()
-            elapsed_days = max(0.05, round((end - start).total_seconds() / 86400, 2))
-            baseline_start = (start - timedelta(days=elapsed_days)).isoformat()
-            after = await _pickup_stats(property_id, e["started_at"], end.isoformat())
-            before = await _pickup_stats(property_id, baseline_start, e["started_at"])
-            comm, vc = float(e.get("commission_pct", 15)), float(e.get("variable_cost", 15))
-            contrib_after = round((after["adr"] * (1 - comm / 100) - vc) * after["room_nights"], 2) if after["room_nights"] else 0
-            contrib_before = round((before["adr"] * (1 - comm / 100) - vc) * before["room_nights"], 2) if before["room_nights"] else 0
-            pickup_chg = round(100 * (after["room_nights"] - before["room_nights"]) / before["room_nights"], 1) if before["room_nights"] else None
-            adr_chg = round(100 * (after["adr"] - before["adr"]) / before["adr"], 1) if before["adr"] else None
-            needed = float(e["predicted"].get("breakeven_rn_increase_pct") or 0)
-            if elapsed_days < 1:
-                verdict = f"⏳ Deney yeni başladı ({elapsed_days} gün) — ilk 24 saatte sonuç değerlendirilmez."
-            elif pickup_chg is None:
-                verdict = "Baz dönem verisi yok — karşılaştırma yapılamıyor."
-            elif pickup_chg >= needed and contrib_after >= contrib_before:
-                verdict = f"✅ Deney hedefte: pickup %{pickup_chg} (gereken %{needed}) ve katkı korundu."
-            elif pickup_chg >= needed:
-                verdict = f"⚠️ Pickup hedefi tuttu (%{pickup_chg} ≥ %{needed}) ama katkı hâlâ geride — ADR düşüşü hacimle kapanmadı."
-            else:
-                verdict = f"❌ Pickup %{pickup_chg}, gereken %{needed} — mevcut hızla rebase katkıyı geri kazanamıyor."
-            out.append({**e, "progress": {
-                "elapsed_days": elapsed_days,
-                "pickup_before": before, "pickup_after": after,
-                "pickup_change_pct": pickup_chg, "adr_change_pct": adr_chg,
-                "contribution_before": contrib_before, "contribution_after": contrib_after,
-                "contribution_delta": round(contrib_after - contrib_before, 2),
-                "verdict_tr": verdict,
-            }})
+            out.append({**e, "progress": await compute_experiment_progress(db, e)})
         return {"experiments": out}
+
+    @router.post("/revenue/rebase-impact/{property_id}/experiments/check-now")
+    async def experiments_check_now(property_id: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Bildirim kontrolünü elle tetikle (saatlik robotu beklemeden)."""
+        sent = await check_experiment_alerts(db)
+        return {"ok": True, "notifications_sent": sent}
 
     return router

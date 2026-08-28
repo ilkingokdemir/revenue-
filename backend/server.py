@@ -1843,7 +1843,7 @@ from routes.platform_ext.p0_pack import create_p0_router
 api_router.include_router(create_p0_router(db, require_roles))
 from routes.platform_ext.menu_manager import create_menu_manager_router
 api_router.include_router(create_menu_manager_router(db, require_roles))
-from routes.revenue_ext.rebase_impact import create_rebase_impact_router
+from routes.revenue_ext.rebase_impact import create_rebase_impact_router, rebase_experiment_loop
 api_router.include_router(create_rebase_impact_router(db, require_roles))
 
 @app.on_event("startup")
@@ -1919,6 +1919,7 @@ async def _start_reviq_gap_loops():
     _spawn(sentiment_theme_loop(db))
     _spawn(id_auto_purge_loop(db))
     _spawn(precheckin_reminder_loop(db))
+    _spawn(rebase_experiment_loop(db))
     _spawn(lastday_ladder_loop(db))
     _spawn(storefront_verify_loop(db))
     _spawn(second_writer_loop(db))

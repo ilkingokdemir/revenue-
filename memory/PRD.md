@@ -1394,3 +1394,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - HAFTALIK RAPOR ROBOTU: weekly_digest.py build_digest'e 'rebase' bloğu (son 30g rapor: değişim %, katkı kaybı, başabaş, son deney verdict'i — compute_experiment_progress ile) ve abs_price_changes_7d eklendi; _rebase_section_html HTML bölümü (loss None guard'lı). Pazartesi 07:00 UTC loop zaten mevcuttu — otomatik gidiyor.
 - TEST: iteration_598.json — backend %100 (7/7) + frontend %100.
 - BEKLEYEN: Resend anahtarı + Twilio SID/Token (kullanıcı 2 kez action item seçti ama değerleri hiç yapıştırmadı).
+
+## Güncelleme (2026-06 — Faz 18: ABS Hedef Takibi + Bülten Arşivi TAMAMLANDI)
+- ABS HEDEF TAKİBİ: abs_selling.py PUT /{pid}/revenue-target {monthly_target} (abs_settings.abs_monthly_target); revenue-dashboard yanıtına monthly_target/current_month_revenue/target_progress_pct eklendi. UI: AbsPanel Gelir Panosu'nda '🎯 Aylık ABS Hedefi' — hedef inputu + renkli ilerleme çubuğu (yeşil ≥%100, sarı ≥%60, kırmızı altı). Curl + screenshot doğrulandı (hedef £500, %28 kırmızı).
+- BÜLTEN ARŞİVİ: weekly_digest.py GET /{pid}/render/{digest_id} — arşivdeki bülteni e-postadaki HTML haliyle döndürür. UI: WeeklyDigest.js '📬 Bülten Arşivi' bölümü (Revenue management > Weekly Digest sekmesi) — geçmiş bültenler listesi (week_key, tarih, alıcı sayısı, elle/otomatik), tıklayınca inline HTML önizleme, 'Şimdi Gönder' butonu. Screenshot ile doğrulandı (4 arşiv kaydı, önizlemede Rebase/Deney/ABS bölümleri görünüyor).
+- TEST: Self-test (curl + 2 screenshot) — testing agent kullanılmadı (küçük eklemeler, mevcut test edilmiş modüller üzerine).
+- BEKLEYEN: Resend anahtarı + Twilio SID/Token (kullanıcı 3. kez action item seçti, değer yapıştırmadı).

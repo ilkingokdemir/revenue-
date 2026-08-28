@@ -16,10 +16,23 @@ export default function AbsPanel({ propertyId }) {
   const [matrix, setMatrix] = useState(null); // { rooms, attributes }
   const [suggestions, setSuggestions] = useState(null);
   const [revDash, setRevDash] = useState(null);
+  const [targetInput, setTargetInput] = useState("");
 
-  useEffect(() => {
-    axios.get(`${API}/abs/${pid}/revenue-dashboard`).then(({ data }) => setRevDash(data)).catch(() => {});
+  const loadRevDash = useCallback(() => {
+    axios.get(`${API}/abs/${pid}/revenue-dashboard`).then(({ data }) => {
+      setRevDash(data);
+      setTargetInput(data.monthly_target ? String(data.monthly_target) : "");
+    }).catch(() => {});
   }, [pid]);
+  useEffect(() => { loadRevDash(); }, [loadRevDash]);
+
+  const saveTarget = async () => {
+    try {
+      await axios.put(`${API}/abs/${pid}/revenue-target`, { monthly_target: Number(targetInput) || 0 });
+      toast.success(Number(targetInput) > 0 ? `Aylık ABS hedefi £${targetInput} olarak ayarlandı` : "Hedef kaldırıldı");
+      loadRevDash();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Hedef kaydedilemedi"); }
+  };
 
   const loadSuggestions = useCallback(async () => {
     try {
@@ -229,6 +242,30 @@ export default function AbsPanel({ propertyId }) {
               <div className="text-lg font-black text-sky-700" data-testid="abs-total-revenue">£{revDash.total_abs_revenue.toLocaleString("en-GB")}</div>
               <div className="text-[10px] text-stone-400">toplam ABS geliri · %{revDash.attach_rate_pct} dönüşüm</div>
             </div>
+          </div>
+          {/* Aylık Hedef Takibi */}
+          <div className="mb-4 bg-stone-50 border border-stone-100 rounded-xl p-3" data-testid="abs-target-tracking">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="text-[10px] font-black uppercase text-stone-500">🎯 Aylık ABS Hedefi ({revDash.current_month})</span>
+              <input type="number" value={targetInput} onChange={(e) => setTargetInput(e.target.value)} placeholder="ör. 500"
+                data-testid="abs-target-input"
+                className="w-24 border border-stone-200 rounded-lg px-2 py-1 text-xs bg-white" />
+              <button onClick={saveTarget} data-testid="abs-target-save"
+                className="text-[10px] font-bold text-white bg-stone-800 hover:bg-stone-700 rounded-lg px-2.5 py-1.5">Kaydet</button>
+              {revDash.target_progress_pct !== null && (
+                <span className={`ml-auto text-xs font-black ${revDash.target_progress_pct >= 100 ? "text-emerald-600" : revDash.target_progress_pct >= 60 ? "text-amber-600" : "text-rose-600"}`} data-testid="abs-target-progress">
+                  £{revDash.current_month_revenue.toLocaleString("en-GB")} / £{revDash.monthly_target.toLocaleString("en-GB")} · %{revDash.target_progress_pct}
+                </span>
+              )}
+            </div>
+            {revDash.target_progress_pct !== null ? (
+              <div className="h-3 bg-stone-200 rounded-full overflow-hidden" data-testid="abs-target-bar">
+                <div className={`h-full rounded-full transition-all ${revDash.target_progress_pct >= 100 ? "bg-emerald-500" : revDash.target_progress_pct >= 60 ? "bg-amber-500" : "bg-rose-500"}`}
+                  style={{ width: `${Math.min(100, revDash.target_progress_pct)}%` }} />
+              </div>
+            ) : (
+              <p className="text-[10px] text-stone-400">Hedef belirleyin — bu ayın gerçekleşmesi renkli çubukta izlensin (yeşil ≥%100, sarı ≥%60, kırmızı altı).</p>
+            )}
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div className="h-44" data-testid="abs-revenue-chart">

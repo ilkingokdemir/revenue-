@@ -9,8 +9,36 @@ export const WeeklyDigest = ({ propertyId }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [archive, setArchive] = useState([]);
+  const [openDigest, setOpenDigest] = useState(null); // { id, html, week_key }
+  const [sending, setSending] = useState(false);
 
   const pid = propertyId || "all";
+  const dpid = pid === "all" ? "aldgate-flats" : pid;
+
+  const loadArchive = () => {
+    axios.get(`${API}/weekly-digest/${dpid}/history`)
+      .then(({ data: d }) => setArchive(d.history || []))
+      .catch(() => {});
+  };
+  useEffect(loadArchive, [dpid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const viewArchived = async (item) => {
+    if (openDigest?.id === item.id) { setOpenDigest(null); return; }
+    try {
+      const { data: d } = await axios.get(`${API}/weekly-digest/${dpid}/render/${item.id}`);
+      setOpenDigest({ id: item.id, html: d.html, week_key: d.week_key, sent_to: d.sent_to });
+    } catch { /* silent */ }
+  };
+
+  const sendNow = async () => {
+    setSending(true);
+    try {
+      await axios.post(`${API}/weekly-digest/${dpid}/send-now`);
+      loadArchive();
+    } catch { /* silent */ }
+    setSending(false);
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -76,6 +104,42 @@ export const WeeklyDigest = ({ propertyId }) => {
           <p className="text-xs text-stone-400 mt-1">Click "Generate Digest" to create your AI-powered weekly revenue summary</p>
         </div>
       )}
+
+      {/* 📬 E-posta Bülteni Arşivi — her pazartesi giden otomatik bülten */}
+      <div className="bg-white border border-stone-200 rounded-2xl p-5" data-testid="digest-archive">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-sm font-black text-stone-800">📬 Bülten Arşivi</h3>
+            <p className="text-[11px] text-stone-500">Her pazartesi yöneticilere giden e-posta bültenleri — geçmişe dönük görüntülenebilir</p>
+          </div>
+          <button onClick={sendNow} disabled={sending} data-testid="digest-send-now-btn"
+            className="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg px-3 py-2 disabled:opacity-50">
+            {sending ? "Gönderiliyor…" : "Şimdi Gönder"}
+          </button>
+        </div>
+        {archive.length === 0 ? (
+          <p className="text-xs text-stone-400" data-testid="digest-archive-empty">Henüz gönderilmiş bülten yok — pazartesi otomatik gidecek ya da "Şimdi Gönder"i kullanın.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {archive.map((item) => (
+              <div key={item.id}>
+                <button onClick={() => viewArchived(item)} data-testid={`digest-archive-item-${item.id}`}
+                  className={`flex items-center gap-3 w-full text-left px-3 py-2 rounded-xl border transition-colors ${openDigest?.id === item.id ? "border-indigo-300 bg-indigo-50" : "border-stone-100 hover:bg-stone-50"}`}>
+                  <Calendar className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" />
+                  <span className="text-xs font-bold text-stone-800">{item.week_key}</span>
+                  <span className="text-[10px] text-stone-400">{new Date(item.created_at).toLocaleString("tr-TR")}</span>
+                  <span className="ml-auto text-[10px] font-semibold text-stone-500">{(item.sent_to || []).length} alıcı{item.forced ? " · elle" : ""}</span>
+                </button>
+                {openDigest?.id === item.id && (
+                  <div className="border border-indigo-100 rounded-xl mt-1 p-3 bg-stone-50 overflow-x-auto" data-testid="digest-archive-preview">
+                    <div dangerouslySetInnerHTML={{ __html: openDigest.html }} />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

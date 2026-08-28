@@ -3,7 +3,7 @@ Haftalık Yönetici Bülteni — her pazartesi geçen haftanın gelir, doluluk, 
 giriş/iptal ve merdiven kazançlarını tek şık e-postada özetler.
 Collection: weekly_digests
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone, timedelta
 from typing import Dict
 import uuid
@@ -211,6 +211,17 @@ def create_weekly_digest_router(db, require_roles):
         docs = await db.weekly_digests.find({"property_id": pid}, {"_id": 0}).sort(
             "created_at", -1).to_list(20)
         return {"history": docs}
+
+    @router.get("/{pid}/render/{digest_id}")
+    async def render_digest(pid: str, digest_id: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Arşivdeki bülteni e-postadaki haliyle HTML olarak döndürür."""
+        doc = await db.weekly_digests.find_one({"id": digest_id, "property_id": pid}, {"_id": 0})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Bülten bulunamadı")
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+        return {"html": _digest_html(prop.get("name", pid), doc["digest"]),
+                "week_key": doc["week_key"], "created_at": doc["created_at"],
+                "sent_to": doc.get("sent_to", [])}
 
     @router.post("/{pid}/send-now")
     async def send_now(pid: str, _u: dict = Depends(require_roles(*ROLES))):

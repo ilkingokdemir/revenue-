@@ -321,11 +321,32 @@ def create_abs_router(db, require_roles):
         start_month = start[:7]
         monthly = [m for m in sorted(months.values(), key=lambda x: x["month"])
                    if start_month <= m["month"] <= cur_month]
+        settings = await db.abs_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        target = float(settings.get("abs_monthly_target") or 0)
+        cur_rev = next((m["abs_revenue"] for m in monthly if m["month"] == cur_month), 0.0)
         by_attr = sorted([{"name": k, "revenue": v} for k, v in attr_rev.items()],
                          key=lambda x: -x["revenue"])
         total_abs = round(sum(m["abs_revenue"] for m in monthly), 2)
         return {"monthly": monthly, "by_attribute": by_attr, "total_abs_revenue": total_abs,
                 "attach_rate_pct": round(100 * abs_b / total_b, 1) if total_b else 0,
-                "total_bookings": total_b}
+                "total_bookings": total_b,
+                "monthly_target": target, "current_month": cur_month,
+                "current_month_revenue": round(cur_rev, 2),
+                "target_progress_pct": round(100 * cur_rev / target, 1) if target > 0 else None}
+
+    @router.put("/{property_id}/revenue-target")
+    async def set_revenue_target(property_id: str, body: Dict,
+                                 _: dict = Depends(require_roles("admin", "manager"))):
+        try:
+            target = float(body.get("monthly_target") or 0)
+        except (TypeError, ValueError):
+            raise HTTPException(422, "monthly_target sayı olmalı")
+        if target < 0:
+            raise HTTPException(422, "Hedef negatif olamaz")
+        await db.abs_settings.update_one({"property_id": property_id},
+                                         {"$set": {"abs_monthly_target": target,
+                                                   "updated_at": datetime.now(timezone.utc).isoformat()}},
+                                         upsert=True)
+        return {"ok": True, "monthly_target": target}
 
     return router

@@ -12,6 +12,45 @@ export const WeeklyDigest = ({ propertyId }) => {
   const [archive, setArchive] = useState([]);
   const [openDigest, setOpenDigest] = useState(null); // { id, html, week_key }
   const [sending, setSending] = useState(false);
+  const [monthlyArchive, setMonthlyArchive] = useState([]);
+  const [openMonthly, setOpenMonthly] = useState(null);
+  const [monthlySending, setMonthlySending] = useState(false);
+
+  const loadMonthly = () => {
+    axios.get(`${API}/monthly-report/${dpid}/history`)
+      .then(({ data: d }) => setMonthlyArchive(d.history || []))
+      .catch(() => {});
+  };
+
+  const viewMonthly = async (item) => {
+    if (openMonthly?.id === item.id) { setOpenMonthly(null); return; }
+    try {
+      const { data: d } = await axios.get(`${API}/monthly-report/${dpid}/render/${item.id}`);
+      setOpenMonthly({ id: item.id, html: d.html, month: d.month });
+    } catch { /* silent */ }
+  };
+
+  const monthlyPdf = async (item, e) => {
+    e.stopPropagation();
+    try {
+      const { data: d } = await axios.get(`${API}/monthly-report/${dpid}/render/${item.id}`);
+      const w = window.open("", "_blank");
+      if (!w) return;
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>aylik-rapor-${d.month}</title></head><body style="margin:0;padding:24px;background:#fff">${d.html}</body></html>`);
+      w.document.close();
+      w.focus();
+      setTimeout(() => w.print(), 400);
+    } catch { /* silent */ }
+  };
+
+  const monthlySendNow = async () => {
+    setMonthlySending(true);
+    try {
+      await axios.post(`${API}/monthly-report/${dpid}/send-now`, {});
+      loadMonthly();
+    } catch { /* silent */ }
+    setMonthlySending(false);
+  };
 
   const pid = propertyId || "all";
   const dpid = pid === "all" ? "aldgate-flats" : pid;
@@ -21,7 +60,7 @@ export const WeeklyDigest = ({ propertyId }) => {
       .then(({ data: d }) => setArchive(d.history || []))
       .catch(() => {});
   };
-  useEffect(loadArchive, [dpid]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadArchive(); loadMonthly(); }, [dpid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const viewArchived = async (item) => {
     if (openDigest?.id === item.id) { setOpenDigest(null); return; }
@@ -151,6 +190,47 @@ export const WeeklyDigest = ({ propertyId }) => {
                 {openDigest?.id === item.id && (
                   <div className="border border-indigo-100 rounded-xl mt-1 p-3 bg-stone-50 overflow-x-auto" data-testid="digest-archive-preview">
                     <div dangerouslySetInnerHTML={{ __html: openDigest.html }} />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 🗓 Aylık Yönetim Raporu Arşivi — ay kapanışında otomatik */}
+      <div className="bg-white border border-stone-200 rounded-2xl p-5" data-testid="monthly-report-archive">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-sm font-black text-stone-800">🗓 Aylık Yönetim Raporu</h3>
+            <p className="text-[11px] text-stone-500">Her ay kapanışında gelir/doluluk/ADR/ABS özeti otomatik hazırlanır ve yöneticilere gönderilir</p>
+          </div>
+          <button onClick={monthlySendNow} disabled={monthlySending} data-testid="monthly-send-now-btn"
+            className="text-[10px] font-bold text-white bg-teal-600 hover:bg-teal-500 rounded-lg px-3 py-2 disabled:opacity-50">
+            {monthlySending ? "Hazırlanıyor…" : "Bu Ayı Şimdi Hazırla"}
+          </button>
+        </div>
+        {monthlyArchive.length === 0 ? (
+          <p className="text-xs text-stone-400" data-testid="monthly-archive-empty">Henüz aylık rapor yok — ay kapanışında otomatik oluşacak ya da "Bu Ayı Şimdi Hazırla"yı kullanın.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {monthlyArchive.map((item) => (
+              <div key={item.id}>
+                <button onClick={() => viewMonthly(item)} data-testid={`monthly-archive-item-${item.id}`}
+                  className={`flex items-center gap-3 w-full text-left px-3 py-2 rounded-xl border transition-colors ${openMonthly?.id === item.id ? "border-teal-300 bg-teal-50" : "border-stone-100 hover:bg-stone-50"}`}>
+                  <Calendar className="w-3.5 h-3.5 text-teal-600 flex-shrink-0" />
+                  <span className="text-xs font-bold text-stone-800">{item.month}</span>
+                  <span className="text-[10px] text-stone-400">{item.created_at ? new Date(item.created_at).toLocaleString("tr-TR") : "—"}</span>
+                  <span className="ml-auto text-[10px] font-semibold text-stone-500">{(item.sent_to || []).length} alıcı{item.forced ? " · elle" : ""}</span>
+                  <span onClick={(e) => monthlyPdf(item, e)} role="button" tabIndex={0} data-testid={`monthly-pdf-${item.id}`}
+                    title="PDF olarak indir"
+                    className="text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-200 rounded-lg px-2 py-1 hover:bg-teal-100">
+                    PDF
+                  </span>
+                </button>
+                {openMonthly?.id === item.id && (
+                  <div className="border border-teal-100 rounded-xl mt-1 p-3 bg-stone-50 overflow-x-auto" data-testid="monthly-archive-preview">
+                    <div dangerouslySetInnerHTML={{ __html: openMonthly.html }} />
                   </div>
                 )}
               </div>

@@ -32,6 +32,7 @@ import { PriceAlerts } from "./PriceAlerts";
 import { DisplacementAnalysis } from "./DisplacementAnalysis";
 import { LOSOptimizer } from "./LOSOptimizer";
 import { WeeklyDigest } from "./WeeklyDigest";
+import { MonthlyTargetsCard } from "./MonthlyTargetsCard";
 import { RateScraper } from "./RateScraper";
 import ReputationDashboard from "./ReputationDashboard";
 import PaceReports from "./PaceReports";
@@ -287,7 +288,10 @@ export const RevenuePanel = ({ properties, activePropertyId, initialTab }) => {
 
           <AnimatePresence mode="wait">
             <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-              {tab === "dashboard" && <RevenueDashboardEnhanced propertyId={pid} onNavigate={handleNavigate} />}
+              {tab === "dashboard" && (<>
+                <MonthlyTargetsCard propertyId={pid} />
+                <RevenueDashboardEnhanced propertyId={pid} onNavigate={handleNavigate} />
+              </>)}
               {tab === "ai-copilot" && <RevenueAICopilot propertyId={pid} />}
               {tab === "learning-robot" && (
                 <Suspense fallback={<div className="p-8 text-sm text-stone-400">Yükleniyor…</div>}>

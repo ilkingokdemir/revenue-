@@ -1,0 +1,25 @@
+{
+  "summary": "Iter 598: Tested ABS Revenue Dashboard endpoint + Weekly Digest send-now rebase/abs blocks and frontend rendering. All 7 backend tests pass; frontend renders the 📊 ABS Gelir Panosu card with total (£120), monthly bar chart svg, per-attribute horizontal bars, plus regression items (Robot Fiyat Önerileri, Otomatik mod toggle, Oda–Özellik Matrisi).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter598_abs_revenue_and_digest.py",
+    "/app/test_reports/pytest/iter598.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "weekly_digest._rebase_section_html uses f-string with `{r.get('loss'):,}` — if loss is None the format spec crashes. Should coerce to 0/skip when None.",
+    "revenue-dashboard uses 183-day cutoff on created_at and clamps to start_month..cur_month; this can drop the earliest partial month at the 183-day boundary — acceptable but consider using calendar-based 6-month start for consistent windows.",
+    "abs_selling.compute_price_suggestions counts ANY booking (regardless of abs_total>0) in `total` but only sums `sold` via abs_attributes — attach_rate denominator may be inflated vs revenue-dashboard which uses abs_total>0 for abs_b count."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter598_abs_revenue_and_digest.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iter598 covers /api/abs/{pid}/revenue-dashboard (auth, shape, no future months, monthly<=6, ordering, total match), /api/weekly-digest/{pid}/send-now (forced by default, returns digest with rebase key + abs_price_changes_7d int, requires auth), and /api/abs/{pid}/price-log regression. Frontend: Ctrl+K → 'Özellik bazlı' → data-testid abs-revenue-dashboard/abs-total-revenue/abs-revenue-chart/abs-revenue-by-attr all render. Emails are mocked (email_outbox).",
+  "rca of the issue": "N/A — no bugs found"
+}

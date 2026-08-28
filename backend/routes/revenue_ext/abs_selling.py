@@ -290,4 +290,42 @@ def create_abs_router(db, require_roles):
         rows = await db.abs_price_log.find({"property_id": property_id}, {"_id": 0}).sort("at", -1).to_list(30)
         return {"log": rows}
 
+    @router.get("/{property_id}/revenue-dashboard")
+    async def abs_revenue_dashboard(property_id: str,
+                                    _: dict = Depends(require_roles("admin", "manager"))):
+        """ABS Gelir Panosu — son 6 ayın özellik geliri (satış/oluşturulma ayına göre)."""
+        now = datetime.now(timezone.utc)
+        start = (now - timedelta(days=183)).isoformat()
+        months, attr_rev = {}, {}
+        total_b, abs_b = 0, 0
+        async for b in db.bookings.find(
+                {"property_id": property_id, "created_at": {"$gte": start},
+                 "status": {"$nin": ["cancelled", "no_show"]}},
+                {"_id": 0, "created_at": 1, "abs_total": 1, "abs_attributes": 1, "nights": 1}):
+            month = str(b.get("created_at", ""))[:7]
+            if not month:
+                continue
+            m = months.setdefault(month, {"month": month, "abs_revenue": 0.0, "bookings_with_abs": 0, "total_bookings": 0})
+            m["total_bookings"] += 1
+            total_b += 1
+            at = float(b.get("abs_total") or 0)
+            if at > 0:
+                m["abs_revenue"] = round(m["abs_revenue"] + at, 2)
+                m["bookings_with_abs"] += 1
+                abs_b += 1
+                n = max(1, int(b.get("nights") or 1))
+                for a in (b.get("abs_attributes") or []):
+                    key = a.get("name", a.get("id", "?"))
+                    attr_rev[key] = round(attr_rev.get(key, 0) + float(a.get("price") or 0) * n, 2)
+        cur_month = now.strftime("%Y-%m")
+        start_month = start[:7]
+        monthly = [m for m in sorted(months.values(), key=lambda x: x["month"])
+                   if start_month <= m["month"] <= cur_month]
+        by_attr = sorted([{"name": k, "revenue": v} for k, v in attr_rev.items()],
+                         key=lambda x: -x["revenue"])
+        total_abs = round(sum(m["abs_revenue"] for m in monthly), 2)
+        return {"monthly": monthly, "by_attribute": by_attr, "total_abs_revenue": total_abs,
+                "attach_rate_pct": round(100 * abs_b / total_b, 1) if total_b else 0,
+                "total_bookings": total_b}
+
     return router

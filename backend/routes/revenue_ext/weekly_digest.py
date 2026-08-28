@@ -65,13 +65,33 @@ async def build_digest(db, pid: str) -> Dict:
     cur = await _week_metrics(db, pid, start, total_rooms)
     prev = await _week_metrics(db, pid, start - timedelta(days=7), total_rooms)
     ladder = await compute_ladder_weekly(db, pid)
+
+    # Rebase & Deney özeti (son 30 gün)
+    rebase = None
+    rep = await db.rebase_reports.find_one({"property_id": pid}, {"_id": 0, "rows": 0}, sort=[("created_at", -1)])
+    if rep and rep.get("created_at", "") >= (today - timedelta(days=30)).isoformat():
+        exp_line = None
+        exp = await db.rebase_experiments.find_one({"property_id": pid}, {"_id": 0}, sort=[("started_at", -1)])
+        if exp:
+            from routes.revenue_ext.rebase_impact import compute_experiment_progress
+            prog = await compute_experiment_progress(db, exp)
+            exp_line = prog["verdict_tr"]
+        rebase = {"date": rep["created_at"][:10],
+                  "weighted_change_pct": rep.get("weighted_change_pct"),
+                  "loss": rep.get("contribution", {}).get("loss"),
+                  "breakeven_feasible": rep.get("breakeven", {}).get("feasible"),
+                  "occ_needed_pct": rep.get("breakeven", {}).get("occ_needed_pct"),
+                  "experiment_verdict": exp_line}
+    abs_changes = await db.abs_price_log.count_documents(
+        {"property_id": pid, "at": {"$gte": (today - timedelta(days=7)).isoformat()}})
+
     return {"week_start": start.isoformat(), "week_end": (today - timedelta(days=1)).isoformat(),
             **cur, "prev": prev,
             "deltas": {"revenue_pct": _delta(cur["revenue"], prev["revenue"]),
                        "occupancy_pts": _delta(cur["occupancy"], prev["occupancy"], pts=True),
                        "adr_pct": _delta(cur["adr"], prev["adr"]),
                        "arrivals_diff": cur["arrivals"] - prev["arrivals"]},
-            "ladder": ladder}
+            "ladder": ladder, "rebase": rebase, "abs_price_changes_7d": abs_changes}
 
 
 def _arrow(v, suffix="%"):
@@ -109,7 +129,28 @@ def _digest_html(prop_name: str, d: Dict) -> str:
             f"({l['lastday']['sold_after_discount']} gece indirimle satıldı) · "
             f"📈 Zam merdiveni ≈£{l['ramp']['uplift_estimate']} ek gelir "
             f"({l['ramp']['guest_approved']} misafir-onaylı kademe)</div>"
+            + _rebase_section_html(d) +
             f"<p style='color:#a8a29e;font-size:11px'>MyHotelBox — her pazartesi otomatik gönderilir.</p></div>")
+
+
+def _rebase_section_html(d: Dict) -> str:
+    r = d.get("rebase")
+    parts = []
+    if r:
+        be = "✅ ulaşılabilir" if r.get("breakeven_feasible") else f"⛔ İMKÂNSIZ (%{r.get('occ_needed_pct')} doluluk gerekir)"
+        loss = r.get("loss") or 0
+        parts.append(
+            f"🧪 <b>Rebase analizi ({r['date']})</b>: otel geneli %{r.get('weighted_change_pct')} · "
+            f"90 günde katkı kaybı £{loss:,} · başabaş {be}")
+        if r.get("experiment_verdict"):
+            parts.append(f"🔬 <b>Deney:</b> {r['experiment_verdict']}")
+    if d.get("abs_price_changes_7d"):
+        parts.append(f"🤖 <b>ABS otomatik fiyat:</b> bu hafta {d['abs_price_changes_7d']} özellik fiyatı güncellendi.")
+    if not parts:
+        return ""
+    inner = "".join(f"<div style='margin-bottom:6px'>{p}</div>" for p in parts)
+    return (f"<div style='background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;"
+            f"padding:12px;font-size:13px;margin-top:10px'>{inner}</div>")
 
 
 async def send_digest(db, pid: str, forced: bool = False) -> Dict:

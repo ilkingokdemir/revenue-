@@ -1388,3 +1388,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - BİLDİRİM SESİ: NotificationBell.js — yeni HIGH öncelikli bildirimde WebAudio iki tonlu uyarı (soundOnRef kontrolü VAR), panelde 🔊/🔇 anahtarı (localStorage notifSound).
 - TEST: iteration_597.json — backend 10/10 + %100 frontend. AI yorum HTML escape düzeltmesi test sonrası eklendi.
 - TWILIO: Hâlâ SID + Auth Token bekleniyor (numara alındı: +447878867510).
+
+## Güncelleme (2026-06 — Faz 17: ABS Gelir Panosu + Haftalık Rapor Robotu Genişletmesi TAMAMLANDI)
+- ABS GELİR PANOSU: abs_selling.py GET /{pid}/revenue-dashboard — son 6 ay (created_at/satış ayına göre, start_month..cur_month clamp), monthly abs_revenue + by_attribute (price×nights) + total + attach_rate. UI: AbsPanel '📊 ABS Gelir Panosu' — recharts bar chart + özellik bazında yatay barlar.
+- HAFTALIK RAPOR ROBOTU: weekly_digest.py build_digest'e 'rebase' bloğu (son 30g rapor: değişim %, katkı kaybı, başabaş, son deney verdict'i — compute_experiment_progress ile) ve abs_price_changes_7d eklendi; _rebase_section_html HTML bölümü (loss None guard'lı). Pazartesi 07:00 UTC loop zaten mevcuttu — otomatik gidiyor.
+- TEST: iteration_598.json — backend %100 (7/7) + frontend %100.
+- BEKLEYEN: Resend anahtarı + Twilio SID/Token (kullanıcı 2 kez action item seçti ama değerleri hiç yapıştırmadı).

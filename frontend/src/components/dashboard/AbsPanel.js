@@ -3,6 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Bed, Plus, Trash, Sparkle } from "@phosphor-icons/react";
 import { Loader2 } from "lucide-react";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -14,6 +15,11 @@ export default function AbsPanel({ propertyId }) {
   const [form, setForm] = useState({ name: "", price: "", description: "", image_url: "" });
   const [matrix, setMatrix] = useState(null); // { rooms, attributes }
   const [suggestions, setSuggestions] = useState(null);
+  const [revDash, setRevDash] = useState(null);
+
+  useEffect(() => {
+    axios.get(`${API}/abs/${pid}/revenue-dashboard`).then(({ data }) => setRevDash(data)).catch(() => {});
+  }, [pid]);
 
   const loadSuggestions = useCallback(async () => {
     try {
@@ -208,6 +214,50 @@ export default function AbsPanel({ propertyId }) {
                 className="text-stone-300 hover:text-rose-500"><Trash size={15} /></button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ABS Gelir Panosu */}
+      {revDash && revDash.monthly.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-2xl p-4" data-testid="abs-revenue-dashboard">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <h2 className="text-sm font-black text-stone-800">📊 ABS Gelir Panosu</h2>
+              <p className="text-[11px] text-stone-500">Son 6 ay · özellik satışlarının aylık gelir katkısı</p>
+            </div>
+            <div className="text-right">
+              <div className="text-lg font-black text-sky-700" data-testid="abs-total-revenue">£{revDash.total_abs_revenue.toLocaleString("en-GB")}</div>
+              <div className="text-[10px] text-stone-400">toplam ABS geliri · %{revDash.attach_rate_pct} dönüşüm</div>
+            </div>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="h-44" data-testid="abs-revenue-chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={revDash.monthly} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+                  <XAxis dataKey="month" tick={{ fontSize: 10 }} tickFormatter={(m) => m.slice(5)} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip formatter={(v) => [`£${v}`, "ABS geliri"]} labelFormatter={(m) => `Ay: ${m}`} />
+                  <Bar dataKey="abs_revenue" fill="#0284c7" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-1.5" data-testid="abs-revenue-by-attr">
+              <div className="text-[10px] font-black uppercase text-stone-400">Özellik bazında (6 ay)</div>
+              {revDash.by_attribute.slice(0, 6).map((a) => {
+                const max = revDash.by_attribute[0]?.revenue || 1;
+                return (
+                  <div key={a.name} className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold text-stone-700 w-36 truncate">{a.name}</span>
+                    <div className="flex-1 h-3 bg-stone-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-sky-500 to-cyan-400 rounded-full" style={{ width: `${Math.max(4, (a.revenue / max) * 100)}%` }} />
+                    </div>
+                    <span className="text-[11px] font-bold text-stone-800 w-16 text-right">£{a.revenue.toLocaleString("en-GB")}</span>
+                  </div>
+                );
+              })}
+              {revDash.by_attribute.length === 0 && <p className="text-[11px] text-stone-400">Henüz özellik satışı yok.</p>}
+            </div>
+          </div>
         </div>
       )}
 

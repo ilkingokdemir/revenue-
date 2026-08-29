@@ -33,6 +33,7 @@ import { DisplacementAnalysis } from "./DisplacementAnalysis";
 import { LOSOptimizer } from "./LOSOptimizer";
 import { WeeklyDigest } from "./WeeklyDigest";
 import { MonthlyTargetsCard } from "./MonthlyTargetsCard";
+import { PriceGuardCard } from "./PriceGuardCard";
 import { RateScraper } from "./RateScraper";
 import ReputationDashboard from "./ReputationDashboard";
 import PaceReports from "./PaceReports";
@@ -290,6 +291,7 @@ export const RevenuePanel = ({ properties, activePropertyId, initialTab }) => {
             <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
               {tab === "dashboard" && (<>
                 <MonthlyTargetsCard propertyId={pid} />
+                <PriceGuardCard propertyId={pid} />
                 <RevenueDashboardEnhanced propertyId={pid} onNavigate={handleNavigate} />
               </>)}
               {tab === "ai-copilot" && <RevenueAICopilot propertyId={pid} />}

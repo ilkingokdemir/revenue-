@@ -49,6 +49,40 @@ async def _effective_rate(db, pid: str, rt_id: str, day: str, base_price: float)
     return float(base_price or 0)
 
 
+from routes.revenue_ext.price_guard import guard_rate_change
+
+
+async def _market_signal(db, pid: str, day: str) -> dict:
+    """DEMAND_STRONG: rakip medyanı yükseliyor mu + rakip müsaitliği daralıyor mu (sönümlü ikinci anahtar)."""
+    def _median(vals):
+        s = sorted(vals)
+        return (s[len(s) // 2] if len(s) % 2 else (s[len(s) // 2 - 1] + s[len(s) // 2]) / 2) if s else 0
+    now = _now()
+    fresh_cut = (now - timedelta(hours=48)).isoformat()
+    old_lo, old_hi = (now - timedelta(days=10)).isoformat(), (now - timedelta(days=5)).isoformat()
+    q_pid = {"$in": [pid, "default"]}
+    fresh, old, unavail = {}, {}, 0
+    async for s in db.comp_rate_snapshots.find(
+            {"property_id": q_pid, "date": day, "scanned_at": {"$gte": fresh_cut}},
+            {"_id": 0, "comp_id": 1, "rate": 1, "sold_out": 1, "unavailable": 1}):
+        fresh[s["comp_id"]] = float(s.get("rate") or 0)
+        if s.get("sold_out") or s.get("unavailable"):
+            unavail += 1
+    async for s in db.comp_rate_snapshots.find(
+            {"property_id": q_pid, "date": day, "scanned_at": {"$gte": old_lo, "$lt": old_hi}},
+            {"_id": 0, "comp_id": 1, "rate": 1}):
+        old.setdefault(s["comp_id"], float(s.get("rate") or 0))
+    if len(fresh) < 2:
+        return {"strong": False}
+    med_new = _median([v for v in fresh.values() if v > 0])
+    med_old = _median([v for v in old.values() if v > 0]) if old else 0
+    rise_pct = round(100 * (med_new - med_old) / med_old, 1) if med_old else 0
+    unavail_share = round(unavail / len(fresh), 2)
+    strong = rise_pct >= 3.0 or unavail_share >= 0.5
+    return {"strong": strong, "rise_pct": rise_pct, "unavail_share": unavail_share,
+            "comps": len(fresh), "full_step": unavail_share >= 0.6}
+
+
 async def scan_property(db, pid: str, force: bool = False) -> Dict:
     cfg = await _get_cfg(db, pid)
     if not cfg["enabled"]:
@@ -118,14 +152,23 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                     continue
 
             # --- MİSAFİR ONAYI + ASİMETRİK ZAMAN KURALI: zam için geçen süre kanıt DEĞİLDİR ---
+            market_step = False
+            market = None
             if step_no >= 1:
                 if bookings_at_last is None or sold <= int(bookings_at_last):
-                    skips.append({"date": day, "room_type": rt.get("name", ""),
-                                  "reason": "awaiting_guest_approval",
-                                  "detail": (f"Kademe {step_no} fiyatında henüz yeni rezervasyon yok "
-                                             f"({sold} = {bookings_at_last}) — asimetrik zaman kuralı: "
-                                             "geçen süre zam kanıtı DEĞİLDİR, tırmanış KAPALI")})
-                    continue
+                    # --- DEMAND_STRONG ikinci anahtar: piyasa sıkılaşınca sönümlü kademe ---
+                    last_mkt = st.get("market_step_at")
+                    mkt_ok = not last_mkt or (now - datetime.fromisoformat(last_mkt)).total_seconds() >= 86400
+                    market = await _market_signal(db, pid, day) if mkt_ok else {"strong": False}
+                    if market.get("strong"):
+                        market_step = True
+                    else:
+                        skips.append({"date": day, "room_type": rt.get("name", ""),
+                                      "reason": "awaiting_guest_approval",
+                                      "detail": (f"Kademe {step_no} fiyatında henüz yeni rezervasyon yok "
+                                                 f"({sold} = {bookings_at_last}) — asimetrik zaman kuralı: "
+                                                 "geçen süre zam kanıtı DEĞİLDİR, tırmanış KAPALI")})
+                        continue
 
             if anchor <= 0:
                 anchor = await _effective_rate(db, pid, rt_id, day, rt.get("base_price", 0))
@@ -133,7 +176,9 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                 continue
             ceiling = await _ceiling_for(db, pid, rt_id, anchor)
             new_step = step_no + 1
-            new_rate = round(anchor * ((1 + step_p) ** new_step), 2)
+            # Piyasa kaynaklı kademe SÖNÜMLÜdür: yarım adım (rakipler tükeniyorsa tam adım)
+            eff_step_p = step_p if (not market_step or (market or {}).get("full_step")) else step_p / 2
+            new_rate = round(anchor * ((1 + step_p) ** step_no) * (1 + eff_step_p), 2)
             if new_rate > ceiling:
                 skips.append({"date": day, "room_type": rt.get("name", ""), "reason": "at_ceiling",
                               "detail": f"Tavan {ceiling} — zam kademe atlanamadı"})
@@ -147,25 +192,42 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                               "detail": f"Hücre kirası '{holder}' aktöründe — çit yazımı engelledi"})
                 continue
 
+            # --- GÜVENLİK SINIRLARI: tek hamle %X + 72s kümülatif %Y + kilit koruması ---
+            cur_rate = await _effective_rate(db, pid, rt_id, day, rt.get("base_price", 0))
+            guard = await guard_rate_change(db, pid, rt_id, day, cur_rate, new_rate, ACTOR)
+            if not guard["allowed"]:
+                skips.append({"date": day, "room_type": rt.get("name", ""),
+                              "reason": "price_guard_blocked", "detail": guard["blocked_reason"]})
+                continue
+            new_rate = guard["rate"]
+
             await db.rate_overrides.update_one(
                 {"property_id": pid, "room_type_id": rt_id, "date": day},
                 {"$set": {"custom_rate": new_rate, "set_by": ACTOR,
-                          "reason": f"Zam merdiveni kademe {new_step}: doluluk %{occ:.0f}"
-                                    + (f", misafir onayı: +{sold - int(bookings_at_last)} yeni rezervasyon" if step_no >= 1 else " (talep kanıtı)"),
+                          "reason": (f"DEMAND_STRONG (piyasa) kademe {new_step}: rakip medyanı %{(market or {}).get('rise_pct', 0)} yükseldi, "
+                                     f"rakip doluluk payı %{round(((market or {}).get('unavail_share') or 0) * 100)} — sönümlü adım"
+                                     if market_step else
+                                     f"Zam merdiveni kademe {new_step}: doluluk %{occ:.0f}"
+                                     + (f", misafir onayı: +{sold - int(bookings_at_last)} yeni rezervasyon" if step_no >= 1 else " (talep kanıtı)"))
+                          + (" · güvenlik sınırı uygulandı" if guard["clamped"] else ""),
                           "updated_at": now.isoformat()}}, upsert=True)
             log = {"id": str(uuid.uuid4()), "property_id": pid, "stay_date": day,
                    "room_type_id": rt_id, "room_type": rt.get("name", ""),
                    "step_no": new_step, "from_step": step_no, "rate": new_rate,
                    "occ": round(occ, 1), "sold": sold, "ceiling": ceiling,
                    "direction": "up",
-                   "guest_approved": step_no >= 1,
-                   "reason": "guest_approved_step" if step_no >= 1 else "demand_evidence_step",
+                   "guest_approved": step_no >= 1 and not market_step,
+                   "guard_clamped": guard["clamped"],
+                   "market_signal": market if market_step else None,
+                   "reason": ("DEMAND_STRONG" if market_step else
+                              "guest_approved_step" if step_no >= 1 else "demand_evidence_step"),
                    "created_at": now.isoformat()}
             await db.ramp_steps.insert_one(dict(log))
             await db.ramp_state.update_one(
                 {"property_id": pid, "stay_date": day, "room_type_id": rt_id},
                 {"$set": {"step_no": new_step, "anchor_rate": anchor,
-                          "bookings_at_last_step": sold, "last_step_at": now.isoformat()}},
+                          "bookings_at_last_step": sold, "last_step_at": now.isoformat(),
+                          **({"market_step_at": now.isoformat()} if market_step else {})}},
                 upsert=True)
             log.pop("_id", None)
             actions.append(log)

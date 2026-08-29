@@ -1,0 +1,26 @@
+{
+  "summary": "Iter 599: Fiyat Güvenlik Sınırları (price guard) + DEMAND_STRONG piyasa kilidi uçtan uca test edildi. Tüm 10 backend testi + tam frontend akışı geçti. Guard API (GET/PUT, 422 validation, enabled toggle), guard mantığı (tek hamle %10 kırpma 120→110, 72h kümülatif %25 tavan 121→125 sonra blok, owner-override kilit) doğrulandı. DEMAND_STRONG scan e2e: seed comp_rate_snapshots (medyan +8%, unavail 0.67) + ramp_state(step_no=1, sold=bookings_at_last) ile scan_property(force=True) çağrıldı → ramp_steps'te reason=DEMAND_STRONG log oluştu, rate_overrides.reason 'DEMAND_STRONG (piyasa)' içeriyor, 24 saat içinde ikinci market step üretilmedi. awaiting_guest_approval regresyonu korunuyor. Frontend: dept-sc-revenue → Dashboard tab → PriceGuardCard renderı; MonthlyTargets (y=24) → PriceGuard (y=145) sıralaması doğru; toggle AKTİF, single/72h inputlar çalışıyor, 12'ye kaydet → toast 'Güvenlik sınırları kaydedildi' + persistence doğrulandı. Cleanup: 10/25/enabled=true olarak restore edildi; seed comp_rate_snapshots/ramp_state/ramp_steps/rate_overrides silindi.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter599_price_guard_demand_strong.py",
+    "/app/test_reports/pytest/iter599.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "price_guard.guard_rate_change 72h cumulative base'i price_guard_log'daki ilk kaydın old_rate'ini alıyor; log yoksa base=old_rate. Bu, ilk yazımdan önce başka bir aktörün (örn. AI dynamic pricing) fiyatı zaten yükseltmiş olması senaryosunda kümülatif ceiling'i düşük hesaplamaz — kabul edilebilir tasarım ama guard-agnostic yükseltmeler 72h penceresinde taban alınmıyor (log dışı yazımlar hesap dışı).",
+    "ramp_ladder.scan_property içinde 'from routes.revenue_ext.price_guard import guard_rate_change' fonksiyon içinden yapılıyor — dosyanın başına taşınabilir (mikro-optimizasyon, hot path).",
+    "_market_signal 'unavail' sayarken sold_out OR unavailable birleşik sayıyor ama full_step eşiği yalnız unavail_share'e göre; sold_out ile unavailable ayrımı istenirse tasarım gözden geçirilmeli. Aksi halde comment ile intent netleştirilebilir.",
+    "PriceGuardCard: propertyId='all' geldiğinde 'aldgate-flats'e düşüyor — çoklu-property senaryosunda kullanıcıyı yanıltabilir. Etiket eklenip 'Property: aldgate-flats' açıkça gösterilebilir."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter599_price_guard_demand_strong.py"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test içinde TEST_iter599_* geçici property_id ile guard_log/rate_overrides seed edildi ve test sonunda temizlendi. DEMAND_STRONG için aldgate-flats + stay=today+5 için comp_rate_snapshots (3 old + 3 fresh), ramp_state, ramp_steps, rate_overrides seed edildi; test tamamında delete_many ile temizlendi. Guard settings default'a (10/25/enabled=true) döndürüldü.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter599 doğruladı: (a) /api/price-guard/{pid} GET+PUT+422 bounds+enabled toggle, (b) guard_rate_change tek-hamle/72h/owner-lock mantığı, (c) ramp_ladder.scan_property force=True ile DEMAND_STRONG uçtan uca (comp snapshots fresh<48h + old 5-10gün + ≥2 comp gerekli; unavail_share≥0.6 → full_step, aksi halde yarım step), (d) 24h piyasa kilidi (market_step_at) tekrar tetiklenmiyor, (e) awaiting_guest_approval skip regresyonu korunuyor, (f) PriceGuardCard UI tam çalışıyor + MonthlyTargets üstte. Frontend nav path: Sign In → property chip 'Aldgate Flats' → data-testid='revenue-btn' (scroll_into_view gerekebilir; dept-sc-revenue de mevcut) → Dashboard tab.",
+  "rca of the issue": "N/A — bug yok."
+}

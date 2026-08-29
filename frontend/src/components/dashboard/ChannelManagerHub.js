@@ -26,6 +26,7 @@ import {
   AlertTriangle, Activity, Sparkles, Globe2, ChevronRight,
   Layers, Ban, Calendar as CalIcon,
 } from "lucide-react";
+import { Zap } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 

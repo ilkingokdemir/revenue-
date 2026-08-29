@@ -1847,6 +1847,8 @@ from routes.revenue_ext.rebase_impact import create_rebase_impact_router, rebase
 api_router.include_router(create_rebase_impact_router(db, require_roles))
 from routes.revenue_ext.monthly_report import create_monthly_report_router, monthly_report_loop
 api_router.include_router(create_monthly_report_router(db, require_roles))
+from routes.revenue_ext.price_guard import create_price_guard_router
+api_router.include_router(create_price_guard_router(db, require_roles))
 
 @app.on_event("startup")
 async def _start_journey_engine():

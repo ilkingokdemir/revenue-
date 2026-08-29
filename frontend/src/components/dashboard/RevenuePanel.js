@@ -34,6 +34,7 @@ import { LOSOptimizer } from "./LOSOptimizer";
 import { WeeklyDigest } from "./WeeklyDigest";
 import { MonthlyTargetsCard } from "./MonthlyTargetsCard";
 import { PriceGuardCard } from "./PriceGuardCard";
+import { PriceTimelineCard } from "./PriceTimelineCard";
 import { RateScraper } from "./RateScraper";
 import ReputationDashboard from "./ReputationDashboard";
 import PaceReports from "./PaceReports";
@@ -292,6 +293,7 @@ export const RevenuePanel = ({ properties, activePropertyId, initialTab }) => {
               {tab === "dashboard" && (<>
                 <MonthlyTargetsCard propertyId={pid} />
                 <PriceGuardCard propertyId={pid} />
+                <PriceTimelineCard propertyId={pid} />
                 <RevenueDashboardEnhanced propertyId={pid} onNavigate={handleNavigate} />
               </>)}
               {tab === "ai-copilot" && <RevenueAICopilot propertyId={pid} />}

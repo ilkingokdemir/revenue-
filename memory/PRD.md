@@ -1418,3 +1418,10 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - DEMAND_STRONG: ramp_ladder.py _market_signal — comp_rate_snapshots taze(48h) vs eski(5-10 gün) medyan ≥%3 artış VEYA sold-out payı ≥0.5 → kendi satışı olmadan SÖNÜMLÜ kademe (yarım adım; unavail ≥0.6 → tam adım/fren gevşer), tarih başına 24h'de 1 piyasa kademesi (ramp_state.market_step_at), ramp_steps reason=DEMAND_STRONG + market_signal, rate_overrides reason 'DEMAND_STRONG (piyasa)...'.
 - TEST: iteration_599.json — 10/10 backend + %100 frontend (guard API/mantık, DEMAND_STRONG e2e scan, 24h kilidi, awaiting_guest_approval regresyonu, UI kart). Import hot-path'e taşındı (review notu).
 - BEKLEYEN: Resend + Twilio anahtarları.
+
+## Güncelleme (2026-06 — Faz 22: Guard İhlal Uyarısı + Fiyat Karar Zaman Çizelgesi + Tarama Kadansı TAMAMLANDI)
+- GUARD İHLAL UYARISI: price_guard.py _maybe_alert_repeated_clamps — aynı aktör 24 saatte ≥3 kez kırpılırsa HIGH bildirim ('ayarları gözden geçirin'), 24 saatte 1 kez (price_guard_alerts.last_alert_at). Birim test: 3 kırpma → 1 bildirim, 4. kırpma → tekrar yok.
+- FİYAT KARAR ZAMAN ÇİZELGESİ: price_guard.py GET /price-timeline/{pid}?date= — ramp_steps + clamped price_guard_log + rate_overrides birleşik kronolojik event listesi + 48s rakip medyanı. UI: PriceTimelineCard (Revenue > Dashboard, PriceGuard altında) — tarih seçici, ikonlu dikey timeline (merdiven yeşil / korkuluk amber / yazım mavi), gerekçeler görünür. Screenshot: 18 event, DEMAND_STRONG gerekçeleri dahil.
+- TARAMA KADANSI: sec_pulse_loop.py _boosted_interval — market_robot_config.near_term_boost (vars. açık): önümüzdeki 7 gün doluluk ≥%60 ise city-scan aralığı 1/3'e iner (min 15 dk).
+- TEST: Guard uyarısı python birim + timeline curl (18 event) + UI screenshot. Kadans kod düzeyinde (deterministik yardımcı), e2e loop beklenmedi.
+- BEKLEYEN: Resend + Twilio anahtarları.

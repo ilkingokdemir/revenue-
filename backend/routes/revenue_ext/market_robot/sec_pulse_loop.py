@@ -536,6 +536,20 @@ def register(router, db, require_roles, resend, S):
         except Exception as e:
             logger.exception(f"Auto geo-scan task failed for {pid}: {e}")
 
+    async def _boosted_interval(pid: str, interval: int) -> int:
+        """Önümüzdeki 7 günün doluluğu ≥%60 ise tarama aralığını 1/3'e indirir (min 15 dk)."""
+        from datetime import date as _date
+        today = _date.today().isoformat()
+        horizon = (_date.today() + timedelta(days=7)).isoformat()
+        sold = 0
+        async for b in db.bookings.find(
+                {"property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
+                 "check_in": {"$gte": today, "$lt": horizon}}, {"_id": 0, "nights": 1}):
+            sold += min(int(b.get("nights") or 0), 7)
+        rooms = await db.rooms.count_documents({"property_id": pid})
+        occ = sold / max(1, rooms * 7)
+        return max(15, interval // 3) if occ >= 0.6 else interval
+
     async def auto_scan_loop():
         """Background loop: every 60s check enabled market-robot configs and trigger due scans.
         Handles BOTH city scans (market_robot_config) AND geo scans (market_robot_geo_config) in parallel."""
@@ -597,6 +611,12 @@ def register(router, db, require_roles, resend, S):
                     if not pid or pid == "all":
                         continue
                     interval = int(cfg.get("scan_interval_minutes") or 60)
+                    # Yakın-dönem kadans hızlandırma: önümüzdeki 7 gün yoğunsa 3 kat sık tara
+                    if cfg.get("near_term_boost", True):
+                        try:
+                            interval = await _boosted_interval(pid, interval)
+                        except Exception:
+                            pass
                     last = cfg.get("last_scan")
                     due = True
                     if last:

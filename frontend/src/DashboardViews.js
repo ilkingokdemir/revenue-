@@ -1610,7 +1610,7 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
 
         {/* UK HR & Payroll */}
         {activeView === "uk-payroll" && (
-          <UKPayrollPanel propertyId={activePropertyId} />
+          <UKPayrollPanel propertyId={activePropertyId} user={user} />
         )}
 
         {/* Reception Report */}

@@ -1,7 +1,7 @@
 """UK-compliant HR & Payroll — employee lifecycle, NMW age bands, PAYE, NI Class 1, payslips (2026/27)."""
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from typing import Dict
 import calendar
 import io
@@ -31,10 +31,15 @@ ER_RATE = 0.15
 SL_THRESH_M = {"plan_1": 26065 / 12, "plan_2": 28470 / 12, "plan_4": 32745 / 12, "postgraduate": 21000 / 12}
 SL_RATE = {"plan_1": 0.09, "plan_2": 0.09, "plan_4": 0.09, "postgraduate": 0.06}
 HOLIDAY_ACCRUAL_PCT = 0.1207  # 12.07% statutory holiday accrual for irregular hours
+# Auto-enrolment (workplace pension) monthly figures 2026/27 — Sage/BrightPay parity
+PEN_LEL_M, PEN_TRIGGER_M, PEN_UEL_M = 520.0, 833.0, 4189.0
+PEN_EE_RATE, PEN_ER_RATE = 0.05, 0.03
+PEN_MIN_AGE, PEN_MAX_AGE = 22, 66
 
 HR_FIELDS = ["dob", "ni_number", "tax_code", "starter_declaration", "contract_type",
              "start_date", "bank_sort_code", "bank_account_no", "student_loan_plans",
-             "is_apprentice", "pension_optin", "address", "postcode", "emergency_contact"]
+             "is_apprentice", "pension_optin", "pension_status", "address", "postcode",
+             "emergency_contact"]
 
 
 def _age_on(dob: str, ref: date) -> int | None:
@@ -307,7 +312,8 @@ def create_uk_payroll_router(db, require_roles):
 
         rows, warnings = [], []
         totals = {"hours": 0.0, "gross": 0.0, "paye": 0.0, "ni_employee": 0.0, "ni_employer": 0.0,
-                  "student_loan": 0.0, "net": 0.0, "nmw_topup": 0.0, "employer_cost": 0.0}
+                  "student_loan": 0.0, "pension_ee": 0.0, "pension_er": 0.0, "net": 0.0,
+                  "nmw_topup": 0.0, "employer_cost": 0.0}
         for sid, items in by_staff.items():
             s = smap.get(sid, {})
             name = s.get("name") or (items[0].get("staff_name", "?"))
@@ -339,21 +345,33 @@ def create_uk_payroll_router(db, require_roles):
             ni_ee = _ni_employee(gross)
             ni_er = _ni_employer(gross)
             sloan = _student_loan(gross, s.get("student_loan_plans", []))
-            net = round(gross - paye - ni_ee - sloan, 2)
+            # Workplace pension (auto-enrolment)
+            pen_status = s.get("pension_status", "auto")
+            ae_eligible = age is not None and PEN_MIN_AGE <= age <= PEN_MAX_AGE and gross > PEN_TRIGGER_M
+            enrolled = pen_status == "opted_in" or (pen_status == "auto" and ae_eligible)
+            if pen_status == "opted_out":
+                enrolled = False
+            qual = max(0.0, min(gross, PEN_UEL_M) - PEN_LEL_M) if enrolled else 0.0
+            pension_ee = round(qual * PEN_EE_RATE, 2)
+            pension_er = round(qual * PEN_ER_RATE, 2)
+            net = round(gross - paye - ni_ee - sloan - pension_ee, 2)
             row = {"staff_id": sid, "staff_name": name, "role": s.get("role", items[0].get("role", "")),
                    "email": s.get("email", ""), "ni_number": s.get("ni_number", ""), "tax_code": tax_code,
                    "age": age, "nmw_rate": nmw, "shifts": len(items), "hours": round(hours, 2),
                    "implied_hourly": implied, "base_earned": round(base_earned, 2), "nmw_topup": nmw_topup,
                    "adjustments": round(adj_add - adj_ded, 2), "gross": gross, "paye": paye,
-                   "ni_employee": ni_ee, "ni_employer": ni_er, "student_loan": sloan, "net": net,
-                   "employer_cost": round(gross + ni_er, 2),
+                   "ni_employee": ni_ee, "ni_employer": ni_er, "student_loan": sloan,
+                   "pension_ee": pension_ee, "pension_er": pension_er, "pension_enrolled": enrolled,
+                   "net": net,
+                   "employer_cost": round(gross + ni_er + pension_er, 2),
                    "shift_ids": [x.get("id") for x in items], "warnings": staff_warn}
             rows.append(row)
             if staff_warn:
                 warnings.append({"staff_name": name, "issues": staff_warn})
             for k, rk in (("hours", "hours"), ("gross", "gross"), ("paye", "paye"),
                           ("ni_employee", "ni_employee"), ("ni_employer", "ni_employer"),
-                          ("student_loan", "student_loan"), ("net", "net"),
+                          ("student_loan", "student_loan"), ("pension_ee", "pension_ee"),
+                          ("pension_er", "pension_er"), ("net", "net"),
                           ("nmw_topup", "nmw_topup"), ("employer_cost", "employer_cost")):
                 totals[k] = round(totals[k] + row[rk], 2)
         rows.sort(key=lambda r: r["staff_name"])
@@ -371,19 +389,14 @@ def create_uk_payroll_router(db, require_roles):
         return await _compute_month(property_id, year, month)
 
     # ==================== PAYROLL RUN ====================
-    @router.post("/uk-payroll/run/{property_id}")
-    async def run_payroll(property_id: str, data: Dict,
-                          current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def _persist_run(property_id: str, year: int, month: int, actor: str, force: bool):
         now = datetime.now(timezone.utc)
-        year = int(data.get("year") or now.year)
-        month = int(data.get("month") or now.month)
-        force = bool(data.get("force"))
         existing = await db.uk_payroll_runs.find_one({"property_id": property_id, "year": year, "month": month}, {"_id": 0})
         if existing and not force:
-            raise HTTPException(409, f"{year}-{month:02d} bordrosu zaten çalıştırılmış. Yeniden çalıştırmak için force:true gönderin.")
+            return {"ok": False, "skipped": "already_run", "run_id": existing["id"]}
         result = await _compute_month(property_id, year, month)
         if not result["rows"]:
-            raise HTTPException(400, "Bu dönemde onaylanmış/tamamlanmış vardiya bulunamadı")
+            return {"ok": False, "skipped": "no_shifts"}
         run_id = str(uuid.uuid4())
         if existing:
             await db.uk_payslips.delete_many({"run_id": existing["id"]})
@@ -391,8 +404,7 @@ def create_uk_payroll_router(db, require_roles):
         run_doc = {"id": run_id, "property_id": property_id, "year": year, "month": month,
                    "tax_year": TAX_YEAR, "period": result["period"], "totals": result["totals"],
                    "staff_count": result["staff_count"], "warning_count": len(result["warnings"]),
-                   "status": "completed", "created_by": current_user.get("name", ""),
-                   "created_at": now.isoformat()}
+                   "status": "completed", "created_by": actor, "created_at": now.isoformat()}
         await db.uk_payroll_runs.insert_one({**run_doc})
         slips = []
         for r in result["rows"]:
@@ -400,7 +412,64 @@ def create_uk_payroll_router(db, require_roles):
                           "year": year, "month": month, "tax_year": TAX_YEAR,
                           "period": result["period"], "email_status": None, "created_at": now.isoformat()})
         await db.uk_payslips.insert_many([{**s} for s in slips])
-        return {"ok": True, "run": run_doc, "payslips_created": len(slips)}
+        return {"ok": True, "run": run_doc, "payslips_created": len(slips), "warnings": result["warnings"]}
+
+    @router.post("/uk-payroll/run/{property_id}")
+    async def run_payroll(property_id: str, data: Dict,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        now = datetime.now(timezone.utc)
+        year = int(data.get("year") or now.year)
+        month = int(data.get("month") or now.month)
+        res = await _persist_run(property_id, year, month, current_user.get("name", ""), bool(data.get("force")))
+        if res.get("skipped") == "already_run":
+            raise HTTPException(409, f"{year}-{month:02d} bordrosu zaten çalıştırılmış. Yeniden çalıştırmak için force:true gönderin.")
+        if res.get("skipped") == "no_shifts":
+            raise HTTPException(400, "Bu dönemde onaylanmış/tamamlanmış vardiya bulunamadı")
+        return {"ok": True, "run": res["run"], "payslips_created": res["payslips_created"]}
+
+    # ==================== PAYROLL ROBOT (last day of month) ====================
+    async def run_monthly_payroll_internal(property_id: str = "all", force: bool = False) -> dict:
+        now = datetime.now(timezone.utc)
+        last_day = calendar.monthrange(now.year, now.month)[1]
+        if now.day != last_day and not force:
+            return {"ok": True, "skipped": "not_last_day_of_month", "today": now.day, "last_day": last_day}
+        pid = property_id or "all"
+        res = await _persist_run(pid, now.year, now.month, "payroll-robot", False)
+        if res.get("skipped") == "already_run":
+            return {"ok": True, "skipped": "already_run"}
+        if res.get("skipped") == "no_shifts":
+            return {"ok": True, "skipped": "no_shifts"}
+        # summary email to managers
+        t = res["run"]["totals"]
+        warn_html = ""
+        if res.get("warnings"):
+            items = "".join(f"<li><b>{w['staff_name']}:</b> {' · '.join(w['issues'])}</li>" for w in res["warnings"][:10])
+            warn_html = f"<h3 style='color:#b45309'>Uyum uyarıları ({len(res['warnings'])})</h3><ul>{items}</ul>"
+        html = (f"<div style='font-family:sans-serif'><h2>🤖 Bordro Robotu — {now.year}-{now.month:02d} bordrosu çalıştırıldı</h2>"
+                f"<table style='border-collapse:collapse'>"
+                f"<tr><td style='padding:4px 12px'>Personel</td><td><b>{res['run']['staff_count']}</b></td></tr>"
+                f"<tr><td style='padding:4px 12px'>Toplam saat</td><td>{t['hours']}</td></tr>"
+                f"<tr><td style='padding:4px 12px'>Brüt</td><td>£{t['gross']:,.2f}</td></tr>"
+                f"<tr><td style='padding:4px 12px'>PAYE</td><td>£{t['paye']:,.2f}</td></tr>"
+                f"<tr><td style='padding:4px 12px'>NI (çalışan/işveren)</td><td>£{t['ni_employee']:,.2f} / £{t['ni_employer']:,.2f}</td></tr>"
+                f"<tr><td style='padding:4px 12px'>Emeklilik (çalışan/işveren)</td><td>£{t.get('pension_ee',0):,.2f} / £{t.get('pension_er',0):,.2f}</td></tr>"
+                f"<tr><td style='padding:4px 12px'>Net ödeme</td><td><b style='color:#0a7a4f'>£{t['net']:,.2f}</b></td></tr>"
+                f"<tr><td style='padding:4px 12px'>Toplam işveren maliyeti</td><td><b>£{t['employer_cost']:,.2f}</b></td></tr>"
+                f"</table>{warn_html}<p>Payslip'ler hazır — İK &amp; Bordro (UK) &gt; Bordro Geçmişi ekranından indirebilir veya personele e-postalayabilirsiniz.</p></div>")
+        recipients = await db.users.find(
+            {"role": {"$in": ["admin", "manager"]}, "email": {"$not": {"$regex": "test|example"}}},
+            {"_id": 0, "email": 1}).to_list(20)
+        statuses = []
+        for r in recipients:
+            statuses.append(await _send_email(r["email"], f"Bordro Robotu — {now.year}-{now.month:02d} özeti", html))
+        return {"ok": True, "run_id": res["run"]["id"], "payslips_created": res["payslips_created"],
+                "emails": {"sent": statuses.count("sent"), "mocked": statuses.count("mocked")}}
+
+    router.run_monthly_payroll_internal = run_monthly_payroll_internal
+
+    @router.post("/uk-payroll/robot/run")
+    async def robot_run(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await run_monthly_payroll_internal(data.get("property_id", "all"), force=bool(data.get("force")))
 
     @router.get("/uk-payroll/runs/{property_id}")
     async def list_runs(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
@@ -463,7 +532,8 @@ def create_uk_payroll_router(db, require_roles):
                 ("Düzeltmeler", slip.get("adjustments", 0))]
         ded = [("PAYE Gelir Vergisi", slip.get("paye", 0)),
                ("National Insurance", slip.get("ni_employee", 0)),
-               ("Öğrenci Kredisi", slip.get("student_loan", 0))]
+               ("Öğrenci Kredisi", slip.get("student_loan", 0)),
+               ("Emeklilik (%5)", slip.get("pension_ee", 0))]
         ey = y - 6 * mm
         for label, val in earn:
             if val:
@@ -482,7 +552,8 @@ def create_uk_payroll_router(db, require_roles):
         c.drawString(20 * mm, yy, f"Çalışılan saat: {slip.get('hours', 0)}  ·  Vardiya: {slip.get('shifts', 0)}  ·  Saatlik (efektif): £{slip.get('implied_hourly', 0):,.2f}")
         yy -= 7 * mm
         c.drawString(20 * mm, yy, f"Brüt Ücret: £{slip.get('gross', 0):,.2f}")
-        c.drawString(90 * mm, yy, f"İşveren NI: £{slip.get('ni_employer', 0):,.2f}")
+        c.drawString(80 * mm, yy, f"İşveren NI: £{slip.get('ni_employer', 0):,.2f}")
+        c.drawString(135 * mm, yy, f"İşveren Emeklilik: £{slip.get('pension_er', 0):,.2f}")
         yy -= 12 * mm
         c.setFillColorRGB(0.06, 0.45, 0.30)
         c.rect(20 * mm, yy - 4 * mm, 170 * mm, 11 * mm, fill=1, stroke=0)
@@ -498,10 +569,14 @@ def create_uk_payroll_router(db, require_roles):
         return buf.getvalue()
 
     @router.get("/uk-payroll/payslip/{payslip_id}/pdf")
-    async def payslip_pdf(payslip_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def payslip_pdf(payslip_id: str,
+                          current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper", "maintenance"))):
         slip = await db.uk_payslips.find_one({"id": payslip_id}, {"_id": 0})
         if not slip:
             raise HTTPException(404, "Payslip bulunamadı")
+        if current_user.get("role") not in ("admin", "manager"):
+            if not slip.get("email") or slip.get("email", "").lower() != (current_user.get("email") or "").lower():
+                raise HTTPException(403, "Sadece kendi bordronuzu görüntüleyebilirsiniz")
         prop = await db.properties.find_one({"id": slip.get("property_id", "")}, {"_id": 0, "name": 1})
         pdf = _payslip_pdf(slip, (prop or {}).get("name", "MyHotelBox"))
         import unicodedata
@@ -558,5 +633,148 @@ def create_uk_payroll_router(db, require_roles):
             else:
                 mocked += 1
         return {"ok": True, "sent": sent, "mocked": mocked, "skipped_no_email": skipped}
+
+    # ==================== P45 (LEAVER DOCUMENT) ====================
+    @router.get("/uk-payroll/employees/{staff_id}/p45")
+    async def p45_pdf(staff_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        s = await db.shift_staff.find_one({"id": staff_id}, {"_id": 0})
+        if not s:
+            raise HTTPException(404, "Personel bulunamadı")
+        if not s.get("leaver_date"):
+            raise HTTPException(400, "P45 sadece işten ayrılmış personel için düzenlenebilir")
+        leaver = datetime.strptime(s["leaver_date"][:10], "%Y-%m-%d").date()
+        ty_start = _tax_year_start(leaver)
+        slips = await db.uk_payslips.find({"staff_id": staff_id}, {"_id": 0}).to_list(50)
+        total_pay = total_tax = 0.0
+        for sl in slips:
+            try:
+                p_start = datetime.strptime(sl["period"]["start"], "%Y-%m-%d").date()
+            except Exception:
+                continue
+            if ty_start <= p_start <= leaver:
+                total_pay += float(sl.get("gross", 0) or 0)
+                total_tax += float(sl.get("paye", 0) or 0)
+        tax_month = ((leaver.month - 4) % 12) + 1  # HMRC tax month (April=1)
+        prop = await db.properties.find_one({"id": s.get("property_id", "")}, {"_id": 0, "name": 1})
+        prop_name = (prop or {}).get("name", "MyHotelBox")
+
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
+        from reportlab.pdfgen import canvas as rl_canvas
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        for reg, paths in {"UKP-Helvetica": ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                                             "/usr/share/fonts/truetype/freefont/FreeSans.ttf"],
+                           "UKP-Helvetica-Bold": ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                                                  "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"]}.items():
+            if reg not in pdfmetrics.getRegisteredFontNames():
+                for p in paths:
+                    if os.path.exists(p):
+                        pdfmetrics.registerFont(TTFont(reg, p))
+                        break
+        buf = io.BytesIO()
+        c = rl_canvas.Canvas(buf, pagesize=A4)
+        w, h = A4
+        c.setFillColorRGB(0.75, 0.16, 0.16)
+        c.rect(0, h - 28 * mm, w, 28 * mm, fill=1, stroke=0)
+        c.setFillColorRGB(1, 1, 1)
+        c.setFont("UKP-Helvetica-Bold", 18)
+        c.drawString(20 * mm, h - 14 * mm, "P45 — Part 1A")
+        c.setFont("UKP-Helvetica", 10)
+        c.drawString(20 * mm, h - 21 * mm, "Details of employee leaving work / İşten ayrılan çalışan bilgileri")
+        c.setFillColorRGB(0, 0, 0)
+        y = h - 40 * mm
+        rows_data = [
+            ("1. Employer PAYE reference / İşveren", prop_name),
+            ("2. Employee's National Insurance number", s.get("ni_number") or "—"),
+            ("3. Surname & first name / Ad Soyad", s.get("name", "")),
+            ("4. Leaving date / Ayrılış tarihi", s["leaver_date"]),
+            ("5. Student Loan deductions", "Yes" if s.get("student_loan_plans") else "No"),
+            ("6. Tax code at leaving date / Vergi kodu", s.get("tax_code") or DEFAULT_TAX_CODE),
+            ("7. Tax month / Vergi ayı", str(tax_month)),
+            ("   Total pay to date / Yıl içi toplam ücret", f"£{total_pay:,.2f}"),
+            ("   Total tax to date / Yıl içi toplam vergi", f"£{total_tax:,.2f}"),
+            ("8. Works number / Personel no", s.get("id", "")[:8]),
+            ("   Department / Departman", s.get("role", "")),
+        ]
+        for label, value in rows_data:
+            c.setFont("UKP-Helvetica", 9)
+            c.setFillColorRGB(0.35, 0.35, 0.35)
+            c.drawString(20 * mm, y, label)
+            c.setFont("UKP-Helvetica-Bold", 10)
+            c.setFillColorRGB(0, 0, 0)
+            c.drawString(110 * mm, y, str(value))
+            c.setStrokeColorRGB(0.85, 0.85, 0.85)
+            c.line(20 * mm, y - 2.5 * mm, 190 * mm, y - 2.5 * mm)
+            y -= 10 * mm
+        y -= 4 * mm
+        c.setFont("UKP-Helvetica", 8)
+        c.setFillColorRGB(0.4, 0.4, 0.4)
+        c.drawString(20 * mm, y, f"Tax year / Vergi yılı: {ty_start.isoformat()} — {leaver.isoformat()} · Certified by {prop_name} payroll")
+        c.drawString(20 * mm, y - 5 * mm, "To the employee: keep this document safe — your new employer will need Parts 2 and 3.")
+        c.drawString(20 * mm, 15 * mm, "Bu belge MyHotelBox İK & Bordro tarafından HMRC P45 formatı esas alınarak otomatik üretilmiştir.")
+        c.showPage()
+        c.save()
+        import unicodedata
+        safe = unicodedata.normalize("NFKD", s.get("name", "staff")).encode("ascii", "ignore").decode() or "staff"
+        return Response(content=buf.getvalue(), media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="P45_{safe.replace(" ", "_")}.pdf"'})
+
+    # ==================== STAFF SELF-SERVICE PORTAL ====================
+    ALL_STAFF_ROLES = ("admin", "manager", "receptionist", "housekeeper", "maintenance")
+
+    async def _my_staff_doc(current_user: dict):
+        import re as _re
+        email = (current_user.get("email") or "").lower()
+        if not email:
+            return None
+        return await db.shift_staff.find_one({"email": {"$regex": f"^{_re.escape(email)}$", "$options": "i"}}, {"_id": 0})
+
+    @router.get("/uk-payroll/me/summary")
+    async def my_summary(current_user: dict = Depends(require_roles(*ALL_STAFF_ROLES))):
+        s = await _my_staff_doc(current_user)
+        if not s:
+            return {"linked": False, "message": "E-posta adresinizle eşleşen personel kaydı bulunamadı. Yöneticinizden İK kaydınıza e-posta eklemesini isteyin."}
+        today = datetime.now(timezone.utc).date()
+        ty_start = _tax_year_start(today)
+        slips = await db.uk_payslips.find({"staff_id": s["id"]}, {"_id": 0, "gross": 1, "paye": 1, "ni_employee": 1, "net": 1, "period": 1}).to_list(50)
+        ytd = {"gross": 0.0, "paye": 0.0, "ni": 0.0, "net": 0.0}
+        for sl in slips:
+            try:
+                if datetime.strptime(sl["period"]["start"], "%Y-%m-%d").date() >= ty_start:
+                    ytd["gross"] += sl.get("gross", 0)
+                    ytd["paye"] += sl.get("paye", 0)
+                    ytd["ni"] += sl.get("ni_employee", 0)
+                    ytd["net"] += sl.get("net", 0)
+            except Exception:
+                continue
+        return {"linked": True,
+                "staff": {k: s.get(k) for k in ("id", "name", "role", "pay_type", "pay_rate", "tax_code",
+                                                "ni_number", "start_date", "leaver_date", "contract_type")},
+                "tax_year": TAX_YEAR,
+                "ytd": {k: round(v, 2) for k, v in ytd.items()}}
+
+    @router.get("/uk-payroll/me/payslips")
+    async def my_payslips(current_user: dict = Depends(require_roles(*ALL_STAFF_ROLES))):
+        s = await _my_staff_doc(current_user)
+        if not s:
+            return []
+        return await db.uk_payslips.find(
+            {"staff_id": s["id"]},
+            {"_id": 0, "id": 1, "year": 1, "month": 1, "hours": 1, "gross": 1, "paye": 1,
+             "ni_employee": 1, "pension_ee": 1, "student_loan": 1, "net": 1, "period": 1}
+        ).sort([("year", -1), ("month", -1)]).to_list(36)
+
+    @router.get("/uk-payroll/me/shifts")
+    async def my_shifts(weeks: int = 6, current_user: dict = Depends(require_roles(*ALL_STAFF_ROLES))):
+        s = await _my_staff_doc(current_user)
+        if not s:
+            return []
+        cutoff = (datetime.now(timezone.utc) - timedelta(weeks=min(weeks, 26))).date().isoformat()
+        return await db.shift_entries.find(
+            {"staff_id": s["id"], "date": {"$gte": cutoff}},
+            {"_id": 0, "date": 1, "start_time": 1, "end_time": 1, "hours_worked": 1,
+             "status": 1, "role": 1, "earned_amount": 1}
+        ).sort("date", -1).to_list(200)
 
     return router

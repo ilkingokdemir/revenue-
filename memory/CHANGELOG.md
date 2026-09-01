@@ -4064,3 +4064,19 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   Kalıcı test: /app/backend/tests/test_uk_payroll_iter600.py.
 - NOT: E-postalar MOCK (RESEND_API_KEY yok). NMW matematiği doğrulandı: 19 yaş → £10.85,
   16h × £6.25 → £73.60 top-up.
+
+## Iter 601 (2026-09-01) — Bordro Robotu + P45 + Personel Portalı + Emeklilik (AE)
+- Bordro Robotu: uk_payroll_run 16. otomasyon motoru (JOB_HANDLERS + JOB_REGISTRY finance,
+  18:00). Ayın son günü guard'ı; run → payslip'ler + yöneticilere özet e-postası (mock).
+  UI: Bordro Geçmişi sekmesinde robot kartı + "Şimdi Çalıştır". POST /uk-payroll/robot/run.
+- P45 Part 1A PDF: GET /uk-payroll/employees/{id}/p45 (sadece leaver; yıl içi toplam
+  ücret+vergi, HMRC vergi ayı, NI, vergi kodu). UI: leaver satırında P45 indirme butonu.
+- Personel Portalı: /uk-payroll/me/{summary,payslips,shifts} (tüm roller, e-posta eşleşmesi
+  re.escape'li case-insensitive). UI: "Portalım" sekmesi (YTD toplamlar + bordrolarım PDF +
+  son 8 hafta vardiyalar). Admin/manager olmayan roller SADECE bu sekmeyi görür.
+  Payslip PDF endpoint'i personelin kendi slip'ine açıldı (aksi 403).
+- Emeklilik auto-enrolment 2026/27: band £520-£4,189/ay, tetik £833, yaş 22-66; EE %5 + ER %3.
+  pension_status (auto/opted_in/opted_out) HR alanı + dialog seçici; bordro tablosu
+  "Emeklilik" sütunu; payslip PDF kesinti satırı; işveren maliyetine ER katkısı dahil.
+- Test: iteration_601.json %100 (backend 11/11 yeni + 8/8 regresyon, frontend %100).
+  Kalıcı test: /app/backend/tests/test_uk_payroll_iter601.py.

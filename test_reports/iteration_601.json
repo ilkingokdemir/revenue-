@@ -1,0 +1,31 @@
+{
+  "summary": "UK Payroll iter601 4 yeni özellik (Bordro Robotu, P45, Personel Portalı, Emeklilik) uçtan uca test edildi. Backend pytest 11/11 GEÇTI (iter601 yeni) + iter600 regresyon 8/8 GEÇTI. Frontend Playwright ile PRO moda geçildi → İK & Bordro (UK) açıldı; 4 sekme mevcut (Personel & İK, Aylık Bordro, Bordro Geçmişi, Portalım). Portalım sekmesi admin için 'ukp-portal-unlinked' Türkçe mesajı gösterdi ('E-posta adresinizle eşleşen personel kaydı bulunamadı...'). Bordro Geçmişi'nde koyu 'ukp-robot-card' ve 'ukp-robot-run-btn' göründü; Şimdi Çalıştır'a tıklandı → toast: 'Bu ay onaylanmış vardiya yok' (Eylül 2026 boş, beklenen davranış). Personel & İK sekmesinde HR düzenle dialogu açıldı; 'Emeklilik (auto-enrolment)' seçicisi (hr-pension-select) 3 seçenekle görüldü: Otomatik (uygunsa kayıt), Katıldı (opt-in), Vazgeçti (opt-out). Backend akışları: (1) POST /uk-payroll/robot/run guard'ı çalışıyor (not_last_day_of_month/no_shifts/already_run), force=true de aynı skip'i döndürüyor. (2) GET /automation/settings jobs listesinde 'uk_payroll_run' var (label 'Bordro Robotu (UK)', category finance, enabled true, cron 18:00). (3) POST /scheduler/trigger/all/uk_payroll_run 200 döndü. (4) P45: aktif personelde 400, offboard sonrası 200 %PDF bytes, reinstate sonrası tekrar 400 — akış temiz. (5) Portal: admin unlinked; email geçici olarak admin@hotelbox.com yapılıp linked:true + ytd + payslips + shifts alanları doğrulandı, ardından email eski değerine geri döndürüldü. (6) Preview totals+rows'ta pension_ee/pension_er/pension_enrolled alanları mevcut; pension_status='opted_out' → enrolled False, EE=ER=0.00. Tüm test verileri temizlendi/geri alındı; Eylül 2026'ya kalıcı kayıt eklenmedi (robot her seferinde skip döndü).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_uk_payroll_iter601.py",
+    "/app/backend/tests/test_uk_payroll_iter600.py",
+    "/app/test_reports/pytest/iter601_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "uk_payroll.py 779 satıra ulaştı — 700 satır sınırına yaklaşıyor; helper'ları (calculators.py, pdf_renderer.py, portal_routes.py) ayrı modüle çıkarmak sürdürülebilirlik açısından öneriliyor.",
+    "run_monthly_payroll_internal içinde 'not_last_day' skip'inde artık last_run_result kaydı yapılmıyor gibi görünüyor — automation_settings 'last_run_result' güncellenmesi scheduler_trigger yolu üzerinden geliyor, doğrudan robot_run endpoint'inden de aynı kaydı yapmak izlenebilirlik için iyi olur.",
+    "P45 endpoint 'tax_month' hesabı ((leaver.month - 4) % 12) + 1: Nisan→1, Mart→12 doğru. Ancak leaver_date'in vergi yılı içinde olduğu kontrolü (_tax_year_start) sadece slip filtresi için kullanılıyor; leaver_date < ty_start senaryosu (önceki vergi yılında ayrılan personel için P45 tekrar üretme) test edilmemiş — total_pay/total_tax 0 dönebilir.",
+    "portal /me/summary email match case-insensitive regex kullanıyor (^{email}$) — email içindeki regex özel karakterleri (nokta, +) escape edilmediği için theorik olarak regex hatası veya yanlış eşleşme riski var. re.escape(email) kullanılmalı.",
+    "portal /me/payslips ve /me/shifts response boyut limitleri (36 payslip, 200 shift) — çok yıllık geçmişi olan personelde pagination gerekebilir; şu an için kabul edilebilir.",
+    "Frontend UKPayrollPanel.js 663 satır — dört yeni özellik tek dosyaya eklendi; PortalTab, RobotCard, PensionSelect ayrı bileşenlere çıkarılabilir."
+  ],
+  "updated_files": ["/app/backend/tests/test_uk_payroll_iter601.py"],
+  "success_rate": {"backend": "100% (11/11 iter601 + 8/8 iter600)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test sırasında bir personel geçici offboard edildi + P45 alındı → finally bloğunda reinstate edildi. Bir personelin email'i geçici olarak admin@hotelbox.com yapıldı → orijinal değerine geri döndürüldü. Bir personelin pension_status'u opted_out olarak değiştirildi → orijinal değerine (auto) geri döndürüldü. Eylül 2026 için hiçbir kalıcı vardiya/run/payslip eklenmedi (robot skip döndü).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter601 4 yeni özellik (Bordro Robotu, P45, Personel Portalı, Emeklilik) tam çalışıyor. Regression için hem iter600 hem iter601 pytest dosyaları kullanılabilir. E-posta göndermeleri RESEND_API_KEY yokluğunda 'mocked' döner. Mayıs 2026 run/payslips DB'de kalıcı — silinmemeli.",
+  "rca of the issue": "N/A — no bugs found."
+}

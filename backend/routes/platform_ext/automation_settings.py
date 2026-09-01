@@ -74,6 +74,11 @@ JOB_REGISTRY = {
         "description": "Her ayın başında tüm otomasyon motorlarının performans karnesini e-posta ile gönderir.",
         "default_cron": (7, 30), "default_enabled": True, "params": [],
     },
+    "uk_payroll_run": {
+        "label": "Bordro Robotu (UK)", "category": "finance",
+        "description": "Ayın son günü UK bordrosunu otomatik çalıştırır, payslip'leri üretir ve yöneticilere özet e-postası gönderir.",
+        "default_cron": (18, 0), "default_enabled": True, "params": [],
+    },
     "weekly_report": {
         "label": "Haftalık Yönetim Raporu", "category": "reporting",
         "description": "Her pazartesi son 7 günün anahtar göstergelerini önceki hafta karşılaştırmasıyla e-postalar.",

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   Users, Calculator, History, RefreshCw, Download, Mail, AlertTriangle,
   CheckCircle, XCircle, UserMinus, UserPlus, Pencil, ShieldCheck, PoundSterling,
+  UserCircle, FileText, Bot,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -39,6 +40,7 @@ function HrEditDialog({ emp, onClose, onSaved }) {
     tax_code: emp.tax_code || "1257L", contract_type: emp.contract_type || "full_time",
     start_date: emp.start_date || "", bank_sort_code: emp.bank_sort_code || "",
     bank_account_no: emp.bank_account_no || "", student_loan_plans: emp.student_loan_plans || [],
+    pension_status: emp.pension_status || "auto",
     address: emp.address || "", postcode: emp.postcode || "",
   });
   const [saving, setSaving] = useState(false);
@@ -95,6 +97,13 @@ function HrEditDialog({ emp, onClose, onSaved }) {
             <select className={inputCls} value={f.student_loan_plans[0] || ""} onChange={(e) => set("student_loan_plans", e.target.value ? [e.target.value] : [])}>
               <option value="">Yok</option>
               {SL_PLANS.map((p) => <option key={p.v} value={p.v}>{p.l}</option>)}
+            </select>
+          </Field>
+          <Field label="Emeklilik (auto-enrolment)">
+            <select className={inputCls} value={f.pension_status} onChange={(e) => set("pension_status", e.target.value)} data-testid="hr-pension-select">
+              <option value="auto">Otomatik (uygunsa kayıt)</option>
+              <option value="opted_in">Katıldı (opt-in)</option>
+              <option value="opted_out">Vazgeçti (opt-out)</option>
             </select>
           </Field>
           <Field label="Sort code"><input className={inputCls} placeholder="12-34-56" value={f.bank_sort_code} onChange={(e) => set("bank_sort_code", e.target.value)} /></Field>
@@ -172,11 +181,15 @@ function OffboardDialog({ emp, onClose, onDone }) {
   );
 }
 
-export const UKPayrollPanel = ({ propertyId }) => {
+export const UKPayrollPanel = ({ propertyId, user }) => {
   const pid = propertyId || "all";
-  const [tab, setTab] = useState("employees");
+  const isManager = ["admin", "manager"].includes(user?.role);
+  const [tab, setTab] = useState(isManager ? "employees" : "portal");
   const [employees, setEmployees] = useState([]);
   const [rates, setRates] = useState(null);
+  const [portal, setPortal] = useState(null);
+  const [mySlips, setMySlips] = useState([]);
+  const [myShifts, setMyShifts] = useState([]);
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -216,9 +229,23 @@ export const UKPayrollPanel = ({ propertyId }) => {
     } catch { /* ignore */ }
   }, [pid]);
 
-  useEffect(() => { loadEmployees(); }, [loadEmployees]);
+  const loadPortal = useCallback(async () => {
+    try {
+      const [s, p, sh] = await Promise.all([
+        axios.get(`${API}/uk-payroll/me/summary`, cfg),
+        axios.get(`${API}/uk-payroll/me/payslips`, cfg),
+        axios.get(`${API}/uk-payroll/me/shifts?weeks=8`, cfg),
+      ]);
+      setPortal(s.data);
+      setMySlips(p.data);
+      setMyShifts(sh.data);
+    } catch { toast.error("Portal verileri yüklenemedi"); }
+  }, []);
+
+  useEffect(() => { if (isManager) loadEmployees(); }, [isManager, loadEmployees]);
   useEffect(() => { if (tab === "payroll") loadPreview(); }, [tab, loadPreview]);
   useEffect(() => { if (tab === "history") loadRuns(); }, [tab, loadRuns]);
+  useEffect(() => { if (tab === "portal") loadPortal(); }, [tab, loadPortal]);
 
   const runPayroll = async (force = false) => {
     setRunning(true);
@@ -252,6 +279,29 @@ export const UKPayrollPanel = ({ propertyId }) => {
       a.click();
       URL.revokeObjectURL(url);
     } catch { toast.error("PDF indirilemedi"); }
+  };
+
+  const downloadP45 = async (emp) => {
+    try {
+      const res = await axios.get(`${API}/uk-payroll/employees/${emp.id}/p45`, { ...cfg, responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `P45_${emp.name}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("P45 belgesi indirildi");
+    } catch { toast.error("P45 oluşturulamadı"); }
+  };
+
+  const runRobot = async () => {
+    try {
+      const { data } = await axios.post(`${API}/uk-payroll/robot/run`, { property_id: pid, force: true }, cfg);
+      if (data.skipped === "already_run") toast.info("Bu ayın bordrosu zaten çalıştırılmış");
+      else if (data.skipped === "no_shifts") toast.info("Bu ay onaylanmış vardiya yok");
+      else toast.success(`Robot bordroyu çalıştırdı — ${data.payslips_created} payslip, ${data.emails?.mocked || 0} özet e-postası (mock)`);
+      loadRuns();
+    } catch { toast.error("Robot çalıştırılamadı"); }
   };
 
   const emailSlip = async (slip) => {
@@ -295,10 +345,11 @@ export const UKPayrollPanel = ({ propertyId }) => {
             Vergi yılı {rates?.tax_year || "2026/27"} · NMW yaş bantları, PAYE, NI Class 1 otomatik hesap · Vardiyadan bordroya
           </p>
         </div>
-        <div className="flex gap-2">
-          <TabBtn id="employees" icon={Users} label="Personel & İK" testid="ukp-tab-employees" />
-          <TabBtn id="payroll" icon={Calculator} label="Aylık Bordro" testid="ukp-tab-payroll" />
-          <TabBtn id="history" icon={History} label="Bordro Geçmişi" testid="ukp-tab-history" />
+        <div className="flex flex-wrap gap-2">
+          {isManager && <TabBtn id="employees" icon={Users} label="Personel & İK" testid="ukp-tab-employees" />}
+          {isManager && <TabBtn id="payroll" icon={Calculator} label="Aylık Bordro" testid="ukp-tab-payroll" />}
+          {isManager && <TabBtn id="history" icon={History} label="Bordro Geçmişi" testid="ukp-tab-history" />}
+          <TabBtn id="portal" icon={UserCircle} label="Portalım" testid="ukp-tab-portal" />
         </div>
       </div>
 
@@ -352,9 +403,14 @@ export const UKPayrollPanel = ({ propertyId }) => {
                     <td className="px-4 py-2.5">
                       <div className="flex gap-1.5 justify-end">
                         <button onClick={() => setEditEmp(e)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-stone-50" title="İK kaydını düzenle" data-testid={`ukp-edit-${e.id}`}><Pencil size={14} /></button>
-                        {e.employment_status === "leaver"
-                          ? <button onClick={() => reinstate(e)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-emerald-50 text-emerald-600" title="Geri al" data-testid={`ukp-reinstate-${e.id}`}><UserPlus size={14} /></button>
-                          : <button onClick={() => setOffEmp(e)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-red-50 text-red-500" title="İşten çıkar" data-testid={`ukp-offboard-${e.id}`}><UserMinus size={14} /></button>}
+                        {e.employment_status === "leaver" ? (
+                          <>
+                            <button onClick={() => downloadP45(e)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-amber-50 text-amber-600" title="P45 indir" data-testid={`ukp-p45-${e.id}`}><FileText size={14} /></button>
+                            <button onClick={() => reinstate(e)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-emerald-50 text-emerald-600" title="Geri al" data-testid={`ukp-reinstate-${e.id}`}><UserPlus size={14} /></button>
+                          </>
+                        ) : (
+                          <button onClick={() => setOffEmp(e)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-red-50 text-red-500" title="İşten çıkar" data-testid={`ukp-offboard-${e.id}`}><UserMinus size={14} /></button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -401,7 +457,7 @@ export const UKPayrollPanel = ({ propertyId }) => {
               <table className="w-full text-sm" data-testid="ukp-payroll-table">
                 <thead className="bg-stone-900 text-white text-xs uppercase">
                   <tr>
-                    {["Personel", "Saat", "Vardiya Kazancı", "NMW Tamamlama", "Brüt", "PAYE", "NI (Çalışan)", "Öğr. Kredisi", "Net", "İşveren NI"].map((h) => (
+                    {["Personel", "Saat", "Vardiya Kazancı", "NMW Tamamlama", "Brüt", "PAYE", "NI (Çalışan)", "Öğr. Kredisi", "Emeklilik", "Net", "İşveren NI"].map((h) => (
                       <th key={h} className="text-left px-3 py-2.5 font-semibold whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -420,12 +476,13 @@ export const UKPayrollPanel = ({ propertyId }) => {
                       <td className="px-3 py-2.5 text-red-600">{gbp(r.paye)}</td>
                       <td className="px-3 py-2.5 text-red-600">{gbp(r.ni_employee)}</td>
                       <td className="px-3 py-2.5">{r.student_loan ? gbp(r.student_loan) : "—"}</td>
+                      <td className="px-3 py-2.5">{r.pension_ee ? <span className="text-indigo-600">{gbp(r.pension_ee)}</span> : "—"}</td>
                       <td className="px-3 py-2.5 font-bold text-emerald-700">{gbp(r.net)}</td>
                       <td className="px-3 py-2.5 text-stone-500">{gbp(r.ni_employer)}</td>
                     </tr>
                   ))}
                   {!loading && !preview?.rows?.length && (
-                    <tr><td colSpan={10} className="px-4 py-8 text-center text-stone-400">Bu dönemde onaylanmış/tamamlanmış vardiya yok.</td></tr>
+                    <tr><td colSpan={11} className="px-4 py-8 text-center text-stone-400">Bu dönemde onaylanmış/tamamlanmış vardiya yok.</td></tr>
                   )}
                 </tbody>
                 {preview?.rows?.length > 0 && (
@@ -439,6 +496,7 @@ export const UKPayrollPanel = ({ propertyId }) => {
                       <td className="px-3 py-2.5 text-red-600">{gbp(preview.totals.paye)}</td>
                       <td className="px-3 py-2.5 text-red-600">{gbp(preview.totals.ni_employee)}</td>
                       <td className="px-3 py-2.5">{gbp(preview.totals.student_loan)}</td>
+                      <td className="px-3 py-2.5 text-indigo-600">{preview.totals.pension_ee ? gbp(preview.totals.pension_ee) : "—"}</td>
                       <td className="px-3 py-2.5 text-emerald-700">{gbp(preview.totals.net)}</td>
                       <td className="px-3 py-2.5">{gbp(preview.totals.ni_employer)}</td>
                     </tr>
@@ -449,14 +507,28 @@ export const UKPayrollPanel = ({ propertyId }) => {
           </div>
           {preview?.totals && preview.rows.length > 0 && (
             <div className="text-sm text-stone-500">
-              Toplam işveren maliyeti (brüt + işveren NI): <b className="text-stone-900">{gbp(preview.totals.employer_cost)}</b>
+              Toplam işveren maliyeti (brüt + işveren NI + işveren emeklilik %3): <b className="text-stone-900">{gbp(preview.totals.employer_cost)}</b>
+              {preview.totals.pension_er > 0 && <span className="ml-3">İşveren emeklilik katkısı: <b>{gbp(preview.totals.pension_er)}</b></span>}
             </div>
           )}
         </div>
       )}
 
       {tab === "history" && (
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="space-y-4">
+          <div className="bg-stone-900 text-white rounded-2xl px-5 py-4 flex flex-wrap items-center justify-between gap-3" data-testid="ukp-robot-card">
+            <div className="flex items-center gap-3">
+              <Bot size={22} className="text-emerald-400" />
+              <div>
+                <div className="font-semibold text-sm">Bordro Robotu</div>
+                <div className="text-xs text-stone-400">Her ayın son günü 18:00'de bordroyu otomatik çalıştırır ve yöneticilere özet e-postası gönderir (Otomasyon Merkezi'nden yönetilir).</div>
+              </div>
+            </div>
+            <button onClick={runRobot} className="px-4 py-2 text-sm rounded-xl bg-emerald-600 hover:bg-emerald-500 font-medium" data-testid="ukp-robot-run-btn">
+              Şimdi Çalıştır
+            </button>
+          </div>
+          <div className="grid md:grid-cols-3 gap-4">
           <div className="space-y-2">
             {runs.map((r) => (
               <button key={r.id} onClick={() => openRun(r)} data-testid={`ukp-run-${r.id}`}
@@ -503,6 +575,82 @@ export const UKPayrollPanel = ({ propertyId }) => {
               <div className="text-sm text-stone-400 p-6 border border-dashed border-stone-200 rounded-2xl">Soldan bir bordro dönemi seçin.</div>
             )}
           </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "portal" && (
+        <div className="space-y-4" data-testid="ukp-portal">
+          {portal && !portal.linked ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-sm text-amber-800" data-testid="ukp-portal-unlinked">
+              {portal.message}
+            </div>
+          ) : portal ? (
+            <>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-white border border-stone-200 rounded-2xl p-5" data-testid="ukp-portal-summary">
+                  <div className="text-xs text-stone-500 uppercase font-semibold mb-2">Kayıt Bilgilerim</div>
+                  <div className="font-bold text-lg text-stone-900">{portal.staff?.name}</div>
+                  <div className="text-sm text-stone-500 mt-1">
+                    {portal.staff?.role} · £{portal.staff?.pay_rate}/{portal.staff?.pay_type === "hourly" ? "saat" : "gün"} · Vergi kodu {portal.staff?.tax_code || "1257L"}
+                  </div>
+                  <div className="text-xs text-stone-400 mt-1">NI: {portal.staff?.ni_number || "—"} · İşe giriş: {portal.staff?.start_date || "—"}</div>
+                </div>
+                <div className="bg-stone-900 text-white rounded-2xl p-5" data-testid="ukp-portal-ytd">
+                  <div className="text-xs text-stone-400 uppercase font-semibold mb-2">Vergi Yılı Toplamlarım ({portal.tax_year})</div>
+                  <div className="grid grid-cols-4 gap-3 text-center">
+                    {[["Brüt", portal.ytd?.gross], ["PAYE", portal.ytd?.paye], ["NI", portal.ytd?.ni], ["Net", portal.ytd?.net]].map(([l, v]) => (
+                      <div key={l}><div className="text-xs text-stone-400">{l}</div><div className="font-bold text-sm">{gbp(v)}</div></div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-stone-100 font-semibold text-sm">Bordrolarım</div>
+                  <table className="w-full text-sm" data-testid="ukp-my-payslips">
+                    <tbody className="divide-y divide-stone-100">
+                      {mySlips.map((s) => (
+                        <tr key={s.id}>
+                          <td className="px-4 py-2.5">
+                            <div className="font-medium">{MONTHS_TR[s.month - 1]} {s.year}</div>
+                            <div className="text-xs text-stone-400">{s.hours} saat · Brüt {gbp(s.gross)}</div>
+                          </td>
+                          <td className="px-4 py-2.5 font-bold text-emerald-700">{gbp(s.net)}</td>
+                          <td className="px-4 py-2.5 text-right">
+                            <button onClick={() => downloadPdf({ ...s, staff_name: portal.staff?.name })} className="p-1.5 rounded-lg border border-stone-200 hover:bg-stone-50" title="PDF indir" data-testid={`ukp-my-pdf-${s.id}`}><Download size={14} /></button>
+                          </td>
+                        </tr>
+                      ))}
+                      {mySlips.length === 0 && <tr><td className="px-4 py-6 text-center text-stone-400 text-sm">Henüz bordronuz oluşturulmamış.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-stone-100 font-semibold text-sm">Vardiyalarım (son 8 hafta)</div>
+                  <div className="max-h-96 overflow-y-auto">
+                    <table className="w-full text-sm" data-testid="ukp-my-shifts">
+                      <tbody className="divide-y divide-stone-100">
+                        {myShifts.map((s, i) => (
+                          <tr key={i}>
+                            <td className="px-4 py-2">{s.date}</td>
+                            <td className="px-4 py-2 text-stone-500">{s.start_time}–{s.end_time}</td>
+                            <td className="px-4 py-2">{s.hours_worked} saat</td>
+                            <td className="px-4 py-2">
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${["completed", "approved"].includes(s.status) ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>{s.status}</span>
+                            </td>
+                          </tr>
+                        ))}
+                        {myShifts.length === 0 && <tr><td className="px-4 py-6 text-center text-stone-400 text-sm">Son 8 haftada vardiya kaydınız yok.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-stone-400 p-6">Yükleniyor...</div>
+          )}
         </div>
       )}
 

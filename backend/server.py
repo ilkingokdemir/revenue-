@@ -1219,6 +1219,13 @@ async def _job_report_card(property_id: str) -> dict:
 
 JOB_HANDLERS["monthly_report_card"] = _job_report_card
 
+async def _job_uk_payroll_run(property_id: str) -> dict:
+    try:
+        return await uk_payroll_router.run_monthly_payroll_internal(property_id or "all")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+JOB_HANDLERS["uk_payroll_run"] = _job_uk_payroll_run
+
 from routes.guests.review_autopilot import create_review_autopilot_router
 review_autopilot_router = create_review_autopilot_router(db, require_roles, LlmChat, UserMessage)
 api_router.include_router(review_autopilot_router)

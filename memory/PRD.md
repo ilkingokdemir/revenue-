@@ -707,6 +707,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   aylık bordro run + payslip PDF (Türkçe font fix) + mock e-posta. iteration_600 %100.
 - Detay: CHANGELOG.md iter 600. Bekleyen: Resend/Twilio anahtarları (kullanıcı).
 
+## Güncelleme (2026-09-01, iter 601) — Bordro Robotu + P45 + Portal + Emeklilik
+- Bordro Robotu (16. motor, ayın son günü otomatik run + yönetici özeti), P45 Part 1A PDF,
+  Personel Portalı ("Portalım" sekmesi, staff rolleri sadece bunu görür), Emeklilik AE
+  (%5 EE + %3 ER, £520-£4,189 band). iteration_601 %100. Detay: CHANGELOG.md iter 601.
+
 ## NOT: Iter 432+ kayıtları /app/memory/CHANGELOG.md dosyasına taşındı (700 satır limiti).
 
 ## Güncelleme (2026-08-14, iter 545)

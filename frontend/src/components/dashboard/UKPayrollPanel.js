@@ -190,6 +190,10 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
   const [portal, setPortal] = useState(null);
   const [mySlips, setMySlips] = useState([]);
   const [myShifts, setMyShifts] = useState([]);
+  const [myLeaves, setMyLeaves] = useState([]);
+  const [pendingLeaves, setPendingLeaves] = useState([]);
+  const [leaveForm, setLeaveForm] = useState({ leave_type: "annual", start_date: "", end_date: "", reason: "" });
+  const [leaveOpen, setLeaveOpen] = useState(false);
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -231,18 +235,27 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
 
   const loadPortal = useCallback(async () => {
     try {
-      const [s, p, sh] = await Promise.all([
+      const [s, p, sh, lv] = await Promise.all([
         axios.get(`${API}/uk-payroll/me/summary`, cfg),
         axios.get(`${API}/uk-payroll/me/payslips`, cfg),
         axios.get(`${API}/uk-payroll/me/shifts?weeks=8`, cfg),
+        axios.get(`${API}/uk-payroll/me/leaves`, cfg),
       ]);
       setPortal(s.data);
       setMySlips(p.data);
       setMyShifts(sh.data);
+      setMyLeaves(lv.data);
     } catch { toast.error("Portal verileri yüklenemedi"); }
   }, []);
 
-  useEffect(() => { if (isManager) loadEmployees(); }, [isManager, loadEmployees]);
+  const loadPendingLeaves = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/shifts/leaves/${pid}?status=pending`, cfg);
+      setPendingLeaves(data);
+    } catch { /* ignore */ }
+  }, [pid]);
+
+  useEffect(() => { if (isManager) { loadEmployees(); loadPendingLeaves(); } }, [isManager, loadEmployees, loadPendingLeaves]);
   useEffect(() => { if (tab === "payroll") loadPreview(); }, [tab, loadPreview]);
   useEffect(() => { if (tab === "history") loadRuns(); }, [tab, loadRuns]);
   useEffect(() => { if (tab === "portal") loadPortal(); }, [tab, loadPortal]);
@@ -279,6 +292,56 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
       a.click();
       URL.revokeObjectURL(url);
     } catch { toast.error("PDF indirilemedi"); }
+  };
+
+  const blobDownload = (data, filename) => {
+    const url = URL.createObjectURL(data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadP60 = async (emp) => {
+    try {
+      const path = emp ? `${API}/uk-payroll/employees/${emp.id}/p60` : `${API}/uk-payroll/me/p60`;
+      const res = await axios.get(path, { ...cfg, responseType: "blob" });
+      const who = (emp?.name || "benim").replace(/\s+/g, "_");
+      blobDownload(res.data, `P60_${who}_${new Date().getFullYear()}.pdf`);
+      toast.success("P60 belgesi indirildi");
+    } catch { toast.error("P60 oluşturulamadı"); }
+  };
+
+  const downloadBacs = async (run) => {
+    try {
+      const res = await axios.get(`${API}/uk-payroll/runs/${run.id}/bacs`, { ...cfg, responseType: "blob" });
+      blobDownload(res.data, `BACS_${run.year}-${String(run.month).padStart(2, "0")}.txt`);
+      const inc = res.headers["x-bacs-included"], skip = res.headers["x-bacs-skipped"];
+      toast.success(`BACS dosyası indirildi — ${inc} ödeme satırı${skip > 0 ? `, ${skip} personel banka bilgisi eksik` : ""}`);
+    } catch (e) {
+      if (e.response?.status === 400) toast.error("Hiçbir personelde geçerli banka bilgisi yok (sort code + hesap no gerekli)");
+      else toast.error("BACS dosyası oluşturulamadı");
+    }
+  };
+
+  const decideLeave = async (leaveId, status) => {
+    try {
+      await axios.put(`${API}/shifts/leaves/${leaveId}`, { status }, cfg);
+      toast.success(status === "approved" ? "İzin onaylandı" : "İzin reddedildi");
+      loadPendingLeaves();
+    } catch { toast.error("İşlem başarısız"); }
+  };
+
+  const submitLeave = async () => {
+    if (!leaveForm.start_date || !leaveForm.end_date) { toast.error("Başlangıç ve bitiş tarihi zorunlu"); return; }
+    try {
+      await axios.post(`${API}/uk-payroll/me/leave-request`, leaveForm, cfg);
+      toast.success("İzin talebiniz gönderildi — yönetici onayı bekleniyor");
+      setLeaveForm({ leave_type: "annual", start_date: "", end_date: "", reason: "" });
+      setLeaveOpen(false);
+      loadPortal();
+    } catch (e) { toast.error(e.response?.data?.detail || "Talep gönderilemedi"); }
   };
 
   const downloadP45 = async (emp) => {
@@ -365,7 +428,27 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
       )}
 
       {tab === "employees" && (
-        <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+        <div className="space-y-4">
+          {pendingLeaves.length > 0 && (
+            <div className="bg-white border border-indigo-200 rounded-2xl p-4" data-testid="ukp-pending-leaves">
+              <div className="font-semibold text-sm text-indigo-800 mb-3">Bekleyen İzin Talepleri ({pendingLeaves.length})</div>
+              <div className="space-y-2">
+                {pendingLeaves.map((lv) => (
+                  <div key={lv.id} className="flex flex-wrap items-center justify-between gap-2 bg-indigo-50/50 rounded-xl px-3 py-2 text-sm">
+                    <div>
+                      <b>{lv.staff_name}</b> · {lv.leave_type === "annual" ? "Yıllık izin" : lv.leave_type === "sick" ? "Hastalık" : lv.leave_type} · {lv.start_date} → {lv.end_date} ({lv.days} gün)
+                      {lv.reason && <span className="text-stone-500"> — {lv.reason}</span>}
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button onClick={() => decideLeave(lv.id, "approved")} className="px-3 py-1 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700" data-testid={`ukp-leave-approve-${lv.id}`}>Onayla</button>
+                      <button onClick={() => decideLeave(lv.id, "rejected")} className="px-3 py-1 text-xs rounded-lg bg-red-100 text-red-600 hover:bg-red-200" data-testid={`ukp-leave-reject-${lv.id}`}>Reddet</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="ukp-employees-table">
               <thead className="bg-stone-50 text-xs text-stone-500 uppercase">
@@ -403,6 +486,7 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
                     <td className="px-4 py-2.5">
                       <div className="flex gap-1.5 justify-end">
                         <button onClick={() => setEditEmp(e)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-stone-50" title="İK kaydını düzenle" data-testid={`ukp-edit-${e.id}`}><Pencil size={14} /></button>
+                        <button onClick={() => downloadP60(e)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-blue-50 text-blue-600" title="P60 indir (vergi yılı özeti)" data-testid={`ukp-p60-${e.id}`}><FileText size={14} /></button>
                         {e.employment_status === "leaver" ? (
                           <>
                             <button onClick={() => downloadP45(e)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-amber-50 text-amber-600" title="P45 indir" data-testid={`ukp-p45-${e.id}`}><FileText size={14} /></button>
@@ -420,6 +504,7 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
                 )}
               </tbody>
             </table>
+          </div>
           </div>
         </div>
       )}
@@ -544,9 +629,14 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
               <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100">
                   <div className="font-semibold text-sm">{MONTHS_TR[activeRun.month - 1]} {activeRun.year} — Payslip'ler</div>
-                  <button onClick={emailAll} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-stone-900 text-white hover:bg-stone-700" data-testid="ukp-email-all-btn">
-                    <Mail size={13} /> Tümüne E-posta
-                  </button>
+                  <div className="flex gap-1.5">
+                    <button onClick={() => downloadBacs(activeRun)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-stone-300 hover:bg-stone-50" data-testid="ukp-bacs-btn">
+                      <Download size={13} /> BACS Dosyası
+                    </button>
+                    <button onClick={emailAll} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-stone-900 text-white hover:bg-stone-700" data-testid="ukp-email-all-btn">
+                      <Mail size={13} /> Tümüne E-posta
+                    </button>
+                  </div>
                 </div>
                 <table className="w-full text-sm" data-testid="ukp-slips-table">
                   <tbody className="divide-y divide-stone-100">
@@ -589,8 +679,15 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
             <>
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="bg-white border border-stone-200 rounded-2xl p-5" data-testid="ukp-portal-summary">
-                  <div className="text-xs text-stone-500 uppercase font-semibold mb-2">Kayıt Bilgilerim</div>
-                  <div className="font-bold text-lg text-stone-900">{portal.staff?.name}</div>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-xs text-stone-500 uppercase font-semibold mb-2">Kayıt Bilgilerim</div>
+                      <div className="font-bold text-lg text-stone-900">{portal.staff?.name}</div>
+                    </div>
+                    <button onClick={() => downloadP60(null)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50" data-testid="ukp-my-p60-btn">
+                      <FileText size={13} /> P60 İndir
+                    </button>
+                  </div>
                   <div className="text-sm text-stone-500 mt-1">
                     {portal.staff?.role} · £{portal.staff?.pay_rate}/{portal.staff?.pay_type === "hourly" ? "saat" : "gün"} · Vergi kodu {portal.staff?.tax_code || "1257L"}
                   </div>
@@ -645,6 +742,41 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              </div>
+              <div className="bg-white border border-stone-200 rounded-2xl p-5" data-testid="ukp-my-leaves">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="font-semibold text-sm">İzin Taleplerim</div>
+                  <button onClick={() => setLeaveOpen(!leaveOpen)} className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" data-testid="ukp-leave-request-btn">
+                    {leaveOpen ? "Vazgeç" : "+ İzin Talep Et"}
+                  </button>
+                </div>
+                {leaveOpen && (
+                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 mb-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end" data-testid="ukp-leave-form">
+                    <Field label="İzin türü">
+                      <select className={inputCls} value={leaveForm.leave_type} onChange={(e) => setLeaveForm({ ...leaveForm, leave_type: e.target.value })} data-testid="ukp-leave-type">
+                        <option value="annual">Yıllık izin</option>
+                        <option value="sick">Hastalık</option>
+                        <option value="unpaid">Ücretsiz izin</option>
+                        <option value="toil">TOIL (fazla mesai)</option>
+                      </select>
+                    </Field>
+                    <Field label="Başlangıç"><input type="date" className={inputCls} value={leaveForm.start_date} onChange={(e) => setLeaveForm({ ...leaveForm, start_date: e.target.value })} data-testid="ukp-leave-start" /></Field>
+                    <Field label="Bitiş"><input type="date" className={inputCls} value={leaveForm.end_date} onChange={(e) => setLeaveForm({ ...leaveForm, end_date: e.target.value })} data-testid="ukp-leave-end" /></Field>
+                    <Field label="Açıklama"><input className={inputCls} value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} placeholder="Opsiyonel" /></Field>
+                    <button onClick={submitLeave} className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 h-fit" data-testid="ukp-leave-submit">Gönder</button>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  {myLeaves.map((lv) => (
+                    <div key={lv.id} className="flex flex-wrap items-center justify-between gap-2 text-sm border border-stone-100 rounded-xl px-3 py-2">
+                      <div>{lv.leave_type === "annual" ? "Yıllık izin" : lv.leave_type === "sick" ? "Hastalık" : lv.leave_type} · {lv.start_date} → {lv.end_date} ({lv.days} gün)</div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${lv.status === "approved" ? "bg-emerald-50 text-emerald-700" : lv.status === "rejected" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700"}`}>
+                        {lv.status === "approved" ? "Onaylandı" : lv.status === "rejected" ? "Reddedildi" : "Onay bekliyor"}
+                      </span>
+                    </div>
+                  ))}
+                  {myLeaves.length === 0 && <div className="text-sm text-stone-400 py-2">Henüz izin talebiniz yok.</div>}
                 </div>
               </div>
             </>

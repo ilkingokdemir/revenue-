@@ -712,6 +712,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   Personel Portalı ("Portalım" sekmesi, staff rolleri sadece bunu görür), Emeklilik AE
   (%5 EE + %3 ER, £520-£4,189 band). iteration_601 %100. Detay: CHANGELOG.md iter 601.
 
+## Güncelleme (2026-09-01, iter 602) — P60 + İzin Portalı + BACS + Vardiya Hatırlatması
+- P60 vergi yılı özet PDF, self-servis izin talebi + yönetici onayı, BACS Standard 18
+  banka dosyası, Vardiya Hatırlatması (17. motor, "İK & Vardiya" kategorisi, opsiyonel).
+  iteration_602: backend 28/28. Detay: CHANGELOG.md iter 602.
+
 ## NOT: Iter 432+ kayıtları /app/memory/CHANGELOG.md dosyasına taşındı (700 satır limiti).
 
 ## Güncelleme (2026-08-14, iter 545)

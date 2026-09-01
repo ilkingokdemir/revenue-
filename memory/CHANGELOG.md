@@ -4080,3 +4080,23 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   "Emeklilik" sütunu; payslip PDF kesinti satırı; işveren maliyetine ER katkısı dahil.
 - Test: iteration_601.json %100 (backend 11/11 yeni + 8/8 regresyon, frontend %100).
   Kalıcı test: /app/backend/tests/test_uk_payroll_iter601.py.
+
+## Iter 602 (2026-09-01) — P60 + İzin Portalı + BACS + Vardiya Hatırlatması
+- P60: GET /uk-payroll/employees/{id}/p60 + /me/p60 (vergi yılı sonu özet PDF: yıllık
+  brüt/PAYE/NI/emeklilik/öğr.kredisi/net; yıl validasyonu 2020-2100). UI: personel satırında
+  mavi P60 butonu + Portalım'da "P60 İndir".
+- İzin Talebi Portalı: POST /uk-payroll/me/leave-request (leave_type whitelist annual/sick/
+  unpaid/toil, otomatik gün hesabı, ters tarih 400, hr_leave bildirimi) + GET /me/leaves.
+  Onay: mevcut PUT /shifts/leaves/{id}. UI: Portalım'da form + taleplerim listesi;
+  Personel & İK'da "Bekleyen İzin Talepleri" kartı (Onayla/Reddet).
+- BACS: GET /uk-payroll/runs/{run_id}/bacs → Standard 18 .txt (6 hane sort + 8 hane hesap +
+  099 + 11 hane pence + originator/ref/isim ASCII); X-Bacs-Included/Skipped header.
+  Origin: BACS_ORIGIN_SORT_CODE/BACS_ORIGIN_ACCOUNT env (yoksa placeholder). UI: run
+  detayında "BACS Dosyası" butonu.
+- Vardiya Hatırlatması: 17. motor shift_reminder (kategori "hr" → "İK & Vardiya" YENİ,
+  16:00, opsiyonel toggle). Yarınki planned/published/approved vardiyalara e-posta (mock),
+  reminder_sent_at shift bazlı dedupe. POST /uk-payroll/reminders/run manuel tetik.
+  AutomationSettingsPanel'e hr+finance CAT_ICON/CAT_COLOR eklendi (finance eksikti).
+- Test: iteration_602.json — backend 28/28 (iter600+601+602 pytest), frontend P60/izin
+  onay/sekme akışları doğrulandı. Kalıcı test: test_uk_payroll_iter602.py.
+- NOT: Backend hot-reload bazen takılıyor → supervisorctl restart backend çözüyor.

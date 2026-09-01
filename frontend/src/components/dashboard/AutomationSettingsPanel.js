@@ -4,12 +4,14 @@ import { toast } from "sonner";
 import {
   GearSix, ArrowsClockwise, CaretDown, CaretUp, Play, Lightning,
   CheckCircle, WarningCircle, Clock, Coins, Megaphone, Heart, ShieldWarning, ChartBar, Target,
+  Wallet, UsersThree,
 } from "@phosphor-icons/react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
 const CAT_ICON = {
   revenue: Coins, marketing: Megaphone, guest: Heart, risk: ShieldWarning, reporting: ChartBar, distribution: Lightning,
+  finance: Wallet, hr: UsersThree,
 };
 const CAT_COLOR = {
   revenue: "text-emerald-600 bg-emerald-50 border-emerald-200",
@@ -18,6 +20,8 @@ const CAT_COLOR = {
   risk: "text-amber-600 bg-amber-50 border-amber-200",
   reporting: "text-violet-600 bg-violet-50 border-violet-200",
   distribution: "text-cyan-600 bg-cyan-50 border-cyan-200",
+  finance: "text-teal-600 bg-teal-50 border-teal-200",
+  hr: "text-indigo-600 bg-indigo-50 border-indigo-200",
 };
 
 const fmtTime = (iso) => {

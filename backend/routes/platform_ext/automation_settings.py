@@ -79,6 +79,11 @@ JOB_REGISTRY = {
         "description": "Ayın son günü UK bordrosunu otomatik çalıştırır, payslip'leri üretir ve yöneticilere özet e-postası gönderir.",
         "default_cron": (18, 0), "default_enabled": True, "params": [],
     },
+    "shift_reminder": {
+        "label": "Vardiya Hatırlatması", "category": "hr",
+        "description": "Personele yarınki vardiyasını e-posta ile hatırlatır (opsiyonel — buradan açıp kapatabilirsiniz).",
+        "default_cron": (16, 0), "default_enabled": True, "params": [],
+    },
     "weekly_report": {
         "label": "Haftalık Yönetim Raporu", "category": "reporting",
         "description": "Her pazartesi son 7 günün anahtar göstergelerini önceki hafta karşılaştırmasıyla e-postalar.",
@@ -198,6 +203,7 @@ CATEGORY_META = {
     "reporting": "Raporlama",
     "distribution": "Dağıtım & OTA",
     "finance": "Finans & Tahsilat",
+    "hr": "İK & Vardiya",
 }
 
 

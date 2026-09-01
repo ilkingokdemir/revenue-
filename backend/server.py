@@ -1226,6 +1226,13 @@ async def _job_uk_payroll_run(property_id: str) -> dict:
         return {"ok": False, "error": str(e)}
 JOB_HANDLERS["uk_payroll_run"] = _job_uk_payroll_run
 
+async def _job_shift_reminder(property_id: str) -> dict:
+    try:
+        return await uk_payroll_router.run_shift_reminders_internal(property_id or "all")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+JOB_HANDLERS["shift_reminder"] = _job_shift_reminder
+
 from routes.guests.review_autopilot import create_review_autopilot_router
 review_autopilot_router = create_review_autopilot_router(db, require_roles, LlmChat, UserMessage)
 api_router.include_router(review_autopilot_router)

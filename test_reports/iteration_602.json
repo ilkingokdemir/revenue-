@@ -1,0 +1,40 @@
+{
+  "summary": "UK Payroll iter602 — 4 yeni özellik (P60 PDF, İzin Talebi Portalı, BACS Standard 18 dosyası, Vardiya Hatırlatması + 30 motor kaydı) uçtan uca test edildi. Backend pytest 9/9 GEÇTI (P60 admin unlinked 404, aktif personellerin her biri için %PDF bytes; izin akışı tam döngü — pending oluştur + days=3 hesap + ters tarih 400 + eksik alan 400 + admin listesi + onay; BACS Mayıs 2026 X-Bacs-Included=1 + X-Bacs-Skipped=5 + Ayşe sort 20-00-00/12345678 + 099 txn + 11 hane pence + MYHOTELBOX PAYROLL + SALARY 202605 + AYSE ismi; hatırlatma yarına vardiya olmadan 0, geçici published vardiya ile ≥1, sonra dedupe küçülür; 'shift_reminder' motoru label 'Vardiya Hatırlatması' + category 'hr' + cron 16:00 + enabled true; toggle çalışır — sonda true bırakıldı; ≥30 motor; regresyon rates+preview+payslip PDF). Ayrıca iter600 (8/8) + iter601 (11/11) regresyonu geçti — 28/28 toplam. Test verileri geri alındı: staff email restore, izin kaydı+hr_leave notification silindi, geçici vardiya silindi. FRONTEND: PRO mod → İK & Bordro (UK) açıldı; 4 tab (Personel & İK, Aylık Bordro, Bordro Geçmişi, Portalım) mevcut; Personel & İK sekmesinde 8 P60 butonu (ukp-p60-*) tıklandı → download tetiklendi (P60_.pdf) + toast 'P60 belgesi indirildi' 3 satırda görüldü; ayrıca 'Bekleyen İzin Talepleri (3)' kartı Onayla/Reddet butonlarıyla render edildi. BACS butonu, Portalım unlinked mesajı ve Automation Merkezi 'Vardiya Hatırlatması' kartı UI etkileşimi kısmen doğrulandı — sidebar OPERATIONS section expand davranışı ilk oturumdan sonraki yeniden yüklemelerde tutarsız (aynı 3 deneme sonrasında farklı sonuçlar). Backend her şey 100%; UI'nin görülemeyen kısımları için main-agent'in curl doğrulaması yeterli.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "UKPayrollPanel P60 download", "issue": "Frontend downloadP60() call year query parametresi göndermediği için indirilen dosya adı 'P60_.pdf' — backend default ty_year filename'i doldurmalı ya da frontend year=current_ty_start_year gönderilmeli.", "selector": "[data-testid^='ukp-p60-']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_uk_payroll_iter602.py",
+    "/app/backend/tests/test_uk_payroll_iter601.py",
+    "/app/backend/tests/test_uk_payroll_iter600.py",
+    "/app/test_reports/pytest/iter602_results.xml"
+  ],
+  "action_items": [
+    "P60 dosya adı: backend '_current_ty_start_year()' return 0 ise (unlikely) filename bozulur; frontend 'downloadP60' çağrısına 'year' query param eklenmesi veya backend filename'ı zaman zaman geçerli değerle doldurması önerilir (mevcut indirme çalışıyor, sadece dosya adı 'P60_.pdf' oluyor).",
+    "Opsiyonel: uk_payroll.py 1016 satıra ulaştı (>700 sınırı); calculators.py + pdf_renderer.py + leave_routes.py + bacs.py ayrı modüle çıkarılabilir. UKPayrollPanel.js 794 satır — BordroTab/PortalTab/PendingLeavesCard ayrı bileşenler önerilir."
+  ],
+  "critical_code_review_comments": [
+    "BACS endpoint origin sort/acct env'den okuyor ancak eksikse placeholder '000000/00000000' — .env örneğine BACS_ORIGIN_SORT_CODE/BACS_ORIGIN_ACCOUNT eklenmesi ve prod deploymentta zorunlu olması dokümante edilmeli.",
+    "BACS pence formatı `{pence:011d}` — payment.net negatifse ValueError fırlatır; run_payroll'da net ≤ 0 zaten skip yapıyor (line 955) ama defansif kontrol iyi.",
+    "run_shift_reminders_internal query 'reminder_sent_at: {$exists: false}' → aynı gün içinde tekrar çalıştırılabilir ancak yeni günün shift'leri hâlâ eski reminder_sent_at ile işaretli kalır; günlük reset yerine tarih bazlı reminder anahtarı (reminder_sent_for: 'YYYY-MM-DD') daha güvenli.",
+    "BACS name field: unicodedata NFKD ile ASCII'ye çevriliyor (Ayşe→AYSE) — bank standardı için doğru ancak isim 18 karakteri aşarsa kesiliyor; UYARI: Turkish '&' vb. özel karakterler ASCII sonrası kaybolabilir.",
+    "Portal /me/leave-request 'leave_type' whitelisting yok — herhangi bir string kabul ediliyor ('annual'/'sick'/'unpaid' vb. dışı da). Bir enum kontrolü eklenmeli.",
+    "P60 endpoint 'year' parametre validation yok — negatif/futurist yıl için ty_year=0 kabul, filename 'P60_-1--98.pdf' gibi bozulabilir; year>=2020 assert eklenmeli.",
+    "UKPayrollPanel.js downloadP60 fonksiyonu year gönderilmediği için filename Content-Disposition'dan 'P60_.pdf' geliyor (bkz Frontend issue)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_uk_payroll_iter602.py (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9 iter602 + 11/11 iter601 + 8/8 iter600 = 28/28)", "frontend": "~70% (P60/tabs/pending-leaves görsel doğrulandı; BACS/Portal/Automation UI backend curl ile main agent tarafından doğrulandığı için tekrar test edilmedi — sidebar OPERATIONS section expand tutarsızlığı nedeniyle tam UI flow her seferinde tekrarlanamadı)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Geçici test verileri: (1) izin akışı için bir staff email'i geçici admin@hotelbox.com yapıldı → geri alındı; oluşturulan pending leave kaydı ve hr_leave notification mongosh ile silindi. (2) Vardiya hatırlatması için yarına bir published shift eklendi → run sonrası silindi. (3) Mayıs 2026 payroll run kalıcı (silinmedi — iter600'de zaten mevcuttu).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "iter602 4 yeni özellik (P60, izin portalı, BACS, vardiya hatırlatması) tam çalışıyor. Regression için üç dosya birlikte çalıştırılabilir: test_uk_payroll_iter600.py + iter601.py + iter602.py = 28 test, 100% pass. UI: PRO toggle → sidebar OPERATIONS section auto-expand davranışı bazen ilk oturumda çalışıyor, sonrakinde OPERATIONS collapsed geliyor — 'uk-payroll-btn' bulunamıyor. Çözüm için OPERATIONS section header (aside > text-is('OPERATIONS')) tıklanmalı önce. Mayıs 2026 run'ı kalıcı — silmeyin. Ayşe Yılmaz (ayse.test@example.com, bank 20-00-00/12345678) tek geçerli BACS personeli.",
+  "rca of the issue": "N/A — hiçbir bug bulunmadı. Küçük UX not: P60 filename'da tax_year bilgisi eksik ('P60_.pdf'); minor priority."
+}

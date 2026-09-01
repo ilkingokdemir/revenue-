@@ -777,4 +777,245 @@ def create_uk_payroll_router(db, require_roles):
              "status": 1, "role": 1, "earned_amount": 1}
         ).sort("date", -1).to_list(200)
 
+    # ==================== P60 (END OF YEAR CERTIFICATE) ====================
+    async def _build_p60(staff: dict, ty_start_year: int) -> bytes:
+        ty_start = date(ty_start_year, 4, 6)
+        ty_end = date(ty_start_year + 1, 4, 5)
+        slips = await db.uk_payslips.find({"staff_id": staff["id"]}, {"_id": 0}).to_list(50)
+        tot = {"gross": 0.0, "paye": 0.0, "ni": 0.0, "pension": 0.0, "sloan": 0.0, "net": 0.0}
+        months = 0
+        for sl in slips:
+            try:
+                p_start = datetime.strptime(sl["period"]["start"], "%Y-%m-%d").date()
+            except Exception:
+                continue
+            if ty_start <= p_start <= ty_end:
+                months += 1
+                tot["gross"] += sl.get("gross", 0)
+                tot["paye"] += sl.get("paye", 0)
+                tot["ni"] += sl.get("ni_employee", 0)
+                tot["pension"] += sl.get("pension_ee", 0)
+                tot["sloan"] += sl.get("student_loan", 0)
+                tot["net"] += sl.get("net", 0)
+        prop = await db.properties.find_one({"id": staff.get("property_id", "")}, {"_id": 0, "name": 1})
+        prop_name = (prop or {}).get("name", "MyHotelBox")
+
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
+        from reportlab.pdfgen import canvas as rl_canvas
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        for reg, paths in {"UKP-Helvetica": ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                                             "/usr/share/fonts/truetype/freefont/FreeSans.ttf"],
+                           "UKP-Helvetica-Bold": ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                                                  "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"]}.items():
+            if reg not in pdfmetrics.getRegisteredFontNames():
+                for p in paths:
+                    if os.path.exists(p):
+                        pdfmetrics.registerFont(TTFont(reg, p))
+                        break
+        buf = io.BytesIO()
+        c = rl_canvas.Canvas(buf, pagesize=A4)
+        w, h = A4
+        c.setFillColorRGB(0.09, 0.28, 0.55)
+        c.rect(0, h - 28 * mm, w, 28 * mm, fill=1, stroke=0)
+        c.setFillColorRGB(1, 1, 1)
+        c.setFont("UKP-Helvetica-Bold", 18)
+        c.drawString(20 * mm, h - 14 * mm, "P60 — End of Year Certificate")
+        c.setFont("UKP-Helvetica", 10)
+        c.drawString(20 * mm, h - 21 * mm, f"Tax year to 5 April {ty_start_year + 1} / {ty_start_year}-{str(ty_start_year + 1)[2:]} vergi yılı özeti")
+        c.setFillColorRGB(0, 0, 0)
+        y = h - 40 * mm
+        rows_data = [
+            ("Employer / İşveren", prop_name),
+            ("Employee / Çalışan", staff.get("name", "")),
+            ("National Insurance number", staff.get("ni_number") or "—"),
+            ("Final tax code / Vergi kodu", staff.get("tax_code") or DEFAULT_TAX_CODE),
+            ("Pay periods included / Dahil edilen bordro", f"{months} ay"),
+            ("Total pay for year / Yıllık toplam ücret", f"£{tot['gross']:,.2f}"),
+            ("Total tax deducted / Yıllık toplam vergi (PAYE)", f"£{tot['paye']:,.2f}"),
+            ("Employee NIC in this employment / Yıllık NI", f"£{tot['ni']:,.2f}"),
+            ("Pension contributions / Emeklilik kesintisi", f"£{tot['pension']:,.2f}"),
+            ("Student Loan deductions / Öğrenci kredisi", f"£{tot['sloan']:,.2f}"),
+            ("Net pay / Yıllık net ödeme", f"£{tot['net']:,.2f}"),
+        ]
+        for label, value in rows_data:
+            c.setFont("UKP-Helvetica", 9)
+            c.setFillColorRGB(0.35, 0.35, 0.35)
+            c.drawString(20 * mm, y, label)
+            c.setFont("UKP-Helvetica-Bold", 10)
+            c.setFillColorRGB(0, 0, 0)
+            c.drawString(115 * mm, y, str(value))
+            c.setStrokeColorRGB(0.85, 0.85, 0.85)
+            c.line(20 * mm, y - 2.5 * mm, 190 * mm, y - 2.5 * mm)
+            y -= 10 * mm
+        c.setFont("UKP-Helvetica", 8)
+        c.setFillColorRGB(0.4, 0.4, 0.4)
+        c.drawString(20 * mm, y - 4 * mm, "Keep this certificate — you may need it for a tax return, tax credits or a loan application.")
+        c.drawString(20 * mm, 15 * mm, f"Bu belge MyHotelBox İK & Bordro tarafından {TAX_YEAR} kayıtlarından otomatik üretilmiştir (HMRC P60 formatı esas alınmıştır).")
+        c.showPage()
+        c.save()
+        return buf.getvalue()
+
+    def _current_ty_start_year() -> int:
+        today = datetime.now(timezone.utc).date()
+        return _tax_year_start(today).year
+
+    @router.get("/uk-payroll/employees/{staff_id}/p60")
+    async def p60_pdf(staff_id: str, year: int = 0,
+                      current_user: dict = Depends(require_roles("admin", "manager"))):
+        s = await db.shift_staff.find_one({"id": staff_id}, {"_id": 0})
+        if not s:
+            raise HTTPException(404, "Personel bulunamadı")
+        if year and not (2020 <= year <= 2100):
+            raise HTTPException(400, "Geçersiz vergi yılı")
+        ty_year = year or _current_ty_start_year()
+        pdf = await _build_p60(s, ty_year)
+        import unicodedata
+        safe = unicodedata.normalize("NFKD", s.get("name", "staff")).encode("ascii", "ignore").decode() or "staff"
+        return Response(content=pdf, media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="P60_{safe.replace(" ", "_")}_{ty_year}-{str(ty_year + 1)[2:]}.pdf"'})
+
+    @router.get("/uk-payroll/me/p60")
+    async def my_p60(year: int = 0, current_user: dict = Depends(require_roles(*ALL_STAFF_ROLES))):
+        s = await _my_staff_doc(current_user)
+        if not s:
+            raise HTTPException(404, "E-posta adresinizle eşleşen personel kaydı bulunamadı")
+        ty_year = year or _current_ty_start_year()
+        pdf = await _build_p60(s, ty_year)
+        return Response(content=pdf, media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="P60_{ty_year}-{str(ty_year + 1)[2:]}.pdf"'})
+
+    # ==================== LEAVE REQUESTS (SELF-SERVICE) ====================
+    @router.post("/uk-payroll/me/leave-request")
+    async def my_leave_request(data: Dict, current_user: dict = Depends(require_roles(*ALL_STAFF_ROLES))):
+        s = await _my_staff_doc(current_user)
+        if not s:
+            raise HTTPException(404, "E-posta adresinizle eşleşen personel kaydı bulunamadı")
+        start_date = data.get("start_date", "")
+        end_date = data.get("end_date", "")
+        if not start_date or not end_date:
+            raise HTTPException(400, "start_date ve end_date zorunlu")
+        try:
+            d1 = datetime.strptime(start_date, "%Y-%m-%d").date()
+            d2 = datetime.strptime(end_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(400, "Tarih formatı YYYY-MM-DD olmalı")
+        if d2 < d1:
+            raise HTTPException(400, "Bitiş tarihi başlangıçtan önce olamaz")
+        leave_type = data.get("leave_type", "annual")
+        if leave_type not in ("annual", "sick", "unpaid", "toil"):
+            raise HTTPException(400, "leave_type annual/sick/unpaid/toil olmalı")
+        days = (d2 - d1).days + 1
+        leave = {
+            "id": str(uuid.uuid4()),
+            "property_id": s.get("property_id", ""),
+            "staff_id": s["id"],
+            "staff_name": s.get("name", ""),
+            "leave_type": leave_type,
+            "start_date": start_date, "end_date": end_date, "days": days,
+            "reason": (data.get("reason") or "")[:300],
+            "status": "pending",
+            "source": "staff_portal",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_by": s.get("name", ""),
+        }
+        await db.shift_leave_requests.insert_one(leave)
+        leave.pop("_id", None)
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "category": "hr_leave", "priority": "normal",
+            "title": "Yeni izin talebi",
+            "message": f"{s.get('name')} — {start_date} → {end_date} ({days} gün, {leave['leave_type']})",
+            "property_id": s.get("property_id", ""), "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        return leave
+
+    @router.get("/uk-payroll/me/leaves")
+    async def my_leaves(current_user: dict = Depends(require_roles(*ALL_STAFF_ROLES))):
+        s = await _my_staff_doc(current_user)
+        if not s:
+            return []
+        return await db.shift_leave_requests.find(
+            {"staff_id": s["id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+
+    # ==================== BACS PAYMENT FILE ====================
+    @router.get("/uk-payroll/runs/{run_id}/bacs")
+    async def bacs_file(run_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        run = await db.uk_payroll_runs.find_one({"id": run_id}, {"_id": 0})
+        if not run:
+            raise HTTPException(404, "Run bulunamadı")
+        slips = await db.uk_payslips.find({"run_id": run_id}, {"_id": 0}).to_list(300)
+        staff_ids = [sl["staff_id"] for sl in slips]
+        staff_docs = await db.shift_staff.find({"id": {"$in": staff_ids}}, {"_id": 0}).to_list(300)
+        smap = {s["id"]: s for s in staff_docs}
+        origin_sort = os.environ.get("BACS_ORIGIN_SORT_CODE", "000000")
+        origin_acct = os.environ.get("BACS_ORIGIN_ACCOUNT", "00000000")
+        lines, skipped = [], []
+        import unicodedata
+        for sl in slips:
+            st = smap.get(sl["staff_id"], {})
+            sort_code = (st.get("bank_sort_code") or "").replace("-", "").replace(" ", "")
+            acct = (st.get("bank_account_no") or "").replace(" ", "")
+            if len(sort_code) != 6 or len(acct) != 8 or sl.get("net", 0) <= 0:
+                skipped.append(sl.get("staff_name", "?"))
+                continue
+            pence = int(round(float(sl["net"]) * 100))
+            name = unicodedata.normalize("NFKD", sl.get("staff_name", "")).encode("ascii", "ignore").decode().upper()[:18]
+            ref = f"SALARY {sl['year']}{sl['month']:02d}"[:18]
+            # BACS Standard 18: dest sort(6) dest acct(8) type(1) txn code(2=99 credit)
+            # origin sort(6) origin acct(8) filler(4) amount pence(11) originator(18) ref(18) beneficiary(18)
+            line = (f"{sort_code}{acct}0" f"99"
+                    f"{origin_sort}{origin_acct}"
+                    f"    "
+                    f"{pence:011d}"
+                    f"{'MYHOTELBOX PAYROLL':<18.18}"
+                    f"{ref:<18.18}"
+                    f"{name:<18.18}")
+            lines.append(line)
+        if not lines:
+            raise HTTPException(400, "Hiçbir personelde geçerli banka bilgisi yok (sort code 6 hane + hesap no 8 hane gerekli)")
+        content = "\r\n".join(lines) + "\r\n"
+        fname = f"BACS_{run['year']}-{run['month']:02d}.txt"
+        headers = {"Content-Disposition": f'attachment; filename="{fname}"',
+                   "X-Bacs-Included": str(len(lines)), "X-Bacs-Skipped": str(len(skipped))}
+        return Response(content=content, media_type="text/plain", headers=headers)
+
+    # ==================== SHIFT REMINDER ROBOT ====================
+    async def run_shift_reminders_internal(property_id: str = "all") -> dict:
+        tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).date().isoformat()
+        query = {"date": tomorrow, "status": {"$in": ["planned", "published", "approved"]},
+                 "reminder_sent_at": {"$exists": False}}
+        if property_id and property_id != "all":
+            query["property_id"] = property_id
+        shifts = await db.shift_entries.find(query, {"_id": 0}).to_list(300)
+        if not shifts:
+            return {"ok": True, "date": tomorrow, "reminders_sent": 0, "skipped_no_email": 0}
+        staff_ids = list({sh.get("staff_id") for sh in shifts})
+        staff_docs = await db.shift_staff.find({"id": {"$in": staff_ids}}, {"_id": 0}).to_list(300)
+        smap = {s["id"]: s for s in staff_docs}
+        sent = skipped = 0
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for sh in shifts:
+            st = smap.get(sh.get("staff_id"), {})
+            email = st.get("email")
+            if not email:
+                skipped += 1
+                continue
+            html = (f"<div style='font-family:sans-serif'><h3>Vardiya Hatırlatması 📅</h3>"
+                    f"<p>Merhaba {sh.get('staff_name')},</p>"
+                    f"<p>Yarın (<b>{sh.get('date')}</b>) <b>{sh.get('start_time')}–{sh.get('end_time')}</b> "
+                    f"saatleri arasında <b>{sh.get('role', '')}</b> vardiyanız bulunuyor.</p>"
+                    f"<p>İyi çalışmalar!</p></div>")
+            await _send_email(email, f"Yarınki vardiyanız — {sh.get('date')} {sh.get('start_time')}", html)
+            await db.shift_entries.update_one({"id": sh["id"]}, {"$set": {"reminder_sent_at": now_iso}})
+            sent += 1
+        return {"ok": True, "date": tomorrow, "reminders_sent": sent, "skipped_no_email": skipped}
+
+    router.run_shift_reminders_internal = run_shift_reminders_internal
+
+    @router.post("/uk-payroll/reminders/run")
+    async def reminders_run(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await run_shift_reminders_internal(data.get("property_id", "all"))
+
     return router

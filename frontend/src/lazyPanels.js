@@ -350,6 +350,7 @@ export const EnhancedDashboard = N(() => import("./components/dashboard/Enhanced
 export const ReportsHub = N(() => import("./components/dashboard/ReportsHub"), "ReportsHub");
 export const FinancePL = N(() => import("./components/dashboard/FinancePL"), "FinancePL");
 export const ShiftScheduler = N(() => import("./components/dashboard/ShiftScheduler"), "ShiftScheduler");
+export const UKPayrollPanel = N(() => import("./components/dashboard/UKPayrollPanel"), "UKPayrollPanel");
 export const ReceptionReport = N(() => import("./components/dashboard/ReceptionReport"), "ReceptionReport");
 export const PassOverDuties = N(() => import("./components/dashboard/PassOverDuties"), "PassOverDuties");
 export const ComplianceRegister = N(() => import("./components/dashboard/ComplianceRegister"), "ComplianceRegister");

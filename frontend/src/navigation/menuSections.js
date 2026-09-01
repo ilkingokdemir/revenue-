@@ -278,6 +278,7 @@ export function buildMenuSections(t, user) {
         { divider: true, label: "Staff" },
         { id: "team-chat", icon: ChatText, name: "Team chat", testId: "team-chat-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift scheduler", testId: "shift-scheduler-btn" },
+        { id: "uk-payroll", icon: Wallet, name: "İK & Bordro (UK)", testId: "uk-payroll-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
         { id: "staff-ops", icon: Clock, name: "Staff clock-in & tips", testId: "staff-ops-btn" },
 

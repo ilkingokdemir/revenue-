@@ -4045,3 +4045,22 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   A5 havuz veri izni, KVKK DPA, vaka çalışması hakkı, RGI ölçüm protokolü, fesih).
 - UI: SimulatorPanel (rm-simulator-btn) — yarış kartları + günlük gelir grafiği + replay kartları.
 - TEST: iteration_545.json — frontend %100 (60 şelale çipi + 60 güven rozeti + simülatör + replay).
+
+## Iter 600 (2026-09-01) — UK Uyumlu İK & Bordro Modülü TAMAMLANDI
+- YENİ backend: routes/hotel_ops/uk_payroll.py (/api/uk-payroll/*) — UK 2026/27 vergi yılı:
+  NMW yaş bantları (21+ £12.71, 18-20 £10.85, <18 & çırak £8.00) + otomatik top-up,
+  PAYE vergi kodu ayrıştırma (1257L/BR/0T/D0/D1/NT/K, W1/M1), NI Class 1 (çalışan %8/%2,
+  işveren %15), öğrenci kredisi planları (P1/P2/P4/PG), tatil tahakkuku %12.07.
+- Endpoint'ler: rates, employees (İK dosya tamlığı + NMW uyum + staff_onboarding hmrc_data
+  zenginleştirme), PUT hr, offboard (final pay: ödenmemiş vardiya + tatil), reinstate,
+  preview (aylık, sadece completed/approved vardiyalar), run (409 dedupe + force), runs,
+  payslips, payslip PDF (FreeSans TTF — Türkçe karakter fix; Content-Disposition ASCII fix),
+  tekil + toplu e-posta (Resend/MOCK).
+- YENİ frontend: UKPayrollPanel.js — 3 sekme: Personel & İK (tablo + HR düzenleme dialogu +
+  offboard/reinstate), Aylık Bordro (Excel tarzı tablo: saat/brüt/PAYE/NI/net + uyum uyarıları
+  + toplam + işveren maliyeti), Bordro Geçmişi (run kartları → payslip PDF indir / e-posta).
+- Menü: Operations > Staff > "İK & Bordro (UK)" (uk-payroll-btn; PRO modda görünür).
+- Test: iteration_600.json %100 (backend 8/8 pytest + frontend tüm akışlar).
+  Kalıcı test: /app/backend/tests/test_uk_payroll_iter600.py.
+- NOT: E-postalar MOCK (RESEND_API_KEY yok). NMW matematiği doğrulandı: 19 yaş → £10.85,
+  16h × £6.25 → £73.60 top-up.

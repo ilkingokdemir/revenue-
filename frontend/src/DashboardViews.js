@@ -271,6 +271,7 @@ import {
   SettingsHubPanel,
   SetupWizardPanel,
   ShiftScheduler,
+  UKPayrollPanel,
   SiteFeasibilityPanel,
   SiteMinderPanel,
   SmartLocksPanel,
@@ -1605,6 +1606,11 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {/* Shift Scheduler */}
         {activeView === "shift-scheduler" && (
           <div className="p-6"><ShiftScheduler propertyId={activePropertyId} /></div>
+        )}
+
+        {/* UK HR & Payroll */}
+        {activeView === "uk-payroll" && (
+          <UKPayrollPanel propertyId={activePropertyId} />
         )}
 
         {/* Reception Report */}

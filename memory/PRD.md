@@ -701,6 +701,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - DERS: Yeni panel eklemeden önce mevcut menü/panel envanterinde işlevsel çakışma taraması yap.
 - E2E DOĞRULANDI: mükerrer giriş 0, Compset > Fiyat Radarı sekmesi grafik + 4 bulgu ile çalışıyor.
 
+## Güncelleme (2026-09-01, iter 600) — UK Uyumlu İK & Bordro Modülü
+- /api/uk-payroll/* + UKPayrollPanel (Operations > Staff > "İK & Bordro (UK)", PRO mod).
+- NMW yaş bantları + top-up, PAYE, NI Class 1, öğrenci kredisi, offboarding final pay,
+  aylık bordro run + payslip PDF (Türkçe font fix) + mock e-posta. iteration_600 %100.
+- Detay: CHANGELOG.md iter 600. Bekleyen: Resend/Twilio anahtarları (kullanıcı).
+
 ## NOT: Iter 432+ kayıtları /app/memory/CHANGELOG.md dosyasına taşındı (700 satır limiti).
 
 ## Güncelleme (2026-08-14, iter 545)

@@ -1,0 +1,38 @@
+{
+  "summary": "UK HR & Payroll (2026/27) modülü uçtan uca test edildi. 8/8 backend pytest testi geçti (rates, employees, HR update+invalid NI, preview + NMW top-up matematiği, run 409 dedupe + force, runs listing + payslips + PDF magic bytes + Türkçe isimli PDF, single email mock + 400 no-email, email-all sayaçları, offboard + reinstate). Frontend akışı da başarıyla doğrulandı: PRO toggle → Operations bölümü aç → uk-payroll-btn → 3 sekme (Personel & İK, Aylık Bordro, Bordro Geçmişi), HR düzenleme dialog + toast, Mayıs 2026 preview (6 satır + uyum uyarıları + toplam satırı), Bordroyu Çalıştır (window.confirm → force overwrite), Bordro Geçmişi (1 run kartı → 6 payslip, PDF/e-posta butonları, Tümüne E-posta), Offboard dialog + final pay özeti + Reinstate (toast: 'Personel yeniden aktif edildi'). Ayşe Yılmaz NMW top-up matematiği doğrulandı: 19 yaş → £10.85 bandı, 16h × £6.25 base £100 → topup £73.60, gross £173.60. Kritik bir hata bulunmadı. Test personeli (Mehmet Kaya, id=50e763cd-...) offboard sonrası MUTLAKA reinstate edildi.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Aylık Bordro tablosu", "issues": ["NMW tamamlama sütununda amber renk kullanılmış (£73.60 vs £5.04 vs £108.40) — okunabilirlik iyi. TEST_ prefix'li personellerde 'kazanç' £160-£200 gösteriliyor ama NMW tamamlama '—' — bu doğru davranış çünkü implied hourly (£20/saat) NMW üstünde"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_uk_payroll_iter600.py",
+    "/app/test_reports/pytest/iter600_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "uk_payroll.py (562 satır) — tek dosyada rate constants + PAYE/NI/NMW hesap fonksiyonları + router endpoints + PDF generator + email sender bulunuyor. 700 satır sınırının altında ama helper'ları ayrı modüle (calculators.py, pdf_renderer.py) çıkarmak DRY ve test edilebilirlik açısından iyi olur.",
+    "_paye() default tax_code=DEFAULT_TAX_CODE olsa da _parse_tax_code'da 'NT' → (0, 0.0) döner ve 0.0 flat kabul edilir → NT'de gross*0.0=0 vergi. Doğru sonuç ama flat=None kontrolü ile NT için tax=0 zaten sağlanır — biraz kafa karıştırıcı.",
+    "run_payroll endpoint'inde force+existing durumunda db.uk_payslips.delete_many + insert_many arasında transaction yok — kısmi başarısızlık halinde eski slip'ler silinip yenileri eklenmeyebilir. Küçük veri seti için önemsiz ama üretim için idempotency risk.",
+    "email-all endpoint sequential (for slip in slips) → 100+ personel için yavaş; asyncio.gather batch'i verimliliği artırır.",
+    "offboard endpoint 'unpaid shifts' hesabında shift_ids kesişimi kullanıyor — payroll_runs'ta silinmiş run varsa yanlış hesap olabilir. Test edilen davranış doğru çalışıyor.",
+    "PDF font registry global state — thread-safety concurrent requests altında race olabilir (registerFont idempotent değil). Testte problem yok.",
+    "Frontend UKPayrollPanel.js — dialog'lar (offboard, hr-edit) fixed position z-50 kullanıyor, mobil viewport'ta test edilmedi."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_uk_payroll_iter600.py (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (cookie-based, /api/auth/login)",
+  "seed_data_creation": "Mevcut TEST_ prefix'li personel (TEST_Receptionist_Ali, TEST_Housekeeper_Ayse, TEST_Maintenance_Mehmet) ve gerçek personel (Ayşe Yılmaz, Fatma Demir, Mehmet Kaya) korundu. Test sırasında Mehmet Kaya offboard edildi ve MUTLAKA reinstate edildi (durumu 'Aktif' olarak geri döndürüldü, toast doğrulandı).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "UK Payroll module fully functional. Test file /app/backend/tests/test_uk_payroll_iter600.py can be reused for regression. May 2026 payroll run persists in DB (force overwrite triggered during test). Tüm e-postalar RESEND_API_KEY yokluğu nedeniyle status='mocked' döner — bu beklenen davranış.",
+  "rca of the issue": "N/A — no bugs found."
+}

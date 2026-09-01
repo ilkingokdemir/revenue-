@@ -62,6 +62,7 @@ from routes.hotel_ops.operations import create_operations_router
 from routes.hotel_ops.shifts import create_shifts_router, create_shifts_v2_router
 from routes.revenue_ext.rates_grid import create_rates_grid_router
 from routes.hotel_ops.workforce_extras import create_workforce_extras_router
+from routes.hotel_ops.uk_payroll import create_uk_payroll_router
 from routes.integrations_pkg.notifications import create_notifications_router
 from routes.finance_ext.finance import create_finance_router
 from routes.pms.my_tasks import create_my_tasks_router
@@ -519,6 +520,9 @@ api_router.include_router(rates_grid_router)
 
 workforce_extras_router = create_workforce_extras_router(db, require_roles)
 api_router.include_router(workforce_extras_router)
+
+uk_payroll_router = create_uk_payroll_router(db, require_roles)
+api_router.include_router(uk_payroll_router)
 
 notifications_router = create_notifications_router(db, require_roles)
 api_router.include_router(notifications_router)

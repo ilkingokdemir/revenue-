@@ -717,6 +717,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   banka dosyası, Vardiya Hatırlatması (17. motor, "İK & Vardiya" kategorisi, opsiyonel).
   iteration_602: backend 28/28. Detay: CHANGELOG.md iter 602.
 
+## Güncelleme (2026-09-01, iter 603) — İzin Bakiyesi + Karşılaştırma + WhatsApp + Belgeler
+- İzin bakiyesi (portal rozeti + çifte kontrol), bordro dönem karşılaştırma (renkli farklar),
+  WhatsApp'lı vardiya hatırlatma (Twilio mock), personel İK belgeleri (Object Storage CRUD).
+  iteration_603: backend 35/35 kümülatif. Detay: CHANGELOG.md iter 603.
+- UI otomasyon notu: sidebar bölüm testid'i `nav-section-{label}` (örn. nav-section-Operations).
+
 ## NOT: Iter 432+ kayıtları /app/memory/CHANGELOG.md dosyasına taşındı (700 satır limiti).
 
 ## Güncelleme (2026-08-14, iter 545)

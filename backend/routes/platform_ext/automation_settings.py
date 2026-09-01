@@ -81,7 +81,7 @@ JOB_REGISTRY = {
     },
     "shift_reminder": {
         "label": "Vardiya Hatırlatması", "category": "hr",
-        "description": "Personele yarınki vardiyasını e-posta ile hatırlatır (opsiyonel — buradan açıp kapatabilirsiniz).",
+        "description": "Personele yarınki vardiyasını e-posta ve WhatsApp ile hatırlatır (opsiyonel — buradan açıp kapatabilirsiniz).",
         "default_cron": (16, 0), "default_enabled": True, "params": [],
     },
     "weekly_report": {

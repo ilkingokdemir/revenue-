@@ -1,5 +1,5 @@
 """UK-compliant HR & Payroll — employee lifecycle, NMW age bands, PAYE, NI Class 1, payslips (2026/27)."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import Response
 from datetime import datetime, timezone, date, timedelta
 from typing import Dict
@@ -38,8 +38,8 @@ PEN_MIN_AGE, PEN_MAX_AGE = 22, 66
 
 HR_FIELDS = ["dob", "ni_number", "tax_code", "starter_declaration", "contract_type",
              "start_date", "bank_sort_code", "bank_account_no", "student_loan_plans",
-             "is_apprentice", "pension_optin", "pension_status", "address", "postcode",
-             "emergency_contact"]
+             "is_apprentice", "pension_optin", "pension_status", "annual_leave_days",
+             "address", "postcode", "emergency_contact"]
 
 
 def _age_on(dob: str, ref: date) -> int | None:
@@ -887,6 +887,25 @@ def create_uk_payroll_router(db, require_roles):
                         headers={"Content-Disposition": f'attachment; filename="P60_{ty_year}-{str(ty_year + 1)[2:]}.pdf"'})
 
     # ==================== LEAVE REQUESTS (SELF-SERVICE) ====================
+    # ==================== LEAVE BALANCE ====================
+    async def _leave_balance(staff: dict) -> dict:
+        entitled = int(staff.get("annual_leave_days") or 28)  # UK statutory 5.6 weeks
+        year = str(datetime.now(timezone.utc).year)
+        leaves = await db.shift_leave_requests.find(
+            {"staff_id": staff["id"], "leave_type": "annual",
+             "start_date": {"$regex": f"^{year}"}}, {"_id": 0, "days": 1, "status": 1}).to_list(100)
+        used = sum(int(lv.get("days", 0)) for lv in leaves if lv.get("status") == "approved")
+        pending = sum(int(lv.get("days", 0)) for lv in leaves if lv.get("status") == "pending")
+        return {"entitled": entitled, "used": used, "pending": pending,
+                "remaining": max(0, entitled - used - pending), "year": int(year)}
+
+    @router.get("/uk-payroll/me/leave-balance")
+    async def my_leave_balance(current_user: dict = Depends(require_roles(*ALL_STAFF_ROLES))):
+        s = await _my_staff_doc(current_user)
+        if not s:
+            raise HTTPException(404, "E-posta adresinizle eşleşen personel kaydı bulunamadı")
+        return await _leave_balance(s)
+
     @router.post("/uk-payroll/me/leave-request")
     async def my_leave_request(data: Dict, current_user: dict = Depends(require_roles(*ALL_STAFF_ROLES))):
         s = await _my_staff_doc(current_user)
@@ -907,6 +926,11 @@ def create_uk_payroll_router(db, require_roles):
         if leave_type not in ("annual", "sick", "unpaid", "toil"):
             raise HTTPException(400, "leave_type annual/sick/unpaid/toil olmalı")
         days = (d2 - d1).days + 1
+        if leave_type == "annual":
+            bal = await _leave_balance(s)
+            if days > bal["remaining"]:
+                raise HTTPException(400, f"Yetersiz izin bakiyesi: kalan {bal['remaining']} gün, talep {days} gün "
+                                          f"(hak {bal['entitled']}, kullanılan {bal['used']}, bekleyen {bal['pending']})")
         leave = {
             "id": str(uuid.uuid4()),
             "property_id": s.get("property_id", ""),
@@ -981,6 +1005,96 @@ def create_uk_payroll_router(db, require_roles):
                    "X-Bacs-Included": str(len(lines)), "X-Bacs-Skipped": str(len(skipped))}
         return Response(content=content, media_type="text/plain", headers=headers)
 
+    # ==================== PAYROLL COMPARISON ====================
+    @router.get("/uk-payroll/compare/{property_id}")
+    async def compare_payroll(property_id: str, y1: int, m1: int, y2: int, m2: int,
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        base_q = {} if property_id == "all" else {"property_id": property_id}
+        slips_a = await db.uk_payslips.find({**base_q, "year": y1, "month": m1}, {"_id": 0}).to_list(300)
+        slips_b = await db.uk_payslips.find({**base_q, "year": y2, "month": m2}, {"_id": 0}).to_list(300)
+        if not slips_a or not slips_b:
+            raise HTTPException(404, "Karşılaştırma için her iki dönemin bordrosu da çalıştırılmış olmalı")
+        metrics = ("hours", "gross", "paye", "ni_employee", "pension_ee", "net", "employer_cost")
+
+        def _tot(slips):
+            return {m: round(sum(float(s.get(m, 0) or 0) for s in slips), 2) for m in metrics}
+        tot_a, tot_b = _tot(slips_a), _tot(slips_b)
+        totals = {m: {"a": tot_a[m], "b": tot_b[m], "delta": round(tot_b[m] - tot_a[m], 2),
+                      "pct": round((tot_b[m] - tot_a[m]) / tot_a[m] * 100, 1) if tot_a[m] else None}
+                  for m in metrics}
+        map_a = {s["staff_id"]: s for s in slips_a}
+        map_b = {s["staff_id"]: s for s in slips_b}
+        rows = []
+        for sid in sorted(set(map_a) | set(map_b), key=lambda x: (map_b.get(x) or map_a.get(x)).get("staff_name", "")):
+            a, b = map_a.get(sid), map_b.get(sid)
+            rows.append({"staff_id": sid,
+                         "staff_name": (b or a).get("staff_name", ""),
+                         "net_a": round(float(a["net"]), 2) if a else None,
+                         "net_b": round(float(b["net"]), 2) if b else None,
+                         "hours_a": a.get("hours") if a else None,
+                         "hours_b": b.get("hours") if b else None,
+                         "delta": round(float((b or {}).get("net", 0)) - float((a or {}).get("net", 0)), 2),
+                         "status": "yeni" if not a else ("ayrıldı" if not b else "her iki dönem")})
+        return {"period_a": {"year": y1, "month": m1, "staff": len(slips_a)},
+                "period_b": {"year": y2, "month": m2, "staff": len(slips_b)},
+                "totals": totals, "rows": rows}
+
+    # ==================== HR DOCUMENTS ====================
+    DOC_TYPES = ("contract", "passport", "visa", "address_proof", "certificate", "other")
+    DOC_EXTS = {"pdf", "jpg", "jpeg", "png", "webp", "heic", "docx"}
+
+    @router.post("/uk-payroll/employees/{staff_id}/documents")
+    async def upload_document(staff_id: str, doc_type: str = Form("other"), file: UploadFile = File(...),
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        s = await db.shift_staff.find_one({"id": staff_id}, {"_id": 0, "id": 1, "name": 1})
+        if not s:
+            raise HTTPException(404, "Personel bulunamadı")
+        if doc_type not in DOC_TYPES:
+            raise HTTPException(400, f"doc_type şunlardan biri olmalı: {', '.join(DOC_TYPES)}")
+        ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else ""
+        if ext not in DOC_EXTS:
+            raise HTTPException(400, "Desteklenmeyen dosya türü (pdf/jpg/png/webp/heic/docx)")
+        content = await file.read()
+        if len(content) > 15 * 1024 * 1024:
+            raise HTTPException(400, "Dosya 15MB'ı aşamaz")
+        doc_id = str(uuid.uuid4())
+        subpath = f"hr_docs/{staff_id}/{doc_id}.{ext}"
+        from object_storage import save_upload
+        await save_upload(subpath, content)
+        doc = {"id": doc_id, "staff_id": staff_id, "staff_name": s.get("name", ""),
+               "doc_type": doc_type, "orig_name": file.filename, "ext": ext,
+               "size": len(content), "subpath": subpath,
+               "uploaded_by": current_user.get("name", ""),
+               "uploaded_at": datetime.now(timezone.utc).isoformat()}
+        await db.hr_documents.insert_one({**doc})
+        return doc
+
+    @router.get("/uk-payroll/employees/{staff_id}/documents")
+    async def list_documents(staff_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await db.hr_documents.find({"staff_id": staff_id}, {"_id": 0}).sort("uploaded_at", -1).to_list(100)
+
+    @router.get("/uk-payroll/documents/{doc_id}/download")
+    async def download_document(doc_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        doc = await db.hr_documents.find_one({"id": doc_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Belge bulunamadı")
+        from object_storage import fetch_upload
+        result = await fetch_upload(doc["subpath"])
+        if not result:
+            raise HTTPException(404, "Dosya depoda bulunamadı")
+        data, ct = result
+        import unicodedata
+        safe = unicodedata.normalize("NFKD", doc.get("orig_name") or f"belge.{doc['ext']}").encode("ascii", "ignore").decode() or f"belge.{doc['ext']}"
+        return Response(content=data, media_type=ct or "application/octet-stream",
+                        headers={"Content-Disposition": f'attachment; filename="{safe}"'})
+
+    @router.delete("/uk-payroll/documents/{doc_id}")
+    async def delete_document(doc_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        res = await db.hr_documents.delete_one({"id": doc_id})
+        if res.deleted_count == 0:
+            raise HTTPException(404, "Belge bulunamadı")
+        return {"ok": True}
+
     # ==================== SHIFT REMINDER ROBOT ====================
     async def run_shift_reminders_internal(property_id: str = "all") -> dict:
         tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).date().isoformat()
@@ -994,23 +1108,40 @@ def create_uk_payroll_router(db, require_roles):
         staff_ids = list({sh.get("staff_id") for sh in shifts})
         staff_docs = await db.shift_staff.find({"id": {"$in": staff_ids}}, {"_id": 0}).to_list(300)
         smap = {s["id"]: s for s in staff_docs}
-        sent = skipped = 0
+        sent = skipped = wa_sent = wa_queued = 0
         now_iso = datetime.now(timezone.utc).isoformat()
+        try:
+            from routes.marketing.whatsapp_voice import _send_whatsapp_reply
+        except Exception:
+            _send_whatsapp_reply = None
         for sh in shifts:
             st = smap.get(sh.get("staff_id"), {})
             email = st.get("email")
-            if not email:
+            phone = (st.get("phone") or "").strip()
+            if not email and not phone:
                 skipped += 1
                 continue
-            html = (f"<div style='font-family:sans-serif'><h3>Vardiya Hatırlatması 📅</h3>"
-                    f"<p>Merhaba {sh.get('staff_name')},</p>"
-                    f"<p>Yarın (<b>{sh.get('date')}</b>) <b>{sh.get('start_time')}–{sh.get('end_time')}</b> "
-                    f"saatleri arasında <b>{sh.get('role', '')}</b> vardiyanız bulunuyor.</p>"
-                    f"<p>İyi çalışmalar!</p></div>")
-            await _send_email(email, f"Yarınki vardiyanız — {sh.get('date')} {sh.get('start_time')}", html)
+            body_txt = (f"Vardiya Hatırlatması 📅 Merhaba {sh.get('staff_name')}, yarın ({sh.get('date')}) "
+                        f"{sh.get('start_time')}–{sh.get('end_time')} saatleri arasında {sh.get('role', '')} vardiyanız var. İyi çalışmalar!")
+            if email:
+                html = (f"<div style='font-family:sans-serif'><h3>Vardiya Hatırlatması 📅</h3>"
+                        f"<p>Merhaba {sh.get('staff_name')},</p>"
+                        f"<p>Yarın (<b>{sh.get('date')}</b>) <b>{sh.get('start_time')}–{sh.get('end_time')}</b> "
+                        f"saatleri arasında <b>{sh.get('role', '')}</b> vardiyanız bulunuyor.</p>"
+                        f"<p>İyi çalışmalar!</p></div>")
+                await _send_email(email, f"Yarınki vardiyanız — {sh.get('date')} {sh.get('start_time')}", html)
+                sent += 1
+            if phone and _send_whatsapp_reply:
+                to = phone if phone.startswith("whatsapp:") else f"whatsapp:{phone if phone.startswith('+') else '+' + phone}"
+                wa = await _send_whatsapp_reply(to, body_txt)
+                if wa.get("status") == "sent":
+                    wa_sent += 1
+                else:
+                    wa_queued += 1
+                    logger.info(f"[MOCK WHATSAPP] to={to} shift={sh.get('date')} ({wa.get('reason') or wa.get('error', '')})")
             await db.shift_entries.update_one({"id": sh["id"]}, {"$set": {"reminder_sent_at": now_iso}})
-            sent += 1
-        return {"ok": True, "date": tomorrow, "reminders_sent": sent, "skipped_no_email": skipped}
+        return {"ok": True, "date": tomorrow, "reminders_sent": sent, "skipped_no_email": skipped,
+                "whatsapp_sent": wa_sent, "whatsapp_mocked": wa_queued}
 
     router.run_shift_reminders_internal = run_shift_reminders_internal
 

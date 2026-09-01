@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Users, Calculator, History, RefreshCw, Download, Mail, AlertTriangle,
   CheckCircle, XCircle, UserMinus, UserPlus, Pencil, ShieldCheck, PoundSterling,
-  UserCircle, FileText, Bot,
+  UserCircle, FileText, Bot, Paperclip, GitCompareArrows,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -41,6 +41,7 @@ function HrEditDialog({ emp, onClose, onSaved }) {
     start_date: emp.start_date || "", bank_sort_code: emp.bank_sort_code || "",
     bank_account_no: emp.bank_account_no || "", student_loan_plans: emp.student_loan_plans || [],
     pension_status: emp.pension_status || "auto",
+    annual_leave_days: emp.annual_leave_days || 28,
     address: emp.address || "", postcode: emp.postcode || "",
   });
   const [saving, setSaving] = useState(false);
@@ -48,7 +49,7 @@ function HrEditDialog({ emp, onClose, onSaved }) {
   const save = async () => {
     setSaving(true);
     try {
-      await axios.put(`${API}/uk-payroll/employees/${emp.id}/hr`, { ...f, pay_rate: parseFloat(f.pay_rate) || 0 }, cfg);
+      await axios.put(`${API}/uk-payroll/employees/${emp.id}/hr`, { ...f, pay_rate: parseFloat(f.pay_rate) || 0, annual_leave_days: parseInt(f.annual_leave_days) || 28 }, cfg);
       toast.success("İK kaydı güncellendi");
       onSaved();
     } catch (e) {
@@ -105,6 +106,9 @@ function HrEditDialog({ emp, onClose, onSaved }) {
               <option value="opted_in">Katıldı (opt-in)</option>
               <option value="opted_out">Vazgeçti (opt-out)</option>
             </select>
+          </Field>
+          <Field label="Yıllık izin hakkı (gün)">
+            <input type="number" min="0" max="60" className={inputCls} value={f.annual_leave_days} onChange={(e) => set("annual_leave_days", e.target.value)} data-testid="hr-leave-days-input" />
           </Field>
           <Field label="Sort code"><input className={inputCls} placeholder="12-34-56" value={f.bank_sort_code} onChange={(e) => set("bank_sort_code", e.target.value)} /></Field>
           <Field label="Hesap no"><input className={inputCls} placeholder="12345678" value={f.bank_account_no} onChange={(e) => set("bank_account_no", e.target.value)} data-testid="hr-bank-input" /></Field>
@@ -181,6 +185,86 @@ function OffboardDialog({ emp, onClose, onDone }) {
   );
 }
 
+const DOC_TYPE_TR = { contract: "Sözleşme", passport: "Pasaport/Kimlik", visa: "Vize/Çalışma izni", address_proof: "Adres belgesi", certificate: "Sertifika", other: "Diğer" };
+
+function DocsDialog({ emp, onClose }) {
+  const [docs, setDocs] = useState([]);
+  const [docType, setDocType] = useState("contract");
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/uk-payroll/employees/${emp.id}/documents`, cfg);
+      setDocs(data);
+    } catch { toast.error("Belgeler yüklenemedi"); }
+  }, [emp.id]);
+  useEffect(() => { load(); }, [load]);
+  const upload = async (file) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("doc_type", docType);
+      fd.append("file", file);
+      await axios.post(`${API}/uk-payroll/employees/${emp.id}/documents`, fd, cfg);
+      toast.success("Belge yüklendi");
+      load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Yükleme başarısız"); }
+    setBusy(false);
+  };
+  const download = async (doc) => {
+    try {
+      const res = await axios.get(`${API}/uk-payroll/documents/${doc.id}/download`, { ...cfg, responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url; a.download = doc.orig_name || `belge.${doc.ext}`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { toast.error("İndirilemedi"); }
+  };
+  const remove = async (doc) => {
+    try {
+      await axios.delete(`${API}/uk-payroll/documents/${doc.id}`, cfg);
+      toast.success("Belge silindi");
+      load();
+    } catch { toast.error("Silinemedi"); }
+  };
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" data-testid="docs-dialog">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-lg">İK Belgeleri — {emp.name}</h3>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-700" data-testid="docs-close"><XCircle size={22} /></button>
+        </div>
+        <div className="flex gap-2 items-end mb-4">
+          <Field label="Belge türü">
+            <select className={inputCls} value={docType} onChange={(e) => setDocType(e.target.value)} data-testid="docs-type-select">
+              {Object.entries(DOC_TYPE_TR).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </Field>
+          <label className={`px-4 py-2 text-sm rounded-lg bg-stone-900 text-white hover:bg-stone-700 cursor-pointer ${busy ? "opacity-50 pointer-events-none" : ""}`} data-testid="docs-upload-btn">
+            {busy ? "Yükleniyor..." : "Dosya Yükle"}
+            <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.docx" onChange={(e) => upload(e.target.files?.[0])} data-testid="docs-file-input" />
+          </label>
+        </div>
+        <div className="space-y-2" data-testid="docs-list">
+          {docs.map((d) => (
+            <div key={d.id} className="flex items-center justify-between gap-2 border border-stone-100 rounded-xl px-3 py-2 text-sm">
+              <div>
+                <div className="font-medium">{DOC_TYPE_TR[d.doc_type] || d.doc_type} · {d.orig_name}</div>
+                <div className="text-xs text-stone-400">{(d.size / 1024).toFixed(0)} KB · {new Date(d.uploaded_at).toLocaleDateString("tr-TR")} · {d.uploaded_by}</div>
+              </div>
+              <div className="flex gap-1.5">
+                <button onClick={() => download(d)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-stone-50" title="İndir" data-testid={`docs-dl-${d.id}`}><Download size={14} /></button>
+                <button onClick={() => remove(d)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-red-50 text-red-500" title="Sil" data-testid={`docs-del-${d.id}`}><XCircle size={14} /></button>
+              </div>
+            </div>
+          ))}
+          {docs.length === 0 && <div className="text-sm text-stone-400 py-3">Henüz belge yüklenmemiş.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const UKPayrollPanel = ({ propertyId, user }) => {
   const pid = propertyId || "all";
   const isManager = ["admin", "manager"].includes(user?.role);
@@ -194,6 +278,11 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
   const [pendingLeaves, setPendingLeaves] = useState([]);
   const [leaveForm, setLeaveForm] = useState({ leave_type: "annual", start_date: "", end_date: "", reason: "" });
   const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaveBalance, setLeaveBalance] = useState(null);
+  const [docsEmp, setDocsEmp] = useState(null);
+  const [cmpA, setCmpA] = useState("");
+  const [cmpB, setCmpB] = useState("");
+  const [cmpResult, setCmpResult] = useState(null);
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -245,6 +334,12 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
       setMySlips(p.data);
       setMyShifts(sh.data);
       setMyLeaves(lv.data);
+      if (s.data?.linked) {
+        try {
+          const bal = await axios.get(`${API}/uk-payroll/me/leave-balance`, cfg);
+          setLeaveBalance(bal.data);
+        } catch { /* ignore */ }
+      }
     } catch { toast.error("Portal verileri yüklenemedi"); }
   }, []);
 
@@ -333,8 +428,25 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
     } catch { toast.error("İşlem başarısız"); }
   };
 
+  const runCompare = async () => {
+    if (!cmpA || !cmpB) { toast.error("İki dönem seçin"); return; }
+    const [y1, m1] = cmpA.split("-").map(Number);
+    const [y2, m2] = cmpB.split("-").map(Number);
+    try {
+      const { data } = await axios.get(`${API}/uk-payroll/compare/${pid}?y1=${y1}&m1=${m1}&y2=${y2}&m2=${m2}`, cfg);
+      setCmpResult(data);
+    } catch (e) { toast.error(e.response?.data?.detail || "Karşılaştırma yapılamadı"); }
+  };
+
   const submitLeave = async () => {
     if (!leaveForm.start_date || !leaveForm.end_date) { toast.error("Başlangıç ve bitiş tarihi zorunlu"); return; }
+    if (leaveForm.leave_type === "annual" && leaveBalance) {
+      const days = Math.round((new Date(leaveForm.end_date) - new Date(leaveForm.start_date)) / 86400000) + 1;
+      if (days > leaveBalance.remaining) {
+        toast.error(`Yetersiz izin bakiyesi: kalan ${leaveBalance.remaining} gün, talep ${days} gün`);
+        return;
+      }
+    }
     try {
       await axios.post(`${API}/uk-payroll/me/leave-request`, leaveForm, cfg);
       toast.success("İzin talebiniz gönderildi — yönetici onayı bekleniyor");
@@ -487,6 +599,7 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
                       <div className="flex gap-1.5 justify-end">
                         <button onClick={() => setEditEmp(e)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-stone-50" title="İK kaydını düzenle" data-testid={`ukp-edit-${e.id}`}><Pencil size={14} /></button>
                         <button onClick={() => downloadP60(e)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-blue-50 text-blue-600" title="P60 indir (vergi yılı özeti)" data-testid={`ukp-p60-${e.id}`}><FileText size={14} /></button>
+                        <button onClick={() => setDocsEmp(e)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-stone-50" title="İK belgeleri" data-testid={`ukp-docs-${e.id}`}><Paperclip size={14} /></button>
                         {e.employment_status === "leaver" ? (
                           <>
                             <button onClick={() => downloadP45(e)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-amber-50 text-amber-600" title="P45 indir" data-testid={`ukp-p45-${e.id}`}><FileText size={14} /></button>
@@ -612,6 +725,59 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
             <button onClick={runRobot} className="px-4 py-2 text-sm rounded-xl bg-emerald-600 hover:bg-emerald-500 font-medium" data-testid="ukp-robot-run-btn">
               Şimdi Çalıştır
             </button>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-2xl p-4" data-testid="ukp-compare-card">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex items-center gap-2 font-semibold text-sm mr-2"><GitCompareArrows size={16} className="text-violet-600" /> Bordro Karşılaştırma</div>
+              <Field label="Dönem A">
+                <select className={inputCls + " !w-auto"} value={cmpA} onChange={(e) => setCmpA(e.target.value)} data-testid="ukp-cmp-a">
+                  <option value="">Seçin</option>
+                  {runs.map((r) => <option key={r.id} value={`${r.year}-${r.month}`}>{MONTHS_TR[r.month - 1]} {r.year}</option>)}
+                </select>
+              </Field>
+              <Field label="Dönem B">
+                <select className={inputCls + " !w-auto"} value={cmpB} onChange={(e) => setCmpB(e.target.value)} data-testid="ukp-cmp-b">
+                  <option value="">Seçin</option>
+                  {runs.map((r) => <option key={r.id} value={`${r.year}-${r.month}`}>{MONTHS_TR[r.month - 1]} {r.year}</option>)}
+                </select>
+              </Field>
+              <button onClick={runCompare} className="px-4 py-2 text-sm rounded-lg bg-violet-600 text-white hover:bg-violet-700" data-testid="ukp-cmp-btn">Karşılaştır</button>
+            </div>
+            {cmpResult && (
+              <div className="mt-4 grid md:grid-cols-2 gap-4" data-testid="ukp-cmp-result">
+                <table className="w-full text-sm">
+                  <thead className="text-xs text-stone-500 uppercase">
+                    <tr><th className="text-left py-1.5">Metrik</th><th className="text-right">A</th><th className="text-right">B</th><th className="text-right">Fark</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {[["hours", "Saat"], ["gross", "Brüt"], ["paye", "PAYE"], ["ni_employee", "NI"], ["pension_ee", "Emeklilik"], ["net", "Net"], ["employer_cost", "İşveren maliyeti"]].map(([k, l]) => {
+                      const t = cmpResult.totals[k];
+                      return (
+                        <tr key={k}>
+                          <td className="py-1.5 font-medium">{l}</td>
+                          <td className="text-right">{k === "hours" ? t.a : gbp(t.a)}</td>
+                          <td className="text-right">{k === "hours" ? t.b : gbp(t.b)}</td>
+                          <td className={`text-right font-semibold ${t.delta > 0 ? "text-emerald-600" : t.delta < 0 ? "text-red-600" : "text-stone-400"}`}>
+                            {t.delta > 0 ? "▲" : t.delta < 0 ? "▼" : ""} {k === "hours" ? Math.abs(t.delta) : gbp(Math.abs(t.delta))}{t.pct !== null ? ` (%${Math.abs(t.pct)})` : ""}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                  <div className="text-xs text-stone-500 uppercase font-semibold">Personel bazında net fark</div>
+                  {cmpResult.rows.map((r) => (
+                    <div key={r.staff_id} className="flex items-center justify-between text-sm border border-stone-100 rounded-lg px-3 py-1.5">
+                      <div>{r.staff_name} <span className="text-xs text-stone-400">({r.status})</span></div>
+                      <div className={`font-semibold ${r.delta > 0 ? "text-emerald-600" : r.delta < 0 ? "text-red-600" : "text-stone-400"}`}>
+                        {r.delta > 0 ? "▲" : r.delta < 0 ? "▼" : "—"} {gbp(Math.abs(r.delta))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div className="grid md:grid-cols-3 gap-4">
           <div className="space-y-2">
@@ -747,9 +913,17 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
               <div className="bg-white border border-stone-200 rounded-2xl p-5" data-testid="ukp-my-leaves">
                 <div className="flex items-center justify-between mb-3">
                   <div className="font-semibold text-sm">İzin Taleplerim</div>
-                  <button onClick={() => setLeaveOpen(!leaveOpen)} className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" data-testid="ukp-leave-request-btn">
-                    {leaveOpen ? "Vazgeç" : "+ İzin Talep Et"}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {leaveBalance && (
+                      <div className="text-xs bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-1.5" data-testid="ukp-leave-balance">
+                        <b className="text-indigo-700">{leaveBalance.remaining} gün</b> kalan yıllık izin
+                        <span className="text-stone-500"> · hak {leaveBalance.entitled} · kullanılan {leaveBalance.used} · bekleyen {leaveBalance.pending}</span>
+                      </div>
+                    )}
+                    <button onClick={() => setLeaveOpen(!leaveOpen)} className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" data-testid="ukp-leave-request-btn">
+                      {leaveOpen ? "Vazgeç" : "+ İzin Talep Et"}
+                    </button>
+                  </div>
                 </div>
                 {leaveOpen && (
                   <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 mb-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end" data-testid="ukp-leave-form">
@@ -787,6 +961,7 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
       )}
 
       {editEmp && <HrEditDialog emp={editEmp} onClose={() => setEditEmp(null)} onSaved={() => { setEditEmp(null); loadEmployees(); }} />}
+      {docsEmp && <DocsDialog emp={docsEmp} onClose={() => setDocsEmp(null)} />}
       {offEmp && <OffboardDialog emp={offEmp} onClose={() => setOffEmp(null)} onDone={() => { setOffEmp(null); loadEmployees(); }} />}
     </div>
   );

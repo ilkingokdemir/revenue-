@@ -4100,3 +4100,20 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - Test: iteration_602.json — backend 28/28 (iter600+601+602 pytest), frontend P60/izin
   onay/sekme akışları doğrulandı. Kalıcı test: test_uk_payroll_iter602.py.
 - NOT: Backend hot-reload bazen takılıyor → supervisorctl restart backend çözüyor.
+
+## Iter 603 (2026-09-01) — İzin Bakiyesi + Bordro Karşılaştırma + WhatsApp + Personel Belgeleri
+- İzin Bakiyesi: GET /uk-payroll/me/leave-balance (annual_leave_days HR alanı, varsayılan 28;
+  kullanılan+bekleyen düşülür). Talep formunda client + server (400) çifte kontrol; sick/unpaid
+  türleri bakiyeye takılmaz. UI: Portalım'da bakiye rozeti + HR dialogunda izin hakkı alanı.
+- Bordro Karşılaştırma: GET /uk-payroll/compare/{pid}?y1&m1&y2&m2 — 7 metrik toplamı
+  (a/b/delta/pct) + personel bazında net fark (yeni/ayrıldı/her iki dönem). UI: Bordro Geçmişi
+  sekmesinde karşılaştırma kartı, yeşil▲/kırmızı▼ renkli farklar.
+- WhatsApp Hatırlatma: shift_reminder robotu artık phone'lu personele WhatsApp da gönderiyor
+  (marketing.whatsapp_voice._send_whatsapp_reply; Twilio yok → whatsapp_mocked sayacı).
+- Personel Belgeleri: /uk-payroll/employees/{id}/documents CRUD (Emergent Object Storage,
+  hr_docs/{staff_id}/ subpath, 15MB, pdf/jpg/png/webp/heic/docx, tür whitelist).
+  UI: personel satırında ataç butonu → DocsDialog (yükle/listele/indir/sil).
+- Test: iteration_603.json — backend 35/35 kümülatif (iter600-603 pytest). UI smoke ana ajan
+  ekran görüntüsüyle (compare tablosu + 8 ataç butonu render).
+- TEST AJANI NOTU: Sidebar bölüm başlıklarında data-testid ZATEN VAR: `nav-section-{label}`
+  (örn. nav-section-Operations) — UI otomasyonunda önce PRO toggle, sonra bu testid'e tıkla.

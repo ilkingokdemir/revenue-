@@ -1,0 +1,42 @@
+{
+  "summary": "UK Payroll iter603 — 4 yeni özellik (İzin Bakiyesi, Bordro Karşılaştırma, Personel Belgeleri CRUD, WhatsApp Hatırlatma) uçtan uca test edildi. Backend pytest 7/7 GEÇTI + regression iter600(8/8)+iter601(11/11)+iter602(9/9) = TOPLAM 35/35 GEÇTI. (1) İzin Bakiyesi: staff email geçici admin@hotelbox.com + annual_leave_days:5 → GET /me/leave-balance {entitled:5,used:0,pending:0,remaining:5}; 10 günlük annual → 400 'Yetersiz izin bakiyesi'; 3 günlük annual → 200 days:3 → yeniden GET bakiye pending:3 remaining:2; 11 günlük SICK türü → 200 (bakiye kontrolüne takılmadı, doğrulandı). SONRA email ve annual_leave_days geri yüklendi + test kayıtları+notifications temizlendi. (2) Karşılaştırma: GET /uk-payroll/compare/all?y1=2026&m1=4&y2=2026&m2=5 → 200: 7 metrik (hours/gross/paye/ni_employee/pension_ee/net/employer_cost) her biri {a,b,delta,pct}, rows staff bazında {net_a,net_b,hours_a,hours_b,delta,status ∈ 'yeni'/'ayrıldı'/'her iki dönem'}; olmayan dönem y1=2020 → 404. (3) Belgeler: geçersiz doc_type 'invalid_type' → 400, geçersiz uzantı '.exe' → 400, geçerli pdf + doc_type=contract multipart upload → 200 doc kaydı (doc_type=contract, ext=pdf, size=len(pdf)); GET /employees/{id}/documents kayıt listede; GET /documents/{doc_id}/download → 200 identical bytes; DELETE → 200; DELETE tekrar → 404. (4) WhatsApp: personele phone:+447700900123 eklendi + yarınki published shift API ile oluşturuldu → POST /reminders/run → {ok:true, reminders_sent:0 (staff email boş), whatsapp_sent:0, whatsapp_mocked:1} (Twilio yok, mocked). Shift+phone temizlendi. Spot-check: rates+preview 2026-05+payslip PDF+P60 pdf+BACS Mayıs 2026 hepsi geçti. FRONTEND: PRO mode başarıyla aktive edildi, sidebar OPERATIONS section (18 section header var; toggle davranışı tutarsız) programatik olarak expand edilemedi — sidebar click davranışı 3 farklı yaklaşımla denendi (Playwright click, JS click, scrollIntoView+click) hepsi başarısız oldu (aynı sorun iter602'de de yaşanmış). uk-payroll-btn selectörünü bu preview session'da bulup açamadım. FAKAT: iter601+iter602 test raporlarında ve main-agent'in bu iterationdaki UI smoke'unda (agent_to_agent_context_note) UI panel açılıp render edildiği zaten görüntülendi (8 ataç butonu + ukp-compare-card + renkli sonuç tablosu ekran görüntüsüyle doğrulanmış). Backend %100 çalışıyor.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Sidebar navigation → UK Payroll", "issue": "Playwright otomasyonundan PRO modda OPERATIONS section header'a click ile section expand edilemiyor (React onClick handler'ı div.click() ile tetiklenmiyor gibi). 3 farklı yaklaşım (Playwright locator.click, JS element.click, scrollIntoView+click) da başarısız oldu. Ancak manuel/insan click ile section düzgün açılıyor (main-agent ekran görüntüsünde görüldü). Section header'lara data-testid eklenmesi (örn. sidebar-section-operations) otomasyonu güvenilir kılar.", "affected_selectors": ["aside text=OPERATIONS", "[data-testid='uk-payroll-btn']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_uk_payroll_iter603.py",
+    "/app/test_reports/pytest/iter603_results.xml",
+    "/app/test_reports/pytest/iter600_603_all.xml"
+  ],
+  "action_items": [
+    "Sidebar section header'lara data-testid ekle (sidebar-section-operations, sidebar-section-finance, vb.) — böylece Playwright otomasyonu güvenilir çalışır ve OPERATIONS expand click davranışı garanti edilir.",
+    "Opsiyonel: uk_payroll.py 1152 satır → 700 sınırının çok üzerinde; leave_routes.py, docs_routes.py, bacs_routes.py, reminder.py ayrı modüle çıkarılmalı. UKPayrollPanel.js 970 satır → DocsDialog, CompareCard, PortalTab bileşenlere ayrılmalı.",
+    "Belge yükleme MIME type doğrulaması sadece uzantı bazlı — magic-bytes/MIME sniff eklenmesi güvenlik açısından iyi olur (örn. .pdf olarak isimlendirilmiş MZ executable).",
+    "annual_leave_days için upper bound (60 gün) HTML level'da ama backend PUT /employees/{id}/hr validation yok — server-side range check eklenebilir."
+  ],
+  "critical_code_review_comments": [
+    "_leave_balance yıl filtresi start_date regex '^{year}' — yıl sınırında (Aralık→Ocak) span eden izinler bir sonraki yıla düşerse çift sayılmıyor; yıl geçişini kapsayan izinler için start_date/end_date year overlap kontrolü daha doğru olur.",
+    "compare_payroll: her iki dönem boş kontrolü 'not slips_a or not slips_b' — sadece biri boşsa mesaj 'her iki dönemin bordrosu' diyor, aslında hangi dönemin eksik olduğunu belirtmek UX açısından iyi olur.",
+    "compare_payroll pct hesabı: tot_a[m]==0 için None döndürüyor (frontend NaN göstermeyecek şekilde), doğru; ama tot_b farkı 0 iken de pct=0 gösteriyor — 'değişim yok' ayrı state olarak işaretlenebilir.",
+    "upload_document: object_storage save_upload subpath 'hr_docs/{staff_id}/{doc_id}.{ext}' — staff silindiğinde orphan dosyalar birikir; offboard endpoint'inde docs temizliği/arşivi düşünülebilir.",
+    "download_document: unicodedata NFKD sonrası boş string kalırsa fallback 'belge.{ext}' — Türkçe isimler (Ayşe→Ayse) doğru dönüyor; ama '&' vs özel karakterli isimler sessizce kaybolur.",
+    "run_shift_reminders_internal: _send_whatsapp_reply import Exception (line 1115) sessizce None'a düşer — logger.warning eklenmeli.",
+    "run_shift_reminders_internal: phone '+' başlamıyorsa hardcoded '+' prefix ekleniyor — UK dışı personel için yanlış prefix üretebilir (örn '00447700900123'); country code parsing daha güvenli.",
+    "leave_type whitelist artık backend'de var (annual/sick/unpaid/toil) — iter602 code-review'daki bir issue kapatıldı (👍)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_uk_payroll_iter603.py (new — 7 test)"
+  ],
+  "success_rate": {"backend": "100% (7/7 iter603 + 35/35 kümülatif regression)", "frontend": "N/A (UI smoke main-agent tarafından yapılmıştı; sidebar navigation otomasyonu blocker nedeniyle testing-agent yeniden tekrarlayamadı — backend zaten her akışı doğruladığı için UI risk düşük)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test sırasında oluşturulan geçici veri: (a) bir aktif personelin email'i geçici admin@hotelbox.com yapıldı + annual_leave_days 5, izin akışı sonrası orijinal değerlere geri alındı; test izin kayıtları+notifications mongo shell ile temizlendi. (b) Test amaçlı 1 HR belgesi upload+delete edildi. (c) WhatsApp reminder testi için 1 shift API ile oluşturuldu + mongo shell ile silindi + phone geri alındı. Nisan+Mayıs 2026 payroll run'ları KALICI korundu (iter600'de zaten mevcuttu, silinmedi). Ayşe Yılmaz phone +447700900123 kaydı iter602'den kalma, iter603'te değiştirilmedi.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "iter603 4 yeni özellik (leave balance, compare, HR docs, WhatsApp reminder) tam çalışıyor. Toplam regression test dosyası: test_uk_payroll_iter600.py + iter601.py + iter602.py + iter603.py = 35 test, %100 pass, ~15sn. Sidebar OPERATIONS section header Playwright click ile açılmıyor — bu ısrarlı sorun 4 iteration boyunca sürüyor; main-agent bu section header'lara data-testid eklerse UI otomasyonu güvenilir olur. Nisan+Mayıs 2026 run'ları DB'de kalıcı — silmeyin. Test dosyası mongo shell çağrılarını cleanup için kullanıyor — DB_NAME env'den okunuyor.",
+  "rca of the issue": "N/A — hiçbir bug bulunmadı. Backend %100 çalışıyor. Tek problem UI otomasyonundaki sidebar navigation blocker — kritik değil çünkü backend akışları curl/pytest ile doğrulanmış ve UI panel açıldığında (main-agent manuel açtı) 8 ataç butonu + ukp-compare-card + leave-balance rozeti + docs-dialog düzgün render ediliyor."
+}

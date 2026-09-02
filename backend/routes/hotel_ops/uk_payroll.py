@@ -39,7 +39,14 @@ PEN_MIN_AGE, PEN_MAX_AGE = 22, 66
 SSP_WEEKLY = 123.25
 SSP_AWE_PCT = 0.80
 SSP_QUALIFYING_DAYS_PER_WEEK = 5
+# Statutory Maternity / Paternity Pay 2026/27 (from 6 Apr 2026)
+SMP_WEEKLY = 194.32
+SMP_AWE_PCT = 0.90
+SMP_LEL_WEEKLY = 129.0
+SMP_WEEKS, SMP_ENHANCED_WEEKS, SPP_MAX_WEEKS = 39, 6, 2
+SMP_RECOVERY_PCT = 0.92
 DOC_EXPIRY_HORIZON_DAYS = 60
+LEAVE_ACTIVE_STATUSES = ["approved", "cancel_requested"]
 
 HR_FIELDS = ["dob", "ni_number", "tax_code", "starter_declaration", "contract_type",
              "start_date", "bank_sort_code", "bank_account_no", "student_loan_plans",
@@ -137,6 +144,36 @@ def _month_bounds(year: int, month: int):
 
 def _tax_year_start(ref: date) -> date:
     return date(ref.year if (ref.month, ref.day) >= (4, 6) else ref.year - 1, 4, 6)
+
+
+def _parental_weeks(pl: dict) -> int:
+    if pl.get("type") == "maternity":
+        return SMP_WEEKS
+    return max(1, min(SPP_MAX_WEEKS, int(pl.get("weeks") or SPP_MAX_WEEKS)))
+
+
+def _parental_weekly(pl: dict, week_idx: int) -> float:
+    awe = float(pl.get("awe") or 0)
+    if pl.get("type") == "maternity" and week_idx < SMP_ENHANCED_WEEKS:
+        return round(awe * SMP_AWE_PCT, 2)
+    return round(min(SMP_WEEKLY, awe * SMP_AWE_PCT), 2)
+
+
+def compute_parental_pay(leaves: list, start: date, end: date) -> dict:
+    """Sum of statutory weekly payments whose week-start falls inside [start, end]."""
+    total, weeks, ptype = 0.0, 0, ""
+    for pl in leaves:
+        try:
+            s = datetime.strptime(pl["start_date"], "%Y-%m-%d").date()
+        except Exception:
+            continue
+        for i in range(_parental_weeks(pl)):
+            wk = s + timedelta(days=7 * i)
+            if start <= wk <= end:
+                total += _parental_weekly(pl, i)
+                weeks += 1
+                ptype = pl.get("type", "")
+    return {"amount": round(total, 2), "weeks": weeks, "type": ptype}
 
 
 def _working_days(d1: date, d2: date) -> int:
@@ -322,7 +359,7 @@ def create_uk_payroll_router(db, require_roles):
             by_staff.setdefault(sh.get("staff_id", ""), []).append(sh)
 
         # Approved sick leaves overlapping this month (SSP)
-        sick_q = {"leave_type": "sick", "status": "approved",
+        sick_q = {"leave_type": "sick", "status": {"$in": LEAVE_ACTIVE_STATUSES},
                   "start_date": {"$lte": end.isoformat()}, "end_date": {"$gte": start.isoformat()}}
         if property_id != "all":
             sick_q["property_id"] = property_id
@@ -330,6 +367,14 @@ def create_uk_payroll_router(db, require_roles):
         sick_by_staff: dict = {}
         for lv in sick_docs:
             sick_by_staff.setdefault(lv.get("staff_id"), []).append(lv)
+        # Active maternity/paternity leaves that started on/before month end (SMP/SPP)
+        par_q = {"status": "active", "start_date": {"$lte": end.isoformat()}}
+        if property_id != "all":
+            par_q["property_id"] = property_id
+        par_docs = await db.staff_parental_leaves.find(par_q, {"_id": 0}).to_list(300)
+        par_by_staff: dict = {}
+        for pl in par_docs:
+            par_by_staff.setdefault(pl.get("staff_id"), []).append(pl)
         # AWE estimate: last 2 months' payslip gross / 8.667 weeks
         prev1_y, prev1_m = (year, month - 1) if month > 1 else (year - 1, 12)
         prev2_y, prev2_m = (prev1_y, prev1_m - 1) if prev1_m > 1 else (prev1_y - 1, 12)
@@ -361,10 +406,10 @@ def create_uk_payroll_router(db, require_roles):
 
         rows, warnings = [], []
         totals = {"hours": 0.0, "gross": 0.0, "paye": 0.0, "ni_employee": 0.0, "ni_employer": 0.0,
-                  "student_loan": 0.0, "pension_ee": 0.0, "pension_er": 0.0, "ssp": 0.0, "net": 0.0,
+                  "student_loan": 0.0, "pension_ee": 0.0, "pension_er": 0.0, "ssp": 0.0, "smp": 0.0, "net": 0.0,
                   "nmw_topup": 0.0, "employer_cost": 0.0}
-        # staff with approved sick leave but no shifts this month still get an SSP-only payslip
-        for sid in sick_by_staff:
+        # staff with approved sick leave / active parental leave but no shifts this month still get a payslip
+        for sid in list(sick_by_staff) + list(par_by_staff):
             if sid and sid not in by_staff and sid in smap:
                 by_staff[sid] = []
         for sid, items in by_staff.items():
@@ -396,7 +441,12 @@ def create_uk_payroll_router(db, require_roles):
             ssp, ssp_days = _ssp_for(sid, base_earned)
             if ssp > 0:
                 staff_warn.append(f"SSP: {ssp_days} iş günü yasal hastalık ödemesi (£{ssp:.2f}) eklendi")
-            gross = round(base_earned + nmw_topup + ssp + adj_add - adj_ded, 2)
+            par = compute_parental_pay(par_by_staff.get(sid, []), start, end)
+            smp = par["amount"]
+            if smp > 0:
+                lbl = "SMP (annelik)" if par["type"] == "maternity" else "SPP (babalık)"
+                staff_warn.append(f"{lbl}: {par['weeks']} hafta yasal doğum ödemesi (£{smp:.2f}) eklendi")
+            gross = round(base_earned + nmw_topup + ssp + smp + adj_add - adj_ded, 2)
             paye = _paye(gross, tax_code)
             ni_ee = _ni_employee(gross)
             ni_er = _ni_employer(gross)
@@ -417,6 +467,7 @@ def create_uk_payroll_router(db, require_roles):
                    "age": age, "nmw_rate": nmw, "shifts": len(items), "hours": round(hours, 2),
                    "implied_hourly": implied, "base_earned": round(base_earned, 2), "nmw_topup": nmw_topup,
                    "adjustments": round(adj_add - adj_ded, 2), "ssp": ssp, "ssp_days": ssp_days,
+                   "smp": smp, "smp_weeks": par["weeks"], "smp_type": par["type"],
                    "gross": gross, "paye": paye,
                    "ni_employee": ni_ee, "ni_employer": ni_er, "student_loan": sloan,
                    "pension_ee": pension_ee, "pension_er": pension_er, "pension_enrolled": enrolled,
@@ -429,9 +480,10 @@ def create_uk_payroll_router(db, require_roles):
             for k, rk in (("hours", "hours"), ("gross", "gross"), ("paye", "paye"),
                           ("ni_employee", "ni_employee"), ("ni_employer", "ni_employer"),
                           ("student_loan", "student_loan"), ("pension_ee", "pension_ee"),
-                          ("pension_er", "pension_er"), ("ssp", "ssp"), ("net", "net"),
+                          ("pension_er", "pension_er"), ("ssp", "ssp"), ("smp", "smp"), ("net", "net"),
                           ("nmw_topup", "nmw_topup"), ("employer_cost", "employer_cost")):
                 totals[k] = round(totals[k] + row[rk], 2)
+        totals["smp_recovery"] = round(totals["smp"] * SMP_RECOVERY_PCT, 2)
         rows.sort(key=lambda r: r["staff_name"])
         return {"tax_year": TAX_YEAR, "year": year, "month": month,
                 "period": {"start": start.isoformat(), "end": end.isoformat()},
@@ -450,6 +502,8 @@ def create_uk_payroll_router(db, require_roles):
     async def _persist_run(property_id: str, year: int, month: int, actor: str, force: bool):
         now = datetime.now(timezone.utc)
         existing = await db.uk_payroll_runs.find_one({"property_id": property_id, "year": year, "month": month}, {"_id": 0})
+        if existing and existing.get("locked"):
+            return {"ok": False, "skipped": "locked", "run_id": existing["id"]}
         if existing and not force:
             return {"ok": False, "skipped": "already_run", "run_id": existing["id"]}
         result = await _compute_month(property_id, year, month)
@@ -462,8 +516,14 @@ def create_uk_payroll_router(db, require_roles):
         run_doc = {"id": run_id, "property_id": property_id, "year": year, "month": month,
                    "tax_year": TAX_YEAR, "period": result["period"], "totals": result["totals"],
                    "staff_count": result["staff_count"], "warning_count": len(result["warnings"]),
-                   "status": "completed", "created_by": actor, "created_at": now.isoformat()}
+                   "status": "completed", "created_by": actor, "created_at": now.isoformat(),
+                   "locked": True, "locked_at": now.isoformat(),
+                   "revision": int(existing.get("revision", 1)) + 1 if existing else 1}
         await db.uk_payroll_runs.insert_one({**run_doc})
+        if existing:
+            await db.uk_payroll_corrections.update_many(
+                {"property_id": property_id, "year": year, "month": month, "status": "approved"},
+                {"$set": {"status": "applied", "applied_at": now.isoformat(), "new_run_id": run_id}})
         slips = []
         for r in result["rows"]:
             slips.append({**r, "id": str(uuid.uuid4()), "run_id": run_id, "property_id": property_id,
@@ -479,11 +539,109 @@ def create_uk_payroll_router(db, require_roles):
         year = int(data.get("year") or now.year)
         month = int(data.get("month") or now.month)
         res = await _persist_run(property_id, year, month, current_user.get("name", ""), bool(data.get("force")))
+        if res.get("skipped") == "locked":
+            raise HTTPException(423, f"{year}-{month:02d} bordrosu kilitli (ödendi). Değişiklik için Düzeltme Talebi oluşturun; admin onayıyla kilit açılır.")
         if res.get("skipped") == "already_run":
             raise HTTPException(409, f"{year}-{month:02d} bordrosu zaten çalıştırılmış. Yeniden çalıştırmak için force:true gönderin.")
         if res.get("skipped") == "no_shifts":
             raise HTTPException(400, "Bu dönemde onaylanmış/tamamlanmış vardiya bulunamadı")
         return {"ok": True, "run": res["run"], "payslips_created": res["payslips_created"]}
+
+    # ==================== PAYROLL LOCK & CORRECTIONS ====================
+    async def _run_or_404(run_id: str) -> dict:
+        run = await db.uk_payroll_runs.find_one({"id": run_id}, {"_id": 0})
+        if not run:
+            raise HTTPException(404, "Run bulunamadı")
+        return run
+
+    async def _notify(title: str, message: str, property_id: str, category: str = "hr_payroll", priority: str = "high"):
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "category": category, "priority": priority, "title": title,
+            "message": message, "property_id": property_id or "", "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat()})
+
+    @router.post("/uk-payroll/runs/{run_id}/correction-request")
+    async def correction_request(run_id: str, data: Dict,
+                                 current_user: dict = Depends(require_roles("admin", "manager"))):
+        run = await _run_or_404(run_id)
+        reason = (data.get("reason") or "").strip()
+        if len(reason) < 5:
+            raise HTTPException(400, "Gerekçe en az 5 karakter olmalı")
+        if not run.get("locked"):
+            raise HTTPException(400, "Bu bordro zaten açık — doğrudan yeniden çalıştırabilirsiniz")
+        dup = await db.uk_payroll_corrections.find_one({"run_id": run_id, "status": "pending"}, {"_id": 0})
+        if dup:
+            raise HTTPException(409, "Bu bordro için bekleyen bir düzeltme talebi zaten var")
+        now = datetime.now(timezone.utc).isoformat()
+        corr = {"id": str(uuid.uuid4()), "run_id": run_id, "property_id": run["property_id"],
+                "year": run["year"], "month": run["month"], "reason": reason[:500],
+                "requested_by": current_user.get("name", ""), "requested_at": now,
+                "status": "pending", "direct": False}
+        await db.uk_payroll_corrections.insert_one({**corr})
+        await _notify("Bordro düzeltme talebi",
+                      f"{corr['requested_by']} — {run['year']}-{run['month']:02d} bordrosu için kilit açma talebi: {reason[:120]}",
+                      run["property_id"])
+        return corr
+
+    @router.get("/uk-payroll/corrections/{property_id}")
+    async def list_corrections(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        q = {} if property_id == "all" else {"property_id": property_id}
+        return await db.uk_payroll_corrections.find(q, {"_id": 0}).sort("requested_at", -1).to_list(100)
+
+    @router.post("/uk-payroll/corrections/{corr_id}/decide")
+    async def decide_correction(corr_id: str, data: Dict, current_user: dict = Depends(require_roles("admin"))):
+        corr = await db.uk_payroll_corrections.find_one({"id": corr_id}, {"_id": 0})
+        if not corr:
+            raise HTTPException(404, "Düzeltme talebi bulunamadı")
+        if corr.get("status") != "pending":
+            raise HTTPException(400, "Bu talep zaten karara bağlanmış")
+        decision = data.get("decision")
+        if decision not in ("approve", "reject"):
+            raise HTTPException(400, "decision approve/reject olmalı")
+        now = datetime.now(timezone.utc).isoformat()
+        upd = {"status": "approved" if decision == "approve" else "rejected",
+               "decided_by": current_user.get("name", ""), "decided_at": now, "decision_note": (data.get("note") or "")[:300]}
+        await db.uk_payroll_corrections.update_one({"id": corr_id}, {"$set": upd})
+        if decision == "approve":
+            await db.uk_payroll_runs.update_one({"id": corr["run_id"]}, {"$set": {
+                "locked": False, "unlocked_at": now, "unlocked_by": upd["decided_by"],
+                "unlock_reason": corr["reason"], "correction_id": corr_id}})
+        await _notify("Bordro düzeltme talebi " + ("onaylandı" if decision == "approve" else "reddedildi"),
+                      f"{corr['year']}-{corr['month']:02d} — {corr['requested_by']} talebi {upd['decided_by']} tarafından "
+                      f"{'onaylandı, kilit açıldı' if decision == 'approve' else 'reddedildi'}",
+                      corr["property_id"], priority="normal")
+        return {**corr, **upd}
+
+    @router.post("/uk-payroll/runs/{run_id}/unlock")
+    async def unlock_run(run_id: str, data: Dict, current_user: dict = Depends(require_roles("admin"))):
+        run = await _run_or_404(run_id)
+        reason = (data.get("reason") or "").strip()
+        if len(reason) < 5:
+            raise HTTPException(400, "Gerekçe en az 5 karakter olmalı")
+        if not run.get("locked"):
+            raise HTTPException(400, "Bordro zaten açık")
+        now = datetime.now(timezone.utc).isoformat()
+        actor = current_user.get("name", "")
+        corr = {"id": str(uuid.uuid4()), "run_id": run_id, "property_id": run["property_id"],
+                "year": run["year"], "month": run["month"], "reason": reason[:500],
+                "requested_by": actor, "requested_at": now, "status": "approved", "direct": True,
+                "decided_by": actor, "decided_at": now, "decision_note": "Admin doğrudan kilit açtı"}
+        await db.uk_payroll_corrections.insert_one({**corr})
+        await db.uk_payroll_runs.update_one({"id": run_id}, {"$set": {
+            "locked": False, "unlocked_at": now, "unlocked_by": actor, "unlock_reason": reason, "correction_id": corr["id"]}})
+        await db.uk_payroll_corrections.update_many(
+            {"run_id": run_id, "status": "pending"},
+            {"$set": {"status": "approved", "decided_by": actor, "decided_at": now, "decision_note": "Admin doğrudan kilit açtı"}})
+        await _notify("Bordro kilidi açıldı", f"{run['year']}-{run['month']:02d} — {actor}: {reason[:120]}",
+                      run["property_id"], priority="normal")
+        return {"ok": True, "correction": corr}
+
+    @router.post("/uk-payroll/runs/{run_id}/lock")
+    async def lock_run(run_id: str, current_user: dict = Depends(require_roles("admin"))):
+        await _run_or_404(run_id)
+        now = datetime.now(timezone.utc).isoformat()
+        await db.uk_payroll_runs.update_one({"id": run_id}, {"$set": {"locked": True, "locked_at": now, "locked_by": current_user.get("name", "")}})
+        return {"ok": True}
 
     # ==================== PAYROLL ROBOT (last day of month) ====================
     async def run_monthly_payroll_internal(property_id: str = "all", force: bool = False) -> dict:
@@ -493,7 +651,7 @@ def create_uk_payroll_router(db, require_roles):
             return {"ok": True, "skipped": "not_last_day_of_month", "today": now.day, "last_day": last_day}
         pid = property_id or "all"
         res = await _persist_run(pid, now.year, now.month, "payroll-robot", False)
-        if res.get("skipped") == "already_run":
+        if res.get("skipped") in ("already_run", "locked"):
             return {"ok": True, "skipped": "already_run"}
         if res.get("skipped") == "no_shifts":
             return {"ok": True, "skipped": "no_shifts"}
@@ -588,6 +746,7 @@ def create_uk_payroll_router(db, require_roles):
         earn = [("Vardiya kazancı", slip.get("base_earned", 0)),
                 ("NMW tamamlama", slip.get("nmw_topup", 0)),
                 ("SSP (Yasal Hastalık Ödemesi)", slip.get("ssp", 0)),
+                ("SMP (Yasal Annelik Ödemesi)" if slip.get("smp_type") == "maternity" else "SPP (Yasal Babalık Ödemesi)", slip.get("smp", 0)),
                 ("Düzeltmeler", slip.get("adjustments", 0))]
         ded = [("PAYE Gelir Vergisi", slip.get("paye", 0)),
                ("National Insurance", slip.get("ni_employee", 0)),
@@ -953,7 +1112,7 @@ def create_uk_payroll_router(db, require_roles):
         leaves = await db.shift_leave_requests.find(
             {"staff_id": staff["id"], "leave_type": "annual",
              "start_date": {"$regex": f"^{year}"}}, {"_id": 0, "days": 1, "status": 1}).to_list(100)
-        used = sum(int(lv.get("days", 0)) for lv in leaves if lv.get("status") == "approved")
+        used = sum(int(lv.get("days", 0)) for lv in leaves if lv.get("status") in LEAVE_ACTIVE_STATUSES)
         pending = sum(int(lv.get("days", 0)) for lv in leaves if lv.get("status") == "pending")
         return {"entitled": entitled, "used": used, "pending": pending,
                 "remaining": max(0, entitled - used - pending), "year": int(year)}
@@ -1021,6 +1180,48 @@ def create_uk_payroll_router(db, require_roles):
             return []
         return await db.shift_leave_requests.find(
             {"staff_id": s["id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+
+    @router.post("/uk-payroll/me/leaves/{leave_id}/cancel")
+    async def my_leave_cancel(leave_id: str, current_user: dict = Depends(require_roles(*ALL_STAFF_ROLES))):
+        s = await _my_staff_doc(current_user)
+        if not s:
+            raise HTTPException(404, "E-posta adresinizle eşleşen personel kaydı bulunamadı")
+        lv = await db.shift_leave_requests.find_one({"id": leave_id, "staff_id": s["id"]}, {"_id": 0})
+        if not lv:
+            raise HTTPException(404, "İzin talebi bulunamadı")
+        now = datetime.now(timezone.utc).isoformat()
+        if lv.get("status") == "pending":
+            new_status = "cancelled"
+            await db.shift_leave_requests.update_one({"id": leave_id}, {"$set": {
+                "status": "cancelled", "cancelled_at": now, "cancelled_by": s.get("name", "")}})
+        elif lv.get("status") == "approved":
+            new_status = "cancel_requested"
+            await db.shift_leave_requests.update_one({"id": leave_id}, {"$set": {
+                "status": "cancel_requested", "cancel_requested_at": now}})
+            await _notify("İzin iptal talebi",
+                          f"{s.get('name')} onaylı iznini iptal etmek istiyor — {lv['start_date']} → {lv['end_date']} ({lv.get('days')} gün)",
+                          s.get("property_id", ""), category="hr_leave", priority="normal")
+        else:
+            raise HTTPException(400, "Sadece bekleyen veya onaylı izinler iptal edilebilir")
+        return {"ok": True, "status": new_status}
+
+    @router.post("/uk-payroll/leaves/{leave_id}/cancel-decision")
+    async def leave_cancel_decision(leave_id: str, data: Dict,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        lv = await db.shift_leave_requests.find_one({"id": leave_id}, {"_id": 0})
+        if not lv:
+            raise HTTPException(404, "İzin talebi bulunamadı")
+        if lv.get("status") != "cancel_requested":
+            raise HTTPException(400, "Bu izin için bekleyen iptal talebi yok")
+        approve = bool(data.get("approve"))
+        now = datetime.now(timezone.utc).isoformat()
+        upd = {"status": "cancelled" if approve else "approved",
+               "cancel_decided_by": current_user.get("name", ""), "cancel_decided_at": now}
+        if approve:
+            upd["cancelled_at"] = now
+            upd["cancelled_by"] = current_user.get("name", "")
+        await db.shift_leave_requests.update_one({"id": leave_id}, {"$set": upd})
+        return {**lv, **upd}
 
     # ==================== BACS PAYMENT FILE ====================
     @router.get("/uk-payroll/runs/{run_id}/bacs")
@@ -1157,6 +1358,69 @@ def create_uk_payroll_router(db, require_roles):
         return {"ok": True}
 
     # ==================== LEAVE CALENDAR ====================
+    # ==================== PARENTAL LEAVE (SMP / SPP) ====================
+    async def _estimate_awe(staff_id: str) -> float:
+        slips = await db.uk_payslips.find({"staff_id": staff_id}, {"_id": 0, "gross": 1, "year": 1, "month": 1}) \
+            .sort([("year", -1), ("month", -1)]).to_list(2)
+        if not slips:
+            return 0.0
+        return round(sum(float(s.get("gross", 0) or 0) for s in slips) / (4.345 * len(slips)), 2)
+
+    def _parental_view(pl: dict) -> dict:
+        weeks = _parental_weeks(pl)
+        try:
+            s = datetime.strptime(pl["start_date"], "%Y-%m-%d").date()
+            end_date = (s + timedelta(days=7 * weeks - 1)).isoformat()
+        except Exception:
+            end_date = ""
+        total = round(sum(_parental_weekly(pl, i) for i in range(weeks)), 2)
+        return {**pl, "total_weeks": weeks, "end_date": end_date, "total_pay": total,
+                "weekly_first": _parental_weekly(pl, 0), "weekly_standard": _parental_weekly(pl, SMP_ENHANCED_WEEKS)}
+
+    @router.get("/uk-payroll/parental-leave/{property_id}")
+    async def list_parental(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        q = {} if property_id == "all" else {"property_id": property_id}
+        docs = await db.staff_parental_leaves.find(q, {"_id": 0}).sort("start_date", -1).to_list(200)
+        return [_parental_view(d) for d in docs]
+
+    @router.post("/uk-payroll/employees/{staff_id}/parental-leave")
+    async def create_parental(staff_id: str, data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        s = await db.shift_staff.find_one({"id": staff_id}, {"_id": 0})
+        if not s:
+            raise HTTPException(404, "Personel bulunamadı")
+        ptype = data.get("type")
+        if ptype not in ("maternity", "paternity"):
+            raise HTTPException(400, "type maternity/paternity olmalı")
+        start_date = data.get("start_date", "")
+        try:
+            datetime.strptime(start_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(400, "start_date YYYY-MM-DD olmalı")
+        awe = float(data.get("awe") or 0) or await _estimate_awe(staff_id)
+        if awe <= 0:
+            raise HTTPException(400, "Ortalama haftalık kazanç (AWE) girin — geçmiş bordro bulunamadı")
+        if awe < SMP_LEL_WEEKLY:
+            raise HTTPException(400, f"AWE £{awe:.2f} < £{SMP_LEL_WEEKLY:.0f} (LEL) — yasal doğum ödemesi hakkı yok")
+        dup = await db.staff_parental_leaves.find_one({"staff_id": staff_id, "status": "active"}, {"_id": 0})
+        if dup:
+            raise HTTPException(409, "Bu personelin zaten aktif bir doğum izni var")
+        pl = {"id": str(uuid.uuid4()), "staff_id": staff_id, "staff_name": s.get("name", ""),
+              "property_id": s.get("property_id", ""), "type": ptype, "start_date": start_date,
+              "weeks": SMP_WEEKS if ptype == "maternity" else max(1, min(SPP_MAX_WEEKS, int(data.get("weeks") or SPP_MAX_WEEKS))),
+              "awe": round(awe, 2), "status": "active", "note": (data.get("note") or "")[:300],
+              "created_by": current_user.get("name", ""), "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.staff_parental_leaves.insert_one({**pl})
+        return _parental_view(pl)
+
+    @router.delete("/uk-payroll/parental-leave/{leave_id}")
+    async def end_parental(leave_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        upd = await db.staff_parental_leaves.update_one(
+            {"id": leave_id}, {"$set": {"status": "ended", "ended_at": datetime.now(timezone.utc).isoformat(),
+                                        "ended_by": current_user.get("name", "")}})
+        if upd.matched_count == 0:
+            raise HTTPException(404, "Doğum izni kaydı bulunamadı")
+        return {"ok": True}
+
     @router.get("/uk-payroll/leave-calendar/{property_id}")
     async def leave_calendar(property_id: str, year: int = 0, month: int = 0,
                              current_user: dict = Depends(require_roles("admin", "manager"))):
@@ -1165,7 +1429,7 @@ def create_uk_payroll_router(db, require_roles):
         if not (1 <= month <= 12):
             raise HTTPException(400, "month 1-12 olmalı")
         start, end = _month_bounds(year, month)
-        q = {"status": {"$in": ["approved", "pending"]},
+        q = {"status": {"$in": ["approved", "cancel_requested", "pending"]},
              "start_date": {"$lte": end.isoformat()}, "end_date": {"$gte": start.isoformat()}}
         if property_id != "all":
             q["property_id"] = property_id
@@ -1186,7 +1450,7 @@ def create_uk_payroll_router(db, require_roles):
             d = start + timedelta(days=i)
             key = d.isoformat()
             entries = days.get(key, [])
-            approved_ids = {e["staff_id"] for e in entries if e["status"] == "approved"}
+            approved_ids = {e["staff_id"] for e in entries if e["status"] in LEAVE_ACTIVE_STATUSES}
             calendar_days.append({"date": key, "weekday": d.weekday(), "entries": entries,
                                   "overlap": len(approved_ids) >= 2})
         return {"year": year, "month": month, "first_weekday": start.weekday(),

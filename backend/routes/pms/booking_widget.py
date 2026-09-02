@@ -8,6 +8,7 @@ import uuid
 import logging
 
 from routes.pms.widget_pricing import nightly_rates, explain_price, check_los_restrictions, stay_signals
+from routes.pms.guest_email_i18n import send_guest_confirmation
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,8 @@ def create_booking_widget_router(db, require_roles):
             "subtitle": (wconfig or {}).get("subtitle", "Experience exceptional hospitality with our best rate guarantee when you book direct"),
             "direct_advantage_pct": float((wconfig or {}).get("direct_advantage_pct", 5) or 0),
             "ota_banner_enabled": (wconfig or {}).get("ota_banner_enabled", True),
+            "ota_ab_enabled": (wconfig or {}).get("ota_ab_enabled", False),
+            "ota_ab_variant_b_pct": float((wconfig or {}).get("ota_ab_variant_b_pct", 8) or 0),
         }
 
         return {
@@ -346,6 +349,7 @@ def create_booking_widget_router(db, require_roles):
             "source": "website_widget",
             "channel_source": (data.get("channel_source") or "direct")[:60],
             "guest_lang": (data.get("lang") or "")[:5],
+            "ab_variant": (data.get("ab_variant") or "")[:1].upper(),
             "abs_attributes": abs_selected,
             "abs_total": abs_total,
             **({"room_id": abs_room["id"], "room_number": abs_room.get("name", ""),
@@ -377,19 +381,10 @@ def create_booking_widget_router(db, require_roles):
                 {"$set": {"redeemed": True, "redeemed_at": now,
                           "redeemed_via": "reservation", "booking_ref": booking_ref}})
 
-        # Confirmed (no payment) → log email mock immediately
+        # Confirmed (no payment) → confirmation e-mail in guest's language (Resend or MOCK)
         if not pay_now:
-            await db.booking_email_log.insert_one({
-                "id": str(uuid.uuid4()),
-                "booking_id": booking["id"],
-                "booking_ref": booking_ref,
-                "to": booking["guest_email"],
-                "subject": f"Booking confirmed · {booking_ref}",
-                "type": "booking_confirmation",
-                "status": "MOCKED",
-                "sent_at": now,
-            })
-            return {"status": "confirmed", "booking_ref": booking_ref, "booking": booking}
+            email = await send_guest_confirmation(db, booking)
+            return {"status": "confirmed", "booking_ref": booking_ref, "booking": booking, "email": email}
 
         # Pay-now flow → forward to Stripe Checkout (reuses existing /payments/booking-checkout
         # logic by calling its underlying StripeCheckout client directly to avoid an
@@ -539,7 +534,8 @@ def create_booking_widget_router(db, require_roles):
             raise HTTPException(400, "property_id gerekli")
         await db.ota_banner_views.insert_one({
             "id": str(uuid.uuid4()), "property_id": pid, "ota": (data.get("ota") or "")[:40],
-            "lang": (data.get("lang") or "")[:5], "ts": datetime.now(timezone.utc).isoformat()})
+            "lang": (data.get("lang") or "")[:5], "variant": (data.get("variant") or "A")[:1].upper(),
+            "pct": float(data.get("pct") or 0), "ts": datetime.now(timezone.utc).isoformat()})
         return {"ok": True}
 
     @router.get("/booking-widget/ota-conversion/{property_id}")
@@ -555,7 +551,12 @@ def create_booking_widget_router(db, require_roles):
         views = await db.ota_banner_views.count_documents(q_views)
         bks = await db.bookings.find(q_book, {"_id": 0, "total": 1, "channel_source": 1, "created_at": 1}).to_list(2000)
         revenue = round(sum(float(b.get("total") or 0) for b in bks), 2)
-        wcfg = await db.booking_widget_config.find_one({"property_id": property_id}, {"_id": 0, "direct_advantage_pct": 1}) or {}
+        wcfg = await db.booking_widget_config.find_one({"property_id": property_id}, {"_id": 0, "direct_advantage_pct": 1, "ota_ab_enabled": 1, "ota_ab_variant_b_pct": 1}) or {}
+        if property_id == "all" and not wcfg.get("ota_ab_enabled"):
+            # fleet view: reflect any property that has the A/B test switched on
+            any_ab = await db.booking_widget_config.find_one({"ota_ab_enabled": True}, {"_id": 0, "direct_advantage_pct": 1, "ota_ab_enabled": 1, "ota_ab_variant_b_pct": 1})
+            if any_ab:
+                wcfg = {**any_ab, **wcfg, "ota_ab_enabled": True}
         direct_pct = float(wcfg.get("direct_advantage_pct", 5) or 0)
         # commission saved: what an OTA (≈15%) would have taken on the OTA-equivalent price
         ota_equiv = revenue / (1 - direct_pct / 100) if 0 < direct_pct < 100 else revenue
@@ -564,10 +565,50 @@ def create_booking_widget_router(db, require_roles):
         for b in bks:
             k = (b.get("channel_source") or "").split(":", 1)[-1] or "ota"
             by_ota[k] = by_ota.get(k, 0) + 1
+        ab = []
+        for v in ("A", "B"):
+            vq = {**q_views, "variant": v}
+            vviews = await db.ota_banner_views.count_documents(vq)
+            vbks = await db.bookings.count_documents({**q_book, "ab_variant": v})
+            ab.append({"variant": v, "views": vviews, "bookings": vbks,
+                       "conversion_pct": round(vbks / vviews * 100, 1) if vviews else 0.0})
+        winner = None
+        if all(x["views"] >= 20 for x in ab) and ab[0]["conversion_pct"] != ab[1]["conversion_pct"]:
+            winner = max(ab, key=lambda x: x["conversion_pct"])["variant"]
         return {"property_id": property_id, "days": days, "banner_views": views, "bookings": len(bks),
                 "conversion_pct": round(len(bks) / views * 100, 1) if views else 0.0,
                 "revenue": revenue, "commission_saved": commission_saved, "direct_advantage_pct": direct_pct,
-                "by_ota": [{"ota": k, "bookings": v} for k, v in sorted(by_ota.items(), key=lambda x: -x[1])]}
+                "by_ota": [{"ota": k, "bookings": v} for k, v in sorted(by_ota.items(), key=lambda x: -x[1])],
+                "ab": {"enabled": bool(wcfg.get("ota_ab_enabled", False)), "variant_b_pct": float(wcfg.get("ota_ab_variant_b_pct", 8) or 0),
+                       "variants": ab, "winner": winner, "min_views_for_winner": 20}}
+
+    @router.get("/booking-widget/upcoming-events/{property_id}")
+    async def upcoming_events(property_id: str, days: int = 90, limit: int = 4):
+        """Public: strongest upcoming city events (market_events) for the widget 'book early' strip."""
+        today = datetime.now(timezone.utc).date()
+        last = (today + timedelta(days=max(7, min(days, 365)))).isoformat()
+        evs = await db.market_events.find(
+            {"property_id": {"$in": [property_id, "all"]}, "end_date": {"$gte": today.isoformat()}, "date": {"$lte": last},
+             "hotel_demand_score": {"$gte": 60}},
+            {"_id": 0, "name": 1, "date": 1, "end_date": 1, "category": 1, "hotel_demand_score": 1}).sort("hotel_demand_score", -1).to_list(40)
+        from routes.pms.widget_pricing import _event_kind
+        out, kept = [], []
+        for e in evs:
+            d0, d1 = e["date"], e.get("end_date") or e["date"]
+            icon, en, tr, de = _event_kind(e.get("category", ""))
+            if any(k[0] == icon and k[1] <= d1 and k[2] >= d0 for k in kept):
+                continue  # same kind, overlapping dates → duplicate listing
+            kept.append((icon, d0, d1))
+            ci = e["date"]
+            end_d = datetime.strptime(e.get("end_date") or e["date"], "%Y-%m-%d").date()
+            co = max(end_d + timedelta(days=1), datetime.strptime(ci, "%Y-%m-%d").date() + timedelta(days=2)).isoformat()
+            out.append({"name": e.get("name", "")[:90], "date": e["date"], "end_date": e.get("end_date") or e["date"],
+                        "icon": icon, "label_en": en, "label_tr": tr, "label_de": de, "score": e.get("hotel_demand_score", 0),
+                        "suggest_check_in": ci, "suggest_check_out": co})
+            if len(out) >= max(1, min(limit, 8)):
+                break
+        out.sort(key=lambda x: x["date"])
+        return {"property_id": property_id, "events": out}
 
     @router.get("/booking-widget/social-proof/{property_id}")
     async def social_proof(property_id: str):

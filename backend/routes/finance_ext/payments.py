@@ -286,19 +286,11 @@ def create_payments_router(db, require_roles):
                             # Send confirmation email — currently mocked (Resend integration
                             # ships once user provides RESEND_API_KEY). Logged so admin can
                             # verify the trigger fires from the booking_email_log collection.
-                            await db.booking_email_log.insert_one({
-                                "id": str(uuid.uuid4()),
-                                "booking_id": booking_id,
-                                "booking_ref": booking.get("booking_ref", ""),
-                                "to": booking.get("guest_email", ""),
-                                "subject": f"Booking confirmed · {booking.get('booking_ref', '')}",
-                                "type": "booking_confirmation",
-                                "status": "MOCKED",
-                                "sent_at": datetime.now(timezone.utc).isoformat(),
-                            })
+                            from routes.pms.guest_email_i18n import send_guest_confirmation
+                            em = await send_guest_confirmation(db, {**booking, "payment_status": "paid"})
                             logger.info(
-                                "📧 Booking confirmation email MOCKED — booking %s, guest %s",
-                                booking.get("booking_ref"), booking.get("guest_email"),
+                                "📧 Booking confirmation email %s (%s) — booking %s, guest %s",
+                                em["status"], em["lang"], booking.get("booking_ref"), booking.get("guest_email"),
                             )
                 # Metadata fallback: booking_id direkt metadata'da olabilir (eski akış)
                 meta = event.metadata or {}

@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 608 tests all pass. Backend: 9/9 pytest — booking confirmation email i18n (TR/EN/DE with correct subject prefixes + html tokens Anreise/Giriş/Check-in), email_outbox + booking_email_log persistence, ab_variant stored on booking, upcoming-events (≤4, min-2-night check-out, dedup by icon+overlap, date-sorted, all label_en/tr/de present), OTA banner-view public log, config PUT/GET round-trip, OTA conversion returns ab {enabled,variant_b_pct=8, variants A/B with views/bookings/conversion_pct, winner=null, min_views_for_winner=20}. Frontend: events strip renders 4 cards on /book/default, be-event-book-* fills dates and shows ≥1 be-book-room-*; TR title switches to 'Yaklaşan etkinlikler — erken rezervasyon yapın'; localStorage be_ab_variant='B' → be-ota-banner-pct='8', 'A' → '5'; compare chip after search shows Expedia ~£270 / Direct £248 (248/(1-0.08)≈269.6). Admin Booking Engine Manager → Theme & Branding tab exposes ota-ab-config, theme-ab-toggle, theme-ab-b-pct. Admin OTA Commission (Channels & Distribution → ota-commission-btn) → ota-conversion-card contains ota-ab-card with ota-ab-status, ota-ab-variant-A and ota-ab-variant-B. Test bookings iter608* cleaned up from bookings/email_outbox/booking_email_log.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "OTA Commission panel (branch=All Branches)", "issues": ["When activePropertyId='all', backend has no widget config so ota-ab-status renders 'KAPALI' and direct_advantage_pct shows 7 (fleet default) instead of the per-property 5. Reviewer expected 'AKTİF' but that only appears when a specific property (e.g. Franziskaner=default) is selected. Consider aggregating theme flags across properties for the all-branches view, or falling back to any-property enabled state, otherwise the A/B badge is misleading in multi-property admins."]},
+    {"screen": "Booking Engine Manager → Theme & Branding", "issues": ["theme-ab-toggle checkbox visually appears unchecked on load even though GET /config/default returns ota_ab_enabled=true and widget correctly renders variant pct — please verify controlled checkbox reads Boolean(config.ota_ab_enabled) on mount (minor)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter608.py",
+    "/app/test_reports/pytest/iter608.xml"
+  ],
+  "action_items": [
+    "(Optional) In OTACommissionPanel, when activePropertyId==='all' pass a resolved property (e.g. first property) or aggregate ab.enabled=true if any property has it on, so the A/B badge reflects reality for multi-property admins.",
+    "(Optional) In BookingEngineAdmin Theme form, ensure the ota_ab_enabled checkbox is initialised from the API response (Boolean(config.ota_ab_enabled)) — currently appears unchecked despite backend having it enabled."
+  ],
+  "critical_code_review_comments": [
+    "booking_widget.py upcoming_events dedup logic is correct: same icon + overlapping ranges skipped. Guarantee co-ci >= 2 nights confirmed.",
+    "guest_email_i18n.build_confirmation defaults lang to 'en' when unsupported — good.",
+    "ota_conversion sets ab.enabled from config lookup keyed by property_id; endpoint used with 'all' returns enabled=false because no wildcard config exists — this is correct backend behaviour but the frontend consumes it directly, causing the badge mismatch flagged above.",
+    "Resend mailer is MOCK by design (email_outbox insert with status='mocked') — confirmed and expected."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter608.py",
+    "/app/test_reports/iteration_608.json"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% for widget flows; admin AKTİF badge shown correctly only when a specific property (not 'all') is selected"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (from /app/memory/test_credentials.md) — cookie auth via POST /api/auth/login",
+  "seed_data_creation": "During tests: 4 pay-at-property bookings + email_outbox/booking_email_log entries for iter608de/tr/en/default@example.com (all deleted at end via test_zz_cleanup). 1 OTA banner-view (Expedia, variant B, pct 8) left as harmless log.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend test file: /app/backend/tests/test_iter608.py (9 tests, ~6s). Uses REACT_APP_BACKEND_URL, MONGO_URL, DB_NAME. Sidebar path for Booking Engine Manager: nav-mode-pro → nav-section-Direct Booking → booking-engine-admin-btn → tab 'Theme & Branding'. Sidebar path for OTA Commission: nav-section-Channels & Distribution → ota-commission-btn (default tab summary contains ota-conversion-card + ota-ab-card). Widget: /book/default?src=expedia + page.evaluate localStorage.setItem('be_ab_variant','B'|'A') then reload. Widget dates flow: be-dates-btn → fill be-checkin/be-checkout → be-search-btn. Server date ~2026-09-02. All iter608* test data cleaned up.",
+  "rca of the issue": "N/A — no functional bugs. The 'KAPALI' badge on the OTA Commission panel while ota_ab_enabled=true on property 'default' is due to the panel being viewed with activePropertyId='all' and the backend not aggregating across properties for the wildcard scope (returns wcfg={} for property_id='all'). Selecting the specific property (Franziskaner/default) in the panel would surface AKTİF; alternatively the frontend could aggregate."
+}

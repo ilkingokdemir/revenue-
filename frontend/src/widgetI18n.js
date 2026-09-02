@@ -26,6 +26,7 @@ const D = {
     reference: "Reference", free_cancel_48: "Free cancellation up to 48 hours before arrival", paid_stripe: "Payment processed via Stripe",
     no_prepay_property: "No prepayment required — pay at property", back_home: "Back to Home",
     default_subtitle: "Experience exceptional hospitality with our best rate guarantee when you book direct",
+    events_kicker: "WHAT'S ON IN THE CITY", events_title: "Upcoming events — book early", events_hint: "Rooms fill up fast on these dates", events_book_early: "Book early for these dates →",
   },
   tr: {
     official_site: "RESMİ SİTE", home: "Ana Sayfa", rooms: "Odalar", book_now: "Rezervasyon", dates: "Tarihler", guests_rooms: "Misafir & Oda",
@@ -50,6 +51,7 @@ const D = {
     reference: "Referans", free_cancel_48: "Girişten 48 saat öncesine kadar ücretsiz iptal", paid_stripe: "Ödeme Stripe ile alındı",
     no_prepay_property: "Ön ödeme gerekmez — otelde ödeyin", back_home: "Ana Sayfaya Dön",
     default_subtitle: "Direkt rezervasyonda en iyi fiyat garantisiyle olağanüstü bir konaklama deneyimi",
+    events_kicker: "ŞEHİRDE NELER VAR", events_title: "Yaklaşan etkinlikler — erken rezervasyon yapın", events_hint: "Bu tarihlerde odalar hızla doluyor", events_book_early: "Bu tarihlerde erken rezervasyon yapın →",
   },
   de: {
     official_site: "OFFIZIELLE SEITE", home: "Start", rooms: "Zimmer", book_now: "Jetzt buchen", dates: "Daten", guests_rooms: "Gäste & Zimmer",
@@ -74,6 +76,7 @@ const D = {
     reference: "Referenz", free_cancel_48: "Kostenlose Stornierung bis 48 Stunden vor Anreise", paid_stripe: "Zahlung über Stripe verarbeitet",
     no_prepay_property: "Keine Vorauszahlung — Zahlung vor Ort", back_home: "Zur Startseite",
     default_subtitle: "Erleben Sie aussergewöhnliche Gastfreundschaft — Bestpreisgarantie bei Direktbuchung",
+    events_kicker: "WAS LÄUFT IN DER STADT", events_title: "Kommende Events — früh buchen", events_hint: "An diesen Tagen sind Zimmer schnell ausgebucht", events_book_early: "Für diese Daten früh buchen →",
   },
 };
 

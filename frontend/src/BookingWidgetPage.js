@@ -113,6 +113,15 @@ export default function BookingWidgetPage({ propertyId }) {
   const [explainOpen, setExplainOpen] = useState(null);
   const [otaDismissed, setOtaDismissed] = useState(false);
   const { lang, setLang, t, nightsLabel, pick } = useWidgetLang();
+  const [upcomingEvents, setUpcomingEvents] = useState([]);
+  const abVariant = useMemo(() => {
+    let v = localStorage.getItem("be_ab_variant");
+    if (v !== "A" && v !== "B") { v = Math.random() < 0.5 ? "A" : "B"; localStorage.setItem("be_ab_variant", v); }
+    return v;
+  }, []);
+  useEffect(() => {
+    axios.get(`${API}/booking-widget/upcoming-events/${propertyId}?days=90&limit=4`).then(({ data }) => setUpcomingEvents(data.events || [])).catch(() => {});
+  }, [propertyId]);
   const [selected, setSelected] = useState(null);
   const [searching, setSearching] = useState(false);
   const [booking, setBooking] = useState(false);
@@ -314,12 +323,14 @@ export default function BookingWidgetPage({ propertyId }) {
     }
   }, []);
 
-  const search = async () => {
-    if (!checkIn || !checkOut) return;
+  const search = async (dates) => {
+    const ci = dates?.ci || checkIn, co = dates?.co || checkOut;
+    if (!ci || !co) return;
+    if (dates) { setCheckIn(ci); setCheckOut(co); window.scrollTo({ top: 0, behavior: "smooth" }); }
     setSearching(true);
     abTrack("check_availability");
     try {
-      const { data } = await axios.post(`${API}/booking-widget/check-availability`, { property_id: propertyId, check_in: checkIn, check_out: checkOut });
+      const { data } = await axios.post(`${API}/booking-widget/check-availability`, { property_id: propertyId, check_in: ci, check_out: co });
       setAvailable(data.available_rooms || []);
       setRestriction(data.restriction || null);
       setExplainOpen(null);
@@ -351,6 +362,7 @@ export default function BookingWidgetPage({ propertyId }) {
         origin_url: window.location.origin,
         channel_source: otaSource ? `ota_banner:${otaSource === "__generic__" ? "ota" : otaSource}` : "direct",
         lang,
+        ab_variant: otaSource ? (abOn ? abVariant : "A") : "",
       });
       // Stripe path → redirect immediately (state lost on redirect; OK because effect picks
       // it up on return via ?payment=success&ref=...).
@@ -389,11 +401,12 @@ export default function BookingWidgetPage({ propertyId }) {
     return src === "ota" ? "__generic__" : null;
   }, []);
   const otaLabel = otaSource === "__generic__" ? t("ota_generic") : otaSource;
-  const directPct = Number(hotel.theme?.direct_advantage_pct ?? 5);
+  const abOn = hotel.theme?.ota_ab_enabled === true;
+  const directPct = abOn && abVariant === "B" ? Number(hotel.theme?.ota_ab_variant_b_pct ?? 8) : Number(hotel.theme?.direct_advantage_pct ?? 5);
   const showOtaBanner = !!otaSource && hotel.theme?.ota_banner_enabled !== false && directPct > 0 && !otaDismissed;
   useEffect(() => {
     if (!otaSource || hotel.theme?.ota_banner_enabled === false || !hotel.property_id) return;
-    axios.post(`${API}/booking-widget/ota-banner-view`, { property_id: propertyId, ota: otaSource === "__generic__" ? "ota" : otaSource, lang }).catch(() => {});
+    axios.post(`${API}/booking-widget/ota-banner-view`, { property_id: propertyId, ota: otaSource === "__generic__" ? "ota" : otaSource, lang, variant: abOn ? abVariant : "A", pct: directPct }).catch(() => {});
   }, [otaSource, hotel.property_id, hotel.theme?.ota_banner_enabled, propertyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── HEADER ───
@@ -517,7 +530,7 @@ export default function BookingWidgetPage({ propertyId }) {
               )}
             </div>
             <div className="flex-shrink-0 flex items-end">
-              <button onClick={search} disabled={searching}
+              <button onClick={() => search()} disabled={searching}
                 className="w-full sm:w-auto px-8 py-3 bg-[#1a3c5e] text-white rounded-xl font-semibold text-sm hover:bg-[#0f2a45] transition-all shadow-lg shadow-[#1a3c5e]/30 disabled:opacity-60" data-testid="be-search-btn">
                 {searching ? "Searching..." : "CHECK AVAILABILITY"}
               </button>
@@ -546,6 +559,32 @@ export default function BookingWidgetPage({ propertyId }) {
         ))}
       </div>
     </div>
+  );
+
+  // ─── UPCOMING EVENTS STRIP ───
+  const EventsStrip = () => upcomingEvents.length === 0 ? null : (
+    <section className="max-w-6xl mx-auto px-4 pt-12" data-testid="be-events-strip">
+      <div className="flex items-end justify-between mb-4">
+        <div>
+          <p className="text-xs font-semibold text-amber-700 uppercase tracking-[0.2em] mb-1">{t("events_kicker")}</p>
+          <h2 className="text-xl sm:text-2xl font-light text-stone-800" style={{ fontFamily: "'Georgia', serif" }}>{t("events_title")}</h2>
+        </div>
+        <span className="text-xs text-stone-400 hidden sm:block">{t("events_hint")}</span>
+      </div>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {upcomingEvents.map((e) => (
+          <div key={e.name + e.date} className="bg-white border border-stone-200 rounded-2xl p-4 flex flex-col gap-2 hover:border-amber-300 transition-colors" data-testid={`be-event-card-${e.date}`}>
+            <div className="flex items-center gap-2 text-xs text-stone-500"><span className="text-lg leading-none">{e.icon}</span>{pick(e, "label")}</div>
+            <div className="font-semibold text-stone-800 text-sm leading-snug line-clamp-2">{e.name}</div>
+            <div className="text-xs text-stone-500">{e.date}{e.end_date !== e.date ? ` → ${e.end_date}` : ""}</div>
+            <button onClick={() => search({ ci: e.suggest_check_in, co: e.suggest_check_out })}
+              className="mt-auto text-xs font-semibold px-3 py-2 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors" data-testid={`be-event-book-${e.date}`}>
+              {t("events_book_early")}
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 
   // ─── ROOMS PREVIEW ───
@@ -821,11 +860,11 @@ export default function BookingWidgetPage({ propertyId }) {
                       : !r.price_explanation && <div className="text-xs text-stone-400 line-through">{cur(r.base_rate * 1.15, cc)}</div>}
                     <div className="text-2xl font-bold" style={{ color: ac }}>{cur(r.total_rate, cc)}</div>
                     <div className="text-xs text-stone-400">{nightsLabel(nights)} · {cur(r.base_rate, cc)}{t("per_night")} · {t("incl_taxes")}</div>
-                    {showOtaBanner && r.ota_compare?.pct > 0 && (
+                    {showOtaBanner && directPct > 0 && (
                       <div className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-2 py-1" data-testid={`be-ota-compare-${r.room_type_id}`}>
-                        <span className="line-through text-stone-400">{otaLabel} ~{cur(r.total_rate / (1 - r.ota_compare.pct / 100), cc)}</span>
+                        <span className="line-through text-stone-400">{otaLabel} ~{cur(r.total_rate / (1 - directPct / 100), cc)}</span>
                         <span className="font-semibold">{t("direct")} {cur(r.total_rate, cc)}</span>
-                        <span className="px-1.5 rounded-full bg-emerald-600 text-white font-semibold">{t("save")} {cur(r.total_rate / (1 - r.ota_compare.pct / 100) - r.total_rate, cc)}</span>
+                        <span className="px-1.5 rounded-full bg-emerald-600 text-white font-semibold">{t("save")} {cur(r.total_rate / (1 - directPct / 100) - r.total_rate, cc)}</span>
                       </div>
                     )}
                     {r.price_explanation && (
@@ -1161,7 +1200,7 @@ export default function BookingWidgetPage({ propertyId }) {
       {!isEmbed && <Header />}
       <AnimatePresence mode="wait">
         {step === "home" && <motion.div key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <Hero />{!isEmbed && <><TrustBar /><RoomsPreview /><GallerySection /><ReviewsSection /><WhyDirect /></>}{!isEmbed && <Footer />}
+          <Hero />{!isEmbed && <><TrustBar /><EventsStrip /><RoomsPreview /><GallerySection /><ReviewsSection /><WhyDirect /></>}{!isEmbed && <Footer />}
         </motion.div>}
         {step === "results" && <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ResultsPage />{!isEmbed && <Footer />}</motion.div>}
         {step === "details" && <motion.div key="details" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><DetailsPage />{!isEmbed && <Footer />}</motion.div>}

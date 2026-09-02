@@ -77,6 +77,24 @@ const OtaConversionCard = ({ activePropertyId, days }) => {
           {d.by_ota.map(x => <span key={x.ota} className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-600">{x.ota}: {x.bookings}</span>)}
         </div>
       )}
+      {d.ab && (
+        <div className="mt-3 border border-violet-200 bg-violet-50/50 rounded-lg p-3" data-testid="ota-ab-card">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div className="text-xs font-semibold text-violet-900">A/B Testi — şerit mesajı %{d.direct_advantage_pct} (A) vs %{d.ab.variant_b_pct} (B)
+              <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] ${d.ab.enabled ? "bg-violet-600 text-white" : "bg-stone-200 text-stone-600"}`} data-testid="ota-ab-status">{d.ab.enabled ? "AKTİF" : "KAPALI"}</span>
+            </div>
+            <div className="text-[11px] text-stone-500">{d.ab.winner ? <>Kazanan: <b className="text-violet-800" data-testid="ota-ab-winner">Varyant {d.ab.winner}</b></> : `Kazanan için her varyantta ≥${d.ab.min_views_for_winner} gösterim gerekir`}</div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {d.ab.variants.map(v => (
+              <div key={v.variant} className={`bg-white rounded-lg p-3 border ${d.ab.winner === v.variant ? "border-violet-400" : "border-stone-100"}`} data-testid={`ota-ab-variant-${v.variant}`}>
+                <div className="text-[11px] text-stone-500">Varyant {v.variant} · %{v.variant === "A" ? d.direct_advantage_pct : d.ab.variant_b_pct}</div>
+                <div className="text-sm mt-1"><b>{fmt(v.views)}</b> gösterim · <b className="text-emerald-700">{fmt(v.bookings)}</b> rezervasyon · <b>{v.conversion_pct}%</b> dönüşüm</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

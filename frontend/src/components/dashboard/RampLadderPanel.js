@@ -43,6 +43,8 @@ export default function RampLadderPanel({ propertyId = "default" }) {
         max_steps: parseInt(f.maxsteps.value, 10),
         cadence_hours: parseInt(f.cadence.value, 10),
         forecast_boost: f.fcboost.checked,
+        event_premium: f.evprem.checked,
+        event_min_score: parseInt(f.evscore.value, 10) || 60,
       });
       toast.success("Zam merdiveni ayarları kaydedildi"); load();
     } catch { toast.error("Kaydedilemedi"); }
@@ -118,6 +120,13 @@ export default function RampLadderPanel({ propertyId = "default" }) {
           <input type="checkbox" name="fcboost" defaultChecked={c.forecast_boost !== false} className="w-4 h-4 accent-indigo-600" data-testid="ramp-forecast-toggle" />
           ML tahmin anahtarı (FORECAST_HOT sönümlü kademe · FORECAST_COLD zam freni)
         </label>
+        <label className="flex items-center gap-2 text-sm font-medium col-span-2 md:col-span-3" title="Şehirdeki büyük etkinlik gecelerinde doluluk kanıtı beklemeden sönümlü (yarım) ilk kademe atılır; etkinlik sürdüğü sürece geri alınmaz">
+          <input type="checkbox" name="evprem" defaultChecked={c.event_premium !== false} className="w-4 h-4 accent-amber-600" data-testid="ramp-event-toggle" />
+          Etkinlik primi (EVENT_PREMIUM sönümlü kademe)
+        </label>
+        <label className="text-xs font-medium col-span-2 md:col-span-1">Min. talep skoru
+          <input name="evscore" type="number" min="10" max="100" defaultValue={c.event_min_score ?? 60} className="mt-1 w-full border rounded-lg px-2 py-1.5 text-sm" data-testid="ramp-event-score" />
+        </label>
         <button type="submit" disabled={saving} className="col-span-2 md:col-span-1 md:w-40 px-4 py-2 rounded-full bg-stone-900 text-white text-sm font-semibold disabled:opacity-50" data-testid="ramp-save-config-btn">
           {saving ? "Kaydediliyor…" : "Ayarları Kaydet"}
         </button>
@@ -164,6 +173,8 @@ export default function RampLadderPanel({ propertyId = "default" }) {
                     ? <span className="text-sky-600 text-xs font-semibold">📈 Piyasa sıkılaştı (sönümlü)</span>
                     : st.reason === "FORECAST_HOT"
                     ? <span className="text-indigo-600 text-xs font-semibold" title={`ML nihai doluluk tahmini %${st.forecast_signal?.occ ?? "?"}`}>🤖 ML tahmin sıcak (sönümlü)</span>
+                    : st.reason === "EVENT_PREMIUM"
+                    ? <span className="text-amber-700 text-xs font-semibold" title={st.event?.name || ""}>🎪 Etkinlik primi (sönümlü)</span>
                     : st.guest_approved
                     ? <span className="text-emerald-600 text-xs font-semibold">✓ Yeni rezervasyon (misafir onayı)</span>
                     : <span className="text-stone-500 text-xs">Talep kanıtı (doluluk)</span>}</td>

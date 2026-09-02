@@ -2,32 +2,32 @@
 from datetime import datetime, timedelta
 
 SOURCE_LABELS = {
-    "ramp-ladder": ("Talep yoğunluğu", "High demand"),
-    "lastday-ladder": ("Son dakika fırsatı", "Last-minute deal"),
-    "event-intelligence": ("Etkinlik dönemi", "Local event"),
-    "owner-override": ("Otel fiyatı", "Hotel rate"),
-    "market-robot": ("Piyasa koşulları", "Market conditions"),
-    "ai-dynamic-pricing": ("Piyasa koşulları", "Market conditions"),
-    "weather-calendar": ("Tatil / hava sinyali", "Holiday / weather"),
-    "sentiment-pricing": ("Misafir puanı etkisi", "Guest review score"),
-    "abs-auto-pricing": ("Oda özelliği talebi", "Room feature demand"),
+    "ramp-ladder": ("Talep yoğunluğu", "High demand", "Hohe Nachfrage"),
+    "lastday-ladder": ("Son dakika fırsatı", "Last-minute deal", "Last-Minute-Angebot"),
+    "event-intelligence": ("Etkinlik dönemi", "Local event", "Lokale Veranstaltung"),
+    "owner-override": ("Otel fiyatı", "Hotel rate", "Hotelpreis"),
+    "market-robot": ("Piyasa koşulları", "Market conditions", "Marktlage"),
+    "ai-dynamic-pricing": ("Piyasa koşulları", "Market conditions", "Marktlage"),
+    "weather-calendar": ("Tatil / hava sinyali", "Holiday / weather", "Feiertag / Wetter"),
+    "sentiment-pricing": ("Misafir puanı etkisi", "Guest review score", "Gästebewertung"),
+    "abs-auto-pricing": ("Oda özelliği talebi", "Room feature demand", "Zimmerausstattung"),
 }
 DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 EVENT_KINDS = [
-    (("concert", "music", "festival"), "🎵", "Concert / festival week — high demand in the city", "Konser / festival haftası — şehirde talep yüksek"),
-    (("sport", "football", "marathon", "tennis", "racing", "rugby", "rowing", "equestrian", "motorsport", "nfl"), "🏟️", "Major sports event in town", "Şehirde büyük spor etkinliği"),
-    (("conference", "exhibition", "expo", "trade", "fair", "awards"), "🏢", "Major conference / trade show", "Büyük kongre / fuar dönemi"),
-    (("citywide", "celebration", "cultural", "parade", "peak"), "🎉", "Citywide celebration", "Şehir geneli kutlama"),
+    (("concert", "music", "festival"), "🎵", "Concert / festival week — high demand in the city", "Konser / festival haftası — şehirde talep yüksek", "Konzert-/Festivalwoche — hohe Nachfrage in der Stadt"),
+    (("sport", "football", "marathon", "tennis", "racing", "rugby", "rowing", "equestrian", "motorsport", "nfl"), "🏟️", "Major sports event in town", "Şehirde büyük spor etkinliği", "Grosses Sportereignis in der Stadt"),
+    (("conference", "exhibition", "expo", "trade", "fair", "awards"), "🏢", "Major conference / trade show", "Büyük kongre / fuar dönemi", "Grosse Konferenz / Messe"),
+    (("citywide", "celebration", "cultural", "parade", "peak"), "🎉", "Citywide celebration", "Şehir geneli kutlama", "Stadtweite Feier"),
 ]
 EVENT_MIN_SCORE = 30
 
 
 def _event_kind(category: str):
     c = (category or "").lower()
-    for keys, icon, en, tr in EVENT_KINDS:
+    for keys, icon, en, tr, de in EVENT_KINDS:
         if any(k in c for k in keys):
-            return icon, en, tr
-    return "📅", "Local event driving demand", "Talep yaratan yerel etkinlik"
+            return icon, en, tr, de
+    return "📅", "Local event driving demand", "Talep yaratan yerel etkinlik", "Lokale Veranstaltung mit hoher Nachfrage"
 
 
 async def stay_signals(db, property_id: str, check_in: str, check_out: str) -> list:
@@ -41,24 +41,24 @@ async def stay_signals(db, property_id: str, check_in: str, check_out: str) -> l
          "hotel_demand_score": {"$gte": EVENT_MIN_SCORE}},
         {"_id": 0, "name": 1, "category": 1, "date": 1, "end_date": 1, "hotel_demand_score": 1}).sort("hotel_demand_score", -1).to_list(6)
     for e in events:
-        icon, en, tr = _event_kind(e.get("category", ""))
+        icon, en, tr, de = _event_kind(e.get("category", ""))
         if icon in seen:
             continue
         seen.add(icon)
-        out.append({"kind": "event", "icon": icon, "label_en": en, "label_tr": tr,
+        out.append({"kind": "event", "icon": icon, "label_en": en, "label_tr": tr, "label_de": de,
                     "name": (e.get("name") or "")[:80], "date": e.get("date"), "end_date": e.get("end_date")})
     hols = await db.demand_calendar_signals.find(
         {"property_id": property_id, "date": {"$in": days}, "holiday": {"$nin": [None, ""]}},
         {"_id": 0, "date": 1, "holiday": 1}).to_list(20)
     for h in hols:
         out.append({"kind": "holiday", "icon": "🎄", "label_en": f"Public holiday: {h['holiday']}",
-                    "label_tr": f"Resmi tatil: {h['holiday']}", "name": h["holiday"], "date": h["date"], "end_date": h["date"]})
+                    "label_tr": f"Resmi tatil: {h['holiday']}", "label_de": f"Feiertag: {h['holiday']}", "name": h["holiday"], "date": h["date"], "end_date": h["date"]})
     own = await db.public_events.find(
         {"property_id": property_id, "date": {"$in": days}, "status": "published"},
         {"_id": 0, "title": 1, "date": 1}).to_list(5)
     for e in own:
         out.append({"kind": "hotel_event", "icon": "✨", "label_en": f"At the hotel: {e.get('title', '')}",
-                    "label_tr": f"Otelde: {e.get('title', '')}", "name": e.get("title", ""), "date": e.get("date"), "end_date": e.get("date")})
+                    "label_tr": f"Otelde: {e.get('title', '')}", "label_de": f"Im Hotel: {e.get('title', '')}", "name": e.get("title", ""), "date": e.get("date"), "end_date": e.get("date")})
     return out[:6]
 
 
@@ -99,21 +99,24 @@ def explain_price(nightly: list) -> dict:
     drivers: dict = {}
     for n in nightly:
         if n["source"] and abs(n["rate"] - n["base"]) >= 0.01:
-            tr, en = SOURCE_LABELS.get(n["source"], ("Dinamik fiyat", "Dynamic pricing"))
-            drivers.setdefault(n["source"], {"label_tr": tr, "label_en": en, "nights": 0,
+            tr, en, de = SOURCE_LABELS.get(n["source"], ("Dinamik fiyat", "Dynamic pricing", "Dynamischer Preis"))
+            drivers.setdefault(n["source"], {"label_tr": tr, "label_en": en, "label_de": de, "nights": 0,
                                              "direction": "up" if n["rate"] > n["base"] else "down"})
             drivers[n["source"]]["nights"] += 1
     if vs_base > 2:
         head_tr = f"Bu tarihlerde talep yüksek — fiyat baz fiyatın %{vs_base:g} üzerinde"
         head_en = f"High demand on these dates — {vs_base:g}% above our standard rate"
+        head_de = f"Hohe Nachfrage an diesen Tagen — {vs_base:g}% über unserem Standardpreis"
     elif vs_base < -2:
         head_tr = f"Bu tarihlerde fiyat baz fiyatın %{abs(vs_base):g} altında — iyi fırsat"
         head_en = f"Good deal — {abs(vs_base):g}% below our standard rate for these dates"
+        head_de = f"Gutes Angebot — {abs(vs_base):g}% unter unserem Standardpreis für diese Tage"
     else:
         head_tr = "Standart fiyat — bu tarihlerde ek talep primi yok"
         head_en = "Standard rate — no demand surcharge on these dates"
+        head_de = "Standardpreis — kein Nachfragezuschlag an diesen Tagen"
     return {"vs_base_pct": vs_base, "base_total": base_total, "total": total,
-            "headline_tr": head_tr, "headline_en": head_en, "drivers": list(drivers.values()),
+            "headline_tr": head_tr, "headline_en": head_en, "headline_de": head_de, "drivers": list(drivers.values()),
             "dynamic_nights": sum(1 for n in nightly if n["source"]), "nights": len(nightly)}
 
 
@@ -136,9 +139,11 @@ async def check_los_restrictions(db, property_id: str, check_in: str, check_out:
         if r.get("type") == "min_stay" and nights < val:
             return {"type": "min_stay", "value": val, "nights": nights,
                     "message_tr": f"Bu tarihler için en az {val} gece konaklama gerekiyor (seçilen: {nights})",
-                    "message_en": f"A minimum stay of {val} nights is required for these dates (selected: {nights})"}
+                    "message_en": f"A minimum stay of {val} nights is required for these dates (selected: {nights})",
+                    "message_de": f"Für diese Daten ist ein Mindestaufenthalt von {val} Nächten erforderlich (gewählt: {nights})"}
         if r.get("type") == "max_stay" and val and nights > val:
             return {"type": "max_stay", "value": val, "nights": nights,
                     "message_tr": f"Bu tarihler için en fazla {val} gece konaklanabilir (seçilen: {nights})",
-                    "message_en": f"Maximum stay for these dates is {val} nights (selected: {nights})"}
+                    "message_en": f"Maximum stay for these dates is {val} nights (selected: {nights})",
+                    "message_de": f"Der maximale Aufenthalt für diese Daten beträgt {val} Nächte (gewählt: {nights})"}
     return None

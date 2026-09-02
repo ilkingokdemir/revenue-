@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useWidgetLang, WIDGET_LANGS } from "./widgetI18n";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import ConciergeChat from "./components/ConciergeChat";
@@ -111,6 +112,7 @@ export default function BookingWidgetPage({ propertyId }) {
   const [restriction, setRestriction] = useState(null);
   const [explainOpen, setExplainOpen] = useState(null);
   const [otaDismissed, setOtaDismissed] = useState(false);
+  const { lang, setLang, t, nightsLabel, pick } = useWidgetLang();
   const [selected, setSelected] = useState(null);
   const [searching, setSearching] = useState(false);
   const [booking, setBooking] = useState(false);
@@ -347,6 +349,8 @@ export default function BookingWidgetPage({ propertyId }) {
         coupon_code: coupon.applied ? coupon.applied.coupon_code : null,
         abs_attribute_ids: absSelected,
         origin_url: window.location.origin,
+        channel_source: otaSource ? `ota_banner:${otaSource === "__generic__" ? "ota" : otaSource}` : "direct",
+        lang,
       });
       // Stripe path → redirect immediately (state lost on redirect; OK because effect picks
       // it up on return via ?payment=success&ref=...).
@@ -373,7 +377,7 @@ export default function BookingWidgetPage({ propertyId }) {
   const ac = theme.accent_color || "#1a3c5e";
   const heroImg = theme.hero_image || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1920&q=80";
   const tagline = theme.tagline || "Premium Accommodation";
-  const subtitle = theme.subtitle || "Experience exceptional hospitality with our best rate guarantee when you book direct";
+  const subtitle = theme.subtitle || t("default_subtitle");
   const roomAmenities = ["Free WiFi", "Air Conditioning", "Flat-screen TV", "Private Bathroom", "Daily Housekeeping", "24hr Front Desk"];
 
   // ─── OTA → DIRECT channel banner ───
@@ -382,10 +386,15 @@ export default function BookingWidgetPage({ propertyId }) {
     const ref = (document.referrer || "").toLowerCase();
     const known = [["booking", "Booking.com"], ["expedia", "Expedia"], ["hotels.com", "Hotels.com"], ["airbnb", "Airbnb"], ["agoda", "Agoda"], ["trivago", "Trivago"], ["tripadvisor", "Tripadvisor"], ["google", "Google Hotels"]];
     for (const [k, label] of known) { if (src.includes(k) || ref.includes(k)) return label; }
-    return src === "ota" ? "an online travel site" : null;
+    return src === "ota" ? "__generic__" : null;
   }, []);
+  const otaLabel = otaSource === "__generic__" ? t("ota_generic") : otaSource;
   const directPct = Number(hotel.theme?.direct_advantage_pct ?? 5);
   const showOtaBanner = !!otaSource && hotel.theme?.ota_banner_enabled !== false && directPct > 0 && !otaDismissed;
+  useEffect(() => {
+    if (!otaSource || hotel.theme?.ota_banner_enabled === false || !hotel.property_id) return;
+    axios.post(`${API}/booking-widget/ota-banner-view`, { property_id: propertyId, ota: otaSource === "__generic__" ? "ota" : otaSource, lang }).catch(() => {});
+  }, [otaSource, hotel.property_id, hotel.theme?.ota_banner_enabled, propertyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── HEADER ───
   const Header = () => (
@@ -395,7 +404,7 @@ export default function BookingWidgetPage({ propertyId }) {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/20 text-xs font-bold">%</span>
-              <span>Coming from <b>{otaSource}</b>? Book direct and save <b data-testid="be-ota-banner-pct">{directPct}%</b> — same room, free cancellation, no booking fees.</span>
+              <span dangerouslySetInnerHTML={{ __html: t("ota_banner", { ota: `<b>${otaLabel}</b>`, pct: `<b data-testid="be-ota-banner-pct">${directPct}</b>` }) }} />
             </div>
             <button onClick={() => setOtaDismissed(true)} className="text-white/70 hover:text-white text-lg leading-none" aria-label="Dismiss" data-testid="be-ota-banner-close">×</button>
           </div>
@@ -406,21 +415,24 @@ export default function BookingWidgetPage({ propertyId }) {
           <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: ac }}>{cn[0]}</div>
           <div>
             <div className="font-semibold text-sm tracking-tight" style={{ color: ac }}>{cn}</div>
-            <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /><span className="text-[10px] text-emerald-600 font-medium">OFFICIAL SITE</span></div>
+            <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /><span className="text-[10px] text-emerald-600 font-medium">{t("official_site")}</span></div>
           </div>
         </div>
         <nav className="hidden md:flex items-center gap-6 text-sm">
-          <button onClick={() => setStep("home")} className="text-stone-600 hover:text-[#1a3c5e] font-medium transition-colors" data-testid="be-nav-home">Home</button>
-          <button onClick={() => { setStep("home"); setTimeout(() => document.getElementById("be-rooms")?.scrollIntoView({ behavior: "smooth" }), 100); }} className="text-stone-600 hover:text-[#1a3c5e] font-medium" data-testid="be-nav-rooms">Rooms</button>
-          <button onClick={() => search()} className="px-5 py-2 text-white rounded-lg font-medium text-sm hover:opacity-90 transition-colors shadow-sm" style={{ backgroundColor: ac }} data-testid="be-nav-book">Book Now</button>
+          <button onClick={() => setStep("home")} className="text-stone-600 hover:text-[#1a3c5e] font-medium transition-colors" data-testid="be-nav-home">{t("home")}</button>
+          <button onClick={() => { setStep("home"); setTimeout(() => document.getElementById("be-rooms")?.scrollIntoView({ behavior: "smooth" }), 100); }} className="text-stone-600 hover:text-[#1a3c5e] font-medium" data-testid="be-nav-rooms">{t("rooms")}</button>
+          <button onClick={() => search()} className="px-5 py-2 text-white rounded-lg font-medium text-sm hover:opacity-90 transition-colors shadow-sm" style={{ backgroundColor: ac }} data-testid="be-nav-book">{t("book_now")}</button>
+          <div className="flex items-center gap-0.5 ml-2 text-[11px] font-semibold" data-testid="be-lang-switch">
+            {WIDGET_LANGS.map((l) => <button key={l} onClick={() => setLang(l)} className={`px-1.5 py-0.5 rounded uppercase ${lang === l ? "bg-stone-900 text-white" : "text-stone-400 hover:text-stone-700"}`} data-testid={`be-lang-${l}`}>{l}</button>)}
+          </div>
         </nav>
         <button onClick={() => setMobileMenu(!mobileMenu)} className="md:hidden p-2 text-stone-500" data-testid="be-mobile-menu">
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
         </button>
       </div>
       {mobileMenu && <div className="md:hidden border-t border-stone-100 bg-white p-4 space-y-3">
-        <button onClick={() => { setStep("home"); setMobileMenu(false); }} className="block w-full text-left text-stone-600 py-2">Home</button>
-        <button onClick={() => { search(); setMobileMenu(false); }} className="block w-full py-2.5 bg-[#1a3c5e] text-white rounded-lg text-center font-medium">Book Now</button>
+        <button onClick={() => { setStep("home"); setMobileMenu(false); }} className="block w-full text-left text-stone-600 py-2">{t("home")}</button>
+        <button onClick={() => { search(); setMobileMenu(false); }} className="block w-full py-2.5 bg-[#1a3c5e] text-white rounded-lg text-center font-medium">{t("book_now")}</button>
       </div>}
     </header>
   );
@@ -448,7 +460,7 @@ export default function BookingWidgetPage({ propertyId }) {
           className="max-w-5xl mx-auto bg-white rounded-2xl shadow-2xl shadow-black/20 p-4 sm:p-5" data-testid="be-booking-bar">
           <div className="flex flex-col sm:flex-row items-stretch gap-3">
             <div className="flex-[2] min-w-0 relative">
-              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-1 block">Dates</label>
+              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-1 block">{t("dates")}</label>
               <button onClick={() => setDatesOpen(!datesOpen)} data-testid="be-dates-btn"
                 className="w-full text-left text-sm font-medium text-stone-800 border border-stone-200 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#1a3c5e]/20 outline-none flex items-center justify-between gap-2">
                 <span className={checkIn ? "" : "text-stone-400"}>
@@ -484,13 +496,13 @@ export default function BookingWidgetPage({ propertyId }) {
               )}
             </div>
             <div className="flex-1 min-w-0 relative">
-              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-1 block">Guests & Rooms</label>
+              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-1 block">{t("guests_rooms")}</label>
               <button onClick={() => setGuestOpen(!guestOpen)} className="w-full text-left text-sm font-medium text-stone-800 border border-stone-200 rounded-lg px-3 py-2.5" data-testid="be-guests-btn">
-                {guests} Adults · {children} Children · {roomCount} Room
+                {guests} {t("adults")} · {children} {t("children")} · {roomCount} {t("room")}
               </button>
               {guestOpen && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-xl p-4 z-50" data-testid="be-guests-dropdown">
-                  {[{ label: "Adults", val: guests, set: setGuests, min: 1 }, { label: "Children", val: children, set: setChildren, min: 0 }, { label: "Rooms", val: roomCount, set: setRoomCount, min: 1 }].map(g => (
+                  {[{ label: t("adults"), val: guests, set: setGuests, min: 1 }, { label: t("children"), val: children, set: setChildren, min: 0 }, { label: t("rooms_n"), val: roomCount, set: setRoomCount, min: 1 }].map(g => (
                     <div key={g.label} className="flex items-center justify-between py-2.5 border-b border-stone-100 last:border-0">
                       <span className="text-sm text-stone-700">{g.label}</span>
                       <div className="flex items-center gap-3">
@@ -500,7 +512,7 @@ export default function BookingWidgetPage({ propertyId }) {
                       </div>
                     </div>
                   ))}
-                  <button onClick={() => setGuestOpen(false)} className="w-full mt-3 py-2 bg-[#1a3c5e] text-white rounded-lg text-sm font-medium">Done</button>
+                  <button onClick={() => setGuestOpen(false)} className="w-full mt-3 py-2 bg-[#1a3c5e] text-white rounded-lg text-sm font-medium">{t("done")}</button>
                 </div>
               )}
             </div>
@@ -540,8 +552,8 @@ export default function BookingWidgetPage({ propertyId }) {
   const RoomsPreview = () => (
     <section id="be-rooms" className="max-w-6xl mx-auto px-4 py-16" data-testid="be-rooms-section">
       <div className="text-center mb-10">
-        <p className="text-xs font-semibold text-[#1a3c5e] uppercase tracking-[0.2em] mb-2">ACCOMMODATION</p>
-        <h2 className="text-2xl sm:text-3xl font-light text-stone-800" style={{ fontFamily: "'Georgia', serif" }}>Our Rooms & Suites</h2>
+        <p className="text-xs font-semibold text-[#1a3c5e] uppercase tracking-[0.2em] mb-2">{t("accommodation")}</p>
+        <h2 className="text-2xl sm:text-3xl font-light text-stone-800" style={{ fontFamily: "'Georgia', serif" }}>{t("our_rooms")}</h2>
         <div className="w-10 h-0.5 bg-amber-400 mx-auto mt-3" />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -582,8 +594,8 @@ export default function BookingWidgetPage({ propertyId }) {
     return (
       <section className="max-w-6xl mx-auto px-4 py-16" data-testid="be-gallery-section">
         <div className="text-center mb-10">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] mb-2" style={{ color: ac }}>GALLERY</p>
-          <h2 className="text-2xl sm:text-3xl font-light text-stone-800" style={{ fontFamily: "'Georgia', serif" }}>Explore Our Property</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] mb-2" style={{ color: ac }}>{t("gallery")}</p>
+          <h2 className="text-2xl sm:text-3xl font-light text-stone-800" style={{ fontFamily: "'Georgia', serif" }}>{t("explore")}</h2>
           <div className="w-10 h-0.5 bg-amber-400 mx-auto mt-3" />
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
@@ -651,8 +663,8 @@ export default function BookingWidgetPage({ propertyId }) {
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-10 gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] mb-2" style={{ color: ac }}>GUEST REVIEWS</p>
-              <h2 className="text-2xl sm:text-3xl font-light text-stone-800" style={{ fontFamily: "'Georgia', serif" }}>What Our Guests Say</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] mb-2" style={{ color: ac }}>{t("guest_reviews")}</p>
+              <h2 className="text-2xl sm:text-3xl font-light text-stone-800" style={{ fontFamily: "'Georgia', serif" }}>{t("what_guests_say")}</h2>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               <div className="text-white rounded-xl px-4 py-3 text-center" style={{ backgroundColor: ac }}>
@@ -707,8 +719,8 @@ export default function BookingWidgetPage({ propertyId }) {
     <section className="py-16" style={{ backgroundColor: ac }} data-testid="be-why-direct">
       <div className="max-w-5xl mx-auto px-4">
         <div className="text-center mb-10">
-          <p className="text-xs font-semibold text-amber-400 uppercase tracking-[0.2em] mb-2">WHY BOOK DIRECT</p>
-          <h2 className="text-2xl sm:text-3xl font-light text-white" style={{ fontFamily: "'Georgia', serif" }}>The Best Rate, Guaranteed</h2>
+          <p className="text-xs font-semibold text-amber-400 uppercase tracking-[0.2em] mb-2">{t("why_direct")}</p>
+          <h2 className="text-2xl sm:text-3xl font-light text-white" style={{ fontFamily: "'Georgia', serif" }}>{t("best_rate")}</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[
@@ -765,24 +777,24 @@ export default function BookingWidgetPage({ propertyId }) {
         <div className="bg-white rounded-2xl border border-stone-200 p-5 mb-6 shadow-sm">
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <div className="flex items-center gap-2"><svg className="w-5 h-5 text-[#1a3c5e]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-              <span className="font-semibold text-stone-800">{fmtDate(checkIn)} — {fmtDate(checkOut)}</span><span className="text-stone-400">({nights} night{nights > 1 ? "s" : ""})</span></div>
-            <div className="text-stone-500">{guests} Adults · {children} Children · {roomCount} Room</div>
-            <button onClick={() => setStep("home")} className="ml-auto text-[#1a3c5e] font-medium hover:underline text-xs" data-testid="be-modify-search">Modify Search</button>
+              <span className="font-semibold text-stone-800">{fmtDate(checkIn)} — {fmtDate(checkOut)}</span><span className="text-stone-400">({nightsLabel(nights)})</span></div>
+            <div className="text-stone-500">{guests} {t("adults")} · {children} {t("children")} · {roomCount} {t("room")}</div>
+            <button onClick={() => setStep("home")} className="ml-auto text-[#1a3c5e] font-medium hover:underline text-xs" data-testid="be-modify-search">{t("modify_search")}</button>
           </div>
         </div>
-        <div className="flex items-center gap-2 mb-4"><span className="text-emerald-600 text-sm font-medium">{available.length} room{available.length !== 1 ? "s" : ""} available</span><span className="text-xs text-stone-400">for your dates</span></div>
+        <div className="flex items-center gap-2 mb-4"><span className="text-emerald-600 text-sm font-medium">{available.length} {t("room")} {t("rooms_available")}</span><span className="text-xs text-stone-400">{t("for_your_dates")}</span></div>
         {available.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center border border-stone-200">
             <svg className="w-16 h-16 text-stone-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
             {restriction ? (
               <>
-                <h3 className="text-lg font-semibold text-stone-800 mb-2" data-testid="be-los-restriction">{restriction.type === "min_stay" ? `Minimum ${restriction.value}-night stay` : `Maximum ${restriction.value}-night stay`}</h3>
-                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 inline-block mb-6">{restriction.message_en}</p>
+                <h3 className="text-lg font-semibold text-stone-800 mb-2" data-testid="be-los-restriction">{t(restriction.type === "min_stay" ? "min_stay" : "max_stay", { n: restriction.value })}</h3>
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 inline-block mb-6">{pick(restriction, "message")}</p>
               </>
             ) : (
               <>
-                <h3 className="text-lg font-semibold text-stone-800 mb-2">No rooms available</h3>
-                <p className="text-sm text-stone-500 mb-6">Try different dates or contact us directly.</p>
+                <h3 className="text-lg font-semibold text-stone-800 mb-2">{t("no_rooms")}</h3>
+                <p className="text-sm text-stone-500 mb-6">{t("try_dates")}</p>
               </>
             )}
             {!restriction && <WaitlistJoinCard propertyId={propertyId} checkIn={checkIn} checkOut={checkOut} guests={guests} />}
@@ -795,7 +807,7 @@ export default function BookingWidgetPage({ propertyId }) {
               <div className="flex-1 p-5">
                 <div className="flex items-start justify-between mb-2">
                   <div><h3 className="font-semibold text-stone-800 text-lg">{r.name}</h3><p className="text-xs text-stone-500">{r.description}</p></div>
-                  <div className="flex-shrink-0 ml-4 text-white px-2.5 py-1 rounded-lg" style={{ backgroundColor: ac }}><span className="text-xs">Score</span><div className="text-sm font-bold">{hotel.avg_rating || "9.2"}</div></div>
+                  <div className="flex-shrink-0 ml-4 text-white px-2.5 py-1 rounded-lg" style={{ backgroundColor: ac }}><span className="text-xs">{t("score")}</span><div className="text-sm font-bold">{hotel.avg_rating || "9.2"}</div></div>
                 </div>
                 <div className="flex flex-wrap gap-1.5 my-3">{roomAmenities.map(a => <span key={a} className="text-[10px] bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full">{a}</span>)}</div>
                 <div className="flex items-center gap-3 text-xs text-stone-500 mb-3">
@@ -808,12 +820,12 @@ export default function BookingWidgetPage({ propertyId }) {
                       ? <div className="text-xs text-stone-400 line-through" data-testid={`be-standard-rate-${r.room_type_id}`}>{cur(r.price_explanation.base_total, cc)}</div>
                       : !r.price_explanation && <div className="text-xs text-stone-400 line-through">{cur(r.base_rate * 1.15, cc)}</div>}
                     <div className="text-2xl font-bold" style={{ color: ac }}>{cur(r.total_rate, cc)}</div>
-                    <div className="text-xs text-stone-400">{nights} night{nights > 1 ? "s" : ""} · {cur(r.base_rate, cc)}/night · Includes taxes</div>
+                    <div className="text-xs text-stone-400">{nightsLabel(nights)} · {cur(r.base_rate, cc)}{t("per_night")} · {t("incl_taxes")}</div>
                     {showOtaBanner && r.ota_compare?.pct > 0 && (
                       <div className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-2 py-1" data-testid={`be-ota-compare-${r.room_type_id}`}>
-                        <span className="line-through text-stone-400">{otaSource} ~{cur(r.total_rate / (1 - r.ota_compare.pct / 100), cc)}</span>
-                        <span className="font-semibold">Direct {cur(r.total_rate, cc)}</span>
-                        <span className="px-1.5 rounded-full bg-emerald-600 text-white font-semibold">save {cur(r.total_rate / (1 - r.ota_compare.pct / 100) - r.total_rate, cc)}</span>
+                        <span className="line-through text-stone-400">{otaLabel} ~{cur(r.total_rate / (1 - r.ota_compare.pct / 100), cc)}</span>
+                        <span className="font-semibold">{t("direct")} {cur(r.total_rate, cc)}</span>
+                        <span className="px-1.5 rounded-full bg-emerald-600 text-white font-semibold">{t("save")} {cur(r.total_rate / (1 - r.ota_compare.pct / 100) - r.total_rate, cc)}</span>
                       </div>
                     )}
                     {r.price_explanation && (
@@ -822,17 +834,17 @@ export default function BookingWidgetPage({ propertyId }) {
                           className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border transition-colors ${r.price_explanation.vs_base_pct > 2 ? "border-amber-300 bg-amber-50 text-amber-700" : r.price_explanation.vs_base_pct < -2 ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-stone-200 bg-stone-50 text-stone-600"}`}
                           data-testid={`be-price-explain-${r.room_type_id}`}>
                           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          Why this price?{r.price_explanation.vs_base_pct > 2 ? ` +${r.price_explanation.vs_base_pct}%` : r.price_explanation.vs_base_pct < -2 ? ` ${r.price_explanation.vs_base_pct}%` : ""}
+                          {t("why_price")}{r.price_explanation.vs_base_pct > 2 ? ` +${r.price_explanation.vs_base_pct}%` : r.price_explanation.vs_base_pct < -2 ? ` ${r.price_explanation.vs_base_pct}%` : ""}
                         </button>
                         {explainOpen === r.room_type_id && (
                           <div className="mt-2 bg-stone-50 border border-stone-200 rounded-xl p-3 text-xs text-stone-600 max-w-md" data-testid={`be-price-explain-panel-${r.room_type_id}`}>
-                            <div className="font-semibold text-stone-800 mb-1">{r.price_explanation.headline_en}</div>
+                            <div className="font-semibold text-stone-800 mb-1">{pick(r.price_explanation, "headline")}</div>
                             {r.price_explanation.signals?.length > 0 && (
                               <div className="space-y-1 mb-2" data-testid={`be-price-signals-${r.room_type_id}`}>
                                 {r.price_explanation.signals.map((s, i) => (
                                   <div key={i} className="flex items-start gap-1.5 bg-white border border-stone-100 rounded-lg px-2 py-1">
                                     <span className="text-sm leading-none">{s.icon}</span>
-                                    <div><div className="font-medium text-stone-700">{s.label_en}</div>{s.kind === "event" && <div className="text-[10px] text-stone-400">{s.name}{s.end_date && s.end_date !== s.date ? ` · ${s.date.slice(5)} → ${s.end_date.slice(5)}` : ` · ${(s.date || "").slice(5)}`}</div>}</div>
+                                    <div><div className="font-medium text-stone-700">{pick(s, "label")}</div>{s.kind === "event" && <div className="text-[10px] text-stone-400">{s.name}{s.end_date && s.end_date !== s.date ? ` · ${s.date.slice(5)} → ${s.end_date.slice(5)}` : ` · ${(s.date || "").slice(5)}`}</div>}</div>
                                   </div>
                                 ))}
                               </div>
@@ -840,7 +852,7 @@ export default function BookingWidgetPage({ propertyId }) {
                             {r.price_explanation.drivers.length > 0 && (
                               <div className="flex flex-wrap gap-1.5 mb-2">
                                 {r.price_explanation.drivers.map((d) => (
-                                  <span key={d.label_en} className={`px-2 py-0.5 rounded-full ${d.direction === "up" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{d.label_en} · {d.nights} night{d.nights > 1 ? "s" : ""}</span>
+                                  <span key={d.label_en} className={`px-2 py-0.5 rounded-full ${d.direction === "up" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{pick(d, "label")} · {nightsLabel(d.nights)}</span>
                                 ))}
                               </div>
                             )}
@@ -852,17 +864,17 @@ export default function BookingWidgetPage({ propertyId }) {
                                 </div>
                               ))}
                             </div>
-                            <div className="mt-1.5 text-[10px] text-stone-400">Standard rate {cur(r.price_explanation.base_total, cc)} → your price {cur(r.price_explanation.total, cc)}. Prices are set transparently by demand; no hidden fees.</div>
+                            <div className="mt-1.5 text-[10px] text-stone-400">{t("standard_rate")} {cur(r.price_explanation.base_total, cc)} → {t("your_price")} {cur(r.price_explanation.total, cc)}. {t("transparent")}</div>
                           </div>
                         )}
                       </div>
                     )}
                   </div>
                   <div className="text-right">
-                    <div className="flex items-center gap-1 mb-1"><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg><span className="text-[10px] text-emerald-600">Free cancellation</span></div>
-                    <div className="flex items-center gap-1 mb-2"><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg><span className="text-[10px] text-emerald-600">No prepayment</span></div>
+                    <div className="flex items-center gap-1 mb-1"><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg><span className="text-[10px] text-emerald-600">{t("free_cancel")}</span></div>
+                    <div className="flex items-center gap-1 mb-2"><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg><span className="text-[10px] text-emerald-600">{t("no_prepay")}</span></div>
                     <button onClick={() => { setSelected(r); setStep("details"); }} className="px-6 py-2.5 text-white rounded-lg font-semibold text-sm hover:opacity-90 transition-colors shadow-md" style={{ backgroundColor: ac }} data-testid={`be-book-room-${r.room_type_id}`}>
-                      Reserve
+                      {t("reserve")}
                     </button>
                   </div>
                 </div>
@@ -880,17 +892,17 @@ export default function BookingWidgetPage({ propertyId }) {
       <div className="max-w-4xl mx-auto px-4">
         <button onClick={() => setStep("results")} className="flex items-center gap-1 text-sm text-[#1a3c5e] font-medium mb-4 hover:underline" data-testid="be-back-results">
           <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" /></svg>
-          Back to rooms
+          {t("back_rooms")}
         </button>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
           <div className="md:col-span-3">
             <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-stone-800 mb-1">Your Details</h2>
-              <p className="text-xs text-stone-400 mb-5">Please fill in your details to complete the reservation</p>
+              <h2 className="text-lg font-semibold text-stone-800 mb-1">{t("your_details")}</h2>
+              <p className="text-xs text-stone-400 mb-5">{t("fill_details")}</p>
               <div className="space-y-4">
-                <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Full Name *</label>
+                <div><label className="text-xs font-semibold text-stone-500 mb-1 block">{t("full_name")}</label>
                   <input value={form.guest_name} onChange={e => setForm({ ...form, guest_name: e.target.value })} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" placeholder="John Smith" data-testid="be-guest-name" /></div>
-                <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Email Address *</label>
+                <div><label className="text-xs font-semibold text-stone-500 mb-1 block">{t("email")}</label>
                   <input type="email" value={form.guest_email} onChange={e => setForm({ ...form, guest_email: e.target.value })} onBlur={e => { checkLoyalty(e.target.value); captureAbandoned(e.target.value); }} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" placeholder="john@example.com" data-testid="be-guest-email" />
                   {loyaltyChecking && <p className="text-[10px] text-stone-400 mt-1">Checking membership…</p>}
                   {loyalty?.is_member && (
@@ -905,15 +917,15 @@ export default function BookingWidgetPage({ propertyId }) {
                     </div>
                   )}
                 </div>
-                <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Phone Number</label>
+                <div><label className="text-xs font-semibold text-stone-500 mb-1 block">{t("phone")}</label>
                   <input type="tel" value={form.guest_phone} onChange={e => setForm({ ...form, guest_phone: e.target.value })} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" placeholder="+44 7911 123456" data-testid="be-guest-phone" /></div>
-                <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Special Requests</label>
+                <div><label className="text-xs font-semibold text-stone-500 mb-1 block">{t("special_requests")}</label>
                   <textarea value={form.special_requests} onChange={e => setForm({ ...form, special_requests: e.target.value })} rows={3} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none resize-none" placeholder="Late check-in, extra pillows..." data-testid="be-special-requests" /></div>
               </div>
               {/* Attribute-Based Selling — ücretli oda tercihleri */}
               {absAttrs.length > 0 && (
                 <div className="mt-5" data-testid="abs-section">
-                  <label className="text-xs font-semibold text-stone-500 mb-2 block">Room Preferences <span className="text-stone-400 font-normal">(paid extras)</span></label>
+                  <label className="text-xs font-semibold text-stone-500 mb-2 block">{t("room_prefs")} <span className="text-stone-400 font-normal">{t("paid_extras")}</span></label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {absAttrs.map(a => {
                       const on = absSelected.includes(a.id);
@@ -949,7 +961,7 @@ export default function BookingWidgetPage({ propertyId }) {
               )}
               {/* Payment mode picker — guest chooses Pay Now (Stripe) vs Pay At Property */}
               <div className="mt-5">
-                <label className="text-xs font-semibold text-stone-500 mb-2 block">Payment</label>
+                <label className="text-xs font-semibold text-stone-500 mb-2 block">{t("payment")}</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => setPaymentMode("pay_now")}
                     data-testid="be-pay-now"
@@ -958,8 +970,8 @@ export default function BookingWidgetPage({ propertyId }) {
                       {paymentMode === "pay_now" && <svg className="w-full h-full text-white p-0.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-stone-900">Pay Now · Card</div>
-                      <div className="text-[10px] text-stone-500">Secure Stripe checkout</div>
+                      <div className="text-xs font-bold text-stone-900">{t("pay_now")}</div>
+                      <div className="text-[10px] text-stone-500">{t("stripe_secure")}</div>
                     </div>
                   </button>
                   <button type="button" onClick={() => setPaymentMode("pay_at_property")}
@@ -969,32 +981,32 @@ export default function BookingWidgetPage({ propertyId }) {
                       {paymentMode === "pay_at_property" && <svg className="w-full h-full text-white p-0.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-stone-900">Pay at Property</div>
-                      <div className="text-[10px] text-stone-500">No charge today</div>
+                      <div className="text-xs font-bold text-stone-900">{t("pay_at_property")}</div>
+                      <div className="text-[10px] text-stone-500">{t("no_charge")}</div>
                     </div>
                   </button>
                 </div>
               </div>
               <button onClick={book} disabled={booking || !form.guest_name || !form.guest_email}
                 className="w-full mt-6 py-3.5 text-white rounded-xl font-semibold text-base hover:opacity-90 transition-colors shadow-lg disabled:opacity-50" style={{ backgroundColor: ac }} data-testid="be-confirm-booking">
-                {booking ? "Processing..." : (paymentMode === "pay_now" ? "PROCEED TO PAYMENT" : "COMPLETE BOOKING")}
+                {booking ? t("processing") : (paymentMode === "pay_now" ? t("proceed_payment") : t("complete_booking"))}
               </button>
               <div className="flex items-center justify-center gap-4 mt-4 text-[10px] text-stone-400">
                 <span className="flex items-center gap-1"><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>SSL Encrypted</span>
-                <span>{paymentMode === "pay_now" ? "Powered by Stripe" : "No payment taken now"}</span><span>Free cancellation</span>
+                <span>{paymentMode === "pay_now" ? t("powered_stripe") : t("no_payment_now")}</span><span>{t("free_cancel")}</span>
               </div>
             </div>
           </div>
           <div className="md:col-span-2">
             <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm sticky top-20">
-              <h3 className="font-semibold text-stone-800 mb-3 text-sm">Booking Summary</h3>
+              <h3 className="font-semibold text-stone-800 mb-3 text-sm">{t("summary")}</h3>
               <div className="space-y-3 text-sm">
-                <div className="flex justify-between"><span className="text-stone-500">Hotel</span><span className="font-medium text-stone-800">{cn}</span></div>
-                <div className="flex justify-between"><span className="text-stone-500">Room</span><span className="font-medium text-stone-800">{selected?.name}</span></div>
-                <div className="flex justify-between"><span className="text-stone-500">Check-in</span><span className="text-stone-700">{fmtDate(checkIn)}</span></div>
-                <div className="flex justify-between"><span className="text-stone-500">Check-out</span><span className="text-stone-700">{fmtDate(checkOut)}</span></div>
-                <div className="flex justify-between"><span className="text-stone-500">Duration</span><span className="text-stone-700">{nights} night{nights > 1 ? "s" : ""}</span></div>
-                <div className="flex justify-between"><span className="text-stone-500">Guests</span><span className="text-stone-700">{guests} adults{children > 0 ? `, ${children} children` : ""}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">{t("hotel")}</span><span className="font-medium text-stone-800">{cn}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">{t("room")}</span><span className="font-medium text-stone-800">{selected?.name}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">{t("check_in")}</span><span className="text-stone-700">{fmtDate(checkIn)}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">{t("check_out")}</span><span className="text-stone-700">{fmtDate(checkOut)}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">{t("duration")}</span><span className="text-stone-700">{nightsLabel(nights)}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">{t("guests")}</span><span className="text-stone-700">{guests} {t("adults").toLowerCase()}{children > 0 ? `, ${children} ${t("children").toLowerCase()}` : ""}</span></div>
               </div>
               <div className="border-t border-stone-100 mt-4 pt-4">
                 <div className="flex justify-between text-xs text-stone-400 mb-1"><span>{nights} night{nights > 1 ? "s" : ""} x {cur(selected?.base_rate, cc)}</span><span>{cur(selected?.total_rate, cc)}</span></div>
@@ -1025,7 +1037,7 @@ export default function BookingWidgetPage({ propertyId }) {
                       <div className="flex gap-1.5">
                         <input value={coupon.code}
                           onChange={e => setCoupon(p => ({ ...p, code: e.target.value.toUpperCase(), error: null }))}
-                          placeholder="Promo / coupon code"
+                          placeholder={t("promo")}
                           className="flex-1 min-w-0 border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs uppercase focus:outline-none focus:ring-1 focus:ring-emerald-500"
                           data-testid="coupon-input" />
                         <button onClick={applyCoupon} disabled={coupon.checking || !coupon.code.trim()}
@@ -1051,8 +1063,8 @@ export default function BookingWidgetPage({ propertyId }) {
                     <span>+£{carbonOffset.total_fee}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-xs text-stone-400 mb-1"><span>Taxes & fees</span><span>Included</span></div>
-                <div className="flex justify-between"><span className="text-stone-500 font-medium">Total</span><span className="text-2xl font-bold" style={{ color: ac }}>{(() => {
+                <div className="flex justify-between text-xs text-stone-400 mb-1"><span>{t("taxes_fees")}</span><span>{t("included")}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500 font-medium">{t("total")}</span><span className="text-2xl font-bold" style={{ color: ac }}>{(() => {
                   let t = selected?.total_rate || 0;
                   if (loyalty?.is_member && loyalty.discount_pct > 0) t = Number((t * (1 - loyalty.discount_pct / 100)).toFixed(2));
                   t += absSelected.reduce((s, id) => s + ((absAttrs.find(x => x.id === id)?.price || 0) * nights * roomCount), 0);
@@ -1087,7 +1099,7 @@ export default function BookingWidgetPage({ propertyId }) {
               <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               </div>
-              <h2 className="text-xl font-semibold text-stone-800 mb-1">Payment Cancelled</h2>
+              <h2 className="text-xl font-semibold text-stone-800 mb-1">{t("payment_cancelled")}</h2>
               <p className="text-sm text-stone-500 mb-6">No charge was made. Your booking <b>{confirmation?.booking_ref}</b> is on hold — try again or contact us.</p>
             </>
           ) : (
@@ -1100,34 +1112,34 @@ export default function BookingWidgetPage({ propertyId }) {
                 )}
               </div>
               <h2 className="text-xl font-semibold text-stone-800 mb-1">
-                {isPendingWebhook ? "Payment Received" : "Booking Confirmed!"}
+                {isPendingWebhook ? t("payment_received") : t("booking_confirmed")}
                 {isPaid && !isPendingWebhook && (
-                  <span className="ml-2 text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5 uppercase tracking-wide">PAID</span>
+                  <span className="ml-2 text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5 uppercase tracking-wide">{t("paid")}</span>
                 )}
               </h2>
               <p className="text-sm text-stone-500 mb-6">
                 {isPendingWebhook
-                  ? "Finalising your reservation. A confirmation email will arrive shortly."
-                  : `A confirmation email has been sent to ${guestEmail}.`}
+                  ? t("finalising")
+                  : t("email_sent", { email: guestEmail })}
               </p>
             </>
           )}
           {!isCancelled && (
             <div className="bg-[#f8f6f3] rounded-xl p-4 mb-6 text-left space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-stone-500">Reference</span><span className="font-bold text-[#1a3c5e] text-base">{confirmation?.booking_ref}</span></div>
-              <div className="flex justify-between"><span className="text-stone-500">Hotel</span><span className="font-medium">{cn}</span></div>
-              {confirmation?.booking?.room_type && <div className="flex justify-between"><span className="text-stone-500">Room</span><span>{confirmation.booking.room_type}</span></div>}
-              <div className="flex justify-between"><span className="text-stone-500">Dates</span><span>{fmtDate(confirmation?.booking?.check_in || checkIn)} — {fmtDate(confirmation?.booking?.check_out || checkOut)}</span></div>
-              {total != null && <div className="flex justify-between"><span className="text-stone-500">Total</span><span className="font-bold text-lg">{cur(total, cc)}</span></div>}
+              <div className="flex justify-between"><span className="text-stone-500">{t("reference")}</span><span className="font-bold text-[#1a3c5e] text-base">{confirmation?.booking_ref}</span></div>
+              <div className="flex justify-between"><span className="text-stone-500">{t("hotel")}</span><span className="font-medium">{cn}</span></div>
+              {confirmation?.booking?.room_type && <div className="flex justify-between"><span className="text-stone-500">{t("room")}</span><span>{confirmation.booking.room_type}</span></div>}
+              <div className="flex justify-between"><span className="text-stone-500">{t("dates")}</span><span>{fmtDate(confirmation?.booking?.check_in || checkIn)} — {fmtDate(confirmation?.booking?.check_out || checkOut)}</span></div>
+              {total != null && <div className="flex justify-between"><span className="text-stone-500">{t("total")}</span><span className="font-bold text-lg">{cur(total, cc)}</span></div>}
             </div>
           )}
           <div className="space-y-1.5 text-xs text-stone-500 mb-6">
-            <p>Free cancellation up to 48 hours before arrival</p>
-            {isPaid ? <p className="text-emerald-700 font-semibold">Payment processed via Stripe</p> : <p>No prepayment required — pay at property</p>}
+            <p>{t("free_cancel_48")}</p>
+            {isPaid ? <p className="text-emerald-700 font-semibold">{t("paid_stripe")}</p> : <p>{t("no_prepay_property")}</p>}
           </div>
           <button onClick={() => { setStep("home"); setConfirmation(null); setSelected(null); setForm({ guest_name: "", guest_email: "", guest_phone: "", special_requests: "" }); }}
             className="px-8 py-2.5 bg-[#1a3c5e] text-white rounded-xl font-medium text-sm" data-testid="be-back-home">
-            Back to Home
+            {t("back_home")}
           </button>
         </div>
       </motion.div>

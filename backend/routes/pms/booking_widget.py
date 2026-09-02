@@ -344,6 +344,8 @@ def create_booking_widget_router(db, require_roles):
             "status": "pending_payment" if pay_now else "confirmed",
             "payment_status": "pending" if pay_now else "pay_at_property",
             "source": "website_widget",
+            "channel_source": (data.get("channel_source") or "direct")[:60],
+            "guest_lang": (data.get("lang") or "")[:5],
             "abs_attributes": abs_selected,
             "abs_total": abs_total,
             **({"room_id": abs_room["id"], "room_number": abs_room.get("name", ""),
@@ -528,6 +530,44 @@ def create_booking_widget_router(db, require_roles):
         return {"status": "uploaded", "url": photo_url}
 
     # ==================== ADMIN: GUEST REVIEWS CRUD ====================
+
+    @router.post("/booking-widget/ota-banner-view")
+    async def ota_banner_view(data: Dict):
+        """Public: log an OTA→direct banner impression (guest arrived from an OTA)."""
+        pid = data.get("property_id", "")
+        if not pid:
+            raise HTTPException(400, "property_id gerekli")
+        await db.ota_banner_views.insert_one({
+            "id": str(uuid.uuid4()), "property_id": pid, "ota": (data.get("ota") or "")[:40],
+            "lang": (data.get("lang") or "")[:5], "ts": datetime.now(timezone.utc).isoformat()})
+        return {"ok": True}
+
+    @router.get("/booking-widget/ota-conversion/{property_id}")
+    async def ota_conversion(property_id: str, days: int = 90,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        since = (datetime.now(timezone.utc) - timedelta(days=max(1, min(days, 365)))).isoformat()
+        q_views = {"ts": {"$gte": since}}
+        q_book = {"channel_source": {"$regex": "^ota_banner:"}, "created_at": {"$gte": since},
+                  "status": {"$nin": ["cancelled", "no_show"]}}
+        if property_id != "all":
+            q_views["property_id"] = property_id
+            q_book["property_id"] = property_id
+        views = await db.ota_banner_views.count_documents(q_views)
+        bks = await db.bookings.find(q_book, {"_id": 0, "total": 1, "channel_source": 1, "created_at": 1}).to_list(2000)
+        revenue = round(sum(float(b.get("total") or 0) for b in bks), 2)
+        wcfg = await db.booking_widget_config.find_one({"property_id": property_id}, {"_id": 0, "direct_advantage_pct": 1}) or {}
+        direct_pct = float(wcfg.get("direct_advantage_pct", 5) or 0)
+        # commission saved: what an OTA (≈15%) would have taken on the OTA-equivalent price
+        ota_equiv = revenue / (1 - direct_pct / 100) if 0 < direct_pct < 100 else revenue
+        commission_saved = round(ota_equiv * 0.15, 2)
+        by_ota: dict = {}
+        for b in bks:
+            k = (b.get("channel_source") or "").split(":", 1)[-1] or "ota"
+            by_ota[k] = by_ota.get(k, 0) + 1
+        return {"property_id": property_id, "days": days, "banner_views": views, "bookings": len(bks),
+                "conversion_pct": round(len(bks) / views * 100, 1) if views else 0.0,
+                "revenue": revenue, "commission_saved": commission_saved, "direct_advantage_pct": direct_pct,
+                "by_ota": [{"ota": k, "bookings": v} for k, v in sorted(by_ota.items(), key=lambda x: -x[1])]}
 
     @router.get("/booking-widget/social-proof/{property_id}")
     async def social_proof(property_id: str):

@@ -7,7 +7,7 @@ Pencere D2+ (D0-D1 son-gün merdivenine aittir — tek yazıcı). Kira-çit kili
 Collections: ramp_config, ramp_state, ramp_steps
 """
 from fastapi import APIRouter, Depends
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from typing import Dict
 import uuid
 import asyncio
@@ -20,9 +20,30 @@ logger = logging.getLogger(__name__)
 ACTOR = "ramp-ladder"
 DEFAULT_CFG = {"enabled": False, "window_start": 2, "window_end": 21,
                "step_pct": 5.0, "max_steps": 3, "occ_threshold": 70.0,
-               "cadence_hours": 12, "forecast_boost": True}
+               "cadence_hours": 12, "forecast_boost": True,
+               "event_premium": True, "event_min_score": 60}
 SAFETY_CAP_MULT = 1.25
 FORECAST_HOT_OCC, FORECAST_COLD_OCC, FORECAST_MIN_DAYS_OUT = 90.0, 50.0, 14
+
+
+async def _event_map(db, pid: str, today: date, window_end: int, min_score: int) -> dict:
+    """Büyük şehir etkinlikleri (market_events, demand_score ≥ eşik) → {stay_date: en güçlü etkinlik}."""
+    last = (today + timedelta(days=window_end)).isoformat()
+    evs = await db.market_events.find(
+        {"property_id": {"$in": [pid, "all"]}, "date": {"$lte": last}, "end_date": {"$gte": today.isoformat()},
+         "hotel_demand_score": {"$gte": int(min_score)}},
+        {"_id": 0, "name": 1, "date": 1, "end_date": 1, "hotel_demand_score": 1, "category": 1}).to_list(200)
+    out: dict = {}
+    for e in evs:
+        try:
+            d0, d1 = date.fromisoformat(e["date"]), date.fromisoformat(e.get("end_date") or e["date"])
+        except Exception:
+            continue
+        for i in range((d1 - d0).days + 1):
+            k = (d0 + timedelta(days=i)).isoformat()
+            if k not in out or e["hotel_demand_score"] > out[k]["hotel_demand_score"]:
+                out[k] = e
+    return out
 
 
 async def _forecast_map(db, pid: str, days: int) -> dict:
@@ -116,9 +137,11 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
     actions, skips = [], []
     step_p = float(cfg["step_pct"]) / 100.0
     fc_map = await _forecast_map(db, pid, int(cfg["window_end"])) if cfg.get("forecast_boost") else {}
+    ev_map = await _event_map(db, pid, today, int(cfg["window_end"]), int(cfg.get("event_min_score", 60))) if cfg.get("event_premium", True) else {}
     for offset in range(int(cfg["window_start"]), int(cfg["window_end"]) + 1):
         day = (today + timedelta(days=offset)).isoformat()
         fsig = _forecast_signal(fc_map.get(day))
+        ev = ev_map.get(day)
         for rt in room_types:
             rt_id = rt["id"]
             total = int(rt.get("total_rooms", 0))
@@ -138,9 +161,17 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
 
             if step_no >= int(cfg["max_steps"]):
                 continue
+            event_step = False
             if occ < float(cfg["occ_threshold"]):
                 if step_no == 0:
-                    continue
+                    # --- EVENT_PREMIUM: büyük etkinlik gecesi → doluluk kanıtı beklemeden sönümlü ilk kademe (1 kez) ---
+                    if ev and not st.get("event_step_at"):
+                        event_step = True
+                    else:
+                        continue
+                elif ev and st.get("event_step_at") and step_no <= 1:
+                    continue  # etkinlik primi etkinlik sürdüğü sürece geri alınmaz
+            if occ < float(cfg["occ_threshold"]) and not event_step:
                 # --- YÖN DÖNÜŞÜ: talep söndü — kademeyi geri al, fiyatı indir ---
                 if not force and last_step_at:
                     elapsed = (now - datetime.fromisoformat(last_step_at)).total_seconds() / 3600
@@ -170,7 +201,7 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                 log.pop("_id", None)
                 actions.append(log)
                 continue
-            if not force and last_step_at:
+            if not force and last_step_at and not event_step:
                 elapsed = (now - datetime.fromisoformat(last_step_at)).total_seconds() / 3600
                 if elapsed < float(cfg["cadence_hours"]):
                     continue
@@ -213,7 +244,7 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
             ceiling = await _ceiling_for(db, pid, rt_id, anchor)
             new_step = step_no + 1
             # Piyasa/tahmin kaynaklı kademe SÖNÜMLÜdür: yarım adım (rakipler tükeniyorsa tam adım)
-            damped = forecast_step or (market_step and not (market or {}).get("full_step"))
+            damped = forecast_step or event_step or (market_step and not (market or {}).get("full_step"))
             eff_step_p = step_p / 2 if damped else step_p
             new_rate = round(anchor * ((1 + step_p) ** step_no) * (1 + eff_step_p), 2)
             if new_rate > ceiling:
@@ -246,6 +277,8 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                                      if market_step else
                                      f"FORECAST_HOT (ML tahmin) kademe {new_step}: {fsig.get('days_out')} gün kala nihai doluluk tahmini %{fsig.get('occ', 0):.0f} — sönümlü adım"
                                      if forecast_step else
+                                     f"EVENT_PREMIUM kademe {new_step}: {(ev or {}).get('name', '')[:60]} (talep skoru {(ev or {}).get('hotel_demand_score', 0)}) — sönümlü etkinlik primi"
+                                     if event_step else
                                      f"Zam merdiveni kademe {new_step}: doluluk %{occ:.0f}"
                                      + (f", misafir onayı: +{sold - int(bookings_at_last)} yeni rezervasyon" if step_no >= 1 else " (talep kanıtı)"))
                           + (" · güvenlik sınırı uygulandı" if guard["clamped"] else ""),
@@ -259,8 +292,10 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                    "guard_clamped": guard["clamped"],
                    "market_signal": market if market_step else None,
                    "forecast_signal": fsig if forecast_step else None,
+                   "event": {"name": ev.get("name"), "score": ev.get("hotel_demand_score"), "category": ev.get("category")} if event_step else None,
                    "reason": ("DEMAND_STRONG" if market_step else
                               "FORECAST_HOT" if forecast_step else
+                              "EVENT_PREMIUM" if event_step else
                               "guest_approved_step" if step_no >= 1 else "demand_evidence_step"),
                    "created_at": now.isoformat()}
             await db.ramp_steps.insert_one(dict(log))
@@ -269,7 +304,8 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                 {"$set": {"step_no": new_step, "anchor_rate": anchor,
                           "bookings_at_last_step": sold, "last_step_at": now.isoformat(),
                           **({"market_step_at": now.isoformat()} if market_step else {}),
-                          **({"forecast_step_at": now.isoformat()} if forecast_step else {})}},
+                          **({"forecast_step_at": now.isoformat()} if forecast_step else {}),
+                          **({"event_step_at": now.isoformat(), "event_name": ev.get("name")} if event_step else {})}},
                 upsert=True)
             log.pop("_id", None)
             actions.append(log)
@@ -328,6 +364,10 @@ def create_ramp_ladder_router(db, require_roles):
             upd["enabled"] = bool(data["enabled"])
         if "forecast_boost" in data:
             upd["forecast_boost"] = bool(data["forecast_boost"])
+        if "event_premium" in data:
+            upd["event_premium"] = bool(data["event_premium"])
+        if "event_min_score" in data:
+            upd["event_min_score"] = max(10, min(100, int(data["event_min_score"])))
         for k, lo, hi in (("window_start", 1, 30), ("window_end", 2, 60),
                           ("max_steps", 1, 6), ("cadence_hours", 1, 48)):
             if data.get(k) is not None:

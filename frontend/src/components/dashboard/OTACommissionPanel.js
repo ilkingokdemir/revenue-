@@ -52,6 +52,35 @@ const TabBtn = ({ active, onClick, children, testId }) => (
 );
 
 /* ═══════════ SUMMARY TAB ═══════════ */
+const OtaConversionCard = ({ activePropertyId, days }) => {
+  const [d, setD] = useState(null);
+  useEffect(() => {
+    axios.get(`${API}/booking-widget/ota-conversion/${activePropertyId || "all"}?days=${days}`).then(r => setD(r.data)).catch(() => setD(null));
+  }, [activePropertyId, days]);
+  if (!d) return null;
+  const fmt = (n) => Number(n || 0).toLocaleString("tr-TR", { maximumFractionDigits: 0 });
+  return (
+    <div className="border border-emerald-200 rounded-lg bg-emerald-50/40 p-4" data-testid="ota-conversion-card">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div className="text-sm font-semibold text-emerald-900">OTA'dan Çevrilen (direkt şerit) — son {d.days} gün</div>
+        <div className="text-[11px] text-stone-500">Şerit: "Direkt rezervasyonda %{d.direct_advantage_pct} daha ucuz" · Booking Engine › Theme'den ayarlanır</div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+        <div className="bg-white rounded-lg p-3 border border-stone-100"><div className="text-[11px] text-stone-500">Şerit görüntülenme</div><div className="text-xl font-bold" data-testid="ota-conv-views">{fmt(d.banner_views)}</div></div>
+        <div className="bg-white rounded-lg p-3 border border-stone-100"><div className="text-[11px] text-stone-500">Direkt rezervasyon</div><div className="text-xl font-bold text-emerald-700" data-testid="ota-conv-bookings">{fmt(d.bookings)}</div></div>
+        <div className="bg-white rounded-lg p-3 border border-stone-100"><div className="text-[11px] text-stone-500">Dönüşüm</div><div className="text-xl font-bold" data-testid="ota-conv-pct">{d.conversion_pct}%</div></div>
+        <div className="bg-white rounded-lg p-3 border border-stone-100"><div className="text-[11px] text-stone-500">Gelir</div><div className="text-xl font-bold">£{fmt(d.revenue)}</div></div>
+        <div className="bg-white rounded-lg p-3 border border-emerald-200"><div className="text-[11px] text-stone-500">Kurtarılan komisyon (~%15)</div><div className="text-xl font-bold text-emerald-700" data-testid="ota-conv-saved">£{fmt(d.commission_saved)}</div></div>
+      </div>
+      {d.by_ota?.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+          {d.by_ota.map(x => <span key={x.ota} className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-600">{x.ota}: {x.bookings}</span>)}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const SummaryTab = ({ activePropertyId }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -107,6 +136,8 @@ const SummaryTab = ({ activePropertyId }) => {
         <Kpi label="Net Gelir" value={`£${fmt(totals.net)}`} icon={TrendingUp} color="emerald" testId="ota-com-kpi-net" />
         <Kpi label="Blended %" value={`${totals.blended_commission_pct?.toFixed?.(2) ?? "-"}%`} icon={PieChart} color="amber" testId="ota-com-kpi-blended" />
       </div>
+
+      <OtaConversionCard activePropertyId={activePropertyId} days={days} />
 
       {/* Leaderboard */}
       <div className="border rounded-lg bg-white overflow-hidden" data-testid="ota-com-leaderboard">

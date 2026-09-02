@@ -1237,6 +1237,13 @@ async def _job_ota_ab_auto_winner(property_id: str) -> dict:
         return {"ok": False, "error": str(e)}
 JOB_HANDLERS["ota_ab_auto_winner"] = _job_ota_ab_auto_winner
 
+async def _job_review_request(property_id: str) -> dict:
+    try:
+        return await bookings_router.run_review_requests_internal(property_id or "all")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+JOB_HANDLERS["review_request"] = _job_review_request
+
 async def _job_uk_payroll_run(property_id: str) -> dict:
     try:
         return await uk_payroll_router.run_monthly_payroll_internal(property_id or "all")

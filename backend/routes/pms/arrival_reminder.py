@@ -1,4 +1,5 @@
 """Arrival reminder robot — T-2 pre-arrival e-mail in guest language (TR/EN/DE) + event packages."""
+import os
 import uuid
 import logging
 from datetime import datetime, timezone, timedelta
@@ -17,17 +18,17 @@ T = {
            "hi": "Dear {name}, your arrival is in {days} days. Here's everything you need for a smooth check-in.",
            "checkin": "Check-in from", "checkout": "Check-out until", "address": "Address", "directions": "Open directions in Google Maps",
            "ref": "Booking reference", "room": "Room", "upsell": "Make your stay even better", "upsell_hint": "Reply to this e-mail and we'll add it to your booking.",
-           "footer": "Questions? Just reply — we're happy to help. See you soon!", "per_stay": "per stay", "per_night": "per night"},
+           "footer": "Questions? Just reply — we're happy to help. See you soon!", "per_stay": "per stay", "per_night": "per night", "add": "Add to my booking"},
     "tr": {"subject": "{days} gün sonra görüşürüz — {hotel} konaklamanız ({ref})", "title": "Odanızı hazırlıyoruz",
            "hi": "Sayın {name}, girişinize {days} gün kaldı. Sorunsuz bir check-in için ihtiyacınız olan her şey burada.",
            "checkin": "Giriş saati", "checkout": "Çıkış saati", "address": "Adres", "directions": "Google Haritalar'da yol tarifini aç",
            "ref": "Rezervasyon numarası", "room": "Oda", "upsell": "Konaklamanızı daha da güzelleştirin", "upsell_hint": "Bu e-postayı yanıtlayın, rezervasyonunuza ekleyelim.",
-           "footer": "Sorunuz mu var? Yanıtlamanız yeterli — yardımcı olmaktan mutluluk duyarız. Görüşmek üzere!", "per_stay": "konaklama başına", "per_night": "gece başına"},
+           "footer": "Sorunuz mu var? Yanıtlamanız yeterli — yardımcı olmaktan mutluluk duyarız. Görüşmek üzere!", "per_stay": "konaklama başına", "per_night": "gece başına", "add": "Rezervasyonuma ekle"},
     "de": {"subject": "Bis in {days} Tagen — Ihr Aufenthalt im {hotel} ({ref})", "title": "Wir bereiten Ihr Zimmer vor",
            "hi": "Liebe/r {name}, Ihre Anreise ist in {days} Tagen. Hier finden Sie alles für einen reibungslosen Check-in.",
            "checkin": "Check-in ab", "checkout": "Check-out bis", "address": "Adresse", "directions": "Route in Google Maps öffnen",
            "ref": "Buchungsnummer", "room": "Zimmer", "upsell": "Machen Sie Ihren Aufenthalt noch schöner", "upsell_hint": "Antworten Sie auf diese E-Mail und wir fügen es Ihrer Buchung hinzu.",
-           "footer": "Fragen? Einfach antworten — wir helfen gerne. Bis bald!", "per_stay": "pro Aufenthalt", "per_night": "pro Nacht"},
+           "footer": "Fragen? Einfach antworten — wir helfen gerne. Bis bald!", "per_stay": "pro Aufenthalt", "per_night": "pro Nacht", "add": "Zu meiner Buchung hinzufügen"},
 }
 DEFAULT_UPSELLS = [
     {"name": {"en": "Late check-out (until 14:00)", "tr": "Geç çıkış (14:00'e kadar)", "de": "Later Check-out (bis 14:00)"}, "price": 20.0, "price_type": "per_stay"},
@@ -50,7 +51,9 @@ def build_arrival_email(booking: dict, hotel: dict, upsells: list, lang: str) ->
     addr = ", ".join(x for x in [hotel.get("address"), hotel.get("city"), hotel.get("country")] if x) or hotel.get("name", "")
     maps = f"https://www.google.com/maps/search/?api=1&query={quote_plus(hotel.get('name', '') + ' ' + addr)}"
     rows = "".join(
-        f"<tr><td style='padding:6px 0;font-size:14px'>{u['label']}</td><td style='padding:6px 0;font-size:14px;text-align:right;font-weight:600'>{sym}{u['price']:.0f} <span style='font-size:11px;color:#888;font-weight:400'>{t['per_night'] if u['price_type'] == 'per_night' else t['per_stay']}</span></td></tr>"
+        f"<tr><td style='padding:6px 0;font-size:14px'>{u['label']}</td><td style='padding:6px 0;font-size:14px;text-align:right;font-weight:600'>{sym}{u['price']:.0f} <span style='font-size:11px;color:#888;font-weight:400'>{t['per_night'] if u['price_type'] == 'per_night' else t['per_stay']}</span>"
+        + (f"<br><a href='{u['claim_url']}' style='display:inline-block;margin-top:4px;background:#2F855A;color:#fff;text-decoration:none;padding:5px 10px;border-radius:6px;font-size:11px'>+ {t['add']}</a>" if u.get('claim_url') else "")
+        + "</td></tr>"
         for u in upsells)
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff">
@@ -89,6 +92,23 @@ def create_arrival_reminder_router(db, require_roles):
             return [{"label": i.get("name", ""), "price": float(i.get("price") or 0), "price_type": i.get("price_type", "per_stay")} for i in items]
         return [{"label": u["name"].get(lang, u["name"]["en"]), "price": u["price"], "price_type": u["price_type"]} for u in DEFAULT_UPSELLS]
 
+    async def _with_claim_links(b: dict, ups: list, lang: str) -> list:
+        """One-click 'add to my booking' tokens → /api/revenue/upsell/claim/{token} (pay at property)."""
+        base = (os.environ.get("PUBLIC_BASE_URL") or "").rstrip("/")
+        nights = max(1, int(b.get("nights") or 1))
+        sym = _sym(b.get("currency", "GBP"))
+        out = []
+        for u in ups:
+            amount = round(u["price"] * (nights if u["price_type"] == "per_night" else 1), 2)
+            token = uuid.uuid4().hex
+            await db.upsell_claim_tokens.insert_one({
+                "token": token, "booking_id": b.get("id"), "booking_ref": b.get("booking_ref"), "guest_email": b.get("guest_email"),
+                "label": u["label"], "amount": amount, "amount_label": f"{sym}{amount:.2f}", "lang": lang,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "expires_at": (datetime.now(timezone.utc) + timedelta(days=14)).isoformat()})
+            out.append({**u, "claim_url": f"{base}/api/revenue/upsell/claim/{token}"})
+        return out
+
     async def run_arrival_reminders_internal(property_id: str) -> dict:
         today = datetime.now(timezone.utc).date()
         targets = [(today + timedelta(days=DAYS_BEFORE)).isoformat(), (today + timedelta(days=1)).isoformat()]
@@ -105,6 +125,7 @@ def create_arrival_reminder_router(db, require_roles):
                 hotels[pid] = await _hotel(pid)
             lang = (b.get("guest_lang") or "en")[:2].lower()
             ups = await _upsells(pid, lang)
+            ups = await _with_claim_links(b, ups, lang)
             subject, html = build_arrival_email(b, hotels[pid], ups, lang)
             status = await send_email(db, b["guest_email"], subject, html, kind="arrival_reminder",
                                       meta={"booking_id": b.get("id"), "booking_ref": b.get("booking_ref"), "lang": lang})

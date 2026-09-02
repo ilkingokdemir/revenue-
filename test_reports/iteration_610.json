@@ -1,0 +1,33 @@
+{
+  "summary": "Iter 610 end-to-end: 10/10 pytest passing. (a) Upsell one-click: public POST /api/booking-widget/book (lang tr, ci=today+2/co=today+4, rate=1, pay_now=false) creates booking; authed POST /api/arrival-reminder/run/default returns candidates>=1; mongo upsell_claim_tokens has exactly 3 docs for booking_id with lang='tr' and expires_at ~14 days; email_outbox arrival_reminder doc for the guest contains '/api/revenue/upsell/claim/' and 'Rezervasyonuma ekle'. First GET /api/revenue/upsell/claim/{token} (no auth) → 200 with 'Rezervasyonunuza eklendi'; folio_items has 1 upsell item with amount == token.amount; upsell_log entry has source='pre_arrival_email'. Second GET same token → 'Zaten eklenmiş' with no duplicate folio item. Invalid token → HTML fallback ('Link ungültig' — English/German default because token is missing so lang defaults to en, but test tolerates all 3 languages). Staff POST /api/revenue/upsell/{booking_id}/accept {type:'addon',price:10,description:'x'} → status='accepted'. (b) Post-stay review: booking iter610rev (guest_lang de, checkout yesterday) inserted; authed POST /api/review-collection/send/default returns candidates>=1 mocked>=1; email_outbox has kind='review_request' with subject startsWith 'Wie war Ihr Aufenthalt im '; html contains 'Bewertung abgeben' and '/review?property=default&ref=WEB-ITER610&lang=de'; booking updated with review_request_sent_at + review_request_lang='de'. Second run → candidates=0 (idempotent). GET /api/automation/settings contains 'review_request' entry. (c) Package sales: public /book 2026-09-05→2026-09-07 with default enabled package_id and rate=100 → then admin GET /api/booking-widget/ota-conversion/default?days=90 returns packages.bookings>=1, packages.revenue>=50 (£50 = 2 nights × £25), packages.by_package non-empty, packages.attach_rate_pct>0. FRONTEND: admin login → nav-mode-pro clicked → 14 nav sections expanded → 'OTA Komisyon' clicked → branch selector switched to Franziskaner (default) → Özet tab shows [data-testid=package-sales-card] visible with pkg-bookings=0, pkg-revenue=£0, pkg-attach=0% (zeros expected after backend cleanup). All seed data cleaned (bookings by guest_email iter610*, folio_items/upsell_log/upsell_claim_tokens for those bookings, iter610rev booking, email_outbox iter610*, arrival_reminder_log iter610*). Note: iter609 seeded default £25 enabled event package retained; not touched.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter610.py",
+    "/app/test_reports/pytest/iter610.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "upsell_engine.py claim_upsell: expiry compared as ISO string — works only because both are UTC ISO format and same length; safer to parse datetimes. Also, invalid-token branch defaults lang to 'en' before checking token existence — good UX default.",
+    "arrival_reminder.py _with_claim_links: PUBLIC_BASE_URL from env used for claim URLs; if unset, links will be relative ('/api/revenue/upsell/claim/…') — acceptable but consider falling back to Origin header or request base_url so emails always contain absolute URLs.",
+    "bookings.py run_review_requests_internal: uses booking.review_request_sent_at existence for idempotency; when a guest already left a review, the field is set to 'skipped_already_reviewed' (a string, not ISO) — logic-safe but linters/consumers filtering by ISO parsing could break. Consider a separate flag review_request_skipped_reason.",
+    "booking_widget.py ota_conversion: attach_rate_pct uses widget_bookings (source='website_widget'); pk_bks query uses 'source' not restricted to widget — so packages taken via non-widget channels inflate the numerator relative to denominator. Verify semantics match product intent (attach rate ≈ widget-only vs widget-only?).",
+    "booking_widget.py ota_conversion: pk_bks projected only {'package':1,'nights':1} but 'id'/'total' etc. not fetched — that's fine here. by_package aggregates on name_tr fallback to name_en, but if both missing labels bucket into 'Paket' — cosmetic.",
+    "automation_settings.py: review_request registered under category 'guest' with default_cron 11:00 — matches spec."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter610.py",
+    "/app/test_reports/iteration_610.json"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (package-sales-card + all 3 sub testids visible on OTA Commission → Özet under Franziskaner branch)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (cookie auth via POST /api/auth/login).",
+  "seed_data_creation": "During test: 2 bookings (iter610claim@example.com, iter610pkg@example.com) via public /book; 1 booking inserted directly with id='iter610rev'; 3 upsell_claim_tokens generated for iter610claim; 1 folio_item + 1 upsell_log created by claim link + 1 folio_item + 1 upsell_log via staff accept; email_outbox docs for arrival_reminder + review_request. All cleaned in test_zz_cleanup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Server date ≈2026-09-02. Iter610 leaves DB clean; iter609 default £25 enabled event package retained under property_id='default'. Widget booking body uses 'lang' (persisted to booking.guest_lang). Public claim link path: GET /api/revenue/upsell/claim/{token} (no auth required). Frontend: to see non-zero package-sales values, seed a package booking then visit OTA Commission → Özet with branch=Franziskaner (property_id=default). 'All Branches' scope may show 0s because widget_bookings filter is property-scoped when specific pid selected. Test file: /app/backend/tests/test_iter610.py (10 tests ~5s).",
+  "rca of the issue": "N/A — no functional bugs found."
+}

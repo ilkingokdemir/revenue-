@@ -670,22 +670,8 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
     @router.post("/review-collection/send/{property_id}")
     async def send_review_collection_emails(property_id: str, current_user: dict = Depends(require_perm("edit_bookings"))):
         """Admin: Send review collection emails to guests who checked out but haven't been emailed"""
-        cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-        bookings_list = await db.bookings.find({
-            "property_id": property_id, "check_out": {"$lte": datetime.now(timezone.utc).strftime("%Y-%m-%d")},
-        }, {"_id": 0}).to_list(100)
-        prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
-        ts = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
-        prop_name = ts.get("hotel_name") or (prop or {}).get("name", "Hotel")
-        sent = 0
-        for b in bookings_list:
-            # Skip if already reviewed
-            existing = await db.guest_reviews.find_one({"booking_ref": b.get("booking_ref")})
-            if existing:
-                continue
-            asyncio.create_task(_send_review_collection_email(b, prop_name))
-            sent += 1
-        return {"sent": sent, "message": f"Sending review collection emails to {sent} guests"}
+        res = await run_review_requests_internal(property_id)
+        return {**res, "sent": res["sent"] + res["mocked"], "message": f"{res['candidates']} misafir · {res['sent']} gönderildi · {res['mocked']} MOCK · {res['skipped_reviewed']} zaten yorum yapmış"}
 
     # --- Multi-Currency ---
 
@@ -1292,41 +1278,74 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
     def _get_base_url():
         return os.environ.get("BASE_URL", os.environ.get("REACT_APP_BACKEND_URL", "https://review-hub-108.preview.emergentagent.com"))
 
-    async def _send_review_collection_email(booking: dict, property_name: str):
-        """Send post-stay review collection email"""
-        if not resend.api_key or resend.api_key == 're_123456789':
-            logger.info("No Resend API key, skipping review collection email")
-            return
+    REVIEW_T = {
+        "en": ("How was your stay at {hotel}?", "How was your stay?", "Hi {name},",
+               "Thank you for staying with us ({ci} — {co}). We'd love to hear about your experience — your feedback helps us improve and helps other travellers.",
+               "Leave a Review", "It only takes 2 minutes"),
+        "tr": ("{hotel} konaklamanız nasıldı?", "Konaklamanız nasıldı?", "Merhaba {name},",
+               "Bizi tercih ettiğiniz için teşekkürler ({ci} — {co}). Deneyiminizi duymak isteriz — geri bildiriminiz hem bize hem diğer misafirlere yardımcı olur.",
+               "Yorum Bırak", "Sadece 2 dakikanızı alır"),
+        "de": ("Wie war Ihr Aufenthalt im {hotel}?", "Wie war Ihr Aufenthalt?", "Hallo {name},",
+               "Vielen Dank für Ihren Aufenthalt bei uns ({ci} — {co}). Wir würden uns über Ihr Feedback freuen — es hilft uns und anderen Reisenden.",
+               "Bewertung abgeben", "Dauert nur 2 Minuten"),
+    }
+
+    async def _send_review_collection_email(booking: dict, property_name: str) -> str:
+        """Post-stay review request in the guest's language (TR/EN/DE) via mailer (Resend or MOCK)."""
+        from routes.platform_ext.mailer import send_email as _mail
+        lang = (booking.get("guest_lang") or "en")[:2].lower()
+        subj, title, hi, body, cta, hint = REVIEW_T.get(lang, REVIEW_T["en"])
         base_url = _get_base_url()
-        review_link = f"{base_url}/review?property={booking.get('property_id','')}&ref={booking.get('booking_ref','')}"
-        try:
-            ci = datetime.fromisoformat(booking["check_in"]).strftime("%d %B") if booking.get("check_in") else ""
-            co = datetime.fromisoformat(booking["check_out"]).strftime("%d %B %Y") if booking.get("check_out") else ""
-        except Exception:
-            ci, co = booking.get("check_in", ""), booking.get("check_out", "")
+        review_link = f"{base_url}/review?property={booking.get('property_id','')}&ref={booking.get('booking_ref','')}&lang={lang}"
+        ci, co = booking.get("check_in", ""), booking.get("check_out", "")
         html = f"""
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;">
           <div style="background:linear-gradient(135deg,#1e293b,#334155);color:#fff;padding:32px;text-align:center;">
-            <h1 style="margin:0;font-size:24px;">How was your stay?</h1>
+            <h1 style="margin:0;font-size:24px;">{title}</h1>
             <p style="margin:8px 0 0;opacity:0.7;font-size:14px;">{property_name}</p>
           </div>
           <div style="padding:32px;">
-            <p style="font-size:15px;color:#475569;line-height:1.6;">Hi {booking.get('guest_name','')},</p>
-            <p style="font-size:15px;color:#475569;line-height:1.6;">Thank you for staying with us ({ci} — {co}). We'd love to hear about your experience — your feedback helps us improve and helps other travellers.</p>
+            <p style="font-size:15px;color:#475569;line-height:1.6;">{hi.format(name=booking.get('guest_name',''))}</p>
+            <p style="font-size:15px;color:#475569;line-height:1.6;">{body.format(ci=ci, co=co)}</p>
             <div style="text-align:center;margin:28px 0;">
-              <a href="{review_link}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:700;font-size:15px;">Leave a Review</a>
+              <a href="{review_link}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:700;font-size:15px;">{cta}</a>
             </div>
-            <p style="font-size:13px;color:#94a3b8;text-align:center;">It only takes 2 minutes</p>
-            <div style="border-top:1px solid #e2e8f0;margin-top:24px;padding-top:16px;text-align:center;font-size:12px;color:#94a3b8;">
-              <p>Powered by MyHotelBox</p>
-            </div>
+            <p style="font-size:13px;color:#94a3b8;text-align:center;">{hint}</p>
           </div>
         </div>"""
-        try:
-            await asyncio.to_thread(resend.Emails.send, {"from": SENDER_EMAIL, "to": [booking.get("guest_email", "")], "subject": f"How was your stay at {property_name}?", "html": html})
-            logger.info(f"Review collection email sent for {booking.get('booking_ref','')}")
-        except Exception as e:
-            logger.error(f"Failed to send review collection email: {e}")
+        status = await _mail(db, booking.get("guest_email", ""), subj.format(hotel=property_name), html, kind="review_request",
+                             meta={"booking_id": booking.get("id"), "booking_ref": booking.get("booking_ref"), "lang": lang})
+        await db.bookings.update_one({"id": booking.get("id")}, {"$set": {
+            "review_request_sent_at": datetime.now(timezone.utc).isoformat(), "review_request_status": status, "review_request_lang": lang}})
+        return status
+
+    async def run_review_requests_internal(property_id: str) -> dict:
+        """Robot: guests who checked out yesterday (or earlier, max 7 days) and were never asked → review e-mail."""
+        today = datetime.now(timezone.utc).date()
+        q = {"check_out": {"$lte": (today - timedelta(days=1)).isoformat(), "$gte": (today - timedelta(days=7)).isoformat()},
+             "status": {"$in": ["checked_out", "confirmed", "completed"]}, "guest_email": {"$nin": [None, ""]},
+             "review_request_sent_at": {"$exists": False}}
+        if property_id and property_id != "all":
+            q["property_id"] = property_id
+        bks = await db.bookings.find(q, {"_id": 0}).to_list(500)
+        names: dict = {}
+        sent = mocked = skipped = 0
+        for b in bks:
+            if await db.guest_reviews.find_one({"booking_ref": b.get("booking_ref")}, {"_id": 0, "id": 1}):
+                await db.bookings.update_one({"id": b["id"]}, {"$set": {"review_request_sent_at": "skipped_already_reviewed"}})
+                skipped += 1
+                continue
+            pid = b.get("property_id", "")
+            if pid not in names:
+                prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+                ts = await db.template_settings.find_one({"property_id": pid}, {"_id": 0, "hotel_name": 1}) or {}
+                names[pid] = ts.get("hotel_name") or prop.get("name") or "Hotel"
+            st = await _send_review_collection_email(b, names[pid])
+            sent += st == "sent"
+            mocked += st == "mocked"
+        return {"ok": True, "candidates": len(bks), "sent": sent, "mocked": mocked, "skipped_reviewed": skipped}
+
+    router.run_review_requests_internal = run_review_requests_internal
 
     async def _send_checkin_email(booking: dict, property_name: str):
         """Send pre-arrival self check-in email"""

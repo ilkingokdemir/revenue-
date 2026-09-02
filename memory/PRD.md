@@ -1495,3 +1495,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - HER yeni istek öncesi ZORUNLU: `grep -rn` ile backend/routes ve frontend/src'de mevcut modül/endpoint/panel ara (ör. ab_test.py, pre_arrival.py, guest_journey.py, upsell_autopilot.py, event_intelligence, forecast_v2, los_optimizer, parity_analysis…). Varsa ASLA yeniden yazma → mevcut modülü genişlet ve kullanıcıya "zaten var, şunu ekliyorum" de.
 - Bilinen duplikasyonlar (kullanıcı isterse birleştir, kendi başına yeni iş açma): OTA A/B sayaçları (booking_widget.py) ↔ ab_test.py motoru; arrival_reminder.py ↔ pre_arrival.py drip (eski göndermiyor).
 - Kullanıcı onayı olmadan yeni modül/koleksiyon açma; öneri listesinde mevcut özellikleri "yeni" gibi sunma.
+
+## Güncelleme (Faz 28 — SADECE mevcut modüller genişletildi, yeni modül YOK) — iteration_610 %100
+- (a) Upsell tek tık: upsell_engine.py → _apply_upsell paylaşımlı helper (staff accept aynı helper'ı kullanır) + PUBLIC GET /revenue/upsell/claim/{token} (TR/EN/DE HTML sayfası; kullanılmış→"Zaten eklenmiş", geçersiz→"Link not valid"). arrival_reminder.py _with_claim_links → db.upsell_claim_tokens (14 gün) ve e-postada "+ Rezervasyonuma ekle" butonları (PUBLIC_BASE_URL). Kabul → folio_items upsell + upsell_log source=pre_arrival_email.
+- (b) Çıkış sonrası yorum: bookings.py mevcut _send_review_collection_email TR/EN/DE (REVIEW_T) + mailer (MOCK) + booking.review_request_sent_at/lang; run_review_requests_internal (checkout 1-7 gün önce, sorulmamış, guest_reviews varsa atla). Mevcut POST /review-collection/send/{pid} bunu kullanır; JOB 'review_request' (11:00, guest) server.py JOB_HANDLERS.
+- (c) Paket satış raporu: ota-conversion yanıtına packages{bookings, revenue, attach_rate_pct, widget_bookings, by_package}; OTACommissionPanel package-sales-card.
+- MOCK: Resend, Twilio.

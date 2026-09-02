@@ -77,6 +77,19 @@ const OtaConversionCard = ({ activePropertyId, days }) => {
           {d.by_ota.map(x => <span key={x.ota} className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-600">{x.ota}: {x.bookings}</span>)}
         </div>
       )}
+      {d.packages && (
+        <div className="mt-3 border border-amber-200 bg-amber-50/50 rounded-lg p-3" data-testid="package-sales-card">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div className="text-xs font-semibold text-amber-900">🎁 Etkinlik Paketi Satışları — son {d.days} gün</div>
+            <div className="text-[11px] text-stone-500">{d.packages.by_package.map(p => `${p.name}: ${p.bookings}`).join(" · ") || "Henüz paketli rezervasyon yok"}</div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white rounded-lg p-3 border border-stone-100"><div className="text-[11px] text-stone-500">Paketli rezervasyon</div><div className="text-xl font-bold" data-testid="pkg-bookings">{fmt(d.packages.bookings)}</div></div>
+            <div className="bg-white rounded-lg p-3 border border-stone-100"><div className="text-[11px] text-stone-500">Ek gelir</div><div className="text-xl font-bold text-amber-700" data-testid="pkg-revenue">£{fmt(d.packages.revenue)}</div></div>
+            <div className="bg-white rounded-lg p-3 border border-stone-100"><div className="text-[11px] text-stone-500">Paket ekleme oranı</div><div className="text-xl font-bold" data-testid="pkg-attach">{d.packages.attach_rate_pct}%</div><div className="text-[10px] text-stone-400">{d.packages.widget_bookings} widget rezervasyonu</div></div>
+          </div>
+        </div>
+      )}
       {d.ab && (
         <div className="mt-3 border border-violet-200 bg-violet-50/50 rounded-lg p-3" data-testid="ota-ab-card">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">

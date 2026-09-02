@@ -636,7 +636,22 @@ def create_booking_widget_router(db, require_roles):
         winner = None
         if all(x["views"] >= 20 for x in ab) and ab[0]["conversion_pct"] != ab[1]["conversion_pct"]:
             winner = max(ab, key=lambda x: x["conversion_pct"])["variant"]
+        pq = {"package.total": {"$gt": 0}, "created_at": {"$gte": since}, "status": {"$nin": ["cancelled", "no_show"]}}
+        wq = {"source": "website_widget", "created_at": {"$gte": since}, "status": {"$nin": ["cancelled", "no_show"]}}
+        if property_id != "all":
+            pq["property_id"] = property_id
+            wq["property_id"] = property_id
+        pk_bks = await db.bookings.find(pq, {"_id": 0, "package": 1, "nights": 1}).to_list(2000)
+        widget_total = await db.bookings.count_documents(wq)
+        pk_names: dict = {}
+        for b in pk_bks:
+            n = (b.get("package") or {}).get("name_tr") or (b.get("package") or {}).get("name_en") or "Paket"
+            pk_names[n] = pk_names.get(n, 0) + 1
+        packages = {"bookings": len(pk_bks), "revenue": round(sum(float((b.get("package") or {}).get("total") or 0) for b in pk_bks), 2),
+                    "attach_rate_pct": round(len(pk_bks) / widget_total * 100, 1) if widget_total else 0.0,
+                    "widget_bookings": widget_total, "by_package": [{"name": k, "bookings": v} for k, v in sorted(pk_names.items(), key=lambda x: -x[1])]}
         return {"property_id": property_id, "days": days, "banner_views": views, "bookings": len(bks),
+                "packages": packages,
                 "conversion_pct": round(len(bks) / views * 100, 1) if views else 0.0,
                 "revenue": revenue, "commission_saved": commission_saved, "direct_advantage_pct": direct_pct,
                 "by_ota": [{"ota": k, "bookings": v} for k, v in sorted(by_ota.items(), key=lambda x: -x[1])],

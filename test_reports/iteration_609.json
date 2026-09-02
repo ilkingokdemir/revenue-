@@ -1,0 +1,42 @@
+{
+  "summary": "Iter 609 tested end-to-end. Backend 7/7 pytest passing (arrival reminder T-2 for TR booking → mocked email in email_outbox with 'google.com/maps' + 'Giriş saati'; idempotency verified; log entry lang=tr, subject startsWith '2 gün sonra görüşürüz'; DE preview subject startsWith 'Bis in 2 Tagen'; automation/settings lists arrival_reminder + ota_ab_auto_winner; event packages GET public / POST use_default (£25) / PUT enabled false / DELETE ok / DELETE 404; /book with package_id → booking.package.total==50, booking.total==rate*2+50, invalid package_id → 400; A/B auto winner with 25 A views + 25 B views + 5 B bookings + 1 A booking → locked.variant='B', pct=8, emails≥1; ota-conversion returns direct_advantage_pct=8, ab.enabled=false, ab.auto_locked.variant='B'; notification 'A/B kazananı' created). Frontend widget /book/default?lang=tr → be-event-package-* buttons present with text '🎁 Paketli rezerve et · +£25/gece', click seeds selection: be-selected-package chip = 'Etkinlik Paketi: kahvaltı + geç çıkış (14:00) · +£25/gece', 2× be-room-package-* lines appear, room total updates from £200 → £250 (+£50 for 2 nights) → matches spec; be-remove-package clears chip and lines. Admin Booking Engine Manager → 'Misafir Yolculuğu' tab (testid=bea-tab-journey) renders arrival-reminder-card + event-packages-card: arrival-run-now returns toast '0 aday · 0 gönderildi · 0 MOCK…' (correct after cleanup); arrival-preview-de opens arrival-preview-panel with iframe showing 'Bis in 2 Tagen' subject and 'Wir bereiten Ihr Zimmer vor' body; event-package-form add flow succeeds → row 'Test Paket / Test Package · +£10/gece', event-package-toggle-* button label 'Pasifleştir' visible, event-package-delete-* removes row. OTA Commission panel shows ota-ab-card with AKTİF badge + hint 'Kazanan için her varyantta ≥20 gösterim ve ≥2 puan fark gerekir'. All seed / test data cleaned up; exactly one enabled £25 default event package retained under property_id='default'; config restored (ota_ab_enabled=true, direct_advantage_pct=5, ota_ab_variant_b_pct=8, ota_ab_auto_locked unset).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BookingEngineAdmin journey tab", "issue": "Review request specifies data-testid 'journey-tab' but the actual DOM uses 'bea-tab-journey'. All child testids (arrival-*, event-package-*) are correct. Consider adding an alias or renaming to match the documented convention so external test suites relying on 'journey-tab' don't break.", "selector": "[data-testid=\"bea-tab-journey\"]", "priority": "LOW"},
+      {"component": "GuestJourneyCards event-packages-card counter", "issue": "Card header shows 'Etkinlik Paketleri (0)' immediately after adding a new package while the row actually renders in the DOM (event-package-row-<id> present with correct text). Counter appears not to refresh from the same list used for rendering (or filters by property_id !== activePropertyId='all'). Cosmetic mismatch only — CRUD works.", "selector": "[data-testid=\"event-packages-card\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Booking Engine Manager → Misafir Yolculuğu (branch=All Branches)", "issues": ["When branch is 'All Branches', event-packages-card shows 0 rows because default seeded package is scoped to property_id='default'. Users on 'all' scope see empty even though data exists per-property. Consider aggregating or auto-switching scope to a specific property when opening the tab (same class of issue flagged in iter 608 for OTA Commission)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter609.py",
+    "/app/test_reports/pytest/iter609.xml"
+  ],
+  "action_items": [
+    "(Optional) Add 'journey-tab' data-testid alias (or rename) on the Misafir Yolculuğu tab trigger to align with the spec. Current: bea-tab-journey.",
+    "(Optional) Fix event-packages-card header count to reflect rendered rows immediately after add/delete, or filter both by the same active property scope.",
+    "(Optional, iter608 recurrence) Aggregate per-property scopes when activePropertyId='all' so admin sees seeded packages / A/B config across the fleet."
+  ],
+  "critical_code_review_comments": [
+    "routes/pms/arrival_reminder.py: idempotency via booking.arrival_reminder_sent_at + query filter — correct; sends both today+1 and today+2 candidates in one pass; DEFAULT_UPSELLS localised properly.",
+    "arrival_reminder.py: uses `b.get('guest_lang')`; booking_widget writes it as `guest_lang` from `data['lang']` — the widget flow uses `lang`, so upstream callers must send `lang` (not `guest_lang`). Documented in test.",
+    "booking_widget.py create_widget_booking: package_id validation is enabled-aware; correctly returns 400 on unknown id; package total added post-ABS/coupon — order verified.",
+    "run_ab_auto_winner_internal: locks winner, disables ota_ab_enabled, records lock; email_outbox+notifications persisted; guardrail (min 20 views, ≥2 pts diff) matches spec.",
+    "ota_conversion 'all'-scope fallback (any_ab) is applied — good; but event_packages doesn't have the same fallback for 'all', causing the empty admin view flagged above.",
+    "GuestJourneyCards: card header count derives from a possibly stale list state after mutation. Ensure setState uses functional updater or re-fetch on success."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter609.py",
+    "/app/test_reports/iteration_609.json"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% for widget package flow, arrival reminder admin, OTA A/B panel; two minor testid/count cosmetic issues"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (cookie auth via POST /api/auth/login).",
+  "seed_data_creation": "During tests: 1 pay-at-property booking (iter609tr) + 1 iter609pkg booking + 1 package (use_default, deleted) + 25 ota_banner_views(A) + 25 ota_banner_views(B) + 5 bookings ab_variant=B + 1 booking ab_variant=A (all sim:true). All cleaned in test_zz_cleanup. arrival_reminder_log for iter609* also purged. Config restored: ota_ab_enabled=true, direct_advantage_pct=5, ota_ab_variant_b_pct=8, ota_ab_auto_locked $unset. Exactly one enabled £25 default event package remains under property_id='default'.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Server date ≈2026-09-02. Widget booking body uses `lang` (not `guest_lang`) — arrival_reminder reads booking.guest_lang which is stored from `lang`. Journey tab testid is `bea-tab-journey` (not `journey-tab`). Branch selector at [data-testid=\"branch-selector-btn\"]; default admin is 'All Branches'. To view seeded per-property packages, select the specific property (Franziskaner=default). Backend test file: /app/backend/tests/test_iter609.py (7 tests ~3s). Note: uvicorn watch reloads on files under backend/tests — modifying tests during a run can time out first calls; wait ~10s or restart backend before running again.",
+  "rca of the issue": "N/A — no functional bugs. Two minor cosmetic/testid deviations noted."
+}

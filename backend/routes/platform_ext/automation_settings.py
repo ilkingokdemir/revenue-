@@ -74,6 +74,16 @@ JOB_REGISTRY = {
         "description": "Her ayın başında tüm otomasyon motorlarının performans karnesini e-posta ile gönderir.",
         "default_cron": (7, 30), "default_enabled": True, "params": [],
     },
+    "arrival_reminder": {
+        "label": "Ön Varış E-postası", "category": "guest",
+        "description": "Girişe 2 gün kalan misafirlere kendi dilinde (TR/EN/DE) check-in saati, adres + yol tarifi ve ek hizmet teklifleri içeren hatırlatma e-postası gönderir.",
+        "default_cron": (10, 0), "default_enabled": True, "params": [],
+    },
+    "ota_ab_auto_winner": {
+        "label": "OTA Şeridi A/B Kazananı", "category": "revenue",
+        "description": "OTA→direkt şerit A/B testinde her varyant ≥20 gösterim ve dönüşüm farkı ≥2 puan olduğunda kazanan yüzdeyi otomatik sabitler, testi kapatır ve yöneticilere bildirir.",
+        "default_cron": (6, 30), "default_enabled": True, "params": [],
+    },
     "uk_payroll_run": {
         "label": "Bordro Robotu (UK)", "category": "finance",
         "description": "Ayın son günü UK bordrosunu otomatik çalıştırır, payslip'leri üretir ve yöneticilere özet e-postası gönderir.",

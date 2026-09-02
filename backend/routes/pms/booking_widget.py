@@ -257,6 +257,15 @@ def create_booking_widget_router(db, require_roles):
             loyalty_pct = float(data.get("loyalty_discount_pct") or 0)
             rate = round(server_rate * (1 - max(0.0, min(loyalty_pct, 50.0)) / 100), 2)
         total = round(rate * nights * int(data.get("rooms", 1)), 2)
+        package = None
+        if data.get("package_id"):
+            pkg = await db.event_packages.find_one({"id": data["package_id"], "property_id": data["property_id"], "enabled": {"$ne": False}}, {"_id": 0})
+            if not pkg:
+                raise HTTPException(400, "Selected package is no longer available")
+            pkg_total = round(float(pkg.get("price_per_night") or 0) * nights * int(data.get("rooms", 1)), 2)
+            package = {"id": pkg["id"], "name_en": pkg.get("name_en"), "name_tr": pkg.get("name_tr"), "name_de": pkg.get("name_de"),
+                       "price_per_night": pkg.get("price_per_night"), "includes": pkg.get("includes", []), "total": pkg_total}
+            total = round(total + pkg_total, 2)
 
         # ABS — Attribute-Based Selling: seçilen oda özellikleri gecelik ek ücret
         abs_ids = data.get("abs_attribute_ids") or []
@@ -350,6 +359,7 @@ def create_booking_widget_router(db, require_roles):
             "channel_source": (data.get("channel_source") or "direct")[:60],
             "guest_lang": (data.get("lang") or "")[:5],
             "ab_variant": (data.get("ab_variant") or "")[:1].upper(),
+            "package": package,
             "abs_attributes": abs_selected,
             "abs_total": abs_total,
             **({"room_id": abs_room["id"], "room_number": abs_room.get("name", ""),
@@ -538,6 +548,57 @@ def create_booking_widget_router(db, require_roles):
             "pct": float(data.get("pct") or 0), "ts": datetime.now(timezone.utc).isoformat()})
         return {"ok": True}
 
+    AB_MIN_VIEWS, AB_MIN_DIFF_PTS = 20, 2.0
+
+    async def _ab_variants(pid: str, since: str) -> list:
+        out = []
+        for v in ("A", "B"):
+            vviews = await db.ota_banner_views.count_documents({"property_id": pid, "variant": v, "ts": {"$gte": since}})
+            vbks = await db.bookings.count_documents({"property_id": pid, "ab_variant": v, "created_at": {"$gte": since},
+                                                      "channel_source": {"$regex": "^ota_banner:"}, "status": {"$nin": ["cancelled", "no_show"]}})
+            out.append({"variant": v, "views": vviews, "bookings": vbks, "conversion_pct": round(vbks / vviews * 100, 1) if vviews else 0.0})
+        return out
+
+    async def run_ab_auto_winner_internal(property_id: str) -> dict:
+        """Robot: lock the winning banner % when the A/B test is statistically settled (simple threshold rule)."""
+        q = {"ota_ab_enabled": True}
+        if property_id and property_id != "all":
+            q["property_id"] = property_id
+        cfgs = await db.booking_widget_config.find(q, {"_id": 0}).to_list(50)
+        since = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
+        locked, checked = [], 0
+        for c in cfgs:
+            pid = c["property_id"]
+            checked += 1
+            vs = await _ab_variants(pid, since)
+            a, b = vs[0], vs[1]
+            if a["views"] < AB_MIN_VIEWS or b["views"] < AB_MIN_VIEWS or abs(a["conversion_pct"] - b["conversion_pct"]) < AB_MIN_DIFF_PTS:
+                continue
+            win = a if a["conversion_pct"] > b["conversion_pct"] else b
+            pct_a, pct_b = float(c.get("direct_advantage_pct", 5) or 0), float(c.get("ota_ab_variant_b_pct", 8) or 0)
+            win_pct = pct_a if win["variant"] == "A" else pct_b
+            now = datetime.now(timezone.utc).isoformat()
+            lock = {"variant": win["variant"], "pct": win_pct, "at": now, "stats": vs, "prev_a_pct": pct_a, "prev_b_pct": pct_b}
+            await db.booking_widget_config.update_one({"property_id": pid}, {"$set": {
+                "direct_advantage_pct": win_pct, "ota_ab_enabled": False, "ota_ab_auto_locked": lock}})
+            title = f"OTA şeridi A/B kazananı sabitlendi: Varyant {win['variant']} (%{win_pct:g})"
+            msg = (f"A: {a['views']} gösterim / {a['bookings']} rez. (%{a['conversion_pct']}) · B: {b['views']} / {b['bookings']} (%{b['conversion_pct']}). "
+                   f"Şerit yüzdesi %{win_pct:g} olarak sabitlendi, test kapatıldı.")
+            await db.notifications.insert_one({"id": str(uuid.uuid4()), "category": "revenue", "priority": "normal", "title": title,
+                                               "message": msg, "property_id": pid, "read": False, "created_at": now})
+            from routes.platform_ext.mailer import send_email as _mail
+            admins = await db.users.find({"role": {"$in": ["admin", "manager"]}, "email": {"$nin": [None, ""]}}, {"_id": 0, "email": 1}).to_list(30)
+            for u in admins:
+                await _mail(db, u["email"], title, f"<div style='font-family:sans-serif'><h3>{title}</h3><p>{msg}</p></div>", kind="ab_auto_winner", meta={"property_id": pid})
+            locked.append({"property_id": pid, **lock, "emails": len(admins)})
+        return {"ok": True, "checked": checked, "locked": locked}
+
+    router.run_ab_auto_winner_internal = run_ab_auto_winner_internal
+
+    @router.post("/booking-widget/ab-auto-winner/run/{property_id}")
+    async def ab_auto_winner_run(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await run_ab_auto_winner_internal(property_id)
+
     @router.get("/booking-widget/ota-conversion/{property_id}")
     async def ota_conversion(property_id: str, days: int = 90,
                              current_user: dict = Depends(require_roles("admin", "manager"))):
@@ -551,7 +612,7 @@ def create_booking_widget_router(db, require_roles):
         views = await db.ota_banner_views.count_documents(q_views)
         bks = await db.bookings.find(q_book, {"_id": 0, "total": 1, "channel_source": 1, "created_at": 1}).to_list(2000)
         revenue = round(sum(float(b.get("total") or 0) for b in bks), 2)
-        wcfg = await db.booking_widget_config.find_one({"property_id": property_id}, {"_id": 0, "direct_advantage_pct": 1, "ota_ab_enabled": 1, "ota_ab_variant_b_pct": 1}) or {}
+        wcfg = await db.booking_widget_config.find_one({"property_id": property_id}, {"_id": 0, "direct_advantage_pct": 1, "ota_ab_enabled": 1, "ota_ab_variant_b_pct": 1, "ota_ab_auto_locked": 1}) or {}
         if property_id == "all" and not wcfg.get("ota_ab_enabled"):
             # fleet view: reflect any property that has the A/B test switched on
             any_ab = await db.booking_widget_config.find_one({"ota_ab_enabled": True}, {"_id": 0, "direct_advantage_pct": 1, "ota_ab_enabled": 1, "ota_ab_variant_b_pct": 1})
@@ -580,7 +641,8 @@ def create_booking_widget_router(db, require_roles):
                 "revenue": revenue, "commission_saved": commission_saved, "direct_advantage_pct": direct_pct,
                 "by_ota": [{"ota": k, "bookings": v} for k, v in sorted(by_ota.items(), key=lambda x: -x[1])],
                 "ab": {"enabled": bool(wcfg.get("ota_ab_enabled", False)), "variant_b_pct": float(wcfg.get("ota_ab_variant_b_pct", 8) or 0),
-                       "variants": ab, "winner": winner, "min_views_for_winner": 20}}
+                       "variants": ab, "winner": winner, "min_views_for_winner": AB_MIN_VIEWS, "min_diff_pts": AB_MIN_DIFF_PTS,
+                       "auto_locked": wcfg.get("ota_ab_auto_locked")}}
 
     @router.get("/booking-widget/upcoming-events/{property_id}")
     async def upcoming_events(property_id: str, days: int = 90, limit: int = 4):

@@ -1219,6 +1219,24 @@ async def _job_report_card(property_id: str) -> dict:
 
 JOB_HANDLERS["monthly_report_card"] = _job_report_card
 
+from routes.pms.arrival_reminder import create_arrival_reminder_router
+arrival_reminder_router = create_arrival_reminder_router(db, require_roles)
+api_router.include_router(arrival_reminder_router)
+
+async def _job_arrival_reminder(property_id: str) -> dict:
+    try:
+        return await arrival_reminder_router.run_arrival_reminders_internal(property_id or "all")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+JOB_HANDLERS["arrival_reminder"] = _job_arrival_reminder
+
+async def _job_ota_ab_auto_winner(property_id: str) -> dict:
+    try:
+        return await booking_widget_router.run_ab_auto_winner_internal(property_id or "all")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+JOB_HANDLERS["ota_ab_auto_winner"] = _job_ota_ab_auto_winner
+
 async def _job_uk_payroll_run(property_id: str) -> dict:
     try:
         return await uk_payroll_router.run_monthly_payroll_internal(property_id or "all")

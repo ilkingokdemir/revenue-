@@ -82,8 +82,9 @@ const OtaConversionCard = ({ activePropertyId, days }) => {
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <div className="text-xs font-semibold text-violet-900">A/B Testi — şerit mesajı %{d.direct_advantage_pct} (A) vs %{d.ab.variant_b_pct} (B)
               <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] ${d.ab.enabled ? "bg-violet-600 text-white" : "bg-stone-200 text-stone-600"}`} data-testid="ota-ab-status">{d.ab.enabled ? "AKTİF" : "KAPALI"}</span>
+              {d.ab.auto_locked && <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-600 text-white" title={`${d.ab.auto_locked.at?.slice(0, 10)} — A %${d.ab.auto_locked.stats?.[0]?.conversion_pct} / B %${d.ab.auto_locked.stats?.[1]?.conversion_pct}`} data-testid="ota-ab-auto-locked">🤖 otomatik sabitlendi: Varyant {d.ab.auto_locked.variant} · %{d.ab.auto_locked.pct}</span>}
             </div>
-            <div className="text-[11px] text-stone-500">{d.ab.winner ? <>Kazanan: <b className="text-violet-800" data-testid="ota-ab-winner">Varyant {d.ab.winner}</b></> : `Kazanan için her varyantta ≥${d.ab.min_views_for_winner} gösterim gerekir`}</div>
+            <div className="text-[11px] text-stone-500">{d.ab.winner ? <>Kazanan: <b className="text-violet-800" data-testid="ota-ab-winner">Varyant {d.ab.winner}</b> · robot 06:30'da sabitler</> : `Kazanan için her varyantta ≥${d.ab.min_views_for_winner} gösterim ve ≥${d.ab.min_diff_pts ?? 2} puan fark gerekir`}</div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {d.ab.variants.map(v => (

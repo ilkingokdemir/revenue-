@@ -114,6 +114,8 @@ export default function BookingWidgetPage({ propertyId }) {
   const [otaDismissed, setOtaDismissed] = useState(false);
   const { lang, setLang, t, nightsLabel, pick } = useWidgetLang();
   const [upcomingEvents, setUpcomingEvents] = useState([]);
+  const [eventPackages, setEventPackages] = useState([]);
+  const [selectedPackage, setSelectedPackage] = useState(null);
   const abVariant = useMemo(() => {
     let v = localStorage.getItem("be_ab_variant");
     if (v !== "A" && v !== "B") { v = Math.random() < 0.5 ? "A" : "B"; localStorage.setItem("be_ab_variant", v); }
@@ -121,6 +123,7 @@ export default function BookingWidgetPage({ propertyId }) {
   }, []);
   useEffect(() => {
     axios.get(`${API}/booking-widget/upcoming-events/${propertyId}?days=90&limit=4`).then(({ data }) => setUpcomingEvents(data.events || [])).catch(() => {});
+    axios.get(`${API}/arrival-reminder/event-packages/${propertyId}`).then(({ data }) => setEventPackages((data || []).filter((p) => p.enabled !== false))).catch(() => {});
   }, [propertyId]);
   const [selected, setSelected] = useState(null);
   const [searching, setSearching] = useState(false);
@@ -262,6 +265,7 @@ export default function BookingWidgetPage({ propertyId }) {
   }, [propertyId]);
 
   const nights = (() => { try { return Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000)); } catch { return 1; } })();
+  const pkgTotal = selectedPackage ? Number(selectedPackage.price_per_night || 0) * nights * roomCount : 0;
 
   useEffect(() => {
     if (selected && nights > 0 && roomCount > 0 && ecoBadge?.show_badge) {
@@ -361,6 +365,7 @@ export default function BookingWidgetPage({ propertyId }) {
         abs_attribute_ids: absSelected,
         origin_url: window.location.origin,
         channel_source: otaSource ? `ota_banner:${otaSource === "__generic__" ? "ota" : otaSource}` : "direct",
+        package_id: selectedPackage?.id || null,
         lang,
         ab_variant: otaSource ? (abOn ? abVariant : "A") : "",
       });
@@ -577,10 +582,16 @@ export default function BookingWidgetPage({ propertyId }) {
             <div className="flex items-center gap-2 text-xs text-stone-500"><span className="text-lg leading-none">{e.icon}</span>{pick(e, "label")}</div>
             <div className="font-semibold text-stone-800 text-sm leading-snug line-clamp-2">{e.name}</div>
             <div className="text-xs text-stone-500">{e.date}{e.end_date !== e.date ? ` → ${e.end_date}` : ""}</div>
-            <button onClick={() => search({ ci: e.suggest_check_in, co: e.suggest_check_out })}
+            <button onClick={() => { setSelectedPackage(null); search({ ci: e.suggest_check_in, co: e.suggest_check_out }); }}
               className="mt-auto text-xs font-semibold px-3 py-2 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors" data-testid={`be-event-book-${e.date}`}>
               {t("events_book_early")}
             </button>
+            {eventPackages[0] && (
+              <button onClick={() => { setSelectedPackage(eventPackages[0]); search({ ci: e.suggest_check_in, co: e.suggest_check_out }); }}
+                className="text-xs font-semibold px-3 py-2 rounded-lg text-white hover:opacity-90 transition-opacity" style={{ backgroundColor: ac }} data-testid={`be-event-package-${e.date}`}>
+                🎁 {t("events_book_package")} · +{cur(eventPackages[0].price_per_night, cc)}{t("per_night")}
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -818,6 +829,12 @@ export default function BookingWidgetPage({ propertyId }) {
             <div className="flex items-center gap-2"><svg className="w-5 h-5 text-[#1a3c5e]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               <span className="font-semibold text-stone-800">{fmtDate(checkIn)} — {fmtDate(checkOut)}</span><span className="text-stone-400">({nightsLabel(nights)})</span></div>
             <div className="text-stone-500">{guests} {t("adults")} · {children} {t("children")} · {roomCount} {t("room")}</div>
+            {selectedPackage && (
+              <span className="inline-flex items-center gap-1.5 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-full px-2.5 py-1" data-testid="be-selected-package">
+                🎁 {pick(selectedPackage, "name")} · +{cur(selectedPackage.price_per_night, cc)}{t("per_night")}
+                <button onClick={() => setSelectedPackage(null)} className="ml-1 text-amber-600 hover:text-amber-900" aria-label="remove" data-testid="be-remove-package">×</button>
+              </span>
+            )}
             <button onClick={() => setStep("home")} className="ml-auto text-[#1a3c5e] font-medium hover:underline text-xs" data-testid="be-modify-search">{t("modify_search")}</button>
           </div>
         </div>
@@ -858,7 +875,8 @@ export default function BookingWidgetPage({ propertyId }) {
                     {r.price_explanation?.vs_base_pct < -2
                       ? <div className="text-xs text-stone-400 line-through" data-testid={`be-standard-rate-${r.room_type_id}`}>{cur(r.price_explanation.base_total, cc)}</div>
                       : !r.price_explanation && <div className="text-xs text-stone-400 line-through">{cur(r.base_rate * 1.15, cc)}</div>}
-                    <div className="text-2xl font-bold" style={{ color: ac }}>{cur(r.total_rate, cc)}</div>
+                    <div className="text-2xl font-bold" style={{ color: ac }}>{cur(r.total_rate + pkgTotal, cc)}</div>
+                    {selectedPackage && <div className="text-[11px] text-amber-700" data-testid={`be-room-package-${r.room_type_id}`}>🎁 {pick(selectedPackage, "name")} · +{cur(pkgTotal, cc)}</div>}
                     <div className="text-xs text-stone-400">{nightsLabel(nights)} · {cur(r.base_rate, cc)}{t("per_night")} · {t("incl_taxes")}</div>
                     {showOtaBanner && directPct > 0 && (
                       <div className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-2 py-1" data-testid={`be-ota-compare-${r.room_type_id}`}>
@@ -1106,6 +1124,7 @@ export default function BookingWidgetPage({ propertyId }) {
                 <div className="flex justify-between"><span className="text-stone-500 font-medium">{t("total")}</span><span className="text-2xl font-bold" style={{ color: ac }}>{(() => {
                   let t = selected?.total_rate || 0;
                   if (loyalty?.is_member && loyalty.discount_pct > 0) t = Number((t * (1 - loyalty.discount_pct / 100)).toFixed(2));
+                  t += pkgTotal;
                   t += absSelected.reduce((s, id) => s + ((absAttrs.find(x => x.id === id)?.price || 0) * nights * roomCount), 0);
                   if (coupon.applied?.discount_pct) t = Number((t * (1 - coupon.applied.discount_pct / 100)).toFixed(2));
                   if (carbonOffset.opt_in) t += carbonOffset.total_fee;

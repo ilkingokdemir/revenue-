@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
+import { EventPackagesCard, ArrivalReminderCard } from "./bookingengine/GuestJourneyCards";
+
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 /* ─── DRAG & DROP ROOM PHOTO UPLOADER ─── */
@@ -302,6 +304,7 @@ const tabs = [
   { id: "photos", label: "Room Photos" },
   { id: "reviews", label: "Guest Reviews" },
   { id: "theme", label: "Theme & Branding" },
+  { id: "journey", label: "Misafir Yolculuğu" },
   { id: "embed", label: "Embed Widget" },
 ];
 
@@ -418,7 +421,7 @@ const EmbedCodePanel = ({ propertyId }) => {
 export const BookingEngineAdmin = ({ properties, activePropertyId }) => {
   const [tab, setTab] = useState("photos");
   const [rooms, setRooms] = useState([]);
-  const pid = activePropertyId || "all";
+  const pid = (!activePropertyId || activePropertyId === "all") ? (properties?.[0]?.id || "default") : activePropertyId;
 
   const loadRooms = useCallback(async () => {
     try {
@@ -478,6 +481,7 @@ export const BookingEngineAdmin = ({ properties, activePropertyId }) => {
           )}
           {tab === "reviews" && <ReviewsManager propertyId={pid} />}
           {tab === "theme" && <ThemeConfig propertyId={pid} />}
+          {tab === "journey" && <div className="space-y-4" data-testid="journey-tab"><ArrivalReminderCard propertyId={pid} /><EventPackagesCard propertyId={pid} /></div>}
           {tab === "embed" && <EmbedCodePanel propertyId={pid} />}
         </motion.div>
       </AnimatePresence>

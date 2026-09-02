@@ -1501,3 +1501,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - (b) Çıkış sonrası yorum: bookings.py mevcut _send_review_collection_email TR/EN/DE (REVIEW_T) + mailer (MOCK) + booking.review_request_sent_at/lang; run_review_requests_internal (checkout 1-7 gün önce, sorulmamış, guest_reviews varsa atla). Mevcut POST /review-collection/send/{pid} bunu kullanır; JOB 'review_request' (11:00, guest) server.py JOB_HANDLERS.
 - (c) Paket satış raporu: ota-conversion yanıtına packages{bookings, revenue, attach_rate_pct, widget_bookings, by_package}; OTACommissionPanel package-sales-card.
 - MOCK: Resend, Twilio.
+
+## Güncelleme (Faz 29 — küçük genişletmeler, yeni modül YOK; curl+screenshot ile doğrulandı)
+- /review sayfası (ReviewCollectionPage.js) ?lang=tr|en|de (yoksa navigator.language) → tüm metinler + tarih locale çevrildi (R sözlüğü, data-testid review-title).
+- Upsell kabul bildirimi: upsell_engine.claim_upsell → db.notifications (category upsell, priority high, booking_id) "Misafir ekstra ekledi: …".
+- Sabah Karnesi (morning_karne.build_karne) yeni satır "Misafir robotları (24s)": ön varış e-postası sayısı · yorum isteği sayısı · (varsa) A/B kazanan sabitlendi.

@@ -75,6 +75,12 @@ async def build_karne(db, pid: str) -> Dict:
     hi_notif = await db.notifications.count_documents(
         {"property_id": pid, "priority": "high", "read": False})
     ladder_week = await compute_ladder_weekly(db, pid)
+    # Misafir robotları (24s): ön varış e-postası · yorum isteği · OTA A/B kazanan
+    pq = {"property_id": pid} if pid != "all" else {}
+    arr_n = await db.arrival_reminder_log.count_documents({**pq, "sent_at": {"$gte": since24}})
+    rev_n = await db.bookings.count_documents({**pq, "review_request_sent_at": {"$gte": since24, "$regex": "^20"}})
+    ab_cfg = await db.booking_widget_config.find_one({**pq, "ota_ab_auto_locked.at": {"$gte": since24}}, {"_id": 0, "ota_ab_auto_locked": 1})
+    ab_txt = f", A/B kazanan sabitlendi (Varyant {ab_cfg['ota_ab_auto_locked']['variant']} %{ab_cfg['ota_ab_auto_locked']['pct']:g})" if ab_cfg else ""
 
     checks = [
         ("Doluluk (bugün)", f"%{occ} — {in_house}/{total_rooms} oda", "ok"),
@@ -89,6 +95,7 @@ async def build_karne(db, pid: str) -> Dict:
          "ok" if (not sf or sf.get("flagged", 0) == 0) else "warn"),
         ("5xx hataları (24s)", f"{errors_5xx} hata", "ok" if errors_5xx == 0 else "warn"),
         ("Okunmamış yüksek öncelik bildirim", f"{hi_notif} adet", "ok" if hi_notif < 5 else "warn"),
+        ("Misafir robotları (24s)", f"{arr_n} ön varış e-postası · {rev_n} yorum isteği{ab_txt}", "ok"),
     ]
     grade = "A" if all(c[2] == "ok" for c in checks) else ("B" if sum(1 for c in checks if c[2] != "ok") <= 2 else "C")
     return {"date": today, "grade": grade, "occ": occ,

@@ -179,6 +179,13 @@ def create_upsell_router(db, require_roles, LlmChat, UserMessage):
             return _claim_page(t[2], t[1].format(label=tk["label"], ref=tk.get("booking_ref", ""), amount=tk["amount_label"]), True)
         await _apply_upsell(tk["booking_id"], "addon", float(tk["amount"]), tk["label"], tk.get("guest_email", "guest"), source="pre_arrival_email")
         await db.upsell_claim_tokens.update_one({"token": token}, {"$set": {"used_at": datetime.now(timezone.utc).isoformat()}})
+        bk = await db.bookings.find_one({"id": tk["booking_id"]}, {"_id": 0, "property_id": 1, "guest_name": 1, "check_in": 1, "room_type": 1}) or {}
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "category": "upsell", "priority": "high", "title": f"Misafir ekstra ekledi: {tk['label']}",
+            "message": (f"{bk.get('guest_name') or tk.get('guest_email', '')} ({tk.get('booking_ref', '')}, giriş {bk.get('check_in', '')}, "
+                        f"{bk.get('room_type', '')}) e-postadan '{tk['label']}' ekledi — {tk['amount_label']} otelde tahsil edilecek, folyoya işlendi."),
+            "property_id": bk.get("property_id", ""), "booking_id": tk["booking_id"], "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat()})
         return _claim_page(t[0], t[1].format(label=tk["label"], ref=tk.get("booking_ref", ""), amount=tk["amount_label"]), True)
 
     @router.get("/revenue/upsell/stats/{property_id}")

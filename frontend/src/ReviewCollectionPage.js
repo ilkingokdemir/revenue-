@@ -4,10 +4,27 @@ import { Star, CheckCircle, Buildings, Heart } from "@phosphor-icons/react";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+const R = {
+  en: { load_err: "Unable to load review page", pick: "Please select a rating", write: "Please write a short review", fail: "Submission failed", retry: "Failed to submit. Please try again.",
+    invalid: "Review Link Invalid", invalid_p: "This review link may have expired or is incomplete.", thanks: "Thank You!", thanks_p: "Your feedback means the world to us. It helps other guests and helps us improve.",
+    stars: ["", "Poor", "Fair", "Good", "Very Good", "Excellent"], how: "How was your stay?", honest: "Your honest feedback helps us improve",
+    title_ph: "Summarize your experience (optional)", text_ph: "Tell us about your stay — the room, service, location, anything that stood out...", submit: "Submit Review", public: "Your review will be shared publicly to help future guests", locale: "en-GB" },
+  tr: { load_err: "Yorum sayfası yüklenemedi", pick: "Lütfen bir puan seçin", write: "Lütfen kısa bir yorum yazın", fail: "Gönderim başarısız", retry: "Gönderilemedi. Lütfen tekrar deneyin.",
+    invalid: "Yorum Bağlantısı Geçersiz", invalid_p: "Bu bağlantının süresi dolmuş ya da eksik olabilir.", thanks: "Teşekkürler!", thanks_p: "Geri bildiriminiz bizim için çok değerli. Diğer misafirlere ve gelişmemize yardımcı olur.",
+    stars: ["", "Zayıf", "Orta", "İyi", "Çok İyi", "Mükemmel"], how: "Konaklamanız nasıldı?", honest: "Dürüst geri bildiriminiz gelişmemize yardımcı olur",
+    title_ph: "Deneyiminizi özetleyin (isteğe bağlı)", text_ph: "Konaklamanızı anlatın — oda, hizmet, konum, öne çıkan her şey...", submit: "Yorumu Gönder", public: "Yorumunuz gelecek misafirlere yardımcı olmak için herkese açık paylaşılır", locale: "tr-TR" },
+  de: { load_err: "Bewertungsseite konnte nicht geladen werden", pick: "Bitte wählen Sie eine Bewertung", write: "Bitte schreiben Sie eine kurze Bewertung", fail: "Übermittlung fehlgeschlagen", retry: "Senden fehlgeschlagen. Bitte erneut versuchen.",
+    invalid: "Bewertungslink ungültig", invalid_p: "Dieser Link ist möglicherweise abgelaufen oder unvollständig.", thanks: "Vielen Dank!", thanks_p: "Ihr Feedback bedeutet uns viel. Es hilft anderen Gästen und uns, besser zu werden.",
+    stars: ["", "Schlecht", "Mässig", "Gut", "Sehr gut", "Ausgezeichnet"], how: "Wie war Ihr Aufenthalt?", honest: "Ihr ehrliches Feedback hilft uns, besser zu werden",
+    title_ph: "Fassen Sie Ihr Erlebnis zusammen (optional)", text_ph: "Erzählen Sie von Ihrem Aufenthalt — Zimmer, Service, Lage, alles, was auffiel...", submit: "Bewertung senden", public: "Ihre Bewertung wird öffentlich geteilt, um künftigen Gästen zu helfen", locale: "de-DE" },
+};
+
 export default function ReviewCollectionPage() {
   const params = new URLSearchParams(window.location.search);
   const propertyId = params.get("property") || "";
   const bookingRef = params.get("ref") || "";
+  const langParam = (params.get("lang") || (navigator.language || "en").slice(0, 2)).toLowerCase();
+  const t = R[langParam] || R.en;
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -23,22 +40,22 @@ export default function ReviewCollectionPage() {
     fetch(`${API}/review-collection/page/${propertyId}/${bookingRef}`)
       .then(r => r.json())
       .then(d => { setData(d); if (d.already_reviewed) setSubmitted(true); })
-      .catch(() => setError("Unable to load review page"))
+      .catch(() => setError(t.load_err))
       .finally(() => setLoading(false));
   }, [propertyId, bookingRef]);
 
   const handleSubmit = async () => {
-    if (rating === 0) { setError("Please select a rating"); return; }
-    if (!reviewText.trim()) { setError("Please write a short review"); return; }
+    if (rating === 0) { setError(t.pick); return; }
+    if (!reviewText.trim()) { setError(t.write); return; }
     setError("");
     try {
       const res = await fetch(
         `${API}/review-collection/submit?property_id=${propertyId}&booking_ref=${bookingRef}&rating=${rating}&title=${encodeURIComponent(title)}&review_text=${encodeURIComponent(reviewText)}&guest_name=${encodeURIComponent(data?.booking?.guest_name || "")}`,
         { method: "POST" }
       );
-      if (!res.ok) { const d = await res.json(); setError(d.detail || "Submission failed"); return; }
+      if (!res.ok) { const d = await res.json(); setError(d.detail || t.fail); return; }
       setSubmitted(true);
-    } catch { setError("Failed to submit. Please try again."); }
+    } catch { setError(t.retry); }
   };
 
   if (loading) return (
@@ -51,8 +68,8 @@ export default function ReviewCollectionPage() {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-lg p-8 text-center max-w-md">
         <Buildings size={48} className="mx-auto text-slate-300 mb-4" />
-        <h1 className="text-xl font-bold text-slate-800">Review Link Invalid</h1>
-        <p className="text-slate-500 mt-2">This review link may have expired or is incomplete.</p>
+        <h1 className="text-xl font-bold text-slate-800">{t.invalid}</h1>
+        <p className="text-slate-500 mt-2">{t.invalid_p}</p>
       </div>
     </div>
   );
@@ -63,8 +80,8 @@ export default function ReviewCollectionPage() {
         <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <Heart size={32} weight="fill" className="text-emerald-600" />
         </div>
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">Thank You!</h1>
-        <p className="text-slate-500">Your feedback means the world to us. It helps other guests and helps us improve.</p>
+        <h1 className="text-2xl font-bold text-slate-900 mb-2">{t.thanks}</h1>
+        <p className="text-slate-500">{t.thanks_p}</p>
         <div className="flex justify-center gap-1 mt-4">
           {[1,2,3,4,5].map(s => <Star key={s} size={24} weight="fill" className={s <= rating ? "text-amber-400" : "text-slate-200"} />)}
         </div>
@@ -72,7 +89,7 @@ export default function ReviewCollectionPage() {
     </div>
   );
 
-  const starLabels = ["", "Poor", "Fair", "Good", "Very Good", "Excellent"];
+  const starLabels = t.stars;
   const activeRating = hoverRating || rating;
 
   return (
@@ -83,13 +100,13 @@ export default function ReviewCollectionPage() {
           <Buildings size={28} weight="fill" className="mx-auto mb-2 opacity-70" />
           <h1 className="text-xl font-bold">{data.property?.name}</h1>
           <p className="text-sm opacity-70 mt-1">
-            {data.booking?.guest_name} &middot; {data.booking?.check_in && new Date(data.booking.check_in).toLocaleDateString("en-GB", { month: "short", day: "numeric" })} — {data.booking?.check_out && new Date(data.booking.check_out).toLocaleDateString("en-GB", { month: "short", day: "numeric", year: "numeric" })}
+            {data.booking?.guest_name} &middot; {data.booking?.check_in && new Date(data.booking.check_in).toLocaleDateString(t.locale, { month: "short", day: "numeric" })} — {data.booking?.check_out && new Date(data.booking.check_out).toLocaleDateString(t.locale, { month: "short", day: "numeric", year: "numeric" })}
           </p>
         </div>
 
         <div className="p-6">
-          <h2 className="text-lg font-semibold text-slate-900 text-center mb-1">How was your stay?</h2>
-          <p className="text-sm text-slate-500 text-center mb-6">Your honest feedback helps us improve</p>
+          <h2 className="text-lg font-semibold text-slate-900 text-center mb-1" data-testid="review-title">{t.how}</h2>
+          <p className="text-sm text-slate-500 text-center mb-6">{t.honest}</p>
 
           {/* Star Rating */}
           <div className="text-center mb-6" data-testid="star-rating">
@@ -107,13 +124,13 @@ export default function ReviewCollectionPage() {
 
           {/* Title */}
           <input value={title} onChange={e => setTitle(e.target.value)}
-            placeholder="Summarize your experience (optional)"
+            placeholder={t.title_ph}
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm mb-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             data-testid="review-title-input" />
 
           {/* Review Text */}
           <textarea value={reviewText} onChange={e => setReviewText(e.target.value)}
-            placeholder="Tell us about your stay — the room, service, location, anything that stood out..."
+            placeholder={t.text_ph}
             rows={4} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none mb-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             data-testid="review-text-input" />
 
@@ -122,9 +139,9 @@ export default function ReviewCollectionPage() {
           <button onClick={handleSubmit} disabled={rating === 0}
             className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-semibold text-sm hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             data-testid="submit-review-btn">
-            <CheckCircle size={18} weight="bold" /> Submit Review
+            <CheckCircle size={18} weight="bold" /> {t.submit}
           </button>
-          <p className="text-[11px] text-slate-400 text-center mt-3">Your review will be shared publicly to help future guests</p>
+          <p className="text-[11px] text-slate-400 text-center mt-3">{t.public}</p>
         </div>
       </div>
     </div>

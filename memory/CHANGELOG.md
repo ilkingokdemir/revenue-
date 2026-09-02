@@ -4117,3 +4117,24 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   ekran görüntüsüyle (compare tablosu + 8 ataç butonu render).
 - TEST AJANI NOTU: Sidebar bölüm başlıklarında data-testid ZATEN VAR: `nav-section-{label}`
   (örn. nav-section-Operations) — UI otomasyonunda önce PRO toggle, sonra bu testid'e tıkla.
+
+## Iter 604 (2026-09-01) — SSP + İzin Takvimi + Belge Hatırlatıcısı
+- SSP 2026/27 (yeni kurallar: bekleme günü yok, LEL yok): haftalık min(£123.25, AWE×%80);
+  AWE son 2 ay payslip brütü/8.667. Onaylı sick izinlerin ay içi iş günleri (Pzt-Cum)
+  bordroya otomatik eklenir (brüte dahil → vergi+NI'a tabi). Vardiyasız hasta personel için
+  SSP-only satır. UI: bordro tablosunda pembe SSP sütunu + payslip PDF'te SSP satırı.
+  BUG FIX: dict.get(default) eager evaluation — items[] boşken items[0] IndexError (satır 414).
+- İzin Takvimi: GET /uk-payroll/leave-calendar/{pid} + 5. yönetici sekmesi. Renkli çipler
+  (yıllık yeşil/hastalık amber/ücretsiz gri/TOIL mavi, pending soluk), 2+ onaylı izin çakışan
+  günler kırmızı (staff_id bazlı) + çakışma rozeti, ←/→ ay gezinme.
+  BUG FIX: calDate useState TDZ hatası (now tanımından önce kullanım) — lazy initializer.
+- Belge Süresi Hatırlatıcısı: belge upload'a expiry_date (ops.); GET /documents/expiring;
+  18. motor doc_expiry_alert (hr, 09:00) → 60 gün kala hr_doc_expiry bildirimi + yönetici
+  e-postası (mock), expiry_alerted_at dedupe. UI: Personel & İK'da amber banner + dialog
+  bitiş tarihi alanı/kırmızı etiket.
+- Canlı Bildirimler: kullanıcıdan Resend/Twilio anahtarları İSTENDİ, "devam et" yanıtı geldi
+  (5. kez anahtar sağlanmadı) — MOCK modda devam. Anahtarlar gelirse: backend/.env'e
+  RESEND_API_KEY, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM ekle +
+  supervisorctl restart backend. Kod hazır, otomatik canlıya geçer.
+- Test: iteration_604.json — kümülatif 44/44 pytest (bug fix sonrası), frontend %100
+  (takvim, SSP sütunu, expiring banner, testid'ler). nav-section-Operations navigasyon çözümü doğrulandı.

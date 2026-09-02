@@ -723,6 +723,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   iteration_603: backend 35/35 kümülatif. Detay: CHANGELOG.md iter 603.
 - UI otomasyon notu: sidebar bölüm testid'i `nav-section-{label}` (örn. nav-section-Operations).
 
+## Güncelleme (2026-09-01, iter 604) — SSP + İzin Takvimi + Belge Hatırlatıcısı
+- SSP 2026/27 otomatik bordro entegrasyonu (SSP-only satır dahil), renkli izin takvimi
+  (çakışma vurgulu, 5. sekme), belge süresi hatırlatıcısı (18. motor, 60 gün eşiği).
+  iteration_604: 44/44 kümülatif pytest. Detay: CHANGELOG.md iter 604.
+- Resend/Twilio anahtarları 5. kez istendi, sağlanmadı — MOCK devam (bkz CHANGELOG geçiş adımları).
+
 ## NOT: Iter 432+ kayıtları /app/memory/CHANGELOG.md dosyasına taşındı (700 satır limiti).
 
 ## Güncelleme (2026-08-14, iter 545)

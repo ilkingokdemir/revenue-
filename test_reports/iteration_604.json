@@ -1,0 +1,41 @@
+{
+  "summary": "UK Payroll iter604 — 3 yeni özellik (SSP / Yasal Hastalık Ödemesi, İzin Takvimi, Belge Süresi Hatırlatıcısı) uçtan uca test edildi. Backend pytest iter604 8 passed + 1 xfail (belgelenmiş backend bug), iter600-603 regression 35/35 PASS. TOPLAM 43 passed, 1 xfailed, ~22sn. FRONTEND: nav-section-Operations → uk-payroll-btn → panel açıldı; 5. sekme 'İzin Takvimi' (ukp-tab-leave-calendar) grid + ukp-cal-prev/next düzgün çalışıyor; Aylık Bordro tablosunda 'SSP' sütun başlığı mevcut; Personel & İK sekmesinde ukp-expiring-docs amber banner 'Ayşe Yılmaz · Vize/Çalışma izni · 2026-10-01 (30 gün kaldı)' render edildi; ukp-docs-{id} → İK Belgeleri dialogunda 'Bitiş tarihi (ops.)' + docs-expiry-input alanı + yüklü belgede kırmızı 'Bitiş: 2026-10-01' etiketi görüldü. Tüm test verileri temizlendi.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/uk-payroll/preview/all", "issue": "SSP-only satır (approved sick leave ama o ayda vardiyası olmayan personel) için _compute_month satır 414'te IndexError: list index out of range. Sebep: `s.get('role', items[0].get('role', ''))` — Python default argument'i her zaman evaluate ettiği için items=[] olduğunda items[0] KeyError/IndexError atar. by_staff[sid]=[] atandığı SSP-only durumda kesin patlıyor. Düzeltme: `items[0].get('role', '') if items else ''` kullanılmalı; aynı bug shift_ids ve base_earned=0 için `hours` hesaplarında sorun oluşturmuyor ama role satırında crash oluşuyor. 500 dönüyor.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_uk_payroll_iter604.py",
+    "/app/test_reports/pytest/iter604_results.xml",
+    "/app/test_reports/pytest/iter600_604_all.xml"
+  ],
+  "action_items": [
+    "CRITICAL: uk_payroll.py satır 414 SSP-only bug: `items[0].get('role', '')` → `(items[0].get('role','') if items else '')` (veya benzer güvenli erişim). Aynı zamanda `shift_ids` üzerinde de items boş olabilir; test edildi ama patlamıyor çünkü liste comprehension boş listeye tolerant. Yine de defensive coding önerilir. Bu bug SSP-only kullanım senaryosunu tamamen bozuyor — user 'vardiyası hiç olmayan ama hasta olan personel için SSP-only bordro satırı oluşur' beklentisi problem statement'ta açıkça belirtilmiş.",
+    "Opsiyonel: leave-calendar overlap sadece 'staff_name' benzersizliğine bakıyor (approved_names set). staff_name'i boş string olan personeller varsa (curl'da employees/all'da 3 personelde name='') bunlar tek bir '' olarak sayılır ve overlap kaçırılabilir. staff_id kullanılması daha güvenli."
+  ],
+  "critical_code_review_comments": [
+    "SSP-only path bug (line 414) — bkz backend_issues.critical",
+    "leave-calendar: `approved_names = {e['staff_name'] for e in entries if e['status']=='approved'}` — staff_name boş olabilir; staff_id set kullanılmalı",
+    "uk_payroll.py hâlâ >1300 satır; iter603'te önerilen modül ayrımı (leave_routes/docs_routes/bacs_routes) yapılmadı",
+    "run_doc_expiry_check_internal: email regex `test|example` — 'test' içeren gerçek domainler (test.co.uk gibi) filtrelenir; ADMIN_EMAIL 'admin@hotelbox.com' geçiyor ama seed edilen 'test_owner_*' hesapları es geçiliyor (istenen davranış olabilir ama test için özel-case eklenmeli)",
+    "SSP AWE hesabı: `awe_gross[sid] / 8.667` — 2 aylık gross'u 8.667 haftaya bölüyor; 8.667 = 26/3 (approx). Doğru formül ancak hardcode magic number; sabit olarak `SSP_AWE_WEEKS = 8.667` tanımlanabilir",
+    "SSP: qualifying_days_per_week=5 hardcoded — vardiya deseni Pzt-Cum varsayımı; iş günleri farklı çalışan (hafta sonu vardiyalı) için yanlış SSP verir. Personel bazında pattern eklenmesi ideal ama MVP için OK"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_uk_payroll_iter604.py (new — 9 test, 8 pass + 1 xfail)"
+  ],
+  "success_rate": {"backend": "89% (8/9 iter604 fonksiyonel PASS + 1 xfail belgelenmiş bug; 43/44 kümülatif iter600-604 dahil regression) — SSP-only path backend bugu nedeniyle 1 test xfail", "frontend": "100% — nav-section-Operations, uk-payroll-btn, ukp-tab-leave-calendar, ukp-leave-calendar, ukp-cal-prev/next, SSP sütun başlığı, ukp-expiring-docs banner, ukp-docs-{id}, docs-expiry-input, kırmızı 'Bitiş:' etiketi hepsi doğrulandı"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Geçici test verileri (hepsi cleanup edildi): (a) Ayşe Yılmaz'a Mayıs 2026 5 iş günlük approved sick leave (SSP testi), (b) hafta sonu sick leave (weekend zero), (c) İzin takvimi için 2 farklı personele 2026-05-13 approved + 1 pending 2026-05-20, (d) Bir HR belgesi (visa, expiry=+30 gün, curl+frontend testi için). Notifications hr_doc_expiry kayıtları da temizlendi. Nisan+Mayıs 2026 payroll run'ları KALICI korundu.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "iter604 backend 3 özellik %100 test edildi. SSP-only satır senaryosunda bir HIGH öncelikli bug bulundu (uk_payroll.py:414 — Python default argument evaluation). Ana ajan curl ile SSP-only akışını test etmemişti; testing agent bunu keşfetti. Ana ajan bu satırı düzelttikten sonra iter604 xfail testi 'expected fail' işaretinden çıkarılıp normal test olarak koşulmalı. Diğer tüm akışlar (Ayşe 5 iş günü SSP, weekend zero SSP, leave-calendar overlap, pending görüntüsü, month=13→400, doc upload+expiry+dedupe, automation/settings 31 motor + doc_expiry_alert) PASS. Frontend UI tüm testids doğrulandı (nav-section-Operations, ukp-*, docs-expiry-input, ukp-expiring-docs). Prev iterasyonlardan farklı olarak: nav-section-Operations testid artık kesin çalışıyor, sidebar navigation blocker'ı çözülmüş.",
+  "rca of the issue": "SSP-only IndexError: /app/backend/routes/hotel_ops/uk_payroll.py satır 366-369'da `if sid and sid not in by_staff and sid in smap: by_staff[sid] = []` ile boş items listesi atanıyor. Satır 414'te `s.get('role', items[0].get('role', ''))` — dict.get() her zaman DEFAULT parametresini evaluate eder (lazy değil), items=[] iken items[0] → IndexError. Reproduction: aktif bir personelin ID'sine, hiç shift olmadan approved sick leave insert et → GET /api/uk-payroll/preview/all?year=Y&month=M → 500. Fix: `items[0].get('role','') if items else ''` şeklinde koşullu erişim yap."
+}

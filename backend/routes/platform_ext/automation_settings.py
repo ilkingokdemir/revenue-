@@ -84,6 +84,11 @@ JOB_REGISTRY = {
         "description": "Personele yarınki vardiyasını e-posta ve WhatsApp ile hatırlatır (opsiyonel — buradan açıp kapatabilirsiniz).",
         "default_cron": (16, 0), "default_enabled": True, "params": [],
     },
+    "doc_expiry_alert": {
+        "label": "Belge Süresi Hatırlatıcısı", "category": "hr",
+        "description": "Vize, pasaport gibi İK belgelerinin bitiş tarihini izler; 60 gün kala yöneticilere bildirim ve e-posta gönderir.",
+        "default_cron": (9, 0), "default_enabled": True, "params": [],
+    },
     "weekly_report": {
         "label": "Haftalık Yönetim Raporu", "category": "reporting",
         "description": "Her pazartesi son 7 günün anahtar göstergelerini önceki hafta karşılaştırmasıyla e-postalar.",

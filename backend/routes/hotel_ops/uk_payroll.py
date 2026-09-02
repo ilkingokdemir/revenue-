@@ -35,6 +35,11 @@ HOLIDAY_ACCRUAL_PCT = 0.1207  # 12.07% statutory holiday accrual for irregular h
 PEN_LEL_M, PEN_TRIGGER_M, PEN_UEL_M = 520.0, 833.0, 4189.0
 PEN_EE_RATE, PEN_ER_RATE = 0.05, 0.03
 PEN_MIN_AGE, PEN_MAX_AGE = 22, 66
+# Statutory Sick Pay 2026/27 (from 6 Apr 2026: no waiting days, no LEL; lower of flat rate or 80% AWE)
+SSP_WEEKLY = 123.25
+SSP_AWE_PCT = 0.80
+SSP_QUALIFYING_DAYS_PER_WEEK = 5
+DOC_EXPIRY_HORIZON_DAYS = 60
 
 HR_FIELDS = ["dob", "ni_number", "tax_code", "starter_declaration", "contract_type",
              "start_date", "bank_sort_code", "bank_account_no", "student_loan_plans",
@@ -132,6 +137,12 @@ def _month_bounds(year: int, month: int):
 
 def _tax_year_start(ref: date) -> date:
     return date(ref.year if (ref.month, ref.day) >= (4, 6) else ref.year - 1, 4, 6)
+
+
+def _working_days(d1: date, d2: date) -> int:
+    if d2 < d1:
+        return 0
+    return sum(1 for i in range((d2 - d1).days + 1) if (d1 + timedelta(days=i)).weekday() < 5)
 
 
 async def _send_email(to_email: str, subject: str, html: str, attachment: tuple | None = None) -> str:
@@ -310,13 +321,55 @@ def create_uk_payroll_router(db, require_roles):
         for sh in shifts:
             by_staff.setdefault(sh.get("staff_id", ""), []).append(sh)
 
+        # Approved sick leaves overlapping this month (SSP)
+        sick_q = {"leave_type": "sick", "status": "approved",
+                  "start_date": {"$lte": end.isoformat()}, "end_date": {"$gte": start.isoformat()}}
+        if property_id != "all":
+            sick_q["property_id"] = property_id
+        sick_docs = await db.shift_leave_requests.find(sick_q, {"_id": 0}).to_list(500)
+        sick_by_staff: dict = {}
+        for lv in sick_docs:
+            sick_by_staff.setdefault(lv.get("staff_id"), []).append(lv)
+        # AWE estimate: last 2 months' payslip gross / 8.667 weeks
+        prev1_y, prev1_m = (year, month - 1) if month > 1 else (year - 1, 12)
+        prev2_y, prev2_m = (prev1_y, prev1_m - 1) if prev1_m > 1 else (prev1_y - 1, 12)
+        prev_slips = await db.uk_payslips.find(
+            {"staff_id": {"$in": list(sick_by_staff.keys())},
+             "$or": [{"year": prev1_y, "month": prev1_m}, {"year": prev2_y, "month": prev2_m}]},
+            {"_id": 0, "staff_id": 1, "gross": 1}).to_list(600) if sick_by_staff else []
+        awe_gross: dict = {}
+        for sl in prev_slips:
+            awe_gross[sl["staff_id"]] = awe_gross.get(sl["staff_id"], 0.0) + float(sl.get("gross", 0) or 0)
+
+        def _ssp_for(sid: str, current_base: float) -> tuple:
+            leaves = sick_by_staff.get(sid, [])
+            if not leaves:
+                return 0.0, 0
+            days = 0
+            for lv in leaves:
+                try:
+                    d1 = max(datetime.strptime(lv["start_date"], "%Y-%m-%d").date(), start)
+                    d2 = min(datetime.strptime(lv["end_date"], "%Y-%m-%d").date(), end)
+                except Exception:
+                    continue
+                days += _working_days(d1, d2)
+            if days == 0:
+                return 0.0, 0
+            awe = awe_gross.get(sid, 0.0) / 8.667 if awe_gross.get(sid) else (current_base / 4.345 if current_base else 0.0)
+            weekly = min(SSP_WEEKLY, round(awe * SSP_AWE_PCT, 2)) if awe > 0 else SSP_WEEKLY
+            return round(weekly / SSP_QUALIFYING_DAYS_PER_WEEK * days, 2), days
+
         rows, warnings = [], []
         totals = {"hours": 0.0, "gross": 0.0, "paye": 0.0, "ni_employee": 0.0, "ni_employer": 0.0,
-                  "student_loan": 0.0, "pension_ee": 0.0, "pension_er": 0.0, "net": 0.0,
+                  "student_loan": 0.0, "pension_ee": 0.0, "pension_er": 0.0, "ssp": 0.0, "net": 0.0,
                   "nmw_topup": 0.0, "employer_cost": 0.0}
+        # staff with approved sick leave but no shifts this month still get an SSP-only payslip
+        for sid in sick_by_staff:
+            if sid and sid not in by_staff and sid in smap:
+                by_staff[sid] = []
         for sid, items in by_staff.items():
             s = smap.get(sid, {})
-            name = s.get("name") or (items[0].get("staff_name", "?"))
+            name = s.get("name") or (items[0].get("staff_name", "?") if items else "?")
             hours = sum(float(x.get("hours_worked", 0) or 0) for x in items)
             base_earned = sum(float(x.get("earned_amount", 0) or 0) for x in items)
             dob = s.get("dob", "")
@@ -340,7 +393,10 @@ def create_uk_payroll_router(db, require_roles):
             adjs = adj_by_staff.get(sid, [])
             adj_add = sum(a.get("amount", 0) for a in adjs if a.get("type") not in ("deduction", "tax"))
             adj_ded = sum(a.get("amount", 0) for a in adjs if a.get("type") in ("deduction", "tax"))
-            gross = round(base_earned + nmw_topup + adj_add - adj_ded, 2)
+            ssp, ssp_days = _ssp_for(sid, base_earned)
+            if ssp > 0:
+                staff_warn.append(f"SSP: {ssp_days} iş günü yasal hastalık ödemesi (£{ssp:.2f}) eklendi")
+            gross = round(base_earned + nmw_topup + ssp + adj_add - adj_ded, 2)
             paye = _paye(gross, tax_code)
             ni_ee = _ni_employee(gross)
             ni_er = _ni_employer(gross)
@@ -355,11 +411,13 @@ def create_uk_payroll_router(db, require_roles):
             pension_ee = round(qual * PEN_EE_RATE, 2)
             pension_er = round(qual * PEN_ER_RATE, 2)
             net = round(gross - paye - ni_ee - sloan - pension_ee, 2)
-            row = {"staff_id": sid, "staff_name": name, "role": s.get("role", items[0].get("role", "")),
+            row = {"staff_id": sid, "staff_name": name,
+                   "role": s.get("role") or (items[0].get("role", "") if items else ""),
                    "email": s.get("email", ""), "ni_number": s.get("ni_number", ""), "tax_code": tax_code,
                    "age": age, "nmw_rate": nmw, "shifts": len(items), "hours": round(hours, 2),
                    "implied_hourly": implied, "base_earned": round(base_earned, 2), "nmw_topup": nmw_topup,
-                   "adjustments": round(adj_add - adj_ded, 2), "gross": gross, "paye": paye,
+                   "adjustments": round(adj_add - adj_ded, 2), "ssp": ssp, "ssp_days": ssp_days,
+                   "gross": gross, "paye": paye,
                    "ni_employee": ni_ee, "ni_employer": ni_er, "student_loan": sloan,
                    "pension_ee": pension_ee, "pension_er": pension_er, "pension_enrolled": enrolled,
                    "net": net,
@@ -371,7 +429,7 @@ def create_uk_payroll_router(db, require_roles):
             for k, rk in (("hours", "hours"), ("gross", "gross"), ("paye", "paye"),
                           ("ni_employee", "ni_employee"), ("ni_employer", "ni_employer"),
                           ("student_loan", "student_loan"), ("pension_ee", "pension_ee"),
-                          ("pension_er", "pension_er"), ("net", "net"),
+                          ("pension_er", "pension_er"), ("ssp", "ssp"), ("net", "net"),
                           ("nmw_topup", "nmw_topup"), ("employer_cost", "employer_cost")):
                 totals[k] = round(totals[k] + row[rk], 2)
         rows.sort(key=lambda r: r["staff_name"])
@@ -529,6 +587,7 @@ def create_uk_payroll_router(db, require_roles):
         c.setFont("Helvetica", 9)
         earn = [("Vardiya kazancı", slip.get("base_earned", 0)),
                 ("NMW tamamlama", slip.get("nmw_topup", 0)),
+                ("SSP (Yasal Hastalık Ödemesi)", slip.get("ssp", 0)),
                 ("Düzeltmeler", slip.get("adjustments", 0))]
         ded = [("PAYE Gelir Vergisi", slip.get("paye", 0)),
                ("National Insurance", slip.get("ni_employee", 0)),
@@ -1044,7 +1103,8 @@ def create_uk_payroll_router(db, require_roles):
     DOC_EXTS = {"pdf", "jpg", "jpeg", "png", "webp", "heic", "docx"}
 
     @router.post("/uk-payroll/employees/{staff_id}/documents")
-    async def upload_document(staff_id: str, doc_type: str = Form("other"), file: UploadFile = File(...),
+    async def upload_document(staff_id: str, doc_type: str = Form("other"), expiry_date: str = Form(""),
+                              file: UploadFile = File(...),
                               current_user: dict = Depends(require_roles("admin", "manager"))):
         s = await db.shift_staff.find_one({"id": staff_id}, {"_id": 0, "id": 1, "name": 1})
         if not s:
@@ -1064,6 +1124,7 @@ def create_uk_payroll_router(db, require_roles):
         doc = {"id": doc_id, "staff_id": staff_id, "staff_name": s.get("name", ""),
                "doc_type": doc_type, "orig_name": file.filename, "ext": ext,
                "size": len(content), "subpath": subpath,
+               "expiry_date": expiry_date[:10] if expiry_date else None,
                "uploaded_by": current_user.get("name", ""),
                "uploaded_at": datetime.now(timezone.utc).isoformat()}
         await db.hr_documents.insert_one({**doc})
@@ -1094,6 +1155,100 @@ def create_uk_payroll_router(db, require_roles):
         if res.deleted_count == 0:
             raise HTTPException(404, "Belge bulunamadı")
         return {"ok": True}
+
+    # ==================== LEAVE CALENDAR ====================
+    @router.get("/uk-payroll/leave-calendar/{property_id}")
+    async def leave_calendar(property_id: str, year: int = 0, month: int = 0,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        now = datetime.now(timezone.utc)
+        year, month = year or now.year, month or now.month
+        if not (1 <= month <= 12):
+            raise HTTPException(400, "month 1-12 olmalı")
+        start, end = _month_bounds(year, month)
+        q = {"status": {"$in": ["approved", "pending"]},
+             "start_date": {"$lte": end.isoformat()}, "end_date": {"$gte": start.isoformat()}}
+        if property_id != "all":
+            q["property_id"] = property_id
+        leaves = await db.shift_leave_requests.find(q, {"_id": 0}).to_list(500)
+        days = {}
+        for lv in leaves:
+            try:
+                d1 = max(datetime.strptime(lv["start_date"], "%Y-%m-%d").date(), start)
+                d2 = min(datetime.strptime(lv["end_date"], "%Y-%m-%d").date(), end)
+            except Exception:
+                continue
+            for i in range((d2 - d1).days + 1):
+                key = (d1 + timedelta(days=i)).isoformat()
+                days.setdefault(key, []).append({"staff_id": lv.get("staff_id"), "staff_name": lv.get("staff_name"),
+                                                 "leave_type": lv.get("leave_type"), "status": lv.get("status")})
+        calendar_days = []
+        for i in range((end - start).days + 1):
+            d = start + timedelta(days=i)
+            key = d.isoformat()
+            entries = days.get(key, [])
+            approved_ids = {e["staff_id"] for e in entries if e["status"] == "approved"}
+            calendar_days.append({"date": key, "weekday": d.weekday(), "entries": entries,
+                                  "overlap": len(approved_ids) >= 2})
+        return {"year": year, "month": month, "first_weekday": start.weekday(),
+                "days": calendar_days, "leaves": leaves,
+                "overlap_days": sum(1 for d in calendar_days if d["overlap"])}
+
+    # ==================== DOCUMENT EXPIRY TRACKING ====================
+    @router.get("/uk-payroll/documents/expiring")
+    async def expiring_documents(days: int = DOC_EXPIRY_HORIZON_DAYS,
+                                 current_user: dict = Depends(require_roles("admin", "manager"))):
+        today = datetime.now(timezone.utc).date()
+        horizon = (today + timedelta(days=min(days, 365))).isoformat()
+        docs = await db.hr_documents.find(
+            {"expiry_date": {"$ne": None, "$lte": horizon}}, {"_id": 0}).sort("expiry_date", 1).to_list(100)
+        out = []
+        for d in docs:
+            try:
+                exp = datetime.strptime(d["expiry_date"][:10], "%Y-%m-%d").date()
+                d["days_left"] = (exp - today).days
+            except Exception:
+                d["days_left"] = None
+            out.append(d)
+        return out
+
+    async def run_doc_expiry_check_internal(property_id: str = "all") -> dict:
+        today = datetime.now(timezone.utc).date()
+        horizon = (today + timedelta(days=DOC_EXPIRY_HORIZON_DAYS)).isoformat()
+        docs = await db.hr_documents.find(
+            {"expiry_date": {"$ne": None, "$lte": horizon}, "expiry_alerted_at": {"$exists": False}},
+            {"_id": 0}).to_list(100)
+        if not docs:
+            return {"ok": True, "alerts": 0}
+        now_iso = datetime.now(timezone.utc).isoformat()
+        lines = []
+        for d in docs:
+            try:
+                days_left = (datetime.strptime(d["expiry_date"][:10], "%Y-%m-%d").date() - today).days
+            except Exception:
+                days_left = "?"
+            label = {"passport": "Pasaport/Kimlik", "visa": "Vize/Çalışma izni", "contract": "Sözleşme",
+                     "address_proof": "Adres belgesi", "certificate": "Sertifika"}.get(d.get("doc_type"), d.get("doc_type"))
+            msg = f"{d.get('staff_name')} — {label} {d.get('expiry_date')} tarihinde sona eriyor ({days_left} gün kaldı)"
+            lines.append(msg)
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()), "category": "hr_doc_expiry", "priority": "high",
+                "title": "Belge süresi doluyor", "message": msg, "read": False, "created_at": now_iso})
+            await db.hr_documents.update_one({"id": d["id"]}, {"$set": {"expiry_alerted_at": now_iso}})
+        recipients = await db.users.find(
+            {"role": {"$in": ["admin", "manager"]}, "email": {"$not": {"$regex": "test|example"}}},
+            {"_id": 0, "email": 1}).to_list(20)
+        html = ("<div style='font-family:sans-serif'><h3>⚠️ Belge Süresi Uyarısı</h3><ul>"
+                + "".join(f"<li>{ln}</li>" for ln in lines)
+                + "</ul><p>İK &amp; Bordro (UK) &gt; Personel &amp; İK ekranından belgeleri yenileyebilirsiniz.</p></div>")
+        statuses = [await _send_email(r["email"], f"Belge süresi uyarısı — {len(lines)} belge", html) for r in recipients]
+        return {"ok": True, "alerts": len(lines),
+                "emails": {"sent": statuses.count("sent"), "mocked": statuses.count("mocked")}}
+
+    router.run_doc_expiry_check_internal = run_doc_expiry_check_internal
+
+    @router.post("/uk-payroll/doc-expiry/run")
+    async def doc_expiry_run(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await run_doc_expiry_check_internal(data.get("property_id", "all"))
 
     # ==================== SHIFT REMINDER ROBOT ====================
     async def run_shift_reminders_internal(property_id: str = "all") -> dict:

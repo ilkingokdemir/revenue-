@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Users, Calculator, History, RefreshCw, Download, Mail, AlertTriangle,
   CheckCircle, XCircle, UserMinus, UserPlus, Pencil, ShieldCheck, PoundSterling,
-  UserCircle, FileText, Bot, Paperclip, GitCompareArrows,
+  UserCircle, FileText, Bot, Paperclip, GitCompareArrows, CalendarDays,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -190,6 +190,7 @@ const DOC_TYPE_TR = { contract: "Sözleşme", passport: "Pasaport/Kimlik", visa:
 function DocsDialog({ emp, onClose }) {
   const [docs, setDocs] = useState([]);
   const [docType, setDocType] = useState("contract");
+  const [expiry, setExpiry] = useState("");
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     try {
@@ -204,6 +205,7 @@ function DocsDialog({ emp, onClose }) {
     try {
       const fd = new FormData();
       fd.append("doc_type", docType);
+      if (expiry) fd.append("expiry_date", expiry);
       fd.append("file", file);
       await axios.post(`${API}/uk-payroll/employees/${emp.id}/documents`, fd, cfg);
       toast.success("Belge yüklendi");
@@ -240,6 +242,9 @@ function DocsDialog({ emp, onClose }) {
               {Object.entries(DOC_TYPE_TR).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </Field>
+          <Field label="Bitiş tarihi (ops.)">
+            <input type="date" className={inputCls} value={expiry} onChange={(e) => setExpiry(e.target.value)} data-testid="docs-expiry-input" />
+          </Field>
           <label className={`px-4 py-2 text-sm rounded-lg bg-stone-900 text-white hover:bg-stone-700 cursor-pointer ${busy ? "opacity-50 pointer-events-none" : ""}`} data-testid="docs-upload-btn">
             {busy ? "Yükleniyor..." : "Dosya Yükle"}
             <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.docx" onChange={(e) => upload(e.target.files?.[0])} data-testid="docs-file-input" />
@@ -250,7 +255,9 @@ function DocsDialog({ emp, onClose }) {
             <div key={d.id} className="flex items-center justify-between gap-2 border border-stone-100 rounded-xl px-3 py-2 text-sm">
               <div>
                 <div className="font-medium">{DOC_TYPE_TR[d.doc_type] || d.doc_type} · {d.orig_name}</div>
-                <div className="text-xs text-stone-400">{(d.size / 1024).toFixed(0)} KB · {new Date(d.uploaded_at).toLocaleDateString("tr-TR")} · {d.uploaded_by}</div>
+                <div className="text-xs text-stone-400">{(d.size / 1024).toFixed(0)} KB · {new Date(d.uploaded_at).toLocaleDateString("tr-TR")} · {d.uploaded_by}
+                  {d.expiry_date && <span className={new Date(d.expiry_date) < new Date(Date.now() + 60 * 86400000) ? " text-red-500 font-semibold" : ""}> · Bitiş: {d.expiry_date}</span>}
+                </div>
               </div>
               <div className="flex gap-1.5">
                 <button onClick={() => download(d)} className="p-1.5 rounded-lg border border-stone-200 hover:bg-stone-50" title="İndir" data-testid={`docs-dl-${d.id}`}><Download size={14} /></button>
@@ -283,6 +290,9 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
   const [cmpA, setCmpA] = useState("");
   const [cmpB, setCmpB] = useState("");
   const [cmpResult, setCmpResult] = useState(null);
+  const [calDate, setCalDate] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() + 1 }; });
+  const [calData, setCalData] = useState(null);
+  const [expiringDocs, setExpiringDocs] = useState([]);
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -345,15 +355,27 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
 
   const loadPendingLeaves = useCallback(async () => {
     try {
-      const { data } = await axios.get(`${API}/shifts/leaves/${pid}?status=pending`, cfg);
+      const [{ data }, exp] = await Promise.all([
+        axios.get(`${API}/shifts/leaves/${pid}?status=pending`, cfg),
+        axios.get(`${API}/uk-payroll/documents/expiring?days=60`, cfg),
+      ]);
       setPendingLeaves(data);
+      setExpiringDocs(exp.data);
     } catch { /* ignore */ }
   }, [pid]);
+
+  const loadCalendar = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/uk-payroll/leave-calendar/${pid}?year=${calDate.year}&month=${calDate.month}`, cfg);
+      setCalData(data);
+    } catch { toast.error("İzin takvimi yüklenemedi"); }
+  }, [pid, calDate]);
 
   useEffect(() => { if (isManager) { loadEmployees(); loadPendingLeaves(); } }, [isManager, loadEmployees, loadPendingLeaves]);
   useEffect(() => { if (tab === "payroll") loadPreview(); }, [tab, loadPreview]);
   useEffect(() => { if (tab === "history") loadRuns(); }, [tab, loadRuns]);
   useEffect(() => { if (tab === "portal") loadPortal(); }, [tab, loadPortal]);
+  useEffect(() => { if (tab === "leave-calendar") loadCalendar(); }, [tab, loadCalendar]);
 
   const runPayroll = async (force = false) => {
     setRunning(true);
@@ -524,6 +546,7 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
           {isManager && <TabBtn id="employees" icon={Users} label="Personel & İK" testid="ukp-tab-employees" />}
           {isManager && <TabBtn id="payroll" icon={Calculator} label="Aylık Bordro" testid="ukp-tab-payroll" />}
           {isManager && <TabBtn id="history" icon={History} label="Bordro Geçmişi" testid="ukp-tab-history" />}
+          {isManager && <TabBtn id="leave-calendar" icon={CalendarDays} label="İzin Takvimi" testid="ukp-tab-leave-calendar" />}
           <TabBtn id="portal" icon={UserCircle} label="Portalım" testid="ukp-tab-portal" />
         </div>
       </div>
@@ -541,6 +564,19 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
 
       {tab === "employees" && (
         <div className="space-y-4">
+          {expiringDocs.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4" data-testid="ukp-expiring-docs">
+              <div className="font-semibold text-sm text-amber-800 mb-2">⚠ Süresi Yaklaşan Belgeler ({expiringDocs.length})</div>
+              <div className="space-y-1 text-sm text-amber-700">
+                {expiringDocs.map((d) => (
+                  <div key={d.id}>
+                    <b>{d.staff_name}</b> · {DOC_TYPE_TR[d.doc_type] || d.doc_type} · {d.expiry_date}
+                    {d.days_left !== null && <span className={d.days_left <= 14 ? "text-red-600 font-semibold" : ""}> ({d.days_left <= 0 ? "SÜRESİ DOLDU" : `${d.days_left} gün kaldı`})</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {pendingLeaves.length > 0 && (
             <div className="bg-white border border-indigo-200 rounded-2xl p-4" data-testid="ukp-pending-leaves">
               <div className="font-semibold text-sm text-indigo-800 mb-3">Bekleyen İzin Talepleri ({pendingLeaves.length})</div>
@@ -655,7 +691,7 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
               <table className="w-full text-sm" data-testid="ukp-payroll-table">
                 <thead className="bg-stone-900 text-white text-xs uppercase">
                   <tr>
-                    {["Personel", "Saat", "Vardiya Kazancı", "NMW Tamamlama", "Brüt", "PAYE", "NI (Çalışan)", "Öğr. Kredisi", "Emeklilik", "Net", "İşveren NI"].map((h) => (
+                    {["Personel", "Saat", "Vardiya Kazancı", "NMW Tamamlama", "SSP", "Brüt", "PAYE", "NI (Çalışan)", "Öğr. Kredisi", "Emeklilik", "Net", "İşveren NI"].map((h) => (
                       <th key={h} className="text-left px-3 py-2.5 font-semibold whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -670,6 +706,7 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
                       <td className="px-3 py-2.5">{r.hours}</td>
                       <td className="px-3 py-2.5">{gbp(r.base_earned)}</td>
                       <td className="px-3 py-2.5">{r.nmw_topup ? <span className="text-amber-600 font-medium">{gbp(r.nmw_topup)}</span> : "—"}</td>
+                      <td className="px-3 py-2.5">{r.ssp ? <span className="text-rose-600 font-medium" title={`${r.ssp_days} iş günü hastalık`}>{gbp(r.ssp)}</span> : "—"}</td>
                       <td className="px-3 py-2.5 font-semibold">{gbp(r.gross)}</td>
                       <td className="px-3 py-2.5 text-red-600">{gbp(r.paye)}</td>
                       <td className="px-3 py-2.5 text-red-600">{gbp(r.ni_employee)}</td>
@@ -680,7 +717,7 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
                     </tr>
                   ))}
                   {!loading && !preview?.rows?.length && (
-                    <tr><td colSpan={11} className="px-4 py-8 text-center text-stone-400">Bu dönemde onaylanmış/tamamlanmış vardiya yok.</td></tr>
+                    <tr><td colSpan={12} className="px-4 py-8 text-center text-stone-400">Bu dönemde onaylanmış/tamamlanmış vardiya yok.</td></tr>
                   )}
                 </tbody>
                 {preview?.rows?.length > 0 && (
@@ -690,6 +727,7 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
                       <td className="px-3 py-2.5">{preview.totals.hours}</td>
                       <td className="px-3 py-2.5" />
                       <td className="px-3 py-2.5">{preview.totals.nmw_topup ? gbp(preview.totals.nmw_topup) : "—"}</td>
+                      <td className="px-3 py-2.5 text-rose-600">{preview.totals.ssp ? gbp(preview.totals.ssp) : "—"}</td>
                       <td className="px-3 py-2.5">{gbp(preview.totals.gross)}</td>
                       <td className="px-3 py-2.5 text-red-600">{gbp(preview.totals.paye)}</td>
                       <td className="px-3 py-2.5 text-red-600">{gbp(preview.totals.ni_employee)}</td>
@@ -832,6 +870,62 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
             )}
           </div>
           </div>
+        </div>
+      )}
+
+      {tab === "leave-calendar" && (
+        <div className="space-y-4" data-testid="ukp-leave-calendar">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setCalDate((p) => p.month === 1 ? { year: p.year - 1, month: 12 } : { ...p, month: p.month - 1 })}
+              className="px-3 py-1.5 text-sm rounded-lg border border-stone-300 hover:bg-stone-50" data-testid="ukp-cal-prev">←</button>
+            <div className="font-bold text-lg w-40 text-center">{MONTHS_TR[calDate.month - 1]} {calDate.year}</div>
+            <button onClick={() => setCalDate((p) => p.month === 12 ? { year: p.year + 1, month: 1 } : { ...p, month: p.month + 1 })}
+              className="px-3 py-1.5 text-sm rounded-lg border border-stone-300 hover:bg-stone-50" data-testid="ukp-cal-next">→</button>
+            {calData?.overlap_days > 0 && (
+              <span className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 font-medium" data-testid="ukp-cal-overlap-badge">
+                ⚠ {calData.overlap_days} gün çakışma (2+ personel aynı gün izinli)
+              </span>
+            )}
+            <div className="flex-1" />
+            <div className="flex gap-3 text-xs text-stone-500">
+              <span><span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 mr-1" />Yıllık</span>
+              <span><span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 mr-1" />Hastalık</span>
+              <span><span className="inline-block w-2.5 h-2.5 rounded-full bg-stone-400 mr-1" />Ücretsiz</span>
+              <span><span className="inline-block w-2.5 h-2.5 rounded-full bg-sky-500 mr-1" />TOIL</span>
+              <span className="opacity-60">soluk = onay bekliyor</span>
+            </div>
+          </div>
+          {calData && (
+            <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+              <div className="grid grid-cols-7 bg-stone-900 text-white text-xs uppercase font-semibold">
+                {["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map((d) => <div key={d} className="px-2 py-2 text-center">{d}</div>)}
+              </div>
+              <div className="grid grid-cols-7">
+                {Array.from({ length: calData.first_weekday }).map((_, i) => <div key={`pad-${i}`} className="min-h-[84px] border-b border-r border-stone-100 bg-stone-50/50" />)}
+                {calData.days.map((d) => {
+                  const typeColor = { annual: "bg-emerald-500", sick: "bg-amber-500", unpaid: "bg-stone-400", toil: "bg-sky-500" };
+                  return (
+                    <div key={d.date} className={`min-h-[84px] border-b border-r border-stone-100 p-1.5 ${d.overlap ? "bg-red-50 ring-1 ring-inset ring-red-300" : d.weekday >= 5 ? "bg-stone-50/50" : ""}`}
+                      data-testid={`ukp-cal-day-${d.date}`}>
+                      <div className={`text-xs font-semibold mb-1 ${d.overlap ? "text-red-600" : "text-stone-400"}`}>{parseInt(d.date.slice(8), 10)}{d.overlap ? " ⚠" : ""}</div>
+                      <div className="space-y-0.5">
+                        {d.entries.slice(0, 3).map((e, i) => (
+                          <div key={i} className={`text-[10px] leading-tight px-1.5 py-0.5 rounded text-white truncate ${typeColor[e.leave_type] || "bg-stone-400"} ${e.status === "pending" ? "opacity-45" : ""}`}
+                            title={`${e.staff_name} · ${e.leave_type}${e.status === "pending" ? " (onay bekliyor)" : ""}`}>
+                            {e.staff_name}
+                          </div>
+                        ))}
+                        {d.entries.length > 3 && <div className="text-[10px] text-stone-400">+{d.entries.length - 3} daha</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {calData && calData.leaves.length === 0 && (
+            <div className="text-sm text-stone-400">Bu ay onaylı veya bekleyen izin yok.</div>
+          )}
         </div>
       )}
 

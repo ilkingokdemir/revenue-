@@ -1,0 +1,22 @@
+{
+  "summary": "Iteration 605 regression: 23 backend pytest cases + frontend UI verification for UK Payroll (SMP/SPP maternity, leave cancellation, payroll lock/correction/unlock), Booking Widget dynamic pricing + LOS + price-explain, and Ramp Ladder forecast_boost toggle. All backend endpoints & all UI selectors called out in the request are present and working.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_uk_payroll_iter605.py",
+    "/app/test_reports/pytest/iter605_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Booking widget /book returns 409 on 1-night stay when min_stay=2 exists — correct behavior; error message could include restriction.value to aid clients.",
+    "Ramp Ladder scan?force=true JSON returned includes actions/skips arrays with no crash; good defensive coding around _forecast_signal when ML is unavailable."
+  ],
+  "updated_files": ["/app/backend/tests/test_uk_payroll_iter605.py"],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "100% (all requested selectors + flows verified)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Ephemeral: maternity parental_leave for Fatma (ended in cleanup), 2 self-service leave requests (cancelled), payroll run April 2026 for property=all (left locked as instructed), 1 correction request (applied), 1 direct-unlock correction, 1 test booking (deleted via mongosh by guest_email prefix test_iter605).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend session uses cookie auth via /api/auth/login (requests.Session). Fatma id=52c4271e-e333-4dec-958d-d6220482e9f6 (property default). Widget uses public routes. Ramp Ladder UI toggled forecast_boost off then back on. UK Payroll: click nav-mode-pro then nav-section-Operations then uk-payroll-btn. Admin is not linked to a staff record after teardown (portal shows ukp-portal-unlinked). April 2026 run is locked as required; the correction created during the test is in 'applied' status.",
+  "rca of the issue": "No issues found."
+}

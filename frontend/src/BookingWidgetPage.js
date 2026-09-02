@@ -108,6 +108,8 @@ export default function BookingWidgetPage({ propertyId }) {
   const [children, setChildren] = useState(0);
   const [roomCount, setRoomCount] = useState(1);
   const [available, setAvailable] = useState([]);
+  const [restriction, setRestriction] = useState(null);
+  const [explainOpen, setExplainOpen] = useState(null);
   const [selected, setSelected] = useState(null);
   const [searching, setSearching] = useState(false);
   const [booking, setBooking] = useState(false);
@@ -316,6 +318,8 @@ export default function BookingWidgetPage({ propertyId }) {
     try {
       const { data } = await axios.post(`${API}/booking-widget/check-availability`, { property_id: propertyId, check_in: checkIn, check_out: checkOut });
       setAvailable(data.available_rooms || []);
+      setRestriction(data.restriction || null);
+      setExplainOpen(null);
       setStep("results");
     } catch { /* silent */ }
     setSearching(false);
@@ -747,9 +751,18 @@ export default function BookingWidgetPage({ propertyId }) {
         {available.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center border border-stone-200">
             <svg className="w-16 h-16 text-stone-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-            <h3 className="text-lg font-semibold text-stone-800 mb-2">No rooms available</h3>
-            <p className="text-sm text-stone-500 mb-6">Try different dates or contact us directly.</p>
-            <WaitlistJoinCard propertyId={propertyId} checkIn={checkIn} checkOut={checkOut} guests={guests} />
+            {restriction ? (
+              <>
+                <h3 className="text-lg font-semibold text-stone-800 mb-2" data-testid="be-los-restriction">{restriction.type === "min_stay" ? `Minimum ${restriction.value}-night stay` : `Maximum ${restriction.value}-night stay`}</h3>
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 inline-block mb-6">{restriction.message_en}</p>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-semibold text-stone-800 mb-2">No rooms available</h3>
+                <p className="text-sm text-stone-500 mb-6">Try different dates or contact us directly.</p>
+              </>
+            )}
+            {!restriction && <WaitlistJoinCard propertyId={propertyId} checkIn={checkIn} checkOut={checkOut} guests={guests} />}
           </div>
         ) : available.map((r, i) => (
           <motion.div key={r.room_type_id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
@@ -768,9 +781,42 @@ export default function BookingWidgetPage({ propertyId }) {
                 </div>
                 <div className="flex items-end justify-between pt-3 border-t border-stone-100">
                   <div>
-                    <div className="text-xs text-stone-400 line-through">{cur(r.base_rate * 1.15, cc)}</div>
+                    {r.price_explanation?.vs_base_pct < -2
+                      ? <div className="text-xs text-stone-400 line-through" data-testid={`be-standard-rate-${r.room_type_id}`}>{cur(r.price_explanation.base_total, cc)}</div>
+                      : !r.price_explanation && <div className="text-xs text-stone-400 line-through">{cur(r.base_rate * 1.15, cc)}</div>}
                     <div className="text-2xl font-bold" style={{ color: ac }}>{cur(r.total_rate, cc)}</div>
                     <div className="text-xs text-stone-400">{nights} night{nights > 1 ? "s" : ""} · {cur(r.base_rate, cc)}/night · Includes taxes</div>
+                    {r.price_explanation && (
+                      <div className="mt-1.5">
+                        <button onClick={() => setExplainOpen(explainOpen === r.room_type_id ? null : r.room_type_id)}
+                          className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border transition-colors ${r.price_explanation.vs_base_pct > 2 ? "border-amber-300 bg-amber-50 text-amber-700" : r.price_explanation.vs_base_pct < -2 ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-stone-200 bg-stone-50 text-stone-600"}`}
+                          data-testid={`be-price-explain-${r.room_type_id}`}>
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          Why this price?{r.price_explanation.vs_base_pct > 2 ? ` +${r.price_explanation.vs_base_pct}%` : r.price_explanation.vs_base_pct < -2 ? ` ${r.price_explanation.vs_base_pct}%` : ""}
+                        </button>
+                        {explainOpen === r.room_type_id && (
+                          <div className="mt-2 bg-stone-50 border border-stone-200 rounded-xl p-3 text-xs text-stone-600 max-w-md" data-testid={`be-price-explain-panel-${r.room_type_id}`}>
+                            <div className="font-semibold text-stone-800 mb-1">{r.price_explanation.headline_en}</div>
+                            {r.price_explanation.drivers.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mb-2">
+                                {r.price_explanation.drivers.map((d) => (
+                                  <span key={d.label_en} className={`px-2 py-0.5 rounded-full ${d.direction === "up" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{d.label_en} · {d.nights} night{d.nights > 1 ? "s" : ""}</span>
+                                ))}
+                              </div>
+                            )}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
+                              {r.nightly.map((n) => (
+                                <div key={n.date} className="flex justify-between bg-white rounded-md px-2 py-1 border border-stone-100">
+                                  <span className="text-stone-400">{n.date.slice(5)}</span>
+                                  <span className={`font-semibold ${n.rate > n.base ? "text-amber-700" : n.rate < n.base ? "text-emerald-700" : "text-stone-700"}`}>{cur(n.rate, cc)}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="mt-1.5 text-[10px] text-stone-400">Standard rate {cur(r.price_explanation.base_total, cc)} → your price {cur(r.price_explanation.total, cc)}. Prices are set transparently by demand; no hidden fees.</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="text-right">
                     <div className="flex items-center gap-1 mb-1"><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg><span className="text-[10px] text-emerald-600">Free cancellation</span></div>

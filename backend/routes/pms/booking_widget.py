@@ -7,6 +7,8 @@ from typing import Dict
 import uuid
 import logging
 
+from routes.pms.widget_pricing import nightly_rates, explain_price, check_los_restrictions
+
 logger = logging.getLogger(__name__)
 
 
@@ -126,6 +128,12 @@ def create_booking_widget_router(db, require_roles):
                 {"id": "suite", "name": "Suite", "base_rate": 250, "total_rooms": 2, "max_occupancy": 4},
             ]
 
+        # LOS restrictions (min/max stay) — enforced before listing rooms
+        los_block = await check_los_restrictions(db, property_id, check_in, check_out)
+        if los_block:
+            return {"available_rooms": [], "check_in": check_in, "check_out": check_out,
+                    "los_discount": None, "restriction": los_block}
+
         # Check existing bookings for overlap
         available = []
         for room in rooms:
@@ -139,15 +147,11 @@ def create_booking_widget_router(db, require_roles):
             total = room.get("total_rooms", 10)
             avail = max(total - booked, 0)
             if avail > 0:
-                # Calculate nights
-                try:
-                    ci = datetime.strptime(check_in, "%Y-%m-%d")
-                    co = datetime.strptime(check_out, "%Y-%m-%d")
-                    nights = (co - ci).days
-                except Exception:
-                    nights = 1
-
-                rate = room.get("base_rate") or 100
+                nightly = await nightly_rates(db, property_id, room, check_in, check_out)
+                nights = len(nightly)
+                total_rate = round(sum(n["rate"] for n in nightly), 2)
+                rate = round(total_rate / nights, 2)
+                explanation = explain_price(nightly)
                 default_photos = [
                     "https://images.unsplash.com/photo-1631048730670-ff5cd0d08f15?w=600&q=75",
                     "https://images.unsplash.com/photo-1629140727571-9b5c6f6267b4?w=600&q=75",
@@ -161,8 +165,10 @@ def create_booking_widget_router(db, require_roles):
                     "name": room.get("name", ""),
                     "photo": room.get("photo", "") or default_photos[idx % len(default_photos)],
                     "base_rate": rate,
-                    "total_rate": round(rate * nights, 2),
+                    "total_rate": total_rate,
                     "nights": nights,
+                    "nightly": nightly,
+                    "price_explanation": explanation,
                     "available": avail,
                     "max_occupancy": room.get("max_occupancy", 2),
                     "description": room.get("description", ""),
@@ -226,6 +232,19 @@ def create_booking_widget_router(db, require_roles):
             nights = 1
 
         rate = float(data.get("rate", 0))
+        # Server-side repricing: RMS nightly rates are the source of truth (client rate ignored)
+        los_block = await check_los_restrictions(db, data["property_id"], data["check_in"], data["check_out"])
+        if los_block:
+            raise HTTPException(409, los_block["message_en"])
+        room_doc = await db.room_types.find_one(
+            {"property_id": data["property_id"], "name": data["room_type"]}, {"_id": 0})
+        nightly_breakdown = []
+        if room_doc:
+            nightly_breakdown = await nightly_rates(db, data["property_id"], room_doc, data["check_in"], data["check_out"])
+            nights = len(nightly_breakdown)
+            server_rate = round(sum(n["rate"] for n in nightly_breakdown) / nights, 2)
+            loyalty_pct = float(data.get("loyalty_discount_pct") or 0)
+            rate = round(server_rate * (1 - max(0.0, min(loyalty_pct, 50.0)) / 100), 2)
         total = round(rate * nights * int(data.get("rooms", 1)), 2)
 
         # ABS — Attribute-Based Selling: seçilen oda özellikleri gecelik ek ücret
@@ -312,6 +331,7 @@ def create_booking_widget_router(db, require_roles):
             "total": total,
             "total_price": total,  # required by /payments/booking-checkout
             "nights": nights,
+            "nightly_rates": [{"date": n["date"], "rate": n["rate"], "source": n["source"]} for n in nightly_breakdown],
             "currency": currency,
             "status": "pending_payment" if pay_now else "confirmed",
             "payment_status": "pending" if pay_now else "pay_at_property",

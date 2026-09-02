@@ -4,8 +4,10 @@ import { toast } from "sonner";
 import {
   Users, Calculator, History, RefreshCw, Download, Mail, AlertTriangle,
   CheckCircle, XCircle, UserMinus, UserPlus, Pencil, ShieldCheck, PoundSterling,
-  UserCircle, FileText, Bot, Paperclip, GitCompareArrows, CalendarDays,
+  UserCircle, FileText, Bot, Paperclip, GitCompareArrows, CalendarDays, Lock, LockOpen,
 } from "lucide-react";
+import { ParentalLeaveCard } from "./ukpayroll/ParentalLeaveCard";
+import { PayrollCorrectionsCard } from "./ukpayroll/PayrollCorrectionsCard";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cfg = { withCredentials: true };
@@ -23,6 +25,12 @@ const SL_PLANS = [
 ];
 
 const gbp = (n) => `£${Number(n || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const LEAVE_TYPE_TR = { annual: "Yıllık izin", sick: "Hastalık", unpaid: "Ücretsiz izin", toil: "TOIL" };
+const LEAVE_STATUS_TR = {
+  approved: ["Onaylandı", "bg-emerald-50 text-emerald-700"], rejected: ["Reddedildi", "bg-red-50 text-red-600"],
+  pending: ["Onay bekliyor", "bg-amber-50 text-amber-700"], cancelled: ["İptal edildi", "bg-stone-100 text-stone-500"],
+  cancel_requested: ["İptal talebi bekliyor", "bg-orange-50 text-orange-700"],
+};
 
 const Field = ({ label, children }) => (
   <label className="block text-xs">
@@ -275,6 +283,9 @@ function DocsDialog({ emp, onClose }) {
 export const UKPayrollPanel = ({ propertyId, user }) => {
   const pid = propertyId || "all";
   const isManager = ["admin", "manager"].includes(user?.role);
+  const isAdmin = user?.role === "admin";
+  const [corrKey, setCorrKey] = useState(0);
+  const [cancelReqs, setCancelReqs] = useState([]);
   const [tab, setTab] = useState(isManager ? "employees" : "portal");
   const [employees, setEmployees] = useState([]);
   const [rates, setRates] = useState(null);
@@ -355,12 +366,14 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
 
   const loadPendingLeaves = useCallback(async () => {
     try {
-      const [{ data }, exp] = await Promise.all([
+      const [{ data }, exp, cr] = await Promise.all([
         axios.get(`${API}/shifts/leaves/${pid}?status=pending`, cfg),
         axios.get(`${API}/uk-payroll/documents/expiring?days=60`, cfg),
+        axios.get(`${API}/shifts/leaves/${pid}?status=cancel_requested`, cfg),
       ]);
       setPendingLeaves(data);
       setExpiringDocs(exp.data);
+      setCancelReqs(cr.data);
     } catch { /* ignore */ }
   }, [pid]);
 
@@ -386,9 +399,61 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
     } catch (e) {
       if (e.response?.status === 409) {
         if (window.confirm("Bu dönem zaten çalıştırılmış. Üzerine yazılsın mı?")) return runPayroll(true);
+      } else if (e.response?.status === 423) {
+        toast.error(e.response.data?.detail || "Bordro kilitli — düzeltme talebi gerekli", { duration: 6000 });
+        setTab("history");
       } else toast.error(e.response?.data?.detail || "Bordro çalıştırılamadı");
     }
     setRunning(false);
+  };
+
+  const requestCorrection = async (run) => {
+    const reason = window.prompt(`${MONTHS_TR[run.month - 1]} ${run.year} bordrosu kilitli. Düzeltme gerekçesi:`);
+    if (!reason) return;
+    try {
+      await axios.post(`${API}/uk-payroll/runs/${run.id}/correction-request`, { reason }, cfg);
+      toast.success("Düzeltme talebi oluşturuldu — admin onayı bekleniyor");
+      setCorrKey((k) => k + 1);
+    } catch (e) { toast.error(e.response?.data?.detail || "Talep oluşturulamadı"); }
+  };
+
+  const unlockRun = async (run) => {
+    const reason = window.prompt("Kilidi doğrudan açma gerekçesi (loglanır):");
+    if (!reason) return;
+    try {
+      await axios.post(`${API}/uk-payroll/runs/${run.id}/unlock`, { reason }, cfg);
+      toast.success("Kilit açıldı — dönem yeniden çalıştırılabilir");
+      setCorrKey((k) => k + 1);
+      loadRuns();
+      setActiveRun({ ...run, locked: false });
+    } catch (e) { toast.error(e.response?.data?.detail || "Kilit açılamadı"); }
+  };
+
+  const lockRun = async (run) => {
+    try {
+      await axios.post(`${API}/uk-payroll/runs/${run.id}/lock`, {}, cfg);
+      toast.success("Bordro kilitlendi");
+      loadRuns();
+      setActiveRun({ ...run, locked: true });
+    } catch { toast.error("Kilitlenemedi"); }
+  };
+
+  const cancelMyLeave = async (lv) => {
+    const msg = lv.status === "approved" ? "Onaylı izin — iptal talebi yöneticiye gönderilecek. Devam?" : "İzin talebiniz iptal edilsin mi?";
+    if (!window.confirm(msg)) return;
+    try {
+      const { data } = await axios.post(`${API}/uk-payroll/me/leaves/${lv.id}/cancel`, {}, cfg);
+      toast.success(data.status === "cancelled" ? "İzin talebi iptal edildi" : "İptal talebi gönderildi — yönetici onayı bekleniyor");
+      loadPortal();
+    } catch (e) { toast.error(e.response?.data?.detail || "İptal edilemedi"); }
+  };
+
+  const decideCancel = async (lv, approve) => {
+    try {
+      await axios.post(`${API}/uk-payroll/leaves/${lv.id}/cancel-decision`, { approve }, cfg);
+      toast.success(approve ? "İzin iptal edildi — bakiye geri yüklendi" : "İptal reddedildi — izin onaylı kalıyor");
+      loadPendingLeaves();
+    } catch (e) { toast.error(e.response?.data?.detail || "İşlem başarısız"); }
   };
 
   const openRun = async (run) => {
@@ -596,6 +661,23 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
               </div>
             </div>
           )}
+          {cancelReqs.length > 0 && (
+            <div className="bg-white border border-orange-200 rounded-2xl p-4" data-testid="ukp-cancel-requests">
+              <div className="font-semibold text-sm text-orange-800 mb-3">İzin İptal Talepleri ({cancelReqs.length}) — onaylı izinler</div>
+              <div className="space-y-2">
+                {cancelReqs.map((lv) => (
+                  <div key={lv.id} className="flex flex-wrap items-center justify-between gap-2 bg-orange-50/50 rounded-xl px-3 py-2 text-sm">
+                    <div><b>{lv.staff_name}</b> · {LEAVE_TYPE_TR[lv.leave_type] || lv.leave_type} · {lv.start_date} → {lv.end_date} ({lv.days} gün)</div>
+                    <div className="flex gap-1.5">
+                      <button onClick={() => decideCancel(lv, true)} className="px-3 py-1 text-xs rounded-lg bg-orange-600 text-white hover:bg-orange-700" data-testid={`ukp-cancel-approve-${lv.id}`}>İptali Onayla</button>
+                      <button onClick={() => decideCancel(lv, false)} className="px-3 py-1 text-xs rounded-lg bg-stone-100 text-stone-700 hover:bg-stone-200" data-testid={`ukp-cancel-reject-${lv.id}`}>İzin Kalsın</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <ParentalLeaveCard pid={pid} employees={employees} />
           <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="ukp-employees-table">
@@ -691,7 +773,7 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
               <table className="w-full text-sm" data-testid="ukp-payroll-table">
                 <thead className="bg-stone-900 text-white text-xs uppercase">
                   <tr>
-                    {["Personel", "Saat", "Vardiya Kazancı", "NMW Tamamlama", "SSP", "Brüt", "PAYE", "NI (Çalışan)", "Öğr. Kredisi", "Emeklilik", "Net", "İşveren NI"].map((h) => (
+                    {["Personel", "Saat", "Vardiya Kazancı", "NMW Tamamlama", "SSP", "SMP/SPP", "Brüt", "PAYE", "NI (Çalışan)", "Öğr. Kredisi", "Emeklilik", "Net", "İşveren NI"].map((h) => (
                       <th key={h} className="text-left px-3 py-2.5 font-semibold whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -707,6 +789,7 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
                       <td className="px-3 py-2.5">{gbp(r.base_earned)}</td>
                       <td className="px-3 py-2.5">{r.nmw_topup ? <span className="text-amber-600 font-medium">{gbp(r.nmw_topup)}</span> : "—"}</td>
                       <td className="px-3 py-2.5">{r.ssp ? <span className="text-rose-600 font-medium" title={`${r.ssp_days} iş günü hastalık`}>{gbp(r.ssp)}</span> : "—"}</td>
+                      <td className="px-3 py-2.5">{r.smp ? <span className="text-pink-600 font-medium" title={`${r.smp_weeks} hafta ${r.smp_type === "maternity" ? "SMP" : "SPP"}`} data-testid={`ukp-smp-${r.staff_id}`}>{gbp(r.smp)}</span> : "—"}</td>
                       <td className="px-3 py-2.5 font-semibold">{gbp(r.gross)}</td>
                       <td className="px-3 py-2.5 text-red-600">{gbp(r.paye)}</td>
                       <td className="px-3 py-2.5 text-red-600">{gbp(r.ni_employee)}</td>
@@ -717,7 +800,7 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
                     </tr>
                   ))}
                   {!loading && !preview?.rows?.length && (
-                    <tr><td colSpan={12} className="px-4 py-8 text-center text-stone-400">Bu dönemde onaylanmış/tamamlanmış vardiya yok.</td></tr>
+                    <tr><td colSpan={13} className="px-4 py-8 text-center text-stone-400">Bu dönemde onaylanmış/tamamlanmış vardiya yok.</td></tr>
                   )}
                 </tbody>
                 {preview?.rows?.length > 0 && (
@@ -728,6 +811,7 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
                       <td className="px-3 py-2.5" />
                       <td className="px-3 py-2.5">{preview.totals.nmw_topup ? gbp(preview.totals.nmw_topup) : "—"}</td>
                       <td className="px-3 py-2.5 text-rose-600">{preview.totals.ssp ? gbp(preview.totals.ssp) : "—"}</td>
+                      <td className="px-3 py-2.5 text-pink-600" title={preview.totals.smp_recovery ? `HMRC'den geri alınabilir (%92): ${gbp(preview.totals.smp_recovery)}` : ""}>{preview.totals.smp ? gbp(preview.totals.smp) : "—"}</td>
                       <td className="px-3 py-2.5">{gbp(preview.totals.gross)}</td>
                       <td className="px-3 py-2.5 text-red-600">{gbp(preview.totals.paye)}</td>
                       <td className="px-3 py-2.5 text-red-600">{gbp(preview.totals.ni_employee)}</td>
@@ -745,6 +829,7 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
             <div className="text-sm text-stone-500">
               Toplam işveren maliyeti (brüt + işveren NI + işveren emeklilik %3): <b className="text-stone-900">{gbp(preview.totals.employer_cost)}</b>
               {preview.totals.pension_er > 0 && <span className="ml-3">İşveren emeklilik katkısı: <b>{gbp(preview.totals.pension_er)}</b></span>}
+              {preview.totals.smp > 0 && <span className="ml-3" data-testid="ukp-smp-recovery">SMP/SPP HMRC geri alım (%92): <b className="text-pink-700">{gbp(preview.totals.smp_recovery)}</b></span>}
             </div>
           )}
         </div>
@@ -817,12 +902,18 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
               </div>
             )}
           </div>
+          <PayrollCorrectionsCard pid={pid} isAdmin={isAdmin} refreshKey={corrKey} onChanged={loadRuns} />
           <div className="grid md:grid-cols-3 gap-4">
           <div className="space-y-2">
             {runs.map((r) => (
               <button key={r.id} onClick={() => openRun(r)} data-testid={`ukp-run-${r.id}`}
                 className={`w-full text-left bg-white border rounded-xl px-4 py-3 hover:border-emerald-400 transition-colors ${activeRun?.id === r.id ? "border-emerald-500 ring-1 ring-emerald-200" : "border-stone-200"}`}>
-                <div className="font-semibold text-sm">{MONTHS_TR[r.month - 1]} {r.year}</div>
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-sm">{MONTHS_TR[r.month - 1]} {r.year}{r.revision > 1 && <span className="ml-1 text-xs text-stone-400">rev.{r.revision}</span>}</div>
+                  {r.locked
+                    ? <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700" data-testid={`ukp-run-locked-${r.id}`}><Lock size={11} /> Kilitli</span>
+                    : <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700" data-testid={`ukp-run-unlocked-${r.id}`}><LockOpen size={11} /> Açık</span>}
+                </div>
                 <div className="text-xs text-stone-500">{r.staff_count} personel · Net {gbp(r.totals?.net)} · {new Date(r.created_at).toLocaleDateString("tr-TR")}</div>
               </button>
             ))}
@@ -833,7 +924,23 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
               <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100">
                   <div className="font-semibold text-sm">{MONTHS_TR[activeRun.month - 1]} {activeRun.year} — Payslip'ler</div>
-                  <div className="flex gap-1.5">
+                  <div className="flex flex-wrap gap-1.5">
+                    {activeRun.locked ? (
+                      <>
+                        <button onClick={() => requestCorrection(activeRun)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 hover:bg-amber-50" data-testid="ukp-correction-request-btn">
+                          <Lock size={13} /> Düzeltme Talebi
+                        </button>
+                        {isAdmin && (
+                          <button onClick={() => unlockRun(activeRun)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-violet-300 text-violet-700 hover:bg-violet-50" data-testid="ukp-unlock-btn">
+                            <LockOpen size={13} /> Kilidi Aç (admin)
+                          </button>
+                        )}
+                      </>
+                    ) : isAdmin && (
+                      <button onClick={() => lockRun(activeRun)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-stone-300 hover:bg-stone-50" data-testid="ukp-lock-btn">
+                        <Lock size={13} /> Kilitle
+                      </button>
+                    )}
                     <button onClick={() => downloadBacs(activeRun)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-stone-300 hover:bg-stone-50" data-testid="ukp-bacs-btn">
                       <Download size={13} /> BACS Dosyası
                     </button>
@@ -1036,14 +1143,22 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
                   </div>
                 )}
                 <div className="space-y-2">
-                  {myLeaves.map((lv) => (
-                    <div key={lv.id} className="flex flex-wrap items-center justify-between gap-2 text-sm border border-stone-100 rounded-xl px-3 py-2">
-                      <div>{lv.leave_type === "annual" ? "Yıllık izin" : lv.leave_type === "sick" ? "Hastalık" : lv.leave_type} · {lv.start_date} → {lv.end_date} ({lv.days} gün)</div>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${lv.status === "approved" ? "bg-emerald-50 text-emerald-700" : lv.status === "rejected" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700"}`}>
-                        {lv.status === "approved" ? "Onaylandı" : lv.status === "rejected" ? "Reddedildi" : "Onay bekliyor"}
-                      </span>
-                    </div>
-                  ))}
+                  {myLeaves.map((lv) => {
+                    const [label, cls] = LEAVE_STATUS_TR[lv.status] || [lv.status, "bg-stone-100 text-stone-500"];
+                    return (
+                      <div key={lv.id} className="flex flex-wrap items-center justify-between gap-2 text-sm border border-stone-100 rounded-xl px-3 py-2" data-testid={`ukp-my-leave-${lv.id}`}>
+                        <div>{LEAVE_TYPE_TR[lv.leave_type] || lv.leave_type} · {lv.start_date} → {lv.end_date} ({lv.days} gün)</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${cls}`}>{label}</span>
+                          {(lv.status === "pending" || lv.status === "approved") && (
+                            <button onClick={() => cancelMyLeave(lv)} className="text-xs px-2.5 py-0.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50" data-testid={`ukp-my-leave-cancel-${lv.id}`}>
+                              {lv.status === "pending" ? "İptal Et" : "İptal Talep Et"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                   {myLeaves.length === 0 && <div className="text-sm text-stone-400 py-2">Henüz izin talebiniz yok.</div>}
                 </div>
               </div>

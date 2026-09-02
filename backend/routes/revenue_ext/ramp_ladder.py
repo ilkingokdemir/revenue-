@@ -20,8 +20,30 @@ logger = logging.getLogger(__name__)
 ACTOR = "ramp-ladder"
 DEFAULT_CFG = {"enabled": False, "window_start": 2, "window_end": 21,
                "step_pct": 5.0, "max_steps": 3, "occ_threshold": 70.0,
-               "cadence_hours": 12}
+               "cadence_hours": 12, "forecast_boost": True}
 SAFETY_CAP_MULT = 1.25
+FORECAST_HOT_OCC, FORECAST_COLD_OCC, FORECAST_MIN_DAYS_OUT = 90.0, 50.0, 14
+
+
+async def _forecast_map(db, pid: str, days: int) -> dict:
+    """ML pickup tahmini (LightGBM) → {stay_date: row}; model yoksa boş dict (sessiz)."""
+    try:
+        from routes.revenue_ext.ml_pickup import ml_pickup_forecast
+        f = await ml_pickup_forecast(db, pid, days=days + 1)
+        return {r["date"]: r for r in f.get("days", [])}
+    except Exception as ex:
+        logger.info("ramp forecast unavailable for %s: %s", pid, ex)
+        return {}
+
+
+def _forecast_signal(fc_row: dict | None) -> dict:
+    """Uzak ufukta (T>14) tahmin 'sıcak' ise sönümlü kademe; 'boş gece' ise zam freni."""
+    if not fc_row:
+        return {"hot": False, "cold": False}
+    occ = float(fc_row.get("ml_final_occ_pct") or 0)
+    far = int(fc_row.get("days_out") or 0) > FORECAST_MIN_DAYS_OUT
+    return {"hot": far and occ >= FORECAST_HOT_OCC, "cold": occ < FORECAST_COLD_OCC,
+            "occ": occ, "days_out": fc_row.get("days_out"), "otb": fc_row.get("otb")}
 
 
 def _now():
@@ -93,8 +115,10 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
         {"property_id": pid}, {"_id": 0, "id": 1, "name": 1, "base_price": 1, "total_rooms": 1}).to_list(50)
     actions, skips = [], []
     step_p = float(cfg["step_pct"]) / 100.0
+    fc_map = await _forecast_map(db, pid, int(cfg["window_end"])) if cfg.get("forecast_boost") else {}
     for offset in range(int(cfg["window_start"]), int(cfg["window_end"]) + 1):
         day = (today + timedelta(days=offset)).isoformat()
+        fsig = _forecast_signal(fc_map.get(day))
         for rt in room_types:
             rt_id = rt["id"]
             total = int(rt.get("total_rooms", 0))
@@ -151,8 +175,15 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                 if elapsed < float(cfg["cadence_hours"]):
                     continue
 
+            # --- FORECAST_COLD freni: ML tahmini boş gece diyorsa yukarı kademe atılmaz ---
+            if fsig["cold"] and step_no >= 1:
+                skips.append({"date": day, "room_type": rt.get("name", ""), "reason": "forecast_cold_brake",
+                              "detail": f"ML tahmini nihai doluluk %{fsig['occ']:.0f} (<%{FORECAST_COLD_OCC:.0f}) — zam freni"})
+                continue
+
             # --- MİSAFİR ONAYI + ASİMETRİK ZAMAN KURALI: zam için geçen süre kanıt DEĞİLDİR ---
             market_step = False
+            forecast_step = False
             market = None
             if step_no >= 1:
                 if bookings_at_last is None or sold <= int(bookings_at_last):
@@ -160,8 +191,13 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                     last_mkt = st.get("market_step_at")
                     mkt_ok = not last_mkt or (now - datetime.fromisoformat(last_mkt)).total_seconds() >= 86400
                     market = await _market_signal(db, pid, day) if mkt_ok else {"strong": False}
+                    # --- FORECAST_HOT üçüncü anahtar: uzak ufukta ML tahmini ≥%90 → sönümlü kademe (48 saatte 1) ---
+                    last_fc = st.get("forecast_step_at")
+                    fc_ok = not last_fc or (now - datetime.fromisoformat(last_fc)).total_seconds() >= 172800
                     if market.get("strong"):
                         market_step = True
+                    elif fsig["hot"] and fc_ok:
+                        forecast_step = True
                     else:
                         skips.append({"date": day, "room_type": rt.get("name", ""),
                                       "reason": "awaiting_guest_approval",
@@ -176,8 +212,9 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                 continue
             ceiling = await _ceiling_for(db, pid, rt_id, anchor)
             new_step = step_no + 1
-            # Piyasa kaynaklı kademe SÖNÜMLÜdür: yarım adım (rakipler tükeniyorsa tam adım)
-            eff_step_p = step_p if (not market_step or (market or {}).get("full_step")) else step_p / 2
+            # Piyasa/tahmin kaynaklı kademe SÖNÜMLÜdür: yarım adım (rakipler tükeniyorsa tam adım)
+            damped = forecast_step or (market_step and not (market or {}).get("full_step"))
+            eff_step_p = step_p / 2 if damped else step_p
             new_rate = round(anchor * ((1 + step_p) ** step_no) * (1 + eff_step_p), 2)
             if new_rate > ceiling:
                 skips.append({"date": day, "room_type": rt.get("name", ""), "reason": "at_ceiling",
@@ -207,6 +244,8 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                           "reason": (f"DEMAND_STRONG (piyasa) kademe {new_step}: rakip medyanı %{(market or {}).get('rise_pct', 0)} yükseldi, "
                                      f"rakip doluluk payı %{round(((market or {}).get('unavail_share') or 0) * 100)} — sönümlü adım"
                                      if market_step else
+                                     f"FORECAST_HOT (ML tahmin) kademe {new_step}: {fsig.get('days_out')} gün kala nihai doluluk tahmini %{fsig.get('occ', 0):.0f} — sönümlü adım"
+                                     if forecast_step else
                                      f"Zam merdiveni kademe {new_step}: doluluk %{occ:.0f}"
                                      + (f", misafir onayı: +{sold - int(bookings_at_last)} yeni rezervasyon" if step_no >= 1 else " (talep kanıtı)"))
                           + (" · güvenlik sınırı uygulandı" if guard["clamped"] else ""),
@@ -216,10 +255,12 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                    "step_no": new_step, "from_step": step_no, "rate": new_rate,
                    "occ": round(occ, 1), "sold": sold, "ceiling": ceiling,
                    "direction": "up",
-                   "guest_approved": step_no >= 1 and not market_step,
+                   "guest_approved": step_no >= 1 and not market_step and not forecast_step,
                    "guard_clamped": guard["clamped"],
                    "market_signal": market if market_step else None,
+                   "forecast_signal": fsig if forecast_step else None,
                    "reason": ("DEMAND_STRONG" if market_step else
+                              "FORECAST_HOT" if forecast_step else
                               "guest_approved_step" if step_no >= 1 else "demand_evidence_step"),
                    "created_at": now.isoformat()}
             await db.ramp_steps.insert_one(dict(log))
@@ -227,7 +268,8 @@ async def scan_property(db, pid: str, force: bool = False) -> Dict:
                 {"property_id": pid, "stay_date": day, "room_type_id": rt_id},
                 {"$set": {"step_no": new_step, "anchor_rate": anchor,
                           "bookings_at_last_step": sold, "last_step_at": now.isoformat(),
-                          **({"market_step_at": now.isoformat()} if market_step else {})}},
+                          **({"market_step_at": now.isoformat()} if market_step else {}),
+                          **({"forecast_step_at": now.isoformat()} if forecast_step else {})}},
                 upsert=True)
             log.pop("_id", None)
             actions.append(log)
@@ -284,6 +326,8 @@ def create_ramp_ladder_router(db, require_roles):
         upd = {}
         if "enabled" in data:
             upd["enabled"] = bool(data["enabled"])
+        if "forecast_boost" in data:
+            upd["forecast_boost"] = bool(data["forecast_boost"])
         for k, lo, hi in (("window_start", 1, 30), ("window_end", 2, 60),
                           ("max_steps", 1, 6), ("cadence_hours", 1, 48)):
             if data.get(k) is not None:

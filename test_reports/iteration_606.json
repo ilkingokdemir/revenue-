@@ -1,0 +1,23 @@
+{
+  "summary": "Iteration 606 e2e testing — booking-widget event/holiday signals + OTA→Direct compare banner/chips, admin theme config (direct_advantage_pct, ota_banner_enabled), and UK payroll lock notifications (correction-request/decide/unlock) delivery mock. All 5 pytest cases pass; frontend widget + admin theme + payroll toasts verified.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter606.py",
+    "/app/test_reports/pytest/iter606.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "uk_payroll._notify: 'mode' is derived from email_st only for the emails branch ('sent' in email_st or 'sent' in wa_st) — logic is correct; note that when there are no recipients emails=0 but delivery still returns mode='mock' which is intended.",
+    "booking_widget check-availability: computes ota_total = total_rate / (1 - direct_pct/100). Safe against divide-by-zero (guarded 0 < direct_pct < 100). For pct outside range falls back to ota_total==direct_total — acceptable.",
+    "widget stay_signals returns only one item per icon kind (via `seen` set on icons) — matches requirement; deduplication is by category-mapped icon, so two 'sport' events would collapse to one. This is intentional guest-facing simplification."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter606.py"],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (cookie session via POST /api/auth/login)",
+  "seed_data_creation": "No seed created. Payroll April 2026 run touched: correction-request (Bildirim testi) → decide reject, then unlock (test unlock), then re-lock. Left locked at end as instructed. Restored booking_widget_config.direct_advantage_pct back to 5 after PUT to 8/7.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend regression file /app/backend/tests/test_iter606.py covers: (1) /api/booking-widget/check-availability signals unique icons + sports signal for 2026-09-12..16 and Jeûne genevois holiday for 2026-09-09..11; (2) info theme defaults + PUT config with restore; (3) UK payroll correction-request/decide/unlock delivery {mode:'mock', emails>=1} and notification-log. Widget frontend testids verified: be-ota-banner, be-ota-banner-pct(=5%), be-ota-banner-close, be-dates-btn, be-checkin, be-checkout, be-search-btn, be-ota-compare-*, be-price-explain-*, be-price-signals-*. Admin: booking-engine-admin-btn → Theme & Branding tab exposes theme-direct-pct/theme-ota-banner-toggle/theme-save. Payroll toasts contain 'e-posta' and '(MOCK)'.",
+  "rca of the issue": "N/A — no issues found."
+}

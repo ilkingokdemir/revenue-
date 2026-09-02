@@ -224,13 +224,13 @@ const ReviewsManager = ({ propertyId }) => {
 
 /* ─── WIDGET THEME CONFIG ─── */
 const ThemeConfig = ({ propertyId }) => {
-  const [config, setConfig] = useState({ accent_color: "#1a3c5e", hero_image: "", tagline: "Premium Accommodation", subtitle: "" });
+  const [config, setConfig] = useState({ accent_color: "#1a3c5e", hero_image: "", tagline: "Premium Accommodation", subtitle: "", direct_advantage_pct: 5, ota_banner_enabled: true });
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     axios.get(`${API}/booking-widget/info/${propertyId}`).then(r => {
       const t = r.data.theme || {};
-      setConfig({ accent_color: t.accent_color || "#1a3c5e", hero_image: t.hero_image || "", tagline: t.tagline || "", subtitle: t.subtitle || "" });
+      setConfig({ accent_color: t.accent_color || "#1a3c5e", hero_image: t.hero_image || "", tagline: t.tagline || "", subtitle: t.subtitle || "", direct_advantage_pct: t.direct_advantage_pct ?? 5, ota_banner_enabled: t.ota_banner_enabled !== false });
     }).catch(() => {});
   }, [propertyId]);
 
@@ -268,6 +268,16 @@ const ThemeConfig = ({ propertyId }) => {
         <div>
           <label className="text-xs font-semibold text-stone-500 mb-1 block">Subtitle</label>
           <Textarea value={config.subtitle} onChange={e => setConfig({...config, subtitle: e.target.value})} placeholder="Experience exceptional hospitality..." rows={2} data-testid="theme-subtitle" />
+        </div>
+        <div className="grid md:grid-cols-2 gap-4 items-end" data-testid="ota-banner-config">
+          <div>
+            <label className="text-xs font-semibold text-stone-500 mb-1 block">Direct booking advantage (%) — OTA'dan gelen misafire gösterilen fark</label>
+            <Input type="number" min="0" max="50" step="0.5" value={config.direct_advantage_pct} onChange={e => setConfig({...config, direct_advantage_pct: parseFloat(e.target.value) || 0})} className="h-10" data-testid="theme-direct-pct" />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-stone-700 h-10">
+            <input type="checkbox" checked={config.ota_banner_enabled} onChange={e => setConfig({...config, ota_banner_enabled: e.target.checked})} className="w-4 h-4 accent-emerald-600" data-testid="theme-ota-banner-toggle" />
+            OTA yönlendirme şeridi (?src=booking / referrer) aktif
+          </label>
         </div>
         <button onClick={save} className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${saved ? "bg-emerald-100 text-emerald-700" : "bg-emerald-600 text-white hover:bg-emerald-700"}`} data-testid="theme-save">
           {saved ? "Saved!" : "Save Theme"}

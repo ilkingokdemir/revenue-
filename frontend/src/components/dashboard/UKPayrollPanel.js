@@ -25,6 +25,7 @@ const SL_PLANS = [
 ];
 
 const gbp = (n) => `£${Number(n || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const deliveryText = (d) => d ? `yöneticilere ${d.emails} e-posta${d.whatsapp ? ` + ${d.whatsapp} WhatsApp` : ""} ${d.mode === "live" ? "gönderildi" : "(MOCK) kuyruklandı"}` : "bildirim gönderildi";
 const LEAVE_TYPE_TR = { annual: "Yıllık izin", sick: "Hastalık", unpaid: "Ücretsiz izin", toil: "TOIL" };
 const LEAVE_STATUS_TR = {
   approved: ["Onaylandı", "bg-emerald-50 text-emerald-700"], rejected: ["Reddedildi", "bg-red-50 text-red-600"],
@@ -411,8 +412,8 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
     const reason = window.prompt(`${MONTHS_TR[run.month - 1]} ${run.year} bordrosu kilitli. Düzeltme gerekçesi:`);
     if (!reason) return;
     try {
-      await axios.post(`${API}/uk-payroll/runs/${run.id}/correction-request`, { reason }, cfg);
-      toast.success("Düzeltme talebi oluşturuldu — admin onayı bekleniyor");
+      const { data } = await axios.post(`${API}/uk-payroll/runs/${run.id}/correction-request`, { reason }, cfg);
+      toast.success(`Düzeltme talebi oluşturuldu — ${deliveryText(data.delivery)}`);
       setCorrKey((k) => k + 1);
     } catch (e) { toast.error(e.response?.data?.detail || "Talep oluşturulamadı"); }
   };
@@ -421,8 +422,8 @@ export const UKPayrollPanel = ({ propertyId, user }) => {
     const reason = window.prompt("Kilidi doğrudan açma gerekçesi (loglanır):");
     if (!reason) return;
     try {
-      await axios.post(`${API}/uk-payroll/runs/${run.id}/unlock`, { reason }, cfg);
-      toast.success("Kilit açıldı — dönem yeniden çalıştırılabilir");
+      const { data } = await axios.post(`${API}/uk-payroll/runs/${run.id}/unlock`, { reason }, cfg);
+      toast.success(`Kilit açıldı — ${deliveryText(data.delivery)}`);
       setCorrKey((k) => k + 1);
       loadRuns();
       setActiveRun({ ...run, locked: false });

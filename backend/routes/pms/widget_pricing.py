@@ -13,6 +13,53 @@ SOURCE_LABELS = {
     "abs-auto-pricing": ("Oda özelliği talebi", "Room feature demand"),
 }
 DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+EVENT_KINDS = [
+    (("concert", "music", "festival"), "🎵", "Concert / festival week — high demand in the city", "Konser / festival haftası — şehirde talep yüksek"),
+    (("sport", "football", "marathon", "tennis", "racing", "rugby", "rowing", "equestrian", "motorsport", "nfl"), "🏟️", "Major sports event in town", "Şehirde büyük spor etkinliği"),
+    (("conference", "exhibition", "expo", "trade", "fair", "awards"), "🏢", "Major conference / trade show", "Büyük kongre / fuar dönemi"),
+    (("citywide", "celebration", "cultural", "parade", "peak"), "🎉", "Citywide celebration", "Şehir geneli kutlama"),
+]
+EVENT_MIN_SCORE = 30
+
+
+def _event_kind(category: str):
+    c = (category or "").lower()
+    for keys, icon, en, tr in EVENT_KINDS:
+        if any(k in c for k in keys):
+            return icon, en, tr
+    return "📅", "Local event driving demand", "Talep yaratan yerel etkinlik"
+
+
+async def stay_signals(db, property_id: str, check_in: str, check_out: str) -> list:
+    """Guest-facing demand signals overlapping the stay: city events, public holidays, hotel's own events."""
+    ci, co = _parse(check_in), _parse(check_out)
+    last = (co - timedelta(days=1)).isoformat()
+    days = [(ci + timedelta(days=i)).isoformat() for i in range(max(1, (co - ci).days))]
+    out, seen = [], set()
+    events = await db.market_events.find(
+        {"property_id": {"$in": [property_id, "all"]}, "date": {"$lte": last}, "end_date": {"$gte": check_in},
+         "hotel_demand_score": {"$gte": EVENT_MIN_SCORE}},
+        {"_id": 0, "name": 1, "category": 1, "date": 1, "end_date": 1, "hotel_demand_score": 1}).sort("hotel_demand_score", -1).to_list(6)
+    for e in events:
+        icon, en, tr = _event_kind(e.get("category", ""))
+        if icon in seen:
+            continue
+        seen.add(icon)
+        out.append({"kind": "event", "icon": icon, "label_en": en, "label_tr": tr,
+                    "name": (e.get("name") or "")[:80], "date": e.get("date"), "end_date": e.get("end_date")})
+    hols = await db.demand_calendar_signals.find(
+        {"property_id": property_id, "date": {"$in": days}, "holiday": {"$nin": [None, ""]}},
+        {"_id": 0, "date": 1, "holiday": 1}).to_list(20)
+    for h in hols:
+        out.append({"kind": "holiday", "icon": "🎄", "label_en": f"Public holiday: {h['holiday']}",
+                    "label_tr": f"Resmi tatil: {h['holiday']}", "name": h["holiday"], "date": h["date"], "end_date": h["date"]})
+    own = await db.public_events.find(
+        {"property_id": property_id, "date": {"$in": days}, "status": "published"},
+        {"_id": 0, "title": 1, "date": 1}).to_list(5)
+    for e in own:
+        out.append({"kind": "hotel_event", "icon": "✨", "label_en": f"At the hotel: {e.get('title', '')}",
+                    "label_tr": f"Otelde: {e.get('title', '')}", "name": e.get("title", ""), "date": e.get("date"), "end_date": e.get("date")})
+    return out[:6]
 
 
 def _parse(d: str):

@@ -554,11 +554,41 @@ def create_uk_payroll_router(db, require_roles):
             raise HTTPException(404, "Run bulunamadı")
         return run
 
-    async def _notify(title: str, message: str, property_id: str, category: str = "hr_payroll", priority: str = "high"):
+    async def _notify(title: str, message: str, property_id: str, category: str = "hr_payroll", priority: str = "high",
+                      push: bool = False):
         await db.notifications.insert_one({
             "id": str(uuid.uuid4()), "category": category, "priority": priority, "title": title,
             "message": message, "property_id": property_id or "", "read": False,
             "created_at": datetime.now(timezone.utc).isoformat()})
+        if not push:
+            return {"emails": 0, "whatsapp": 0}
+        recipients = await db.users.find(
+            {"role": {"$in": ["admin", "manager"]}}, {"_id": 0, "email": 1, "phone": 1, "name": 1}).to_list(30)
+        try:
+            from routes.marketing.whatsapp_voice import _send_whatsapp_reply
+        except Exception:
+            _send_whatsapp_reply = None
+        html = (f"<div style='font-family:sans-serif'><h3>🔒 {title}</h3><p>{message}</p>"
+                "<p style='color:#777;font-size:12px'>İK &amp; Bordro (UK) › Bordro Geçmişi ekranından işlem yapabilirsiniz.</p></div>")
+        email_st, wa_st = [], []
+        for r in recipients:
+            if r.get("email"):
+                email_st.append(await _send_email(r["email"], f"Bordro — {title}", html))
+            phone = (r.get("phone") or "").strip()
+            if phone and _send_whatsapp_reply:
+                to = phone if phone.startswith("whatsapp:") else f"whatsapp:{phone if phone.startswith('+') else '+' + phone}"
+                wa_st.append((await _send_whatsapp_reply(to, f"🔒 {title}\n{message}")).get("status"))
+        await db.hr_notification_log.insert_one({
+            "id": str(uuid.uuid4()), "title": title, "message": message, "property_id": property_id or "",
+            "recipients": len(recipients), "email_sent": email_st.count("sent"), "email_mocked": email_st.count("mocked"),
+            "whatsapp_sent": wa_st.count("sent"), "whatsapp_mocked": len(wa_st) - wa_st.count("sent"),
+            "created_at": datetime.now(timezone.utc).isoformat()})
+        return {"emails": len(email_st), "whatsapp": len(wa_st),
+                "mode": "live" if "sent" in email_st or "sent" in wa_st else "mock"}
+
+    @router.get("/uk-payroll/notification-log")
+    async def hr_notification_log(current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await db.hr_notification_log.find({}, {"_id": 0}).sort("created_at", -1).to_list(30)
 
     @router.post("/uk-payroll/runs/{run_id}/correction-request")
     async def correction_request(run_id: str, data: Dict,
@@ -578,10 +608,10 @@ def create_uk_payroll_router(db, require_roles):
                 "requested_by": current_user.get("name", ""), "requested_at": now,
                 "status": "pending", "direct": False}
         await db.uk_payroll_corrections.insert_one({**corr})
-        await _notify("Bordro düzeltme talebi",
-                      f"{corr['requested_by']} — {run['year']}-{run['month']:02d} bordrosu için kilit açma talebi: {reason[:120]}",
-                      run["property_id"])
-        return corr
+        delivery = await _notify("Bordro düzeltme talebi",
+                                 f"{corr['requested_by']} — {run['year']}-{run['month']:02d} bordrosu için kilit açma talebi: {reason[:120]}",
+                                 run["property_id"], push=True)
+        return {**corr, "delivery": delivery}
 
     @router.get("/uk-payroll/corrections/{property_id}")
     async def list_corrections(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
@@ -606,11 +636,11 @@ def create_uk_payroll_router(db, require_roles):
             await db.uk_payroll_runs.update_one({"id": corr["run_id"]}, {"$set": {
                 "locked": False, "unlocked_at": now, "unlocked_by": upd["decided_by"],
                 "unlock_reason": corr["reason"], "correction_id": corr_id}})
-        await _notify("Bordro düzeltme talebi " + ("onaylandı" if decision == "approve" else "reddedildi"),
-                      f"{corr['year']}-{corr['month']:02d} — {corr['requested_by']} talebi {upd['decided_by']} tarafından "
-                      f"{'onaylandı, kilit açıldı' if decision == 'approve' else 'reddedildi'}",
-                      corr["property_id"], priority="normal")
-        return {**corr, **upd}
+        delivery = await _notify("Bordro düzeltme talebi " + ("onaylandı" if decision == "approve" else "reddedildi"),
+                                 f"{corr['year']}-{corr['month']:02d} — {corr['requested_by']} talebi {upd['decided_by']} tarafından "
+                                 f"{'onaylandı, kilit açıldı' if decision == 'approve' else 'reddedildi'}",
+                                 corr["property_id"], priority="normal", push=True)
+        return {**corr, **upd, "delivery": delivery}
 
     @router.post("/uk-payroll/runs/{run_id}/unlock")
     async def unlock_run(run_id: str, data: Dict, current_user: dict = Depends(require_roles("admin"))):
@@ -632,9 +662,9 @@ def create_uk_payroll_router(db, require_roles):
         await db.uk_payroll_corrections.update_many(
             {"run_id": run_id, "status": "pending"},
             {"$set": {"status": "approved", "decided_by": actor, "decided_at": now, "decision_note": "Admin doğrudan kilit açtı"}})
-        await _notify("Bordro kilidi açıldı", f"{run['year']}-{run['month']:02d} — {actor}: {reason[:120]}",
-                      run["property_id"], priority="normal")
-        return {"ok": True, "correction": corr}
+        delivery = await _notify("Bordro kilidi açıldı", f"{run['year']}-{run['month']:02d} — {actor}: {reason[:120]}",
+                                 run["property_id"], priority="normal", push=True)
+        return {"ok": True, "correction": corr, "delivery": delivery}
 
     @router.post("/uk-payroll/runs/{run_id}/lock")
     async def lock_run(run_id: str, current_user: dict = Depends(require_roles("admin"))):

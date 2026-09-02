@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import ConciergeChat from "./components/ConciergeChat";
@@ -110,6 +110,7 @@ export default function BookingWidgetPage({ propertyId }) {
   const [available, setAvailable] = useState([]);
   const [restriction, setRestriction] = useState(null);
   const [explainOpen, setExplainOpen] = useState(null);
+  const [otaDismissed, setOtaDismissed] = useState(false);
   const [selected, setSelected] = useState(null);
   const [searching, setSearching] = useState(false);
   const [booking, setBooking] = useState(false);
@@ -375,9 +376,31 @@ export default function BookingWidgetPage({ propertyId }) {
   const subtitle = theme.subtitle || "Experience exceptional hospitality with our best rate guarantee when you book direct";
   const roomAmenities = ["Free WiFi", "Air Conditioning", "Flat-screen TV", "Private Bathroom", "Daily Housekeeping", "24hr Front Desk"];
 
+  // ─── OTA → DIRECT channel banner ───
+  const otaSource = useMemo(() => {
+    const src = (new URLSearchParams(window.location.search).get("src") || "").toLowerCase();
+    const ref = (document.referrer || "").toLowerCase();
+    const known = [["booking", "Booking.com"], ["expedia", "Expedia"], ["hotels.com", "Hotels.com"], ["airbnb", "Airbnb"], ["agoda", "Agoda"], ["trivago", "Trivago"], ["tripadvisor", "Tripadvisor"], ["google", "Google Hotels"]];
+    for (const [k, label] of known) { if (src.includes(k) || ref.includes(k)) return label; }
+    return src === "ota" ? "an online travel site" : null;
+  }, []);
+  const directPct = Number(hotel.theme?.direct_advantage_pct ?? 5);
+  const showOtaBanner = !!otaSource && hotel.theme?.ota_banner_enabled !== false && directPct > 0 && !otaDismissed;
+
   // ─── HEADER ───
   const Header = () => (
     <header className="fixed top-0 left-0 right-0 z-50 transition-all bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-sm" data-testid="be-header">
+      {showOtaBanner && (
+        <div className="bg-emerald-700 text-white text-sm" data-testid="be-ota-banner">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/20 text-xs font-bold">%</span>
+              <span>Coming from <b>{otaSource}</b>? Book direct and save <b data-testid="be-ota-banner-pct">{directPct}%</b> — same room, free cancellation, no booking fees.</span>
+            </div>
+            <button onClick={() => setOtaDismissed(true)} className="text-white/70 hover:text-white text-lg leading-none" aria-label="Dismiss" data-testid="be-ota-banner-close">×</button>
+          </div>
+        </div>
+      )}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: ac }}>{cn[0]}</div>
@@ -786,6 +809,13 @@ export default function BookingWidgetPage({ propertyId }) {
                       : !r.price_explanation && <div className="text-xs text-stone-400 line-through">{cur(r.base_rate * 1.15, cc)}</div>}
                     <div className="text-2xl font-bold" style={{ color: ac }}>{cur(r.total_rate, cc)}</div>
                     <div className="text-xs text-stone-400">{nights} night{nights > 1 ? "s" : ""} · {cur(r.base_rate, cc)}/night · Includes taxes</div>
+                    {showOtaBanner && r.ota_compare?.pct > 0 && (
+                      <div className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-2 py-1" data-testid={`be-ota-compare-${r.room_type_id}`}>
+                        <span className="line-through text-stone-400">{otaSource} ~{cur(r.total_rate / (1 - r.ota_compare.pct / 100), cc)}</span>
+                        <span className="font-semibold">Direct {cur(r.total_rate, cc)}</span>
+                        <span className="px-1.5 rounded-full bg-emerald-600 text-white font-semibold">save {cur(r.total_rate / (1 - r.ota_compare.pct / 100) - r.total_rate, cc)}</span>
+                      </div>
+                    )}
                     {r.price_explanation && (
                       <div className="mt-1.5">
                         <button onClick={() => setExplainOpen(explainOpen === r.room_type_id ? null : r.room_type_id)}
@@ -797,6 +827,16 @@ export default function BookingWidgetPage({ propertyId }) {
                         {explainOpen === r.room_type_id && (
                           <div className="mt-2 bg-stone-50 border border-stone-200 rounded-xl p-3 text-xs text-stone-600 max-w-md" data-testid={`be-price-explain-panel-${r.room_type_id}`}>
                             <div className="font-semibold text-stone-800 mb-1">{r.price_explanation.headline_en}</div>
+                            {r.price_explanation.signals?.length > 0 && (
+                              <div className="space-y-1 mb-2" data-testid={`be-price-signals-${r.room_type_id}`}>
+                                {r.price_explanation.signals.map((s, i) => (
+                                  <div key={i} className="flex items-start gap-1.5 bg-white border border-stone-100 rounded-lg px-2 py-1">
+                                    <span className="text-sm leading-none">{s.icon}</span>
+                                    <div><div className="font-medium text-stone-700">{s.label_en}</div>{s.kind === "event" && <div className="text-[10px] text-stone-400">{s.name}{s.end_date && s.end_date !== s.date ? ` · ${s.date.slice(5)} → ${s.end_date.slice(5)}` : ` · ${(s.date || "").slice(5)}`}</div>}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             {r.price_explanation.drivers.length > 0 && (
                               <div className="flex flex-wrap gap-1.5 mb-2">
                                 {r.price_explanation.drivers.map((d) => (

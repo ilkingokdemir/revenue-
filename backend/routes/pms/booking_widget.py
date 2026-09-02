@@ -7,7 +7,7 @@ from typing import Dict
 import uuid
 import logging
 
-from routes.pms.widget_pricing import nightly_rates, explain_price, check_los_restrictions
+from routes.pms.widget_pricing import nightly_rates, explain_price, check_los_restrictions, stay_signals
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,8 @@ def create_booking_widget_router(db, require_roles):
             "hero_image": (wconfig or {}).get("hero_image", "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1920&q=80"),
             "tagline": (wconfig or {}).get("tagline", "Premium Accommodation"),
             "subtitle": (wconfig or {}).get("subtitle", "Experience exceptional hospitality with our best rate guarantee when you book direct"),
+            "direct_advantage_pct": float((wconfig or {}).get("direct_advantage_pct", 5) or 0),
+            "ota_banner_enabled": (wconfig or {}).get("ota_banner_enabled", True),
         }
 
         return {
@@ -136,6 +138,9 @@ def create_booking_widget_router(db, require_roles):
 
         # Check existing bookings for overlap
         available = []
+        signals = await stay_signals(db, property_id, check_in, check_out)
+        wcfg = await db.booking_widget_config.find_one({"property_id": property_id}, {"_id": 0, "direct_advantage_pct": 1, "ota_banner_enabled": 1}) or {}
+        direct_pct = float(wcfg.get("direct_advantage_pct", 5) or 0)
         for room in rooms:
             booked = await db.bookings.count_documents({
                 "property_id": property_id,
@@ -152,6 +157,8 @@ def create_booking_widget_router(db, require_roles):
                 total_rate = round(sum(n["rate"] for n in nightly), 2)
                 rate = round(total_rate / nights, 2)
                 explanation = explain_price(nightly)
+                explanation["signals"] = signals
+                ota_total = round(total_rate / (1 - direct_pct / 100), 2) if 0 < direct_pct < 100 else total_rate
                 default_photos = [
                     "https://images.unsplash.com/photo-1631048730670-ff5cd0d08f15?w=600&q=75",
                     "https://images.unsplash.com/photo-1629140727571-9b5c6f6267b4?w=600&q=75",
@@ -169,6 +176,7 @@ def create_booking_widget_router(db, require_roles):
                     "nights": nights,
                     "nightly": nightly,
                     "price_explanation": explanation,
+                    "ota_compare": {"ota_total": ota_total, "direct_total": total_rate, "saving": round(ota_total - total_rate, 2), "pct": direct_pct},
                     "available": avail,
                     "max_occupancy": room.get("max_occupancy", 2),
                     "description": room.get("description", ""),

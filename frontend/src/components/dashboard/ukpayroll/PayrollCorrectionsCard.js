@@ -21,8 +21,10 @@ export const PayrollCorrectionsCard = ({ pid, isAdmin, refreshKey, onChanged }) 
 
   const decide = async (c, decision) => {
     try {
-      await axios.post(`${API}/uk-payroll/corrections/${c.id}/decide`, { decision }, cfg);
-      toast.success(decision === "approve" ? "Düzeltme onaylandı — bordro kilidi açıldı" : "Düzeltme talebi reddedildi");
+      const { data } = await axios.post(`${API}/uk-payroll/corrections/${c.id}/decide`, { decision }, cfg);
+      const d = data.delivery;
+      const dl = d ? ` · ${d.emails} e-posta${d.whatsapp ? ` + ${d.whatsapp} WhatsApp` : ""} ${d.mode === "live" ? "gönderildi" : "(MOCK)"}` : "";
+      toast.success((decision === "approve" ? "Düzeltme onaylandı — bordro kilidi açıldı" : "Düzeltme talebi reddedildi") + dl);
       load();
       onChanged?.();
     } catch (e) { toast.error(e.response?.data?.detail || "İşlem başarısız"); }

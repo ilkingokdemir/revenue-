@@ -1489,3 +1489,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - A/B OTOMATİK KAZANAN: booking_widget.run_ab_auto_winner_internal — ota_ab_enabled config'ler için 90 gün varyant istatistiği; her varyant ≥20 gösterim ve fark ≥2 puan → direct_advantage_pct=kazanan %, ota_ab_enabled=false, ota_ab_auto_locked{variant,pct,at,stats}, notifications + admin e-posta (MOCK). POST /booking-widget/ab-auto-winner/run/{pid}; JOB 'ota_ab_auto_winner' (06:30). ota-conversion.ab.auto_locked → OTACommissionPanel 'otomatik sabitlendi' etiketi.
 - ADMIN UI: BookingEngineAdmin yeni sekme "Misafir Yolculuğu" (bea-tab-journey) → ArrivalReminderCard (şimdi çalıştır, TR/EN/DE önizleme iframe, log) + EventPackagesCard (varsayılan/özel ekle, aktif/pasif, sil). 'all' şube seçiliyken pid ilk mülke düşer.
 - MOCK: Resend, Twilio.
+
+## ⚠️ KULLANICI KURALI (2026-09 — zorunlu, her fork okusun)
+- Kullanıcı: "Olan özellikleri tekrar yazıyorsun, ekstra maliyet ve zaman kaybı — istemiyorum."
+- HER yeni istek öncesi ZORUNLU: `grep -rn` ile backend/routes ve frontend/src'de mevcut modül/endpoint/panel ara (ör. ab_test.py, pre_arrival.py, guest_journey.py, upsell_autopilot.py, event_intelligence, forecast_v2, los_optimizer, parity_analysis…). Varsa ASLA yeniden yazma → mevcut modülü genişlet ve kullanıcıya "zaten var, şunu ekliyorum" de.
+- Bilinen duplikasyonlar (kullanıcı isterse birleştir, kendi başına yeni iş açma): OTA A/B sayaçları (booking_widget.py) ↔ ab_test.py motoru; arrival_reminder.py ↔ pre_arrival.py drip (eski göndermiyor).
+- Kullanıcı onayı olmadan yeni modül/koleksiyon açma; öneri listesinde mevcut özellikleri "yeni" gibi sunma.

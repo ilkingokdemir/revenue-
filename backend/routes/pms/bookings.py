@@ -448,7 +448,56 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.reviews.insert_one(hub_review)
-        return {"status": "success", "message": "Thank you for your review!"}
+        coupon = await _issue_review_thanks_coupon(booking, doc)
+        return {"status": "success", "message": "Thank you for your review!", "coupon": coupon}
+
+    REVIEW_COUPON_PCT, REVIEW_COUPON_DAYS = 10, 365
+    COUPON_T = {
+        "en": ("A thank-you gift from {hotel}: {pct}% off your next stay", "Thank you for your review!",
+               "As a small thank-you, here's {pct}% off your next direct booking. Use the code at checkout on our website.", "Valid until {until} · one use · direct bookings only", "Book your next stay"),
+        "tr": ("{hotel} teşekkür hediyesi: sonraki konaklamanızda %{pct} indirim", "Yorumunuz için teşekkürler!",
+               "Küçük bir teşekkür olarak bir sonraki direkt rezervasyonunuzda %{pct} indirim. Kodu web sitemizde ödeme adımında kullanın.", "{until} tarihine kadar geçerli · tek kullanım · yalnızca direkt rezervasyon", "Sonraki konaklamanızı planlayın"),
+        "de": ("Ein Dankeschön von {hotel}: {pct}% Rabatt auf Ihren nächsten Aufenthalt", "Vielen Dank für Ihre Bewertung!",
+               "Als kleines Dankeschön erhalten Sie {pct}% Rabatt auf Ihre nächste Direktbuchung. Code beim Checkout auf unserer Website eingeben.", "Gültig bis {until} · einmalig · nur Direktbuchungen", "Nächsten Aufenthalt buchen"),
+    }
+
+    async def _issue_review_thanks_coupon(booking: dict, review: dict) -> dict | None:
+        """Reviewer reward: one-time 10% promo code (existing promo_codes infra) e-mailed in guest language."""
+        email = (review.get("guest_email") or booking.get("guest_email") or "").strip()
+        if not email:
+            return None
+        if await db.promo_codes.find_one({"source": "review_thanks", "booking_ref": booking.get("booking_ref")}, {"_id": 0, "code": 1}):
+            return None
+        from routes.platform_ext.mailer import send_email as _mail
+        pid = booking.get("property_id", "")
+        lang = (booking.get("guest_lang") or "en")[:2].lower()
+        subj, title, body, valid, cta = COUPON_T.get(lang, COUPON_T["en"])
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+        ts = await db.template_settings.find_one({"property_id": pid}, {"_id": 0, "hotel_name": 1}) or {}
+        hotel = ts.get("hotel_name") or prop.get("name") or "Hotel"
+        until = (datetime.now(timezone.utc) + timedelta(days=REVIEW_COUPON_DAYS)).date().isoformat()
+        code = "THANKS" + uuid.uuid4().hex[:6].upper()
+        await db.promo_codes.insert_one({
+            "id": str(uuid.uuid4()), "property_id": pid, "code": code, "kind": "percent", "amount": REVIEW_COUPON_PCT,
+            "valid_from": datetime.now(timezone.utc).date().isoformat(), "valid_to": until, "max_uses": 1, "used": 0,
+            "min_nights": 1, "applies_to_products": [], "active": True, "source": "review_thanks",
+            "booking_ref": booking.get("booking_ref"), "guest_email": email, "review_rating": review.get("rating"),
+            "created_at": datetime.now(timezone.utc).isoformat()})
+        book_url = f"{_get_base_url()}/book/{pid}?coupon={code}&lang={lang}"
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;">
+          <div style="background:#1a3c5e;color:#fff;padding:28px;text-align:center;"><h1 style="margin:0;font-size:22px;">🎁 {title}</h1></div>
+          <div style="padding:28px;text-align:center;">
+            <p style="font-size:15px;color:#475569;line-height:1.6;">{body.format(pct=REVIEW_COUPON_PCT)}</p>
+            <div style="display:inline-block;background:#F5F7FA;border:2px dashed #1a3c5e;border-radius:10px;padding:14px 28px;margin:16px 0;font-size:26px;font-weight:800;letter-spacing:3px;color:#1a3c5e;">{code}</div>
+            <p style="font-size:12px;color:#94a3b8;">{valid.format(until=until)}</p>
+            <a href="{book_url}" style="display:inline-block;margin-top:12px;background:#2563eb;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:700;font-size:14px;">{cta}</a>
+            <p style="margin-top:24px;font-size:12px;color:#666;"><strong>{hotel}</strong></p>
+          </div>
+        </div>"""
+        status = await _mail(db, email, subj.format(hotel=hotel, pct=REVIEW_COUPON_PCT), html, kind="review_thanks_coupon",
+                             meta={"booking_ref": booking.get("booking_ref"), "code": code, "lang": lang})
+        return {"code": code, "pct": REVIEW_COUPON_PCT, "valid_to": until, "email_status": status}
 
     @router.get("/review-collection/page/{property_id}/{booking_ref}")
     async def get_review_page_data(property_id: str, booking_ref: str):

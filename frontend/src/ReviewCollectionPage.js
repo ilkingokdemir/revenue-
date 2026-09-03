@@ -8,15 +8,18 @@ const R = {
   en: { load_err: "Unable to load review page", pick: "Please select a rating", write: "Please write a short review", fail: "Submission failed", retry: "Failed to submit. Please try again.",
     invalid: "Review Link Invalid", invalid_p: "This review link may have expired or is incomplete.", thanks: "Thank You!", thanks_p: "Your feedback means the world to us. It helps other guests and helps us improve.",
     stars: ["", "Poor", "Fair", "Good", "Very Good", "Excellent"], how: "How was your stay?", honest: "Your honest feedback helps us improve",
-    title_ph: "Summarize your experience (optional)", text_ph: "Tell us about your stay — the room, service, location, anything that stood out...", submit: "Submit Review", public: "Your review will be shared publicly to help future guests", locale: "en-GB" },
+    title_ph: "Summarize your experience (optional)", text_ph: "Tell us about your stay — the room, service, location, anything that stood out...", submit: "Submit Review", public: "Your review will be shared publicly to help future guests", locale: "en-GB",
+    gift: "Your thank-you gift: {pct}% off your next stay", gift_valid: "Valid until {until} · one use · direct bookings only · also sent by e-mail", gift_cta: "Book your next stay" },
   tr: { load_err: "Yorum sayfası yüklenemedi", pick: "Lütfen bir puan seçin", write: "Lütfen kısa bir yorum yazın", fail: "Gönderim başarısız", retry: "Gönderilemedi. Lütfen tekrar deneyin.",
     invalid: "Yorum Bağlantısı Geçersiz", invalid_p: "Bu bağlantının süresi dolmuş ya da eksik olabilir.", thanks: "Teşekkürler!", thanks_p: "Geri bildiriminiz bizim için çok değerli. Diğer misafirlere ve gelişmemize yardımcı olur.",
     stars: ["", "Zayıf", "Orta", "İyi", "Çok İyi", "Mükemmel"], how: "Konaklamanız nasıldı?", honest: "Dürüst geri bildiriminiz gelişmemize yardımcı olur",
-    title_ph: "Deneyiminizi özetleyin (isteğe bağlı)", text_ph: "Konaklamanızı anlatın — oda, hizmet, konum, öne çıkan her şey...", submit: "Yorumu Gönder", public: "Yorumunuz gelecek misafirlere yardımcı olmak için herkese açık paylaşılır", locale: "tr-TR" },
+    title_ph: "Deneyiminizi özetleyin (isteğe bağlı)", text_ph: "Konaklamanızı anlatın — oda, hizmet, konum, öne çıkan her şey...", submit: "Yorumu Gönder", public: "Yorumunuz gelecek misafirlere yardımcı olmak için herkese açık paylaşılır", locale: "tr-TR",
+    gift: "Teşekkür hediyeniz: sonraki konaklamada %{pct} indirim", gift_valid: "{until} tarihine kadar geçerli · tek kullanım · yalnızca direkt rezervasyon · e-postayla da gönderildi", gift_cta: "Sonraki konaklamanızı planlayın" },
   de: { load_err: "Bewertungsseite konnte nicht geladen werden", pick: "Bitte wählen Sie eine Bewertung", write: "Bitte schreiben Sie eine kurze Bewertung", fail: "Übermittlung fehlgeschlagen", retry: "Senden fehlgeschlagen. Bitte erneut versuchen.",
     invalid: "Bewertungslink ungültig", invalid_p: "Dieser Link ist möglicherweise abgelaufen oder unvollständig.", thanks: "Vielen Dank!", thanks_p: "Ihr Feedback bedeutet uns viel. Es hilft anderen Gästen und uns, besser zu werden.",
     stars: ["", "Schlecht", "Mässig", "Gut", "Sehr gut", "Ausgezeichnet"], how: "Wie war Ihr Aufenthalt?", honest: "Ihr ehrliches Feedback hilft uns, besser zu werden",
-    title_ph: "Fassen Sie Ihr Erlebnis zusammen (optional)", text_ph: "Erzählen Sie von Ihrem Aufenthalt — Zimmer, Service, Lage, alles, was auffiel...", submit: "Bewertung senden", public: "Ihre Bewertung wird öffentlich geteilt, um künftigen Gästen zu helfen", locale: "de-DE" },
+    title_ph: "Fassen Sie Ihr Erlebnis zusammen (optional)", text_ph: "Erzählen Sie von Ihrem Aufenthalt — Zimmer, Service, Lage, alles, was auffiel...", submit: "Bewertung senden", public: "Ihre Bewertung wird öffentlich geteilt, um künftigen Gästen zu helfen", locale: "de-DE",
+    gift: "Ihr Dankeschön: {pct}% Rabatt auf den nächsten Aufenthalt", gift_valid: "Gültig bis {until} · einmalig · nur Direktbuchungen · auch per E-Mail gesendet", gift_cta: "Nächsten Aufenthalt buchen" },
 };
 
 export default function ReviewCollectionPage() {
@@ -33,6 +36,7 @@ export default function ReviewCollectionPage() {
   const [title, setTitle] = useState("");
   const [reviewText, setReviewText] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [coupon, setCoupon] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -54,6 +58,8 @@ export default function ReviewCollectionPage() {
         { method: "POST" }
       );
       if (!res.ok) { const d = await res.json(); setError(d.detail || t.fail); return; }
+      const ok = await res.json().catch(() => ({}));
+      if (ok?.coupon) setCoupon(ok.coupon);
       setSubmitted(true);
     } catch { setError(t.retry); }
   };
@@ -82,6 +88,14 @@ export default function ReviewCollectionPage() {
         </div>
         <h1 className="text-2xl font-bold text-slate-900 mb-2">{t.thanks}</h1>
         <p className="text-slate-500">{t.thanks_p}</p>
+        {coupon && (
+          <div className="mt-5 bg-blue-50 border-2 border-dashed border-blue-300 rounded-xl p-4" data-testid="review-coupon">
+            <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide">{t.gift.replace("{pct}", coupon.pct)}</div>
+            <div className="text-2xl font-extrabold tracking-[3px] text-blue-900 my-1" data-testid="review-coupon-code">{coupon.code}</div>
+            <div className="text-[11px] text-slate-500">{t.gift_valid.replace("{until}", coupon.valid_to)}</div>
+            <a href={`/book/${propertyId}?coupon=${coupon.code}&lang=${langParam}`} className="inline-block mt-3 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2" data-testid="review-coupon-book">{t.gift_cta}</a>
+          </div>
+        )}
         <div className="flex justify-center gap-1 mt-4">
           {[1,2,3,4,5].map(s => <Star key={s} size={24} weight="fill" className={s <= rating ? "text-amber-400" : "text-slate-200"} />)}
         </div>

@@ -1506,3 +1506,6 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - /review sayfası (ReviewCollectionPage.js) ?lang=tr|en|de (yoksa navigator.language) → tüm metinler + tarih locale çevrildi (R sözlüğü, data-testid review-title).
 - Upsell kabul bildirimi: upsell_engine.claim_upsell → db.notifications (category upsell, priority high, booking_id) "Misafir ekstra ekledi: …".
 - Sabah Karnesi (morning_karne.build_karne) yeni satır "Misafir robotları (24s)": ön varış e-postası sayısı · yorum isteği sayısı · (varsa) A/B kazanan sabitlendi.
+
+## Güncelleme (Faz 30 — Yorum Teşekkür Kuponu; mevcut promo_codes + mailer altyapısı, yeni modül YOK)
+- bookings.py submit_review → _issue_review_thanks_coupon: db.promo_codes'a {kind percent, amount 10, max_uses 1, valid_to +365g, source review_thanks, booking_ref} (aynı rezervasyona 1 kez); TR/EN/DE e-posta (kind review_thanks_coupon, MOCK) + /book/{pid}?coupon=CODE&lang= linki (widget ?coupon= zaten okuyor, direct-conversion/validate ile kullanılır). Submit yanıtı coupon{code,pct,valid_to,email_status}; ReviewCollectionPage teşekkür ekranında review-coupon kutusu.

@@ -126,7 +126,7 @@ async def send_karne(db, pid: str, forced: bool = False) -> Dict:
     prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
     admins = await db.users.find({"role": {"$in": ["admin", "manager"]},
                                   "is_active": {"$ne": False}},
-                                 {"_id": 0, "email": 1}).to_list(20)
+                                 {"_id": 0, "email": 1, "phone": 1}).to_list(20)
     html = _karne_html(prop.get("name", pid), karne)
     sent_to = []
     for a in admins:
@@ -135,8 +135,24 @@ async def send_karne(db, pid: str, forced: bool = False) -> Dict:
                              f"🌅 Sabah Karnesi ({karne['grade']}) — {prop.get('name', pid)} · {today}",
                              html, kind="morning_karne", meta={"property_id": pid})
             sent_to.append(a["email"])
+    wa_sent = []
+    try:
+        from routes.marketing.whatsapp_voice import _send_whatsapp_reply
+        top = [c for c in karne.get("checks", []) if c.get("status") != "ok"][:3]
+        lines = [f"🌅 Sabah Karnesi {today} — {prop.get('name', pid)} · Not: {karne.get('grade')}"]
+        lines += [f"• {c['name']}: {c['value']}" for c in top] or ["• Tüm kontroller ✅"]
+        text = "\n".join(lines)
+        for a in admins:
+            phone = (a.get("phone") or "").strip()
+            if not phone:
+                continue
+            to = phone if phone.startswith("whatsapp:") else f"whatsapp:{phone if phone.startswith('+') else '+' + phone}"
+            r = await _send_whatsapp_reply(to, text)
+            wa_sent.append({"to": phone, "status": r.get("status")})
+    except Exception as ex:
+        logger.info("karne whatsapp skipped: %s", ex)
     doc = {"id": str(uuid.uuid4()), "property_id": pid, "date": today, "karne": karne,
-           "sent_to": sent_to, "forced": forced, "created_at": _now().isoformat()}
+           "sent_to": sent_to, "whatsapp": wa_sent, "forced": forced, "created_at": _now().isoformat()}
     await db.daily_report_cards.insert_one(dict(doc))
     doc.pop("_id", None)
     return doc

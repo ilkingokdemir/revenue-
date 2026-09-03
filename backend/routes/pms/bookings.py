@@ -448,7 +448,18 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.reviews.insert_one(hub_review)
-        coupon = await _issue_review_thanks_coupon(booking, doc)
+        coupon = None
+        if int(doc.get("rating") or 0) <= 2:
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()), "category": "guest_recovery", "priority": "high",
+                "title": f"⚠️ Misafir kurtarma: {doc.get('rating')}★ yorum — {booking.get('guest_name') or doc.get('guest_name', '')}",
+                "message": (f"{booking.get('booking_ref', '')} · {booking.get('room_type', '')} · çıkış {booking.get('check_out', '')} · "
+                            f"\"{(doc.get('title') or '')[:60]}\" — {(doc.get('review_text') or '')[:180]} · Kupon gönderilmedi; misafirle iletişime geçin."),
+                "property_id": booking.get("property_id", ""), "booking_id": booking.get("id"), "booking_ref": booking.get("booking_ref"),
+                "guest_email": booking.get("guest_email", ""), "rating": doc.get("rating"), "read": False,
+                "created_at": datetime.now(timezone.utc).isoformat()})
+        else:
+            coupon = await _issue_review_thanks_coupon(booking, doc)
         return {"status": "success", "message": "Thank you for your review!", "coupon": coupon}
 
     REVIEW_COUPON_PCT, REVIEW_COUPON_DAYS = 10, 365

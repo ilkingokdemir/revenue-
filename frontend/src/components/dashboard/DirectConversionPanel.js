@@ -107,6 +107,22 @@ const StatsTab = () => {
         <KPI icon={TrendingUp} label="Komisyon Tasarrufu" value={`£${fmt(data.commission_saved)}`} accent="text-emerald-700" testId="dcv-kpi-saved" />
       </div>
 
+      {data.review_coupons && (
+        <div className="bg-white border border-blue-200 rounded-xl p-4" data-testid="dcv-review-coupons">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <h3 className="text-sm font-semibold text-blue-900">🎁 Yorum Teşekkür Kuponları (THANKS-kodları)</h3>
+            <span className="text-[11px] text-stone-500">Yorum bırakan misafire otomatik %10 · tek kullanım · 1 yıl</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+            <div className="bg-stone-50 rounded-lg p-3"><div className="text-[11px] text-stone-500">Verilen</div><div className="text-xl font-bold" data-testid="dcv-rc-issued">{data.review_coupons.issued}</div></div>
+            <div className="bg-stone-50 rounded-lg p-3"><div className="text-[11px] text-stone-500">Kullanılan</div><div className="text-xl font-bold text-emerald-700" data-testid="dcv-rc-used">{data.review_coupons.used}</div></div>
+            <div className="bg-stone-50 rounded-lg p-3"><div className="text-[11px] text-stone-500">Kullanım oranı</div><div className="text-xl font-bold" data-testid="dcv-rc-pct">{data.review_coupons.usage_pct}%</div></div>
+            <div className="bg-stone-50 rounded-lg p-3"><div className="text-[11px] text-stone-500">Süresi dolan</div><div className="text-xl font-bold text-stone-500">{data.review_coupons.expired}</div></div>
+            <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200"><div className="text-[11px] text-stone-500">Getirdiği gelir</div><div className="text-xl font-bold text-emerald-700" data-testid="dcv-rc-revenue">£{fmt(data.review_coupons.revenue)}</div></div>
+          </div>
+        </div>
+      )}
+
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-white border border-stone-200 rounded-xl p-5">
           <h3 className="text-sm font-semibold text-stone-800 mb-3">Funnel</h3>

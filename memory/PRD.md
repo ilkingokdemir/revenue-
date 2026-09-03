@@ -1509,3 +1509,8 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 
 ## Güncelleme (Faz 30 — Yorum Teşekkür Kuponu; mevcut promo_codes + mailer altyapısı, yeni modül YOK)
 - bookings.py submit_review → _issue_review_thanks_coupon: db.promo_codes'a {kind percent, amount 10, max_uses 1, valid_to +365g, source review_thanks, booking_ref} (aynı rezervasyona 1 kez); TR/EN/DE e-posta (kind review_thanks_coupon, MOCK) + /book/{pid}?coupon=CODE&lang= linki (widget ?coupon= zaten okuyor, direct-conversion/validate ile kullanılır). Submit yanıtı coupon{code,pct,valid_to,email_status}; ReviewCollectionPage teşekkür ekranında review-coupon kutusu.
+
+## Güncelleme (Faz 31 — mevcut dosyalara 3 küçük ekleme; curl ile doğrulandı)
+- Düşük puan uyarısı: bookings.submit_review rating ≤2 → kupon YOK, db.notifications {category guest_recovery, priority high, booking_ref, guest_email, rating} "⚠️ Misafir kurtarma: 1★ yorum — …"; ≥3 → THANKS kuponu.
+- Karne WhatsApp: morning_karne.send_karne admin/manager phone varsa _send_whatsapp_reply (Twilio MOCK→queued) ile not + en fazla 3 sorunlu kontrol; doc.whatsapp[] loglanır.
+- Kupon kullanım raporu: direct-conversion/stats → review_coupons{issued, used, expired, usage_pct, revenue (bookings.coupon_code eşleşmesi)}; DirectConversionPanel dcv-review-coupons kartı.

@@ -359,7 +359,22 @@ def create_direct_conversion_router(db, require_roles):
             "commission_saved": commission_saved,
             "potential_saving": potential_saving,
             "by_channel": sorted(by_channel.values(), key=lambda x: x["sent"], reverse=True),
+            "review_coupons": await _review_coupon_stats(),
         }
+
+    async def _review_coupon_stats() -> dict:
+        """THANKS-codes issued after guest reviews: issued / used / revenue from bookings that redeemed them."""
+        codes = await db.promo_codes.find({"source": "review_thanks"}, {"_id": 0, "code": 1, "used": 1, "valid_to": 1}).to_list(5000)
+        used_codes = [c["code"] for c in codes if int(c.get("used") or 0) > 0]
+        today = datetime.now(timezone.utc).date().isoformat()
+        revenue = 0.0
+        if used_codes:
+            bks = await db.bookings.find({"coupon_code": {"$in": used_codes}, "status": {"$nin": ["cancelled", "no_show"]}},
+                                         {"_id": 0, "total": 1, "total_price": 1}).to_list(5000)
+            revenue = round(sum(float(b.get("total") or b.get("total_price") or 0) for b in bks), 2)
+        return {"issued": len(codes), "used": len(used_codes),
+                "expired": sum(1 for c in codes if c.get("valid_to", "9999") < today and int(c.get("used") or 0) == 0),
+                "usage_pct": round(len(used_codes) / len(codes) * 100, 1) if codes else 0.0, "revenue": revenue}
 
     @router.post("/scan")
     async def scan(limit: int = 200,

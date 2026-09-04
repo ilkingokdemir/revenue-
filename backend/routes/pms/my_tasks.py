@@ -1,7 +1,7 @@
 """
 My Tasks — Personalized daily dashboard aggregating shifts, handover notes, routines, maintenance
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone, timedelta
 from typing import Dict
 import logging
@@ -79,7 +79,11 @@ def create_my_tasks_router(db, require_roles):
         notif_q = {"read": False, "$or": [{"target_user": user_email}, {"target_user": ""}, {"target_role": user_role}]}
         unread_notifs = await db.notifications.count_documents(notif_q)
 
+        rc_q = {"source": "root_cause", "status": {"$nin": ["done", "resolved", "completed", "closed"]}}
+        root_cause_tasks = await db.staff_tasks.find(rc_q, {"_id": 0}).sort("created_at", -1).to_list(20)
+
         return {
+            "root_cause_tasks": root_cause_tasks,
             "user": {"name": user_name, "role": user_role, "email": user_email},
             "date": today,
             "today_shifts": shifts,
@@ -102,6 +106,16 @@ def create_my_tasks_router(db, require_roles):
                 "hk_urgent": sum(1 for t in hk_tasks if t.get("priority") == "urgent"),
             }
         }
+
+    @router.put("/my-tasks/staff-task/{task_id}/complete")
+    async def complete_staff_task(task_id: str, body: Dict = None, current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper", "staff"))):
+        now = datetime.now(timezone.utc).isoformat()
+        r = await db.staff_tasks.update_one({"id": task_id}, {"$set": {"status": "done", "completed_at": now, "updated_at": now,
+                                                                       "completed_by": current_user.get("name", current_user.get("email", "")),
+                                                                       "completion_notes": str((body or {}).get("notes") or "")[:500]}})
+        if not r.matched_count:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return {"ok": True, "status": "done", "completed_at": now}
 
     @router.post("/my-tasks/personal")
     async def add_personal_task(data: Dict, current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper", "maintenance"))):

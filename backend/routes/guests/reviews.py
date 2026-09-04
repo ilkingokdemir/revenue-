@@ -912,6 +912,82 @@ def create_reviews_router(db, require_roles, get_current_user, verify_api_key, L
         q = {"property_id": property_id} if property_id != "all" else {}
         return {"items": await db.staff_praise_log.find(q, {"_id": 0}).sort("created_at", -1).to_list(20)}
 
+    @router.get("/reviews/staff-praise/leaderboard")
+    async def staff_leaderboard(property_id: str = "all", _: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper", "staff"))):
+        """Ödül Duvarı: haftalık yıldızlar (rozet) + aylık liderlik (son 30g övgü)."""
+        q = {"property_id": property_id} if property_id != "all" else {}
+        weekly = await db.staff_praise_log.find(q, {"_id": 0}).sort("created_at", -1).to_list(12)
+        badges: Dict[str, dict] = {}
+        seen = set()
+        for w in weekly:
+            key = (w["staff"], w.get("week"))
+            if key in seen:
+                continue
+            seen.add(key)
+            b = badges.setdefault(w["staff"], {"name": w["staff"], "weeks_won": 0, "last_week": w.get("week"), "badges": []})
+            b["weeks_won"] += 1
+        for b in badges.values():
+            n = b["weeks_won"]
+            b["badges"] = (["⭐ Haftanın Yıldızı"] + (["🥈 2× Yıldız"] if n >= 2 else []) + (["🥇 3× Yıldız"] if n >= 3 else []) + (["🏆 Efsane (5×)"] if n >= 5 else []))
+        month = await staff_intelligence(db, property_id, 30)
+        board = sorted(month.get("staff", []), key=lambda x: (-x["positive"], x["negative"], -x["avg_rating"]))
+        for i, p in enumerate(board): p["rank"] = i + 1
+        return {"weekly_stars": weekly[:8], "badges": sorted(badges.values(), key=lambda x: -x["weeks_won"]),
+                "monthly_leaderboard": board[:10], "month_days": 30}
+
+    async def run_root_cause_impact_internal(property_id: str = "all") -> dict:
+        """Kök neden görevi kapandıktan ≥30 gün sonra: konunun yorum puanı/frekansı 30g önce vs 30g sonra → rapor + bildirim."""
+        now = datetime.now(timezone.utc)
+        cutoff = (now - timedelta(days=30)).isoformat()
+        q = {"source": "root_cause", "status": {"$in": ["done", "resolved", "completed", "closed"]}, "impact_reported_at": {"$exists": False},
+             "$or": [{"completed_at": {"$lte": cutoff}}, {"updated_at": {"$lte": cutoff}}]}
+        if property_id and property_id != "all": q["property_id"] = property_id
+        reports = []
+        for t in await db.staff_tasks.find(q, {"_id": 0}).to_list(50):
+            closed = t.get("completed_at") or t.get("updated_at")
+            c_dt = datetime.fromisoformat(closed.replace("Z", "+00:00")) if isinstance(closed, str) else closed
+            pid, topic = t.get("property_id", ""), t.get("topic", "")
+            pq = {"property_id": pid} if pid and pid != "all" else {}
+
+            async def _window(frm, to):
+                docs = await db.reviews.find({**pq, "created_at": {"$gte": frm.isoformat(), "$lt": to.isoformat()}},
+                                             {"_id": 0, "rating": 1, "sentiment_analysis.topics": 1}).to_list(3000)
+                hit = [d for d in docs if topic in [str(x).lower() for x in ((d.get("sentiment_analysis") or {}).get("topics") or [])]]
+                neg = [d for d in hit if int(d.get("rating") or 3) <= 3]
+                return {"reviews": len(docs), "topic_mentions": len(hit), "topic_avg_rating": round(sum(int(d.get("rating") or 3) for d in hit) / len(hit), 2) if hit else None,
+                        "negative_pct": round(len(neg) / len(docs) * 100) if docs else 0}
+            before, after = await _window(c_dt - timedelta(days=30), c_dt), await _window(c_dt, c_dt + timedelta(days=30))
+            delta = (after["topic_avg_rating"] or 0) - (before["topic_avg_rating"] or 0) if before["topic_avg_rating"] is not None and after["topic_avg_rating"] is not None else None
+            if after["topic_mentions"] == 0 and before["topic_mentions"] == 0:
+                verdict = "insufficient_data"
+            elif after["topic_mentions"] == 0:
+                verdict = "improved" if before["topic_mentions"] >= 2 else "insufficient_data"   # konu artık anılmıyor
+            else:
+                verdict = "improved" if (delta or 0) >= 0.3 or after["negative_pct"] < before["negative_pct"] - 5 else "worse" if (delta or 0) <= -0.3 else "unchanged"
+            rep = {"id": str(uuid.uuid4()), "task_id": t["id"], "property_id": pid, "topic": topic, "task_title": t.get("title"), "closed_at": closed,
+                   "before": before, "after": after, "rating_delta": round(delta, 2) if delta is not None else None, "verdict": verdict,
+                   "created_at": now.isoformat()}
+            await db.root_cause_impacts.insert_one(dict(rep))
+            await db.staff_tasks.update_one({"id": t["id"]}, {"$set": {"impact_reported_at": now.isoformat(), "impact_verdict": verdict, "impact_rating_delta": rep["rating_delta"]}})
+            icon = {"improved": "📈", "worse": "📉", "unchanged": "➡️", "insufficient_data": "❔"}[verdict]
+            await db.notifications.insert_one({"id": str(uuid.uuid4()), "category": "root_cause_impact", "priority": "normal",
+                                               "title": f"{icon} Görev kapanış etkisi: {topic} — {verdict}",
+                                               "message": f"Konu puanı {before['topic_avg_rating']} → {after['topic_avg_rating']} (Δ {rep['rating_delta']}), olumsuz % {before['negative_pct']} → {after['negative_pct']}",
+                                               "property_id": pid, "read": False, "created_at": now.isoformat()})
+            rep.pop("_id", None); reports.append(rep)
+        return {"ok": True, "reported": len(reports), "reports": reports}
+
+    router.run_root_cause_impact_internal = run_root_cause_impact_internal
+
+    @router.post("/reviews/root-cause/impact/run")
+    async def root_cause_impact_run(property_id: str = "all", _: dict = Depends(require_roles("admin", "manager"))):
+        return await run_root_cause_impact_internal(property_id)
+
+    @router.get("/reviews/root-cause/impact")
+    async def root_cause_impact_list(property_id: str = "all", _: dict = Depends(require_roles("admin", "manager"))):
+        q = {"property_id": property_id} if property_id != "all" else {}
+        return {"items": await db.root_cause_impacts.find(q, {"_id": 0}).sort("created_at", -1).to_list(30)}
+
     @router.get("/reviews/staff-intelligence")
     async def get_staff_intelligence(property_id: Optional[str] = None, days: int = 90,
                                      _: dict = Depends(require_roles("admin", "manager"))):

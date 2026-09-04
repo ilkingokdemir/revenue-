@@ -29,6 +29,15 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [topicCompare, setTopicCompare] = useState(null);
+  const [compIntel, setCompIntel] = useState(null);
+  const [impacts, setImpacts] = useState([]);
+  const runImpact = async () => {
+    try {
+      const { data } = await axios.post(`${API}/reviews/root-cause/impact/run?property_id=all`);
+      toast.success(`${data.reported} görev etkisi raporlandı`);
+      const r = await axios.get(`${API}/reviews/root-cause/impact?property_id=all`); setImpacts(r.data.items || []);
+    } catch (e) { toast.error(e.response?.data?.detail || "Çalıştırılamadı"); }
+  };
   const [praiseBusy, setPraiseBusy] = useState(false);
   const runStaffPraise = async () => {
     setPraiseBusy(true);
@@ -53,6 +62,8 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
       setCompetitors(competitorsRes.data);
       setBenchmark(benchmarkRes.data);
       axios.get(`${API}/reputation/topic-compare/default`).then(r => setTopicCompare(r.data)).catch(() => {});
+      axios.get(`${API}/reputation/competitor-intel/default`).then(r => setCompIntel(r.data)).catch(() => {});
+      axios.get(`${API}/reviews/root-cause/impact?property_id=all`).then(r => setImpacts(r.data.items || [])).catch(() => {});
     } catch (error) {
       console.error("Error fetching analytics:", error);
     } finally {
@@ -316,6 +327,21 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
                   ))}
                   {!(analytics?.root_cause?.items || []).length && <p className="text-xs text-stone-400">No recurring negative topics — analyze reviews first.</p>}
                 </div>
+                <div className="mt-3 border-t border-stone-100 pt-2" data-testid="root-cause-impact">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-stone-700">Görev Kapanış Etkisi (30g sonra)</span>
+                    <button onClick={runImpact} data-testid="root-cause-impact-run-btn" className="text-[10px] px-2 py-0.5 rounded bg-stone-800 text-white">Şimdi hesapla</button>
+                  </div>
+                  {impacts.length === 0 && <p className="text-[11px] text-stone-400 mt-1">Henüz rapor yok — kapanan görevler 30 gün sonra otomatik raporlanır (07:30).</p>}
+                  {impacts.slice(0, 4).map(r => (
+                    <div key={r.id} className="text-[11px] mt-1 flex items-center justify-between" data-testid={`impact-${r.topic}`}>
+                      <span className="capitalize">{r.topic} <span className="text-stone-400">({new Date(r.closed_at).toLocaleDateString()})</span></span>
+                      <span className={r.verdict === "improved" ? "text-emerald-700 font-semibold" : r.verdict === "worse" ? "text-red-600 font-semibold" : "text-stone-500"}>
+                        {r.before?.topic_avg_rating ?? "—"}★ → {r.after?.topic_avg_rating ?? "—"}★ · olumsuz %{r.before?.negative_pct} → %{r.after?.negative_pct} · {r.verdict}
+                      </span>
+                    </div>
+                  ))}
+                </div>
                 <p className="text-[10px] text-stone-400 mt-2" data-testid="root-cause-task-note">high + recurring konular Sabah Karnesi'nde ilgili departmana otomatik görev açar; çözülen görevlerin trendi karneye yazılır.</p>
               </div>
               <div className="bg-white border border-stone-200 rounded-md p-4" data-testid="staff-intel-card">
@@ -405,6 +431,35 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
 
           {/* Competitors Tab */}
           <TabsContent value="competitors" className="space-y-4">
+            {compIntel && (
+              <div className="bg-white border border-stone-200 rounded-md p-4" data-testid="competitor-intel-card">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="font-medium text-[#1C1917] flex items-center gap-2"><Lightning size={18} className="text-[#C05A44]" /> Competitor Review Intelligence</h4>
+                  <Badge className={compIntel.mode === "live" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}>{compIntel.mode === "live" ? "LIVE" : "SIMULATED"}</Badge>
+                </div>
+                <p className="text-[11px] text-stone-600 mb-3" data-testid="competitor-intel-insight">{compIntel.insight}</p>
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div className="border border-red-100 bg-red-50/40 rounded p-3" data-testid="they-have-we-dont">
+                    <div className="text-xs font-semibold text-red-800 mb-1">Onlarda var, bizde yok</div>
+                    {compIntel.they_have_we_dont.length === 0 && <p className="text-[11px] text-stone-400">Fark bulunamadı.</p>}
+                    {compIntel.they_have_we_dont.slice(0, 6).map(x => (
+                      <div key={x.item} className="text-[11px] mb-1.5"><span className="capitalize font-semibold">{x.item}</span> <span className="text-stone-400">({x.competitors} rakip)</span><div className="text-stone-500">{x.action}</div></div>
+                    ))}
+                    {compIntel.their_strength_our_weakness?.length > 0 && <p className="text-[11px] text-red-700 mt-1">Onların gücü / bizim zayıflığımız: {compIntel.their_strength_our_weakness.join(", ")}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    {compIntel.competitors.map(c => (
+                      <div key={c.name} className="border border-stone-100 rounded p-2 text-[11px]" data-testid={`competitor-intel-${c.name}`}>
+                        <div className="font-semibold text-stone-800">{c.name} <span className="text-stone-400">· {c.reviews_analyzed} yorum</span></div>
+                        <div><span className="text-emerald-700">Güçlü:</span> {c.strengths.join(", ") || "—"}</div>
+                        <div><span className="text-red-600">Zayıf:</span> {c.weaknesses.join(", ") || "—"}</div>
+                        <div><span className="text-stone-500">Övülen olanaklar:</span> {c.amenities_praised.join(", ") || "—"}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
             {topicCompare && (
               <div className="bg-white border border-stone-200 rounded-md p-4" data-testid="topic-compare-card">
                 <div className="flex items-center justify-between mb-1">

@@ -50,6 +50,12 @@ export const MyTasksPanel = ({ user }) => {
   };
 
   const [newTask, setNewTask] = useState("");
+  const [board, setBoard] = useState(null);
+  useEffect(() => { axios.get(`${API}/reviews/staff-praise/leaderboard?property_id=all`).then(r => setBoard(r.data)).catch(() => {}); }, []);
+  const completeRc = async (id) => {
+    try { await axios.put(`${API}/my-tasks/staff-task/${id}/complete`, { notes: "" }); toast.success("Görev kapatıldı — 30 gün sonra etkisi raporlanır"); load(); }
+    catch { toast.error("Güncellenemedi"); }
+  };
   const addPersonal = async () => {
     if (!newTask.trim()) return;
     try {
@@ -104,6 +110,54 @@ export const MyTasksPanel = ({ user }) => {
           </motion.div>
         ))}
       </div>
+
+      {/* Ödül Duvarı */}
+      {board && (
+        <div className="mb-6 bg-gradient-to-br from-amber-50 to-white border-2 border-amber-200 rounded-2xl p-5" data-testid="reward-wall">
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h3 className="font-bold text-stone-800">🏆 Ödül Duvarı — Haftanın Yıldızları</h3>
+            <span className="text-[11px] text-stone-500">Misafir yorumlarında övgü alan ekip arkadaşları</span>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="flex flex-wrap gap-2" data-testid="reward-badges">
+              {board.badges.length === 0 && <p className="text-xs text-stone-400">Henüz haftanın yıldızı seçilmedi.</p>}
+              {board.badges.map(b => (
+                <div key={b.name} className="bg-white border border-amber-200 rounded-xl px-3 py-2 shadow-sm" data-testid={`reward-badge-${b.name}`}>
+                  <div className="font-semibold text-stone-800">{b.name} <span className="text-[10px] text-stone-400">{b.weeks_won}× · {b.last_week}</span></div>
+                  <div className="text-xs mt-0.5">{b.badges.join(" ")}</div>
+                </div>
+              ))}
+            </div>
+            <div data-testid="monthly-leaderboard">
+              <div className="text-xs font-semibold text-stone-700 mb-1">Aylık Liderlik (son 30 gün)</div>
+              {board.monthly_leaderboard.length === 0 && <p className="text-xs text-stone-400">Veri yok.</p>}
+              {board.monthly_leaderboard.slice(0, 5).map(p => (
+                <div key={p.name} className="flex items-center justify-between text-xs py-1 border-b border-amber-100" data-testid={`leader-${p.rank}`}>
+                  <span><span className="inline-block w-5 font-bold text-amber-700">{p.rank}.</span>{p.name} <span className="text-stone-400">★ {p.avg_rating}</span></span>
+                  <span><span className="text-emerald-700 font-semibold">+{p.positive}</span> <span className="text-stone-400">/ −{p.negative}</span></span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Kök Neden Görevleri */}
+      {(data?.root_cause_tasks || []).length > 0 && (
+        <div className="mb-6 bg-white border-2 border-red-200 rounded-2xl p-5" data-testid="root-cause-tasks-section">
+          <h3 className="font-bold text-stone-800 mb-1">🔎 Kök Neden Görevleri ({data.root_cause_tasks.length})</h3>
+          <p className="text-[11px] text-stone-500 mb-3">Yorumlarda tekrarlayan sorunlardan otomatik açıldı. Kapattıktan 30 gün sonra etkisi raporlanır.</p>
+          {data.root_cause_tasks.map(t => (
+            <div key={t.id} className="flex items-start justify-between gap-3 py-2 border-b border-stone-100" data-testid={`rc-task-${t.id}`}>
+              <div>
+                <div className="text-sm font-medium text-stone-800">{t.title} <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 uppercase">{t.department}</span></div>
+                <div className="text-xs text-stone-500">{t.description}</div>
+              </div>
+              <button onClick={() => completeRc(t.id)} data-testid={`rc-task-complete-${t.id}`} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 whitespace-nowrap">Tamamla</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Kişisel Görevler */}
       <div className="mb-6 bg-white border-2 border-violet-200 rounded-2xl p-5" data-testid="my-personal-tasks-section">

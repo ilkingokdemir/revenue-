@@ -1244,6 +1244,13 @@ async def _job_review_request(property_id: str) -> dict:
         return {"ok": False, "error": str(e)}
 JOB_HANDLERS["review_request"] = _job_review_request
 
+async def _job_root_cause_impact(property_id: str) -> dict:
+    try:
+        return await reviews_router.run_root_cause_impact_internal(property_id or "all")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+JOB_HANDLERS["root_cause_impact"] = _job_root_cause_impact
+
 async def _job_staff_praise_weekly(property_id: str) -> dict:
     try:
         if datetime.now(timezone.utc).weekday() != 0:

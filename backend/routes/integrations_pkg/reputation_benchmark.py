@@ -92,6 +92,76 @@ def create_reputation_router(db, require_roles):
             r.raise_for_status()
         return [(rv.get("rating"), (rv.get("text") or {}).get("text", "")) for rv in r.json().get("reviews", [])]
 
+    AMENITY_KW = {
+        "pool": r"\bpool|havuz|schwimmbad", "spa": r"\bspa\b|sauna|hamam|massage|masaj", "gym": r"\bgym|fitness|spor salonu",
+        "rooftop bar": r"rooftop|çatı|dachterrasse|bar\b", "free parking": r"free parking|ücretsiz otopark|kostenlos.*park",
+        "airport shuttle": r"shuttle|transfer|airport pick", "late checkout": r"late check[- ]?out|geç çıkış",
+        "pet friendly": r"pet|dog|köpek|hund", "kids club": r"kids|children|çocuk|kinder", "ev charging": r"\bev\b|charging|şarj",
+        "restaurant": r"restaurant|dinner|akşam yemeği", "room service": r"room service|oda servisi", "balcony": r"balcony|balkon|terrace|teras",
+        "sea view": r"sea view|deniz manzara|meerblick|view\b", "free breakfast": r"free breakfast|breakfast included|kahvaltı dahil",
+        "bathtub": r"bathtub|jacuzzi|küvet", "nespresso": r"nespresso|coffee machine|kahve makinesi", "welcome drink": r"welcome drink|hoş ?geldin",
+    }
+    POS_KW, NEG_KW = r"great|amazing|excellent|love|perfect|wonderful|harika|mükemmel|süper|toll|super|fantastic|best|nice|good", \
+                     r"bad|poor|terrible|dirty|rude|slow|noisy|kötü|berbat|kirli|yavaş|schlecht|dreckig|worst|disappoint"
+
+    def _sim_competitor_reviews(name: str):
+        """Places API yoksa deterministik örnek yorum seti (SIMULATED)."""
+        seeds = [("Great rooftop bar and free parking, staff were amazing.", 5), ("Pool was lovely, breakfast included and excellent.", 5),
+                 ("Room was dirty and check-in slow.", 2), ("Nice spa and sauna, but noisy at night.", 3),
+                 ("Late checkout allowed, very friendly reception.", 4), ("Airport shuttle was convenient; wifi poor.", 4),
+                 ("Pet friendly and good location, restaurant disappointing.", 3), ("Balcony with sea view, perfect stay.", 5)]
+        h = int(hashlib.sha1(name.encode()).hexdigest(), 16)
+        return [(r, t) for i, (t, r) in enumerate(seeds) if (h >> i) & 1 or i < 3]
+
+    def _extract(texts):
+        strengths, weaknesses, amen = {}, {}, {}
+        for rating, text in texts:
+            tl = (text or "").lower()
+            pos = float(rating or 0) >= 4 or re.search(POS_KW, tl)
+            neg = float(rating or 0) <= 2 or re.search(NEG_KW, tl)
+            for t, kw in TOPIC_KW.items():
+                if re.search(kw, tl):
+                    (strengths if pos and not neg else weaknesses if neg else strengths)[t] = (strengths if pos and not neg else weaknesses if neg else strengths).get(t, 0) + 1
+            for a, kw in AMENITY_KW.items():
+                if re.search(kw, tl) and not neg:
+                    amen[a] = amen.get(a, 0) + 1
+        return strengths, weaknesses, amen
+
+    @router.get("/reputation/competitor-intel/{property_id}")
+    async def competitor_intel(property_id: str, days: int = 180, _: dict = Depends(require_roles("admin", "manager"))):
+        """Rakip yorumlarından güçlü/zayıf yanlar + 'onlarda var bizde yok' (olanak/konu) listesi."""
+        cfg = await db.reputation_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        pq = {"property_id": property_id} if property_id != "all" else {}
+        ours = [(r.get("rating"), r.get("review_text", "")) for r in await db.reviews.find({**pq, "created_at": {"$gte": since}}, {"_id": 0, "rating": 1, "review_text": 1}).to_list(3000)]
+        our_str, our_weak, our_amen = _extract(ours)
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "amenities": 1}) or {}
+        our_amenities = {str(a).lower() for a in (prop.get("amenities") or [])} | set(our_amen)
+        comps, gap_count = [], {}
+        for comp in (cfg.get("competitors") or [])[:5]:
+            texts, mode = None, "simulated"
+            try:
+                texts = await _fetch_competitor_texts(comp.get("place_id", ""))
+                if texts: mode = "live"
+            except Exception as e:
+                logger.warning(f"competitor-intel places fail: {e}")
+            texts = texts or _sim_competitor_reviews(comp.get("name", "x"))
+            st, wk, am = _extract(texts)
+            they_have = [a for a in am if not any(a in o or o in a for o in our_amenities)]
+            for a in they_have: gap_count[a] = gap_count.get(a, 0) + 1
+            comps.append({"name": comp.get("name", ""), "mode": mode, "reviews_analyzed": len(texts),
+                          "strengths": sorted(st, key=lambda k: -st[k])[:5], "weaknesses": sorted(wk, key=lambda k: -wk[k])[:5],
+                          "amenities_praised": sorted(am, key=lambda k: -am[k])[:8], "they_have_we_dont": they_have})
+        they_have_we_dont = [{"item": a, "competitors": n, "action": f"'{a}' rakiplerin {n} tanesinde övülüyor; sunuyorsanız web sitesi/OTA listesine ve ön varış e-postasına ekleyin, sunmuyorsanız fizibilite değerlendirin."}
+                             for a, n in sorted(gap_count.items(), key=lambda x: -x[1])]
+        our_topics_weak = [t for t in our_weak if our_weak[t] > our_str.get(t, 0)]
+        their_strong_our_weak = sorted({t for c in comps for t in c["strengths"]} & set(our_topics_weak))
+        return {"property_id": property_id, "days": days, "mode": "live" if any(c["mode"] == "live" for c in comps) else "simulated",
+                "competitors": comps, "they_have_we_dont": they_have_we_dont, "their_strength_our_weakness": their_strong_our_weak,
+                "our_weak_topics": our_topics_weak, "our_strong_topics": sorted(our_str, key=lambda k: -our_str[k])[:5],
+                "insight": (f"Rakipler {', '.join(their_strong_our_weak)} konularında güçlü, biz zayıfız." if their_strong_our_weak else "Rakiplerin güçlü olduğu konularda zayıf noktamız yok.")
+                           + (f" Onlarda var bizde yok: {', '.join(x['item'] for x in they_have_we_dont[:4])}." if they_have_we_dont else "")}
+
     @router.get("/reputation/topic-compare/{property_id}")
     async def topic_compare(property_id: str, days: int = 90,
                             _: dict = Depends(require_roles("admin", "manager"))):

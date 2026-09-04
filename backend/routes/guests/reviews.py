@@ -530,9 +530,18 @@ def create_reviews_router(db, require_roles, get_current_user, verify_api_key, L
             await db.reviews.update_one({"id": review_id}, {"$set": upd})
             await log_review_event(db, review_id, "override_approved" if override else "approved", who, reason=action.notes or "")
             await log_review_event(db, review_id, "published", who, channel=review.get("platform"))
-            if review.get("platform") and review.get("external_review_id"):
+            gbp = None
+            if str(review.get("platform", "")).lower() == "google" and await db.google_tokens.count_documents({"status": "connected"}):
+                try:
+                    from routes.integrations_pkg.gbp_publish import gbp_publish_reply
+                    gbp = await gbp_publish_reply(db, review, review.get("response_text", ""))
+                    await log_review_event(db, review_id, "google_published", who, google_name=gbp.get("google_name"))
+                except HTTPException as e:
+                    gbp = {"ok": False, "error": e.detail}
+                    await log_review_event(db, review_id, "google_publish_failed", who, error=str(e.detail)[:200])
+            elif review.get("platform") and review.get("external_review_id"):
                 asyncio.create_task(_attempt_outbound_sync(review["platform"], review_id, review["external_review_id"], review.get("response_text", "")))
-            return {"message": "Response approved and published", "status": "responded", "override": bool(override)}
+            return {"message": "Response approved and published", "status": "responded", "override": bool(override), "google": gbp}
         elif action.action == "reject":
             await db.reviews.update_one({"id": review_id}, {"$set": {
                 "response_status": "rejected", "approved_by": who, "approval_notes": action.notes}})
@@ -843,6 +852,65 @@ def create_reviews_router(db, require_roles, get_current_user, verify_api_key, L
         for review in reviews:
             deserialize_review(review)
         return reviews
+
+    async def run_staff_praise_weekly_internal(property_id: str = "all") -> dict:
+        """Haftanın en çok övülen çalışanı → yöneticilere (e-posta MOCK + WhatsApp MOCK) ve çalışana (staff eşleşirse)."""
+        from routes.platform_ext.mailer import send_email as _mail
+        pids = [property_id] if property_id and property_id != "all" else \
+            [p["id"] async for p in db.properties.find({}, {"_id": 0, "id": 1})] or ["default"]
+        out = []
+        admins = await db.users.find({"role": {"$in": ["admin", "manager"]}, "is_active": {"$ne": False}},
+                                     {"_id": 0, "email": 1, "phone": 1, "name": 1}).to_list(20)
+        for pid in pids:
+            si = await staff_intelligence(db, pid, 7)
+            top = (si.get("top_praised") or [None])[0]
+            if not top:
+                out.append({"property_id": pid, "winner": None}); continue
+            prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+            hotel = prop.get("name", pid)
+            title = f"🏆 Haftanın yıldızı: {top['name']} — {top['positive']} övgü ({hotel})"
+            body = (f"<h2>{title}</h2><p>{top['name']} bu hafta misafir yorumlarında {top['mentions']} kez anıldı, "
+                    f"{top['positive']} övgü aldı (ort. {top['avg_rating']}★). Takdirinizi iletmeyi unutmayın.</p>")
+            emails = [await _mail(db, a["email"], title, body, kind="staff_praise", meta={"property_id": pid, "staff": top["name"]}) for a in admins if a.get("email")]
+            wa = []
+            try:
+                from routes.marketing.whatsapp_voice import _send_whatsapp_reply
+                for a in admins:
+                    ph = (a.get("phone") or "").strip()
+                    if ph:
+                        r = await _send_whatsapp_reply(ph if ph.startswith("whatsapp:") else f"whatsapp:{ph if ph.startswith('+') else '+' + ph}",
+                                                       f"{title}. {top['mentions']} mention · {top['positive']} övgü · ort. {top['avg_rating']}★")
+                        wa.append(r.get("status", "queued"))
+                staff = await db.staff.find_one({"property_id": pid, "name": {"$regex": f"^{re.escape(top['name'])}\\b", "$options": "i"}},
+                                                {"_id": 0, "email": 1, "phone": 1, "name": 1})
+                if staff:
+                    msg = f"Tebrikler {top['name']}! Bu hafta misafir yorumlarında {top['positive']} kez övüldünüz. Teşekkürler — {hotel} Yönetimi"
+                    if staff.get("email"):
+                        emails.append(await _mail(db, staff["email"], f"🏆 Tebrikler {top['name']}!", f"<p>{msg}</p>", kind="staff_praise_personal", meta={"property_id": pid}))
+                    if staff.get("phone"):
+                        r = await _send_whatsapp_reply(f"whatsapp:{staff['phone'] if str(staff['phone']).startswith('+') else '+' + str(staff['phone'])}", msg)
+                        wa.append(r.get("status", "queued"))
+            except Exception as e:
+                logger.warning(f"staff praise notify failed: {e}")
+            await db.notifications.insert_one({"id": str(uuid.uuid4()), "category": "staff_praise", "priority": "normal", "title": title,
+                                               "message": f"{top['mentions']} mention · {top['positive']} övgü · ort. {top['avg_rating']}★",
+                                               "property_id": pid, "read": False, "created_at": datetime.now(timezone.utc).isoformat()})
+            await db.staff_praise_log.insert_one({"id": str(uuid.uuid4()), "property_id": pid, "staff": top["name"], "positive": top["positive"],
+                                                  "mentions": top["mentions"], "emails": emails, "whatsapp": wa,
+                                                  "week": datetime.now(timezone.utc).strftime("%G-W%V"), "created_at": datetime.now(timezone.utc).isoformat()})
+            out.append({"property_id": pid, "winner": top["name"], "positive": top["positive"], "emails": len(emails), "whatsapp": len(wa)})
+        return {"ok": True, "results": out}
+
+    router.run_staff_praise_weekly_internal = run_staff_praise_weekly_internal
+
+    @router.post("/reviews/staff-praise/run")
+    async def staff_praise_run(property_id: str = "all", _: dict = Depends(require_roles("admin", "manager"))):
+        return await run_staff_praise_weekly_internal(property_id)
+
+    @router.get("/reviews/staff-praise/log")
+    async def staff_praise_log(property_id: str = "all", _: dict = Depends(require_roles("admin", "manager"))):
+        q = {"property_id": property_id} if property_id != "all" else {}
+        return {"items": await db.staff_praise_log.find(q, {"_id": 0}).sort("created_at", -1).to_list(20)}
 
     @router.get("/reviews/staff-intelligence")
     async def get_staff_intelligence(property_id: Optional[str] = None, days: int = 90,

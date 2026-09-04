@@ -61,6 +61,84 @@ def create_reputation_router(db, require_roles):
         ]).to_list(1)
         return (round(agg[0]["avg"], 1), agg[0]["n"]) if agg else (None, 0)
 
+    TOPIC_KW = {
+        "cleanliness": r"clean|dirty|temiz|kirli|sauber|schmutz|hygien",
+        "staff": r"staff|receptionist|personel|çalışan|friendly|rude|mitarbeiter|freundlich",
+        "breakfast": r"breakfast|kahvaltı|frühstück",
+        "check-in": r"check[- ]?in|giriş|anreise|reception|wait",
+        "location": r"location|konum|lage|central|metro",
+        "value": r"value|price|expensive|cheap|fiyat|pahalı|preis|teuer",
+        "noise": r"noise|noisy|loud|gürültü|laut|quiet",
+        "wifi": r"wifi|wi-fi|internet",
+    }
+
+    def _topic_scores_from_texts(items):
+        """items: [(rating, text)] → topic → avg rating (keyword eşleşmesi)."""
+        acc = {t: [] for t in TOPIC_KW}
+        for rating, text in items:
+            tl = (text or "").lower()
+            for t, kw in TOPIC_KW.items():
+                if re.search(kw, tl):
+                    acc[t].append(float(rating or 0))
+        return {t: (round(sum(v) / len(v), 1) if v else None, len(v)) for t, v in acc.items()}
+
+    async def _fetch_competitor_texts(place_id: str):
+        api_key = os.environ.get("GOOGLE_PLACES_API_KEY", "")
+        if not (api_key and place_id):
+            return None
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.get(f"https://places.googleapis.com/v1/places/{place_id}",
+                            headers={"X-Goog-Api-Key": api_key, "X-Goog-FieldMask": "reviews"})
+            r.raise_for_status()
+        return [(rv.get("rating"), (rv.get("text") or {}).get("text", "")) for rv in r.json().get("reviews", [])]
+
+    @router.get("/reputation/topic-compare/{property_id}")
+    async def topic_compare(property_id: str, days: int = 90,
+                            _: dict = Depends(require_roles("admin", "manager"))):
+        """Konu bazlı kıyas: bizim yorumlar (sentiment_analysis.topics veya anahtar kelime) vs rakipler (Places API varsa gerçek, yoksa SIMULATED)."""
+        cfg = await db.reputation_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        pq = {"property_id": property_id} if property_id != "all" else {}
+        ours = await db.reviews.find({**pq, "created_at": {"$gte": since}}, {"_id": 0, "rating": 1, "review_text": 1, "sentiment_analysis.topics": 1}).to_list(3000)
+        acc = {t: [] for t in TOPIC_KW}
+        for r in ours:
+            topics = [str(t).lower() for t in ((r.get("sentiment_analysis") or {}).get("topics") or [])]
+            tl = (r.get("review_text") or "").lower()
+            for t, kw in TOPIC_KW.items():
+                if t in topics or any(t in x for x in topics) or re.search(kw, tl):
+                    acc[t].append(float(r.get("rating") or 0))
+        self_scores = {t: (round(sum(v) / len(v), 1) if v else None, len(v)) for t, v in acc.items()}
+        comps = []
+        for comp in (cfg.get("competitors") or [])[:5]:
+            texts = None
+            try:
+                texts = await _fetch_competitor_texts(comp.get("place_id", ""))
+            except Exception as e:
+                logger.warning(f"topic-compare places fail {comp.get('name')}: {e}")
+            if texts:
+                sc, mode = _topic_scores_from_texts(texts), "live"
+            else:
+                base, _n = _sim_rating(comp.get("name", "x"))
+                sc, mode = {}, "simulated"
+                for t in TOPIC_KW:
+                    h = int(hashlib.sha1(f"{comp.get('name')}|{t}".encode()).hexdigest(), 16)
+                    sc[t] = (round(max(2.5, min(5.0, base + ((h % 90) - 45) / 100)), 1), 20 + h % 60)
+            comps.append({"name": comp.get("name", ""), "mode": mode, "scores": {t: v[0] for t, v in sc.items()}})
+        rows, weak, strong = [], [], []
+        for t in TOPIC_KW:
+            ours_v = self_scores[t][0]
+            cvals = [c["scores"].get(t) for c in comps if c["scores"].get(t) is not None]
+            cavg = round(sum(cvals) / len(cvals), 1) if cvals else None
+            gap = round(ours_v - cavg, 1) if ours_v is not None and cavg is not None else None
+            rows.append({"topic": t, "ours": ours_v, "ours_n": self_scores[t][1], "competitor_avg": cavg, "gap": gap,
+                         "competitors": {c["name"]: c["scores"].get(t) for c in comps}})
+            if gap is not None and gap <= -0.3: weak.append(t)
+            if gap is not None and gap >= 0.3: strong.append(t)
+        insight = (f"{', '.join(weak)} rakiplere göre zayıf (gap ≤ -0.3) — öncelikli aksiyon." if weak else "Rakiplere göre belirgin zayıf konu yok.")
+        return {"property_id": property_id, "days": days, "competitors": [{"name": c["name"], "mode": c["mode"]} for c in comps],
+                "rows": rows, "weak_topics": weak, "strong_topics": strong, "insight": insight,
+                "mode": "live" if any(c["mode"] == "live" for c in comps) else "simulated"}
+
     async def _scan_property(pid: str) -> dict:
         cfg = await db.reputation_config.find_one({"property_id": pid}, {"_id": 0}) or {}
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")

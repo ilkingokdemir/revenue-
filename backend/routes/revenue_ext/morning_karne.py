@@ -87,6 +87,32 @@ async def build_karne(db, pid: str) -> Dict:
     rc_top = rc.get("top")
     rc_txt = (f"{rc_top['topic']} %{rc_top['frequency_pct']} ({'+' if rc_top['trend_pts'] >= 0 else ''}{rc_top['trend_pts']} puan, {rc['negative_reviews']} olumsuz yorum) → {rc_top['action']}"
               if rc_top else f"{rc.get('negative_reviews', 0)} olumsuz yorum, tekrarlayan konu yok")
+    # Kök neden görevi: high + recurring → ilgili departmana otomatik görev (7 günde 1 kez / konu); çözülenler karneye
+    TOPIC_DEPT = {"check-in": "front_office", "check-out": "front_office", "staff": "management", "cleanliness": "housekeeping",
+                  "bathroom": "maintenance", "bed": "housekeeping", "noise": "maintenance", "wifi": "maintenance", "temperature": "maintenance",
+                  "maintenance": "maintenance", "breakfast": "fnb", "food": "fnb", "value": "revenue", "parking": "front_office"}
+    now_utc = datetime.now(timezone.utc)
+    week_ago = (now_utc - timedelta(days=7)).isoformat()
+    tq = {"property_id": pid} if pid != "all" else {}
+    opened = []
+    for it in rc.get("items", []):
+        if it["severity"] != "high" or not it.get("recurring"):
+            continue
+        exists = await db.staff_tasks.find_one({**tq, "source": "root_cause", "topic": it["topic"], "created_at": {"$gte": week_ago}}, {"_id": 1})
+        if exists:
+            continue
+        await db.staff_tasks.insert_one({
+            "id": str(uuid.uuid4()), "property_id": pid, "title": f"Kök neden: {it['topic']} (%{it['frequency_pct']}, {'+' if it['trend_pts'] >= 0 else ''}{it['trend_pts']} puan)",
+            "description": f"{it['count']} olumsuz yorumda tekrarlayan konu. Önerilen aksiyon: {it['action']}",
+            "status": "open", "priority": "urgent", "department": TOPIC_DEPT.get(it["topic"], "management"),
+            "source": "root_cause", "topic": it["topic"], "frequency_pct_at_open": it["frequency_pct"], "created_at": now_utc.isoformat()})
+        opened.append(it["topic"])
+    resolved = await db.staff_tasks.find({**tq, "source": "root_cause", "status": {"$in": ["done", "resolved", "completed", "closed"]},
+                                          "$or": [{"updated_at": {"$gte": week_ago}}, {"completed_at": {"$gte": week_ago}}]},
+                                         {"_id": 0, "topic": 1, "frequency_pct_at_open": 1}).to_list(10)
+    cur_freq = {i["topic"]: i for i in rc.get("items", [])}
+    res_txt = "; ".join(f"{t['topic']} çözüldü: %{t.get('frequency_pct_at_open', '?')} → %{cur_freq.get(t['topic'], {}).get('frequency_pct', 0)}" for t in resolved)
+    task_txt = (f"{len(opened)} yeni görev ({', '.join(opened)})" if opened else "yeni görev yok") + (f" · {res_txt}" if res_txt else "")
     checks = [
         ("Doluluk (bugün)", f"%{occ} — {in_house}/{total_rooms} oda", "ok"),
         ("Giriş / Çıkış (bugün)", f"{arrivals} giriş · {departures} çıkış", "ok"),
@@ -102,6 +128,7 @@ async def build_karne(db, pid: str) -> Dict:
         ("Okunmamış yüksek öncelik bildirim", f"{hi_notif} adet", "ok" if hi_notif < 5 else "warn"),
         ("Misafir robotları (24s)", f"{arr_n} ön varış e-postası · {rev_n} yorum isteği{ab_txt}", "ok"),
         ("Kök neden (yorumlar, 30g)", rc_txt, "warn" if rc_top and rc_top["severity"] == "high" else "ok"),
+        ("Kök neden görevleri (7g)", task_txt, "ok"),
     ]
     grade = "A" if all(c[2] == "ok" for c in checks) else ("B" if sum(1 for c in checks if c[2] != "ok") <= 2 else "C")
     return {"date": today, "grade": grade, "occ": occ,

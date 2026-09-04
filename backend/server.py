@@ -1244,6 +1244,15 @@ async def _job_review_request(property_id: str) -> dict:
         return {"ok": False, "error": str(e)}
 JOB_HANDLERS["review_request"] = _job_review_request
 
+async def _job_staff_praise_weekly(property_id: str) -> dict:
+    try:
+        if datetime.now(timezone.utc).weekday() != 0:
+            return {"ok": True, "skipped": "not_monday"}
+        return await reviews_router.run_staff_praise_weekly_internal(property_id or "all")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+JOB_HANDLERS["staff_praise_weekly"] = _job_staff_praise_weekly
+
 async def _job_coupon_reminder(property_id: str) -> dict:
     try:
         return await bookings_router.run_coupon_reminders_internal(property_id or "all")

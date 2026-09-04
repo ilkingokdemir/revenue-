@@ -1,0 +1,33 @@
+{
+  "summary": "Iter 613 (GBP Connect Wizard + Staff Praise + Root Cause Tasks + Topic-Compare). BACKEND (11/11 pytest passing, test_iter613.py): (1) GET /api/gbp/status?property_id=default → {live:false, connected:false, client_configured:false, redirect_uri contains '/api/gbp/oauth/callback', queue_pending present}. (2) GET /api/gbp/oauth/config → missing=['GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET'], client_configured=false. (3) GET /api/gbp/oauth/start?property_id=default → 400, detail contains redirect URI. (4) GET /api/gbp/oauth/callback (no code/state) → 307 redirect to '/?gbp=error&reason=missing_code'. (5) GET /api/gbp/oauth/locations → 401 'GBP bağlı değil'. (6) POST /api/gbp/oauth/select-location → 404 'Önce Google ile bağlanın'. (7) POST /api/reviews/staff-praise/run?property_id=default → {ok:true, results:[{property_id:'default', winner:'Sarah', positive:1, emails:3, whatsapp:1}]}. (8) GET /api/reviews/staff-praise/log?property_id=default → items[0].staff='Sarah', emails=['mocked','mocked','mocked'], whatsapp=['queued']. (9) GET /api/reputation/topic-compare/default → {mode:'simulated', competitors:[{name:'Competitor Regression', mode:'simulated'}], rows:8 covering exactly cleanliness/staff/breakfast/check-in/location/value/noise/wifi each with topic/ours/ours_n/competitor_avg/gap/competitors, weak_topics/strong_topics/insight present}. (10) POST /api/morning-karne/default/send-now → karne.checks includes 'Kök neden görevleri (7g)' row; a second identical call is idempotent (no error, structure preserved). (11) GET /api/automation/settings contains 'staff_praise_weekly' job in registry. FRONTEND: (a) /login admin OK, nav-mode-pro → Reports & Analytics section (nav-section-'Reports & Analytics') → review-agent-btn → gbp-connect-card visible with status line 'OAuth istemcisi yok: backend .env'e GOOGLE_CLIENT_ID ve GOOGLE_CLIENT_SECRET ekleyin. Redirect URI: https://review-hub-108.preview.emergentagent.com/api/gbp/oauth/callback (şu an MOCK kuyruk: 1 bekleyen)', gbp-connect-btn present and DISABLED as expected. (b) analytics-btn → analytics-sentiment-tab → staff-praise-run-btn clicked → 'Sarah' appears in toast/DOM (winner text rendered), root-cause-task-note visible with text 'high + recurring konular Sabah Karnesi'nde ilgili departmana otomatik görev açar; çözülen görevlerin trendi karneye yazılır.'. (c) analytics-competitors-tab → topic-compare-card rendered with SIMULATED badge, topic-compare-insight text, and all 8 topic-row-{cleanliness,staff,breakfast,check-in,location,value,noise,wifi} rows including Gap coloring (Cleanliness -0.7, Staff -0.4, Check-In -1, Noise -1.3 in red; Breakfast +0.5 etc.).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter613.py",
+    "/app/test_reports/pytest/iter613.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "gbp_publish.py oauth_callback correctly redirects with '?gbp=error&reason=…' on missing/invalid code/state and uses find_one_and_delete to prevent state replay — good.",
+    "gbp_publish.py routes /gbp/status returns full status incl. redirect_uri, queue_pending — matches spec.",
+    "reputation_benchmark.py topic_compare returns TOPIC_KW ordered dict (cleanliness→wifi = 8 topics) — deterministic hash-based simulated scores for competitors is a nice repeatable test.",
+    "morning_karne root-cause task creation uses 7-day idempotency guard on staff_tasks (source='root_cause', topic, created_at≥week_ago) — verified two consecutive runs do not duplicate.",
+    "automation_settings JOB_REGISTRY includes staff_praise_weekly — surface confirmed via /api/automation/settings.",
+    "Review Agent panel path lives under Reports & Analytics (not Guests & Loyalty) — future testers should expand nav-section-'Reports & Analytics' to reach review-agent-btn."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter613.py",
+    "/app/test_reports/iteration_613.json"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (all specified testids reachable & correct behaviour)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (login returns 'token', not 'access_token')",
+  "seed_data_creation": "None new — used existing seed reviews containing 'Sarah' for staff-praise winner and Competitor Regression config for topic-compare.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Nav path for GBP wizard: login → nav-mode-pro → expand [data-testid=\"nav-section-Reports & Analytics\"] → click [data-testid=\"review-agent-btn\"] (NOT under Guests & Loyalty). Analytics tabs: analytics-sentiment-tab (staff-praise-run-btn, root-cause-task-note) and analytics-competitors-tab (topic-compare-card + topic-row-{cleanliness/staff/breakfast/check-in/location/value/noise/wifi}). Login: use REACT_APP_BACKEND_URL env or export explicitly when running pytest — token field is 'token'. GBP status live=false since GOOGLE_CLIENT_ID/SECRET absent by design (MOCK-only path).",
+  "rca of the issue": "N/A — all specified backend and frontend paths function per spec."
+}

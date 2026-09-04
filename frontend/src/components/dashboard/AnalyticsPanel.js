@@ -28,6 +28,17 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
   const [benchmark, setBenchmark] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [topicCompare, setTopicCompare] = useState(null);
+  const [praiseBusy, setPraiseBusy] = useState(false);
+  const runStaffPraise = async () => {
+    setPraiseBusy(true);
+    try {
+      const { data } = await axios.post(`${API}/reviews/staff-praise/run?property_id=all`);
+      const w = (data.results || []).filter(r => r.winner);
+      toast.success(w.length ? `Haftanın yıldızı: ${w.map(r => `${r.winner} (${r.positive} övgü)`).join(", ")} — yöneticilere bildirildi (MOCK)` : "Son 7 günde övgü alan personel yok");
+    } catch (e) { toast.error(e.response?.data?.detail || "Çalıştırılamadı"); }
+    finally { setPraiseBusy(false); }
+  };
   const [newCompetitor, setNewCompetitor] = useState({ name: "", avg_rating: 4.0, total_reviews: 100, response_rate: 50 });
 
   const fetchData = useCallback(async () => {
@@ -41,6 +52,7 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
       setAnalytics(analyticsRes.data);
       setCompetitors(competitorsRes.data);
       setBenchmark(benchmarkRes.data);
+      axios.get(`${API}/reputation/topic-compare/default`).then(r => setTopicCompare(r.data)).catch(() => {});
     } catch (error) {
       console.error("Error fetching analytics:", error);
     } finally {
@@ -304,6 +316,7 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
                   ))}
                   {!(analytics?.root_cause?.items || []).length && <p className="text-xs text-stone-400">No recurring negative topics — analyze reviews first.</p>}
                 </div>
+                <p className="text-[10px] text-stone-400 mt-2" data-testid="root-cause-task-note">high + recurring konular Sabah Karnesi'nde ilgili departmana otomatik görev açar; çözülen görevlerin trendi karneye yazılır.</p>
               </div>
               <div className="bg-white border border-stone-200 rounded-md p-4" data-testid="staff-intel-card">
                 <h4 className="font-medium text-[#1C1917] mb-1 flex items-center gap-2">
@@ -326,6 +339,10 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
                 {analytics?.staff_intelligence?.recurring_complaints?.length > 0 && (
                   <p className="text-[11px] text-red-600 mt-2" data-testid="staff-recurring">Recurring complaints: {analytics.staff_intelligence.recurring_complaints.map(x => x.name).join(", ")}</p>
                 )}
+                <button onClick={runStaffPraise} disabled={praiseBusy} data-testid="staff-praise-run-btn"
+                  className="mt-3 text-[11px] px-2.5 py-1 rounded bg-[#3E5245] text-white hover:bg-[#2A3B30] disabled:opacity-50">
+                  {praiseBusy ? "Gönderiliyor…" : "🏆 Haftalık ödül bildirimi gönder (Pazartesi 09:00 otomatik)"}
+                </button>
               </div>
             </div>
 
@@ -388,6 +405,34 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
 
           {/* Competitors Tab */}
           <TabsContent value="competitors" className="space-y-4">
+            {topicCompare && (
+              <div className="bg-white border border-stone-200 rounded-md p-4" data-testid="topic-compare-card">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="font-medium text-[#1C1917] flex items-center gap-2"><Tag size={18} className="text-[#3E5245]" /> Topic Benchmark vs Competitors ({topicCompare.days}d)</h4>
+                  <Badge className={topicCompare.mode === "live" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}>{topicCompare.mode === "live" ? "LIVE (Places API)" : "SIMULATED"}</Badge>
+                </div>
+                <p className="text-[11px] text-stone-500 mb-3" data-testid="topic-compare-insight">{topicCompare.insight}</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead><tr className="text-stone-400 text-left">
+                      <th className="py-1">Topic</th><th className="py-1 text-right">Our Business</th>
+                      {topicCompare.competitors.map(c => <th key={c.name} className="py-1 text-right">{c.name}</th>)}
+                      <th className="py-1 text-right">Gap</th>
+                    </tr></thead>
+                    <tbody>
+                      {topicCompare.rows.map(r => (
+                        <tr key={r.topic} className="border-t border-stone-100" data-testid={`topic-row-${r.topic}`}>
+                          <td className="py-1.5 capitalize font-medium">{r.topic} <span className="text-stone-400">({r.ours_n})</span></td>
+                          <td className="py-1.5 text-right font-semibold">{r.ours ?? "—"}</td>
+                          {topicCompare.competitors.map(c => <td key={c.name} className="py-1.5 text-right text-stone-600">{r.competitors[c.name] ?? "—"}</td>)}
+                          <td className={`py-1.5 text-right font-bold ${r.gap == null ? "text-stone-400" : r.gap <= -0.3 ? "text-red-600" : r.gap >= 0.3 ? "text-emerald-700" : "text-stone-600"}`}>{r.gap == null ? "—" : (r.gap > 0 ? "+" : "") + r.gap}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
             {/* Your Ranking */}
             {benchmark && (
               <div className="bg-[#E8EDE7] border border-[#D5DDD3] rounded-md p-4">

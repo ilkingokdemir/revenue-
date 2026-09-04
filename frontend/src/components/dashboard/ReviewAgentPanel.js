@@ -98,6 +98,8 @@ export default function ReviewAgentPanel() {
         </select>
       </div>
 
+      <GbpConnectCard propertyId={propertyId} />
+
       {config && (
         <div className="bg-white border border-stone-200 rounded-xl p-4 mb-4 grid md:grid-cols-2 gap-3">
           <label className="inline-flex items-center gap-2">
@@ -236,6 +238,80 @@ export default function ReviewAgentPanel() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function GbpConnectCard({ propertyId }) {
+  const [st, setSt] = useState(null);
+  const [locs, setLocs] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    if (!propertyId) return;
+    try { const r = await axios.get(`${API}/gbp/status?property_id=${propertyId}`, { withCredentials: true }); setSt(r.data); }
+    catch (e) { setSt(null); }
+  }, [propertyId]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("gbp");
+    if (q === "connected") toast.success("Google Business Profile bağlandı — şimdi konum seçin");
+    else if (q === "error") toast.error("Google bağlantısı başarısız: " + (new URLSearchParams(window.location.search).get("reason") || ""));
+  }, []);
+  const connect = async () => {
+    setBusy(true);
+    try { const r = await axios.get(`${API}/gbp/oauth/start?property_id=${propertyId}`, { withCredentials: true }); window.location.href = r.data.url; }
+    catch (e) { toast.error(e.response?.data?.detail || "Başlatılamadı"); setBusy(false); }
+  };
+  const loadLocs = async () => {
+    setBusy(true);
+    try { const r = await axios.get(`${API}/gbp/oauth/locations?property_id=${propertyId}`, { withCredentials: true }); setLocs(r.data.locations || []); }
+    catch (e) { toast.error(e.response?.data?.detail || "Konumlar alınamadı"); }
+    finally { setBusy(false); }
+  };
+  const pick = async (l) => {
+    try { await axios.post(`${API}/gbp/oauth/select-location`, { property_id: propertyId, ...l }, { withCredentials: true }); toast.success(`Konum seçildi: ${l.title}`); setLocs(null); load(); }
+    catch (e) { toast.error(e.response?.data?.detail || "Seçilemedi"); }
+  };
+  const disconnect = async () => {
+    if (!window.confirm("Google bağlantısı kaldırılsın mı?")) return;
+    await axios.delete(`${API}/gbp/oauth/disconnect?property_id=${propertyId}`, { withCredentials: true }); load();
+  };
+  if (!st) return null;
+  return (
+    <div className="bg-white border border-stone-200 rounded-xl p-4 mb-4" data-testid="gbp-connect-card">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-sm font-semibold text-stone-900">Google Business Profile — Bağlantı Sihirbazı</div>
+          <div className="text-xs text-stone-500 mt-0.5" data-testid="gbp-status-line">
+            {st.connected ? <>Bağlı ✓ {st.connection?.location_title ? `· Konum: ${st.connection.location_title}` : "· Konum seçilmedi"} · onaylanan Google yanıtları <b>gerçek</b> yayınlanır</>
+              : st.client_configured ? "OAuth istemcisi hazır — 'Google ile bağlan' ile business.manage izni verin"
+              : <>OAuth istemcisi yok: backend .env'e <code>GOOGLE_CLIENT_ID</code> ve <code>GOOGLE_CLIENT_SECRET</code> ekleyin. Redirect URI: <code className="break-all">{st.redirect_uri}</code></>}
+            {!st.connected && <span className="ml-1 text-amber-700">(şu an MOCK kuyruk: {st.queue_pending} bekleyen)</span>}
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {!st.connected && (
+            <button onClick={connect} disabled={busy || !st.client_configured} data-testid="gbp-connect-btn"
+              className="text-sm px-4 py-1.5 bg-[#1a73e8] text-white rounded-lg hover:bg-[#1558b0] disabled:opacity-50">Google ile bağlan</button>
+          )}
+          {st.connected && (
+            <>
+              <button onClick={loadLocs} disabled={busy} data-testid="gbp-locations-btn" className="text-sm px-3 py-1.5 bg-stone-900 text-white rounded-lg">Konum seç</button>
+              <button onClick={disconnect} data-testid="gbp-disconnect-btn" className="text-sm px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg">Bağlantıyı kes</button>
+            </>
+          )}
+        </div>
+      </div>
+      {locs && (
+        <div className="mt-3 grid sm:grid-cols-2 gap-2" data-testid="gbp-locations">
+          {locs.length === 0 && <p className="text-xs text-stone-400">Bu Google hesabında doğrulanmış konum bulunamadı.</p>}
+          {locs.map(l => (
+            <button key={l.location_id} onClick={() => pick(l)} className="text-left text-xs border border-stone-200 rounded-lg p-2 hover:bg-stone-50">
+              <div className="font-semibold">{l.title}</div><div className="text-stone-400">{l.account_name} · {l.store_code || l.location_id}</div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

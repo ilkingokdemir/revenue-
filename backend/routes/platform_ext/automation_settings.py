@@ -84,6 +84,11 @@ JOB_REGISTRY = {
         "description": "Çıkıştan 1 gün sonra misafire kendi dilinde (TR/EN/DE) teşekkür + yorum isteği e-postası gönderir; zaten yorum yapmışsa atlar, aynı misafire tekrar gitmez.",
         "default_cron": (11, 0), "default_enabled": True, "params": [],
     },
+    "staff_praise_weekly": {
+        "label": "Personel Ödül Bildirimi (haftalık)", "category": "guest",
+        "description": "Son 7 günün yorumlarında en çok övülen çalışanı yöneticilere (e-posta + WhatsApp) ve çalışana bildirir. Pazartesi 09:00.",
+        "default_cron": (9, 0), "default_enabled": True, "params": [], "weekday": 0,
+    },
     "coupon_reminder": {
         "label": "Kupon Hatırlatma (THANKS)", "category": "guest",
         "description": "Kullanılmamış yorum teşekkür kuponlarına süresi dolmadan 30 gün önce misafirin dilinde tek seferlik hatırlatma e-postası gönderir.",

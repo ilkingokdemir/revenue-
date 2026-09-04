@@ -88,6 +88,10 @@ export function AdminPanel({ properties, user, activePropertyId }) {
     try { await axios.put(`${API}/admin/users/${userId}/permissions`, { role }); toast.success("Role updated"); fetchUsers(); }
     catch (e) { toast.error("Failed"); }
   };
+  const saveUserField = async (userId, patch) => {
+    try { await axios.put(`${API}/admin/users/${userId}/permissions`, patch); toast.success(patch.phone !== undefined ? "Telefon kaydedildi" : "Güncellendi"); fetchUsers(); }
+    catch (e) { toast.error(e.response?.data?.detail || "Kaydedilemedi"); }
+  };
 
   const saveModuleSettings = async (module) => {
     try {
@@ -217,7 +221,7 @@ export function AdminPanel({ properties, user, activePropertyId }) {
             <h3 className="text-base font-bold text-stone-900">Team Members</h3>
             <div className="space-y-2">
               {users.map(u => (
-                <div key={u.id} className="bg-white rounded-2xl border border-stone-200 p-4 flex items-center justify-between shadow-sm" data-testid={`user-${u.id}`}>
+                <div key={u.id || u.email} className="bg-white rounded-2xl border border-stone-200 p-4 flex items-center justify-between shadow-sm" data-testid={`user-${u.id}`}>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2C4C3B] to-[#D4A373] flex items-center justify-center text-white text-sm font-bold">
                       {u.name?.charAt(0)?.toUpperCase() || "U"}
@@ -227,7 +231,16 @@ export function AdminPanel({ properties, user, activePropertyId }) {
                       <div className="text-[11px] text-stone-500">{u.email}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap justify-end">
+                    <div className="flex items-center gap-1.5" title="WhatsApp bildirimleri (Sabah Karnesi, bordro) için E.164 formatı: +447700900123">
+                      <Input defaultValue={u.phone || ""} placeholder="+44 7700 900123" data-testid={`phone-input-${u.id}`}
+                        className="h-8 text-xs w-40 border-stone-200"
+                        onBlur={e => { const v = e.target.value.trim(); if (v !== (u.phone || "")) saveUserField(u.id, { phone: v }); }} />
+                      <label className="flex items-center gap-1 text-[10px] text-stone-500 whitespace-nowrap">
+                        <Switch checked={u.karne_whatsapp !== false} onCheckedChange={v => saveUserField(u.id, { karne_whatsapp: v })} data-testid={`karne-wa-switch-${u.id}`} />
+                        Karne WA
+                      </label>
+                    </div>
                     <Select value={u.role} onValueChange={v => updateUserRole(u.id, v)}>
                       <SelectTrigger className="h-8 text-xs w-40 border-stone-200" data-testid={`role-select-${u.id}`}><SelectValue /></SelectTrigger>
                       <SelectContent>

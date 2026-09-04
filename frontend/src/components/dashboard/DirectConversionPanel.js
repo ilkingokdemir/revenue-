@@ -65,6 +65,16 @@ const fmt = (n) => (typeof n === "number" ? n.toLocaleString("tr-TR", { maximumF
 const StatsTab = () => {
   const [data, setData] = useState(null);
   const [scanning, setScanning] = useState(false);
+  const [reminding, setReminding] = useState(false);
+  const runReminders = async () => {
+    setReminding(true);
+    try {
+      const r = await axios.post(`${API}/review-collection/coupon-reminders/all`);
+      toast.success(`${r.data.candidates} aday · ${r.data.sent} gönderildi · ${r.data.mocked} MOCK`);
+      load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Çalıştırılamadı"); }
+    finally { setReminding(false); }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -119,6 +129,15 @@ const StatsTab = () => {
             <div className="bg-stone-50 rounded-lg p-3"><div className="text-[11px] text-stone-500">Kullanım oranı</div><div className="text-xl font-bold" data-testid="dcv-rc-pct">{data.review_coupons.usage_pct}%</div></div>
             <div className="bg-stone-50 rounded-lg p-3"><div className="text-[11px] text-stone-500">Süresi dolan</div><div className="text-xl font-bold text-stone-500">{data.review_coupons.expired}</div></div>
             <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200"><div className="text-[11px] text-stone-500">Getirdiği gelir</div><div className="text-xl font-bold text-emerald-700" data-testid="dcv-rc-revenue">£{fmt(data.review_coupons.revenue)}</div></div>
+            <div className="bg-amber-50 rounded-lg p-3 border border-amber-200">
+              <div className="text-[11px] text-stone-500">Hatırlatma (30 gün kala)</div>
+              <div className="text-xl font-bold text-amber-800" data-testid="dcv-rc-reminded">{data.review_coupons.reminded ?? 0}</div>
+              <div className="text-[10px] text-stone-500">gönderildi · {data.review_coupons.expiring_30d ?? 0} kupon 30 günde dolacak</div>
+              <button onClick={runReminders} disabled={reminding} data-testid="dcv-rc-remind-btn"
+                className="mt-1.5 text-[11px] px-2 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50">
+                {reminding ? "Gönderiliyor…" : "Şimdi çalıştır"}
+              </button>
+            </div>
           </div>
         </div>
       )}

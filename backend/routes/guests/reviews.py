@@ -5,7 +5,7 @@ Extracted from server.py for maintainability
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Optional
 import os
 import uuid
@@ -233,6 +233,92 @@ async def staff_surnames_db(db) -> List[str]:
 async def privacy_check_db(db, text: str, property_id: str = "") -> dict:
     """privacy_check + personel soyadları (users/staff) ile."""
     return privacy_check(text, await staff_surnames_db(db))
+
+
+TOPIC_ACTIONS = {
+    "check-in": "15:00–18:00 arası resepsiyon kadrosunu artırın; online/self check-in'i ön varış e-postasında öne çıkarın.",
+    "checkin": "15:00–18:00 arası resepsiyon kadrosunu artırın; online/self check-in'i ön varış e-postasında öne çıkarın.",
+    "check-out": "Express check-out (folio e-posta) açın; sabah 10:00–12:00 kasada ikinci kişi bulundurun.",
+    "cleanliness": "HK kontrol listesine banyo/yatak denetimi ekleyin; süpervizör örnekleme oranını %20'ye çıkarın.",
+    "noise": "Sessiz kat/oda ataması kuralı; koridor ve klima gürültüsü için bakım turu; misafire kulak tıkacı seti.",
+    "breakfast": "Kahvaltı çeşitliliğini gözden geçirin (sıcak seçenek, yerel ürün); yoğun saatte ikinci büfe hattı.",
+    "food": "Menü mühendisliği: en çok şikâyet alan kalemleri değiştirin; mutfak porsiyon/sıcaklık standardı.",
+    "staff": "Şikâyet alan personel için birebir koçluk; misafir iletişim eğitimi; övgü alanları ödüllendirin.",
+    "wifi": "Erişim noktası kapsama testi; bant genişliği yükseltme; oda kartında Wi-Fi bilgisi.",
+    "bathroom": "Duş basıncı/sıcak su bakım turu; tesisat önleyici bakım planı.",
+    "bed": "Yatak/yastık değişim planı; yastık menüsü sunun.",
+    "value": "Fiyat-değer algısı: dahil hizmetleri netleştirin; direkt rezervasyona küçük avantaj ekleyin.",
+    "parking": "Otopark rezervasyon/ücret bilgisini ön varış e-postasına ekleyin; alternatif otopark anlaşması.",
+    "location": "Ulaşım rehberi ve transfer seçeneğini ön varış e-postasında paylaşın.",
+    "amenities": "Eksik/arızalı olanakları listeleyin; öncelikli bakım planı.",
+    "maintenance": "Önleyici bakım turlarını haftalık yapın; arıza SLA'sı 2 saat.",
+    "temperature": "Klima/ısıtma bakım turu; oda içi kontrol talimatı.",
+}
+
+
+async def root_cause(db, property_id: str, days: int = 30) -> dict:
+    """Olumsuz yorumlardaki (≤3★) tekrarlayan konular: frekans %, önceki döneme göre trend, önerilen aksiyon."""
+    now = datetime.now(timezone.utc)
+    cur_from = (now - timedelta(days=days)).isoformat()
+    prev_from = (now - timedelta(days=days * 2)).isoformat()
+    pq = {"property_id": property_id} if property_id and property_id != "all" else {}
+    base = {**pq, "rating": {"$lte": 3}, "sentiment_analysis.topics": {"$exists": True, "$ne": []}}
+
+    async def _count(frm, to=None):
+        q = {**base, "created_at": {"$gte": frm, **({"$lt": to} if to else {})}}
+        docs = await db.reviews.find(q, {"_id": 0, "sentiment_analysis.topics": 1, "rating": 1}).to_list(2000)
+        cnt: Dict[str, int] = {}
+        for d in docs:
+            for t in set((d.get("sentiment_analysis") or {}).get("topics") or []):
+                t = str(t).lower().strip()
+                cnt[t] = cnt.get(t, 0) + 1
+        return len(docs), cnt
+
+    n_cur, cur = await _count(cur_from)
+    n_prev, prev = await _count(prev_from, cur_from)
+    items = []
+    for topic, c in sorted(cur.items(), key=lambda x: -x[1]):
+        freq = round(c / n_cur * 100) if n_cur else 0
+        pfreq = round(prev.get(topic, 0) / n_prev * 100) if n_prev else 0
+        trend = freq - pfreq
+        severity = "high" if freq >= 30 or trend >= 15 else "medium" if freq >= 15 or trend >= 5 else "low"
+        items.append({"topic": topic, "count": c, "frequency_pct": freq, "prev_pct": pfreq, "trend_pts": trend,
+                      "severity": severity, "recurring": c >= 3,
+                      "action": TOPIC_ACTIONS.get(topic) or TOPIC_ACTIONS.get(topic.replace(" ", "-")) or "Konuyu haftalık operasyon toplantısında ele alın; sorumlu departman atayın."})
+    return {"days": days, "negative_reviews": n_cur, "previous_negative_reviews": n_prev, "items": items[:8],
+            "top": items[0] if items else None}
+
+
+async def staff_intelligence(db, property_id: str, days: int = 90) -> dict:
+    """Yorumlarda adı geçen personel: mention / övgü / şikâyet sayıları."""
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    pq = {"property_id": property_id} if property_id and property_id != "all" else {}
+    docs = await db.reviews.find({**pq, "created_at": {"$gte": since}, "sentiment_analysis.staff_mentioned.0": {"$exists": True}},
+                                 {"_id": 0, "id": 1, "rating": 1, "guest_name": 1, "created_at": 1, "sentiment_analysis.staff_mentioned": 1,
+                                  "sentiment_analysis.sentiment": 1}).to_list(2000)
+    people: Dict[str, dict] = {}
+    for d in docs:
+        a = d.get("sentiment_analysis") or {}
+        positive = int(d.get("rating") or 3) >= 4 or a.get("sentiment") == "positive"
+        for raw in a.get("staff_mentioned") or []:
+            name = str(raw).strip().split(" ")[0].title()
+            if not name or name.lower() in _ROLE_WORDS:
+                continue
+            p = people.setdefault(name, {"name": name, "mentions": 0, "positive": 0, "negative": 0, "ratings": [], "last_review_id": None, "last_at": ""})
+            p["mentions"] += 1
+            p["positive" if positive else "negative"] += 1
+            p["ratings"].append(int(d.get("rating") or 3))
+            if (d.get("created_at") or "") > p["last_at"]:
+                p["last_at"], p["last_review_id"] = d.get("created_at", ""), d.get("id")
+    out = []
+    for p in people.values():
+        p["avg_rating"] = round(sum(p["ratings"]) / len(p["ratings"]), 1)
+        p.pop("ratings")
+        out.append(p)
+    out.sort(key=lambda x: -x["mentions"])
+    return {"days": days, "staff": out[:20],
+            "top_praised": sorted([x for x in out if x["positive"]], key=lambda x: -x["positive"])[:5],
+            "recurring_complaints": sorted([x for x in out if x["negative"] >= 2], key=lambda x: -x["negative"])[:5]}
 
 
 async def get_review_agent_cfg(db, property_id: str) -> dict:
@@ -757,6 +843,16 @@ def create_reviews_router(db, require_roles, get_current_user, verify_api_key, L
         for review in reviews:
             deserialize_review(review)
         return reviews
+
+    @router.get("/reviews/staff-intelligence")
+    async def get_staff_intelligence(property_id: Optional[str] = None, days: int = 90,
+                                     _: dict = Depends(require_roles("admin", "manager"))):
+        return await staff_intelligence(db, property_id or "all", days)
+
+    @router.get("/reviews/root-cause")
+    async def get_root_cause(property_id: Optional[str] = None, days: int = 30,
+                             _: dict = Depends(require_roles("admin", "manager"))):
+        return await root_cause(db, property_id or "all", days)
 
     @router.get("/reviews/{review_id}", response_model=Review)
     async def get_review(review_id: str):
@@ -1817,7 +1913,9 @@ Review: {review.get('review_text', '')}
             "top_topics": top_topics,
             "common_issues": common_issues,
             "common_praises": common_praises,
-            "priority_queue": priority_reviews
+            "priority_queue": priority_reviews,
+            "staff_intelligence": await staff_intelligence(db, "all", 90),
+            "root_cause": await root_cause(db, "all", 30),
         }
 
     # ==================== COMPETITOR ROUTES ====================

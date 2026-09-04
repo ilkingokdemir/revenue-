@@ -1528,3 +1528,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - BEKLEYEN (kullanıcı onaylı, yapılmadı): Yönetici Telefonları UI (AdminPanel phone + karne_whatsapp alanı), Kupon Hatırlatma UI (DirectConversionPanel), Kurtarma Takibi 'Arandı/Çözüldü' butonları — backend'leri hazır.
 - Review Ops P1/P2 backlog: Staff Intelligence (mention → personel bazlı), Root Cause (konu frekans + trend + öneri), konu bazlı rakip kıyası, dashboard AI Performance bloğu (Reviews ana sayfa), GBP v1 + Pub/Sub (Google OAuth/kota gerekir).
 - MOCK: Resend, Twilio, Trustpilot/Booking/Google sync (anahtar yok).
+
+## Güncelleme (Faz 33 — Bekleyen 3 iş + Personel Zekâsı + Kök Neden) — iteration_612 backend 8/8, frontend %100
+- Yönetici Telefonları: AdminPanel Team Members → phone-input-{id} (blur'da kaydeder) + karne-wa-switch-{id} → PUT /admin/users/{id}/permissions {phone, karne_whatsapp}. Karne WhatsApp (MOCK) bu numaraya gider.
+- Kupon Hatırlatma UI: direct-conversion/stats.review_coupons → reminded, expiring_30d; DirectConversionPanel dcv-rc-reminded + dcv-rc-remind-btn (POST /review-collection/coupon-reminders/all). Robot 'coupon_reminder' 12:00.
+- Kurtarma Takibi: PUT /service-recovery/{id} {called:true, call_notes} → called_at/called_by, open→in_progress. ServiceRecoveryPanel complaint-called-btn-{id} / complaint-resolve-btn-{id}, etiketler complaint-called-tag-{id}, complaint-review-tag-{id} ('Yorumdan geldi', channel=review).
+- Personel Zekâsı: reviews.staff_intelligence(db,pid,days) → GET /reviews/staff-intelligence (staff[], top_praised, recurring_complaints ≥2 negatif). Kaynak: sentiment_analysis.staff_mentioned (analyze ile dolar).
+- Kök Neden: reviews.root_cause(db,pid,days) → GET /reviews/root-cause (≤3★ yorum konuları; frekans %, önceki döneme trend puanı, severity, recurring ≥3, TOPIC_ACTIONS önerisi). /analytics/dashboard'a root_cause + staff_intelligence eklendi; AnalyticsPanel → Sentiment sekmesi root-cause-card / staff-intel-card. Sabah Karnesi: 'Kök neden (yorumlar, 30g)' satırı (severity high → warn).
+- NOT: /reviews/staff-intelligence ve /reviews/root-cause rotaları /reviews/{review_id}'den ÖNCE tanımlı olmalı (çakışma).
+- Google Canlı Yayın: kullanıcıdan GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / refresh token + GBP API kotası bekleniyor; mevcut integrations.py OAuth akışı + gbp_publish kuyruğu hazır (GBP_LIVE=true).

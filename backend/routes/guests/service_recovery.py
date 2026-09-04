@@ -263,6 +263,12 @@ def create_service_recovery_router(db, require_roles):
                 update[field] = data[field]
         if data.get("compensation_amount") is not None:
             update["compensation_amount"] = float(data.get("compensation_amount") or 0)
+        if data.get("called"):
+            update["called_at"] = datetime.now(timezone.utc).isoformat()
+            update["called_by"] = current_user.get("name", "Staff")
+            update["call_notes"] = str(data.get("call_notes") or "")[:500]
+            if existing.get("status", "open") == "open":
+                update["status"] = "in_progress"
 
         if data.get("status") in ("resolved", "closed") and not existing.get("resolved_at"):
             update["resolved_at"] = datetime.now(timezone.utc).isoformat()

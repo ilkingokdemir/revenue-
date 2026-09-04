@@ -82,6 +82,11 @@ async def build_karne(db, pid: str) -> Dict:
     ab_cfg = await db.booking_widget_config.find_one({**pq, "ota_ab_auto_locked.at": {"$gte": since24}}, {"_id": 0, "ota_ab_auto_locked": 1})
     ab_txt = f", A/B kazanan sabitlendi (Varyant {ab_cfg['ota_ab_auto_locked']['variant']} %{ab_cfg['ota_ab_auto_locked']['pct']:g})" if ab_cfg else ""
 
+    from routes.guests.reviews import root_cause as _root_cause
+    rc = await _root_cause(db, pid, 30)
+    rc_top = rc.get("top")
+    rc_txt = (f"{rc_top['topic']} %{rc_top['frequency_pct']} ({'+' if rc_top['trend_pts'] >= 0 else ''}{rc_top['trend_pts']} puan, {rc['negative_reviews']} olumsuz yorum) → {rc_top['action']}"
+              if rc_top else f"{rc.get('negative_reviews', 0)} olumsuz yorum, tekrarlayan konu yok")
     checks = [
         ("Doluluk (bugün)", f"%{occ} — {in_house}/{total_rooms} oda", "ok"),
         ("Giriş / Çıkış (bugün)", f"{arrivals} giriş · {departures} çıkış", "ok"),
@@ -96,6 +101,7 @@ async def build_karne(db, pid: str) -> Dict:
         ("5xx hataları (24s)", f"{errors_5xx} hata", "ok" if errors_5xx == 0 else "warn"),
         ("Okunmamış yüksek öncelik bildirim", f"{hi_notif} adet", "ok" if hi_notif < 5 else "warn"),
         ("Misafir robotları (24s)", f"{arr_n} ön varış e-postası · {rev_n} yorum isteği{ab_txt}", "ok"),
+        ("Kök neden (yorumlar, 30g)", rc_txt, "warn" if rc_top and rc_top["severity"] == "high" else "ok"),
     ]
     grade = "A" if all(c[2] == "ok" for c in checks) else ("B" if sum(1 for c in checks if c[2] != "ok") <= 2 else "C")
     return {"date": today, "grade": grade, "occ": occ,

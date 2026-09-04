@@ -364,7 +364,7 @@ def create_direct_conversion_router(db, require_roles):
 
     async def _review_coupon_stats() -> dict:
         """THANKS-codes issued after guest reviews: issued / used / revenue from bookings that redeemed them."""
-        codes = await db.promo_codes.find({"source": "review_thanks"}, {"_id": 0, "code": 1, "used": 1, "valid_to": 1}).to_list(5000)
+        codes = await db.promo_codes.find({"source": "review_thanks"}, {"_id": 0, "code": 1, "used": 1, "valid_to": 1, "reminder_sent_at": 1}).to_list(5000)
         used_codes = [c["code"] for c in codes if int(c.get("used") or 0) > 0]
         today = datetime.now(timezone.utc).date().isoformat()
         revenue = 0.0
@@ -372,7 +372,10 @@ def create_direct_conversion_router(db, require_roles):
             bks = await db.bookings.find({"coupon_code": {"$in": used_codes}, "status": {"$nin": ["cancelled", "no_show"]}},
                                          {"_id": 0, "total": 1, "total_price": 1}).to_list(5000)
             revenue = round(sum(float(b.get("total") or b.get("total_price") or 0) for b in bks), 2)
+        in30 = (datetime.now(timezone.utc).date() + timedelta(days=30)).isoformat()
         return {"issued": len(codes), "used": len(used_codes),
+                "reminded": sum(1 for c in codes if c.get("reminder_sent_at")),
+                "expiring_30d": sum(1 for c in codes if today <= c.get("valid_to", "9999") <= in30 and int(c.get("used") or 0) == 0),
                 "expired": sum(1 for c in codes if c.get("valid_to", "9999") < today and int(c.get("used") or 0) == 0),
                 "usage_pct": round(len(used_codes) / len(codes) * 100, 1) if codes else 0.0, "revenue": revenue}
 

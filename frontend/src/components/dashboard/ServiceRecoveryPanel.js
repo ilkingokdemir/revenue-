@@ -199,6 +199,13 @@ function SeverityBar({ severity, count, max }) {
 function ComplaintRow({ c, onEdit, onReload }) {
   const sev = SEVERITY_META[c.severity] || SEVERITY_META.medium;
   const st  = STATUS_META[c.status] || STATUS_META.open;
+  const quick = async (patch) => {
+    try {
+      await axios.put(`${API}/service-recovery/${c.id}`, patch);
+      toast.success(patch.called ? "Arandı olarak işaretlendi" : "Çözüldü");
+      onReload();
+    } catch (e) { toast.error(e.response?.data?.detail || "Güncellenemedi"); }
+  };
   const remove = async () => {
     if (!window.confirm("Delete this complaint?")) return;
     try {
@@ -217,6 +224,8 @@ function ComplaintRow({ c, onEdit, onReload }) {
             <span className="text-stone-500 text-[11px] capitalize">{(c.category || "other").replaceAll("_", " ")}</span>
             {c.guest_name && <span className="text-stone-300 text-xs">· {c.guest_name}</span>}
             {c.room_number && <span className="text-stone-400 text-xs">· Rm {c.room_number}</span>}
+            {c.channel === "review" && <span data-testid={`complaint-review-tag-${c.id}`} className="px-2 py-0.5 rounded border text-[10px] bg-amber-500/15 text-amber-300 border-amber-500/40">Yorumdan geldi</span>}
+            {c.called_at && <span data-testid={`complaint-called-tag-${c.id}`} className="px-2 py-0.5 rounded border text-[10px] bg-sky-500/15 text-sky-300 border-sky-500/40">Arandı · {new Date(c.called_at).toLocaleDateString()} · {c.called_by}</span>}
           </div>
           <div className="text-sm text-stone-200 mb-1 line-clamp-2">{c.text}</div>
           {c.ai_summary && (
@@ -232,6 +241,14 @@ function ComplaintRow({ c, onEdit, onReload }) {
             <div className="text-xs text-emerald-300">Comp: {fmt(c.compensation_amount)}</div>
           )}
           <div className="flex items-center gap-1">
+            {!c.called_at && c.status !== "resolved" && c.status !== "closed" && (
+              <button data-testid={`complaint-called-btn-${c.id}`} onClick={() => quick({ called: true })}
+                className="text-[11px] px-2 py-0.5 rounded bg-sky-700 hover:bg-sky-600 text-white">Arandı</button>
+            )}
+            {c.status !== "resolved" && c.status !== "closed" && (
+              <button data-testid={`complaint-resolve-btn-${c.id}`} onClick={() => quick({ status: "resolved" })}
+                className="text-[11px] px-2 py-0.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white">Çözüldü</button>
+            )}
             <button data-testid="complaint-edit-btn" onClick={onEdit}
               className="text-[11px] px-2 py-0.5 rounded bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700">
               Update

@@ -1,0 +1,41 @@
+{
+  "summary": "Iter 612 (Root Cause + Staff Intelligence + DCV coupon reminders + Service Recovery quick actions + Admin phone/karne_whatsapp + Morning karne extension). BACKEND: 8/8 pytest passing (test_iter612.py). (1) GET /api/reviews/root-cause?property_id=all&days=30 returns {days:30, negative_reviews:15, previous_negative_reviews:1, items[{topic,count,frequency_pct,prev_pct,trend_pts,severity,recurring,action}], top}. (2) GET /api/reviews/staff-intelligence?property_id=all&days=90 returns staff[] with 'John' having negative>=1 (4 mentions, -4 negative), plus top_praised & recurring_complaints. (3) GET /api/analytics/dashboard contains root_cause + staff_intelligence keys. (4) PUT /api/admin/users/{admin_user_id}/permissions {phone:'+447700900123', karne_whatsapp:false} → response reflects phone and karne_whatsapp:false; toggled back to true. (5) POST /api/morning-karne/default/send-now → karne.checks includes 'Kök neden (yorumlar, 30g)' row; whatsapp[] contains admin phone +447700900123 with status='queued' (Twilio MOCK). (6) GET /api/direct-conversion/stats.review_coupons has all required keys (issued/used/reminded/expiring_30d/expired/usage_pct/revenue); POST /api/review-collection/coupon-reminders/all returns {ok,candidates,sent,mocked}. (7) POST /api/service-recovery creates a complaint; PUT with {called:true, call_notes} → status='in_progress', called_at + called_by populated; PUT {status:'resolved'} → resolved_at populated; DELETE cleanup succeeds. FRONTEND: (a) Admin Panel via nav-section-'Settings & Admin' → admin-panel-btn → 'Team Members' tab: 7 phone-input-{id} + 7 karne-wa-switch-{id}; admin row shows +447700900123 pre-filled (phone-input-471f89e7-59ab-4f12-9ff7-adecb8d150c9). (b) DirectConversionPanel via nav-section-'Direct Booking' → direct-conversion-btn: dcv-review-coupons, dcv-rc-reminded and dcv-rc-remind-btn all present; click triggers backend call (no exception). (c) ServiceRecoveryPanel via nav-section-'Guests & Loyalty' → service-recovery-btn: 15 complaint-rows, 13 complaint-called-btn, 14 complaint-resolve-btn; clicking first complaint-called-btn shows Sonner toast 'Arandı olarak işaretlendi' and the button disappears (row moves to called state). (d) Analytics via nav-section-'Reports & Analytics' → analytics-btn → analytics-sentiment-tab: root-cause-card rendered with 5 items (root-cause-staff/cleanliness/value/room/noise), each showing RECURRING tag + severity 'high' + trend pts + '→ action' text; staff-intel-card rendered with staff-intel-John (4 mentions +0/-4) and staff-recurring ('Recurring complaints: John').",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ServiceRecoveryPanel", "issue": "data-testid values are NOT unique per row: every ComplaintRow renders the same 'complaint-row', 'complaint-called-btn', 'complaint-resolve-btn', 'complaint-called-tag', 'complaint-review-tag'. Spec suggests per-row scoping (e.g. complaint-called-btn-{id}); duplicate testids make it impossible to assert on a specific row via a single selector. Functionality works, but tests must rely on nth-index or DOM traversal.", "selector": "[data-testid=\"complaint-called-btn\"]", "priority": "MEDIUM"},
+      {"component": "AdminPanel Team Members", "issue": "React warning in console: 'Each child in a list should have a unique \"key\" prop. Check the render method of `AdminPanel`.' — Team Members list is missing/using duplicate keys. Not blocking but should be fixed.", "selector": "AdminPanel Team Members list", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter612.py",
+    "/app/test_reports/pytest/iter612.xml"
+  ],
+  "action_items": [
+    "ServiceRecoveryPanel.js: make complaint-row/complaint-called-btn/complaint-resolve-btn/complaint-called-tag/complaint-review-tag testids per-row (append complaint id, e.g. complaint-called-btn-{c.id}) to match spec and improve testability.",
+    "AdminPanel: add unique key prop to each mapped Team Members row (React key warning surfaces on Team Members tab).",
+    "Optional: consider surfacing the phone-save toast on blur even when value is unchanged (currently no toast if value equals existing value)."
+  ],
+  "critical_code_review_comments": [
+    "ServiceRecoveryPanel ComplaintRow uses static data-testids across rows — will cause selector collisions in test automation; append row id.",
+    "AdminPanel Team Members list missing React keys — fix to avoid re-render bugs.",
+    "GET /reviews/root-cause and /reviews/staff-intelligence appear before generic /reviews/{review_id} route (confirmed in reviews.py ~845) — good; keep ordering guard.",
+    "Morning-karne 'Kök neden' row and whatsapp queued entry with admin phone rely on user.karne_whatsapp=true + phone present — good coupling with new Admin fields."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter612.py",
+    "/app/test_reports/iteration_612.json"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (all specified testids present and reachable; all quick actions functional)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (Bearer via POST /api/auth/login; login returns `token` field, not `access_token`).",
+  "seed_data_creation": "Backend test creates + deletes one service-recovery complaint (property_id=default) as part of test_service_recovery_flow. Admin phone is set to +447700900123 (and karne_whatsapp back to true) as part of test_admin_permissions_phone_karne — persisted, used by Morning Karne WA test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Nav path: /login → nav-mode-pro → click sidebar section header 'nav-section-{Section Name}' first (they are collapsed by default) → then click the leaf testId. Sections used: 'Settings & Admin' (admin-panel-btn), 'Direct Booking' (direct-conversion-btn), 'Guests & Loyalty' (service-recovery-btn), 'Reports & Analytics' (analytics-btn). Analytics tabs: analytics-overview-tab / analytics-sentiment-tab / analytics-competitors-tab. Login response uses key 'token' (not 'access_token'). Admin phone is +447700900123 and karne_whatsapp:true (set by suite). Service Recovery quick-action testids are NOT per-row — use nth() when asserting on a specific row.",
+  "rca of the issue": "N/A — no failing tests. Minor: ServiceRecoveryPanel data-testids not scoped per row (see action items)."
+}

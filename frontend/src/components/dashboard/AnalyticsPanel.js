@@ -281,6 +281,54 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
               </div>
             </div>
 
+            {/* Review Ops: Root Cause + Staff Intelligence */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white border border-stone-200 rounded-md p-4" data-testid="root-cause-card">
+                <h4 className="font-medium text-[#1C1917] mb-1 flex items-center gap-2">
+                  <TrendDown size={18} className="text-[#C05A44]" /> Root Cause (30d)
+                </h4>
+                <p className="text-[11px] text-stone-400 mb-3">{analytics?.root_cause?.negative_reviews ?? 0} negative reviews vs {analytics?.root_cause?.previous_negative_reviews ?? 0} previous period</p>
+                <div className="space-y-2">
+                  {(analytics?.root_cause?.items || []).slice(0, 5).map((it) => (
+                    <div key={it.topic} className="border border-stone-100 rounded p-2" data-testid={`root-cause-${it.topic}`}>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="capitalize font-medium">{it.topic}{it.recurring && <span className="ml-1 text-[10px] text-red-600 font-bold">RECURRING</span>}</span>
+                        <span className="text-xs">
+                          <b>{it.frequency_pct}%</b>
+                          <span className={`ml-1 ${it.trend_pts > 0 ? "text-red-600" : "text-emerald-600"}`}>{it.trend_pts > 0 ? "+" : ""}{it.trend_pts} pts</span>
+                          <Badge className={`ml-2 ${it.severity === "high" ? "bg-red-100 text-red-700" : it.severity === "medium" ? "bg-amber-100 text-amber-800" : "bg-stone-100 text-stone-600"}`}>{it.severity}</Badge>
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-stone-500 mt-1">→ {it.action}</p>
+                    </div>
+                  ))}
+                  {!(analytics?.root_cause?.items || []).length && <p className="text-xs text-stone-400">No recurring negative topics — analyze reviews first.</p>}
+                </div>
+              </div>
+              <div className="bg-white border border-stone-200 rounded-md p-4" data-testid="staff-intel-card">
+                <h4 className="font-medium text-[#1C1917] mb-1 flex items-center gap-2">
+                  <Users size={18} className="text-[#3E5245]" /> Staff Intelligence (90d)
+                </h4>
+                <p className="text-[11px] text-stone-400 mb-3">Staff names mentioned in reviews — praise vs complaints</p>
+                <div className="space-y-1.5">
+                  {(analytics?.staff_intelligence?.staff || []).slice(0, 8).map((p) => (
+                    <div key={p.name} className="flex items-center justify-between text-sm" data-testid={`staff-intel-${p.name}`}>
+                      <span className="font-medium">{p.name} <span className="text-[10px] text-stone-400">★ {p.avg_rating}</span></span>
+                      <span className="text-xs">
+                        <span className="text-stone-500">{p.mentions} mentions</span>
+                        <span className="ml-2 text-emerald-700 font-semibold">+{p.positive}</span>
+                        <span className={`ml-1 font-semibold ${p.negative >= 2 ? "text-red-600" : "text-stone-400"}`}>−{p.negative}</span>
+                      </span>
+                    </div>
+                  ))}
+                  {!(analytics?.staff_intelligence?.staff || []).length && <p className="text-xs text-stone-400">No staff mentions detected yet.</p>}
+                </div>
+                {analytics?.staff_intelligence?.recurring_complaints?.length > 0 && (
+                  <p className="text-[11px] text-red-600 mt-2" data-testid="staff-recurring">Recurring complaints: {analytics.staff_intelligence.recurring_complaints.map(x => x.name).join(", ")}</p>
+                )}
+              </div>
+            </div>
+
             {/* Top Topics */}
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white border border-stone-200 rounded-md p-4">

@@ -16,6 +16,239 @@ from routes.helpers import serialize_review, deserialize_review, log_sync, fire_
 
 logger = logging.getLogger(__name__)
 
+# ==================== REVIEW INTELLIGENCE (pure helpers, shared with autopilot/agent) ====================
+import re
+import difflib
+
+_URL_RE = re.compile(r"(https?://|www\.|\.com\b|\.net\b|\.io\b|whatsapp\s*\+?\d)", re.I)
+_KW = {
+    "refund_requested": r"\b(refund|money back|para(mı|yı)? (geri|iade)|iade|rückerstattung|geld zurück|chargeback|reimburse)",
+    "compensation_requested": r"\b(compensat|discount|voucher|telafi|indirim|tazminat|entschädigung|gutschein|free night)",
+    "safety_issue": r"\b(unsafe|safety|fire|smoke alarm|injur|hurt|assault|bed ?bug|food poison|mold|mould|güvensiz|yaraland|zehirlen|böcek|tahtakurusu|brand|verletz|gefährlich)",
+    "legal_issue": r"\b(lawyer|legal|sue|lawsuit|police|court|trading standards|avukat|dava|mahkeme|polis|anwalt|klage|gericht|polizei)",
+    "discrimination": r"\b(racis|discriminat|sexis|homophob|ayrımcı|ırkçı|rassis|diskriminier)",
+    "harassment": r"\b(harass|threaten|abus|taciz|tehdit|belästig|bedroh)",
+    "fraud_allegation": r"\b(scam|fraud|stole|theft|stolen|overcharg|dolandır|hırsız|çalındı|betrug|gestohlen|abgezockt)",
+    "medical_issue": r"\b(hospital|ambulance|doctor|allerg|sick|ill\b|hastane|ambulans|doktor|alerji|hasta|krankenhaus|arzt)",
+}
+RISK_LEVELS = ((20, "low"), (40, "medium"), (70, "high"), (100, "critical"))
+DEFAULT_AUTO_RULES = {"min_rating": 4, "max_spam_pct": 5, "max_risk": 20, "min_quality": 80,
+                      "max_similarity": 70, "block_refund": True, "block_legal": True, "block_safety": True}
+PUBLISHING_MODES = ("manual", "smart_auto", "full_auto")
+
+
+def heuristic_flags(text: str, rating: int) -> dict:
+    """Deterministic keyword/pattern flags — used as fallback and merged under LLM output."""
+    t = (text or "").lower()
+    flags = {k: bool(re.search(p, t)) for k, p in _KW.items()}
+    words = t.split()
+    caps_ratio = sum(1 for w in (text or "").split() if len(w) > 3 and w.isupper()) / max(1, len(words))
+    excl = t.count("!")
+    spam = 0.02
+    if _URL_RE.search(t): spam += 0.55
+    if caps_ratio > 0.3: spam += 0.2
+    if excl >= 4: spam += 0.15
+    if len(words) < 4 and rating in (1, 5): spam += 0.1
+    if re.search(r"\b(buy now|click here|promo code|best price|visit our|earn money)\b", t): spam += 0.3
+    fake = 0.03
+    if len(words) < 5 and not flags["refund_requested"]: fake += 0.12
+    if rating == 5 and re.search(r"\b(best|perfect|amazing)\b.*\b(best|perfect|amazing)\b", t): fake += 0.1
+    if spam > 0.5: fake += 0.3
+    flags["spam_probability"] = round(min(spam, 0.99), 2)
+    flags["fake_probability"] = round(min(fake, 0.99), 2)
+    return flags
+
+
+def compute_risk(analysis: dict, rating: int) -> dict:
+    """0-100 risk score → LOW / MEDIUM / HIGH / CRITICAL + escalation level."""
+    s = {1: 35, 2: 25, 3: 12, 4: 3, 5: 0}.get(int(rating or 3), 12)
+    a = analysis or {}
+    s += 30 if a.get("safety_issue") else 0
+    s += 30 if a.get("legal_issue") else 0
+    s += 25 if a.get("discrimination") or a.get("harassment") else 0
+    s += 20 if a.get("fraud_allegation") else 0
+    s += 20 if a.get("medical_issue") else 0
+    s += 15 if a.get("refund_requested") else 0
+    s += 8 if a.get("compensation_requested") else 0
+    s += 8 if a.get("staff_mentioned") and a.get("sentiment") == "negative" else 0
+    s += {"critical": 15, "high": 8}.get(a.get("urgency"), 0)
+    s += {"critical": 10, "high": 5}.get(a.get("severity"), 0)
+    s += int(float(a.get("spam_probability") or 0) * 15)
+    score = max(0, min(100, s))
+    level = next(l for cap, l in RISK_LEVELS if score <= cap)
+    esc = "management" if level == "critical" else "manager" if level == "high" else "none"
+    return {"risk_score": score, "risk_level": level, "escalation_level": esc}
+
+
+_SIGN_RE = re.compile(r"^(—|–|-|kind regards|best regards|warm regards|sincerely|saygılar|sevgiler|mit freundlichen|herzliche|the management|yönetim|management team)", re.I)
+
+
+def _norm(t: str) -> str:
+    return re.sub(r"[^a-z0-9çğıöşüäöß ]+", " ", (t or "").lower()).strip()
+
+
+def similarity_score(text: str, previous: List[str]) -> dict:
+    """Exact + opening/closing + structure similarity vs previous responses (0-100)."""
+    if not text or not previous:
+        return {"max_pct": 0, "opening_pct": 0, "closing_pct": 0, "compared": 0, "action": "ok"}
+    def _body(t: str) -> str:
+        # imza / kapanış satırlarını (— Yönetim, Kind regards, The Management Team…) çıkar
+        lines = [l for l in (t or "").splitlines() if l.strip() and not _SIGN_RE.match(l.strip())]
+        return " ".join(lines)
+    text_b = _body(text)
+    n = _norm(text_b)
+    sents = [x.strip() for x in re.split(r"[.!?]\s", text_b) if x.strip()]
+    opening, closing = _norm(sents[0] if sents else text_b[:80]), _norm(sents[-1] if sents else text_b[-80:])
+    best = op = cl = 0.0
+    for p in previous[:100]:
+        pb = _body(p)
+        pn = _norm(pb)
+        if not pn:
+            continue
+        best = max(best, difflib.SequenceMatcher(None, n, pn).ratio())
+        ps = [x.strip() for x in re.split(r"[.!?]\s", pb) if x.strip()]
+        if ps:
+            op = max(op, difflib.SequenceMatcher(None, opening, _norm(ps[0])).ratio())
+            cl = max(cl, difflib.SequenceMatcher(None, closing, _norm(ps[-1])).ratio())
+    mx = round(max(best, op * 0.7, cl * 0.5) * 100)
+    return {"max_pct": mx, "opening_pct": round(op * 100), "closing_pct": round(cl * 100),
+            "compared": min(len(previous), 100), "action": "regenerate" if mx >= 85 else "ok"}
+
+
+_BANNED = re.compile(r"\b(idiot|stupid|liar|shut up|fake review|you are wrong|aptal|yalancı|dumm|lügner)\b", re.I)
+_GENERIC_OPEN = re.compile(r"^(thank you for your feedback|dear valued guest|değerli misafirimiz|vielen dank für ihr feedback)", re.I)
+
+
+def quality_score(response: str, review: dict, analysis: dict, similarity_pct: int) -> dict:
+    """7-dimension heuristic quality score (0-100 each) + total."""
+    r, a = response or "", analysis or {}
+    rl, words = r.lower(), r.split()
+    name = (review.get("guest_name") or review.get("author") or "").split(" ")[0].lower()
+    topics = [t.lower() for t in (a.get("topics") or [])] + [str(x).lower() for x in (a.get("key_issues") or []) + (a.get("key_praises") or [])]
+    hits = sum(1 for t in topics if t and any(w in rl for w in t.split()[:2]))
+    review_words = set(_norm(review.get("review_text") or review.get("comment") or "").split()) - {"the", "and", "was", "very", "bir", "ve", "çok"}
+    overlap = len(review_words & set(_norm(r).split()))
+    personal = min(100, (30 if name and name in rl else 0) + min(40, hits * 20) + min(40, overlap * 5))
+    relevance = min(100, 55 + min(45, overlap * 6)) if words else 0
+    neg = a.get("sentiment") == "negative" or int(review.get("rating") or 3) <= 2
+    apology = bool(re.search(r"\b(sorry|apolog|özür|üzgün|entschuldig|bedauern)\b", rl))
+    thanks = bool(re.search(r"\b(thank|teşekkür|dank)\b", rl))
+    brand = 60 + (20 if (apology if neg else thanks) else 0) + (20 if 40 <= len(words) <= 220 else 5)
+    fact = 100 - (30 if re.search(r"\b(always|never|100%|guarantee|garanti|her zaman|asla)\b", rl) else 0) - (20 if re.search(r"\b(refund(ed)?|iade edildi|we will refund)\b", rl) and not a.get("refund_requested") else 0)
+    originality = max(0, 100 - int(similarity_pct or 0)) - (15 if _GENERIC_OPEN.search(r.strip()) else 0)
+    prof = 100 - (40 if _BANNED.search(r) else 0) - (10 if r.count("!") > 3 else 0) - (10 if len(words) < 25 else 0)
+    policy = 100 - (60 if _BANNED.search(r) else 0) - (40 if re.search(r"\b(five stars?|5 stars?|change your (review|rating)|remove (the|your) review|5 yıldız|puanı(nı)? değiştir|yorumu(nu)? sil)\b", rl) else 0) \
+        - (30 if re.search(r"\b(room \d{3,4}|booking (ref|no)\.? ?[A-Z0-9]{5,}|card ending)\b", r, re.I) else 0)
+    dims = {"personalisation": max(0, personal), "relevance": relevance, "brand_voice": min(100, brand), "factuality": max(0, fact),
+            "originality": max(0, originality), "professionalism": max(0, prof), "policy_safety": max(0, policy)}
+    total = round(sum(dims.values()) / len(dims))
+    if dims["policy_safety"] < 60:
+        total = min(total, 49)
+    return {**dims, "total": total}
+
+
+def decide_action(analysis: dict, rating: int, quality_total: int, similarity_pct: int, cfg: dict) -> dict:
+    """Decision engine → do_not_reply | escalate | auto_approve | human_approval (+ reasons)."""
+    a, reasons = analysis or {}, []
+    rules = {**DEFAULT_AUTO_RULES, **(cfg.get("auto_rules") or {})}
+    mode = cfg.get("publishing_mode") or "manual"
+    spam = float(a.get("spam_probability") or 0) * 100
+    risk = a.get("risk_level") or compute_risk(a, rating)["risk_level"]
+    if spam >= 80:
+        return {"action": "do_not_reply", "reasons": [f"spam {spam:.0f}%"], "mode": mode}
+    if risk == "critical":
+        return {"action": "escalate", "reasons": ["risk critical"], "mode": mode, "escalation_level": "management"}
+    if mode == "manual":
+        return {"action": "human_approval", "reasons": ["manual mode"], "mode": mode}
+    if a.get("legal_issue"): reasons.append("legal")
+    if a.get("safety_issue"): reasons.append("safety")
+    if a.get("discrimination") or a.get("harassment"): reasons.append("sensitive")
+    if mode == "full_auto":
+        return {"action": "human_approval" if reasons else "auto_approve", "reasons": reasons or ["full_auto"], "mode": mode}
+    if int(rating or 0) < int(rules["min_rating"]): reasons.append(f"rating < {rules['min_rating']}")
+    if spam > float(rules["max_spam_pct"]): reasons.append(f"spam {spam:.0f}% > {rules['max_spam_pct']}%")
+    if int(a.get("risk_score") or 0) > int(rules["max_risk"]): reasons.append(f"risk {a.get('risk_score')} > {rules['max_risk']}")
+    if rules.get("block_refund") and (a.get("refund_requested") or a.get("compensation_requested")): reasons.append("refund/compensation")
+    if a.get("staff_mentioned") and a.get("sentiment") == "negative": reasons.append("staff complaint")
+    if quality_total is not None and int(quality_total) < int(rules["min_quality"]): reasons.append(f"quality {quality_total} < {rules['min_quality']}")
+    if int(similarity_pct or 0) >= int(rules["max_similarity"]): reasons.append(f"similarity {similarity_pct}% ≥ {rules['max_similarity']}%")
+    if risk == "high": reasons.append("risk high")
+    return {"action": "human_approval" if reasons else "auto_approve", "reasons": reasons or ["rules passed"], "mode": mode}
+
+
+_PRIV = {
+    "email": re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+"),
+    "phone": re.compile(r"(?<![\d/.\-])(\+?\d[\d\s().-]{8,}\d)(?![\d/.\-])"),
+    "card_or_iban": re.compile(r"\b(?:\d[ -]?){13,19}\b|\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b"),
+    "payment": re.compile(r"\b(card ending|last 4 digits|cvv|expiry date|kart(ın)? son|kartın|iban|sort code|hesap no)\b", re.I),
+    "booking_ref": re.compile(r"\b(booking|reservation|rezervasyon|confirmation|onay|ref(erence)?|buchung)\b\s*(no\.?|number|numarası|nr\.?|id|#|code|kodu)?\s*[:#]?\s*(?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{4,}\b", re.I),
+    "room_number": re.compile(r"\b(room|oda|zimmer|suite)\s*(no\.?|number|numarası|nr\.?)?\s*#?\s*\d{2,4}\b", re.I),
+    "internal_notes": re.compile(r"\b(internal note|internal only|do not publish|yayınlamayın|iç not|yönetici notu|manager note|staff note|crm|pms|folio|blacklist|kara liste|vip flag|housekeeping log|ticket #|incident report)\b", re.I),
+}
+
+
+def privacy_check(text: str, staff_surnames: Optional[List[str]] = None) -> dict:
+    """Yayın öncesi sert gizlilik denetimi → {ok, violations[]}. Gerçek verileri asla döndürmez, sadece tür + maskeli örnek."""
+    t = text or ""
+    found = []
+    for kind, rx in _PRIV.items():
+        m = rx.search(t)
+        if not m:
+            continue
+        if kind == "phone" and len(re.sub(r"\D", "", m.group(0))) < 9:
+            continue
+        snip = m.group(0)
+        found.append({"type": kind, "sample": snip[:3] + "…" + snip[-2:] if len(snip) > 6 else "•••"})
+    for sn in (staff_surnames or []):
+        if sn and len(sn) >= 3 and re.search(r"\b" + re.escape(sn) + r"\b", t, re.I):
+            found.append({"type": "staff_private", "sample": sn[:1] + "•••"})
+            break
+    return {"ok": not found, "violations": found}
+
+
+_ROLE_WORDS = {"manager", "housekeeper", "receptionist", "admin", "staff", "team", "management", "director", "concierge",
+               "host", "owner", "test", "user", "demo", "auditor", "chef", "waiter", "reception", "front", "desk", "night",
+               "revenue", "finance", "sales", "marketing", "general", "assistant", "supervisor", "guest", "hotel", "yönetici",
+               "müdür", "resepsiyon", "personel", "kat", "görevlisi", "leiter", "rezeption"}
+
+
+async def staff_surnames_db(db) -> List[str]:
+    """Personel soyadları (users/staff). Rol/unvan kelimeleri ve tek kelimelik isimler hariç."""
+    surnames: List[str] = []
+    for coll in (db.users, db.staff):
+        try:
+            async for u in coll.find({}, {"_id": 0, "name": 1, "full_name": 1, "last_name": 1}).limit(300):
+                if u.get("last_name"):
+                    nm = str(u["last_name"]).strip()
+                else:
+                    parts = (u.get("full_name") or u.get("name") or "").strip().split()
+                    nm = parts[-1] if len(parts) >= 2 else ""
+                if nm and len(nm) >= 3 and nm.lower() not in _ROLE_WORDS and nm.isalpha():
+                    surnames.append(nm)
+        except Exception:
+            pass
+    return surnames
+
+
+async def privacy_check_db(db, text: str, property_id: str = "") -> dict:
+    """privacy_check + personel soyadları (users/staff) ile."""
+    return privacy_check(text, await staff_surnames_db(db))
+
+
+async def get_review_agent_cfg(db, property_id: str) -> dict:
+    """Per-property publishing config (review_agent_config koleksiyonu — review_agent.py ile ortak)."""
+    cfg = await db.review_agent_config.find_one({"property_id": property_id or "default"}, {"_id": 0}) or {}
+    cfg.setdefault("publishing_mode", "smart_auto")
+    cfg["auto_rules"] = {**DEFAULT_AUTO_RULES, **(cfg.get("auto_rules") or {})}
+    return cfg
+
+
+async def log_review_event(db, review_id: str, event: str, by: str = "system", **meta):
+    """Audit zinciri: reviews.events[] (son 60 olay)."""
+    await db.reviews.update_one({"id": review_id, "events": None}, {"$set": {"events": []}})
+    await db.reviews.update_one({"id": review_id}, {"$push": {"events": {"$each": [{
+        "type": event, "by": by, "at": datetime.now(timezone.utc).isoformat(), **({"meta": meta} if meta else {})}], "$slice": -60}}})
+
 
 def create_reviews_router(db, require_roles, get_current_user, verify_api_key, LlmChat, UserMessage, resend):
     """Factory function that creates review routes with injected dependencies"""
@@ -157,71 +390,197 @@ def create_reviews_router(db, require_roles, get_current_user, verify_api_key, L
         review = await db.reviews.find_one({"id": review_id}, {"_id": 0})
         if not review:
             raise HTTPException(status_code=404, detail="Review not found")
-        if not review.get("response_text"):
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+        text = (body.get("response_text") or review.get("response_text") or review.get("ai_draft") or "").strip()
+        if not text:
             raise HTTPException(status_code=400, detail="No response text to submit")
         await db.reviews.update_one({"id": review_id}, {"$set": {
+            "response_text": text,
             "response_status": "pending_approval",
             "drafted_by": current_user.get("name", current_user.get("email")),
         }})
+        await log_review_event(db, review_id, "submitted_for_approval", current_user.get("name", current_user.get("email")))
         return {"message": "Submitted for approval", "status": "pending_approval"}
 
     @router.post("/reviews/{review_id}/approve")
     async def approve_response(review_id: str, action: ApprovalAction, request: Request):
         current_user = await get_current_user(request)
-        if current_user["role"] not in ["admin", "manager"]:
-            raise HTTPException(status_code=403, detail="Only managers and admins can approve")
+        from routes.platform_ext.admin import has_permission
+        if not has_permission(current_user, "reviews", "approve"):
+            raise HTTPException(status_code=403, detail="CAN_APPROVE_RESPONSE izniniz yok")
         review = await db.reviews.find_one({"id": review_id}, {"_id": 0})
         if not review:
             raise HTTPException(status_code=404, detail="Review not found")
+        who = current_user.get("name", current_user.get("email"))
+        now = datetime.now(timezone.utc).isoformat()
+        analysis = review.get("sentiment_analysis") or {}
+        risk_level = analysis.get("risk_level", "low")
 
         if action.action == "approve":
-            await db.reviews.update_one({"id": review_id}, {"$set": {
-                "response_status": "responded",
-                "approved_by": current_user.get("name", current_user.get("email")),
-                "approval_notes": action.notes,
-                "response_date": datetime.now(timezone.utc).isoformat()
-            }})
-            return {"message": "Response approved and published", "status": "responded"}
+            if not has_permission(current_user, "reviews", "publish"):
+                raise HTTPException(status_code=403, detail="CAN_PUBLISH_RESPONSE izniniz yok")
+            if analysis.get("spam_suspected") and not (action.notes or "").strip():
+                raise HTTPException(status_code=400, detail="Spam şüpheli yorum: yayımlamak için gerekçe (notes) zorunlu")
+            if not (review.get("response_text") or "").strip():
+                raise HTTPException(status_code=400, detail="Yayımlanacak yanıt metni yok")
+            pv = await privacy_check_db(db, review.get("response_text", ""), review.get("property_id", ""))
+            if not pv["ok"]:
+                await log_review_event(db, review_id, "publish_blocked_privacy", who, violations=[v["type"] for v in pv["violations"]])
+                raise HTTPException(status_code=400, detail="Gizlilik ihlali — yayın engellendi: " + ", ".join(v["type"] for v in pv["violations"]))
+            override = None
+            if risk_level in ("high", "critical") or review.get("escalated"):
+                if not (action.notes or "").strip():
+                    raise HTTPException(status_code=400, detail=f"Risk {risk_level.upper()}: override gerekçesi (notes) zorunlu")
+                override = {"by": who, "at": now, "reason": action.notes, "risk_level": risk_level,
+                            "risk_score": analysis.get("risk_score"), "draft_version": review.get("regeneration_count", 1)}
+            upd = {"response_status": "responded", "responded": True, "approved_by": who, "approval_notes": action.notes,
+                   "response_date": now, "escalated": False}
+            if override:
+                upd["approval_override"] = override
+            await db.reviews.update_one({"id": review_id}, {"$set": upd})
+            await log_review_event(db, review_id, "override_approved" if override else "approved", who, reason=action.notes or "")
+            await log_review_event(db, review_id, "published", who, channel=review.get("platform"))
+            if review.get("platform") and review.get("external_review_id"):
+                asyncio.create_task(_attempt_outbound_sync(review["platform"], review_id, review["external_review_id"], review.get("response_text", "")))
+            return {"message": "Response approved and published", "status": "responded", "override": bool(override)}
         elif action.action == "reject":
             await db.reviews.update_one({"id": review_id}, {"$set": {
-                "response_status": "rejected",
-                "approved_by": current_user.get("name", current_user.get("email")),
-                "approval_notes": action.notes
-            }})
+                "response_status": "rejected", "approved_by": who, "approval_notes": action.notes}})
+            await log_review_event(db, review_id, "rejected", who, reason=action.notes or "")
             return {"message": "Response rejected", "status": "rejected"}
+        elif action.action == "escalate":
+            level = "management" if risk_level == "critical" else "manager"
+            await db.reviews.update_one({"id": review_id}, {"$set": {
+                "response_status": "pending_approval", "escalated": True, "escalation_level": level,
+                "escalated_by": who, "escalated_at": now, "escalation_notes": action.notes or ""}})
+            await log_review_event(db, review_id, "escalated", who, level=level, reason=action.notes or "")
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()), "category": "review_escalation", "priority": "high",
+                "title": f"🔺 Yorum eskalasyonu ({risk_level.upper()}): {review.get('guest_name', '')} {review.get('rating', '?')}★",
+                "message": f"{who} yorumu {level} seviyesine yükseltti. {action.notes or ''} — \"{(review.get('review_text') or '')[:140]}\"",
+                "property_id": review.get("property_id", ""), "review_id": review_id, "read": False, "created_at": now})
+            return {"message": f"Escalated to {level}", "status": "pending_approval", "escalation_level": level}
         else:
             raise HTTPException(status_code=400, detail="Invalid action")
 
     @router.get("/reviews/pending-approval")
-    async def get_pending_approvals(request: Request):
+    async def get_pending_approvals(request: Request, property_id: Optional[str] = None):
         current_user = await get_current_user(request)
         if current_user["role"] not in ["admin", "manager"]:
             raise HTTPException(status_code=403, detail="Only managers and admins can view approval queue")
-        reviews = await db.reviews.find({"response_status": "pending_approval"}, {"_id": 0}).to_list(100)
+        q: Dict = {"response_status": "pending_approval"}
+        if property_id and property_id != "all":
+            q["property_id"] = property_id
+        reviews = await db.reviews.find(q, {"_id": 0}).to_list(200)
+        surnames = await staff_surnames_db(db)
+        for r in reviews:
+            if r.get("response_text"):
+                r["response_privacy"] = privacy_check(r["response_text"], surnames)
+        order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+        reviews.sort(key=lambda r: (0 if r.get("escalated") else 1,
+                                    order.get((r.get("sentiment_analysis") or {}).get("risk_level", "low"), 3),
+                                    -int((r.get("sentiment_analysis") or {}).get("risk_score") or 0)))
         return [serialize_review(r) for r in reviews]
 
+    @router.post("/reviews/approve-bulk")
+    async def approve_bulk(request: Request):
+        """Kontrollü toplu onay: sadece 4-5★ + risk low + kalite ≥ eşik + spam değil (1-3★ asla)."""
+        current_user = await get_current_user(request)
+        from routes.platform_ext.admin import has_permission
+        if not (has_permission(current_user, "reviews", "approve") and has_permission(current_user, "reviews", "publish")):
+            raise HTTPException(status_code=403, detail="Toplu onay için approve + publish izni gerekir")
+        body = await request.json()
+        ids = body.get("review_ids") or []
+        q: Dict = {"response_status": "pending_approval"}
+        if ids:
+            q["id"] = {"$in": ids}
+        elif body.get("property_id") and body["property_id"] != "all":
+            q["property_id"] = body["property_id"]
+        who = current_user.get("name", current_user.get("email"))
+        approved, skipped = [], []
+        for r in await db.reviews.find(q, {"_id": 0}).to_list(200):
+            cfg = await get_review_agent_cfg(db, r.get("property_id", "default"))
+            a = r.get("sentiment_analysis") or {}
+            qt = (r.get("response_quality") or {}).get("total")
+            why = []
+            if int(r.get("rating") or 0) < 4: why.append("rating < 4")
+            if a.get("risk_level", "low") != "low": why.append(f"risk {a.get('risk_level')}")
+            if a.get("spam_suspected"): why.append("spam")
+            if r.get("escalated"): why.append("escalated")
+            if qt is not None and qt < cfg["auto_rules"]["min_quality"]: why.append(f"quality {qt}")
+            if not (r.get("response_text") or "").strip(): why.append("no draft")
+            elif not (await privacy_check_db(db, r["response_text"], r.get("property_id", "")))["ok"]: why.append("privacy")
+            if why:
+                skipped.append({"review_id": r["id"], "guest_name": r.get("guest_name"), "reasons": why}); continue
+            now = datetime.now(timezone.utc).isoformat()
+            await db.reviews.update_one({"id": r["id"]}, {"$set": {"response_status": "responded", "responded": True, "approved_by": who,
+                                                                  "approval_notes": "bulk", "response_date": now}})
+            await log_review_event(db, r["id"], "bulk_approved", who)
+            await log_review_event(db, r["id"], "published", who, channel=r.get("platform"))
+            approved.append(r["id"])
+        return {"approved": len(approved), "approved_ids": approved, "skipped": skipped}
+
+    def _basic_analysis(review_text: str, rating: int) -> dict:
+        sentiment = "positive" if rating >= 4 else "negative" if rating <= 2 else "neutral"
+        return {
+            "sentiment": sentiment,
+            "score": (rating - 3) / 2,
+            "urgency": "critical" if rating == 1 else "high" if rating == 2 else "low",
+            "topics": [],
+            "suggested_tone": "apologetic" if rating <= 2 else "friendly" if rating >= 4 else "professional",
+            "suggested_category": "negative" if rating <= 2 else "positive" if rating >= 4 else "neutral",
+            "key_issues": [], "key_praises": [], "emotion": [], "staff_mentioned": [],
+            "severity": "high" if rating <= 2 else "medium" if rating == 3 else "low",
+            "customer_intent": "complaint" if rating <= 2 else "praise" if rating >= 4 else "feedback",
+            "source": "heuristic",
+        }
+
+    def _enrich_analysis(analysis: dict, review_text: str, rating: int) -> dict:
+        """Merge deterministic flags under LLM output, then compute risk + recommended action."""
+        flags = heuristic_flags(review_text, rating)
+        for k, v in flags.items():
+            if k in ("spam_probability", "fake_probability"):
+                analysis[k] = round(max(float(analysis.get(k) or 0), v), 2)
+            else:
+                analysis[k] = bool(analysis.get(k)) or v
+        analysis.setdefault("emotion", []); analysis.setdefault("staff_mentioned", [])
+        analysis.setdefault("severity", "high" if rating <= 2 else "medium" if rating == 3 else "low")
+        analysis.update(compute_risk(analysis, rating))
+        analysis["spam_suspected"] = analysis["spam_probability"] >= 0.8
+        analysis["fake_suspected"] = analysis["fake_probability"] >= 0.7
+        analysis["recommended_action"] = ("do_not_reply" if analysis["spam_suspected"] else
+                                          "escalate" if analysis["risk_level"] == "critical" else
+                                          "human_review" if analysis["risk_level"] in ("high", "medium") or analysis["fake_suspected"] else "auto_ok")
+        analysis["analyzed_at"] = datetime.now(timezone.utc).isoformat()
+        return analysis
+
     async def analyze_sentiment(review_text: str, rating: int) -> dict:
-        """Analyze sentiment of a review using GPT-5.2"""
+        """Review Intelligence: sentiment + emotion + topics + staff + risk flags + spam/fake (GPT-5.2, heuristik yedek)"""
         api_key = os.environ.get("EMERGENT_LLM_KEY")
         if not api_key:
-            # Return basic analysis based on rating if no API key
-            sentiment = "positive" if rating >= 4 else "negative" if rating <= 2 else "neutral"
-            return {
-                "sentiment": sentiment,
-                "score": (rating - 3) / 2,  # -1 to 1 scale
-                "urgency": "critical" if rating == 1 else "high" if rating == 2 else "low",
-                "topics": [],
-                "suggested_tone": "apologetic" if rating <= 2 else "friendly" if rating >= 4 else "professional",
-                "suggested_category": "negative" if rating <= 2 else "positive" if rating >= 4 else "neutral",
-                "key_issues": [],
-                "key_praises": []
-            }
+            return _enrich_analysis(_basic_analysis(review_text, rating), review_text, rating)
 
-        system_message = """You are a hotel review sentiment analyzer. Analyze the given review and return a JSON object with:
+        system_message = """You are a hotel review intelligence analyzer. Analyze the given review and return a JSON object with:
     - sentiment: "positive", "negative", "neutral", or "mixed"
     - score: float from -1 (very negative) to 1 (very positive)
+    - emotion: array of emotions (e.g. "frustration","disappointment","anger","joy","gratitude","surprise")
+    - severity: "low", "medium", "high", or "critical"
     - urgency: "low", "medium", "high", or "critical" (critical for reviews mentioning health/safety/legal issues)
     - topics: array of topics mentioned (cleanliness, staff, amenities, location, value, food, noise, parking, wifi, bathroom, bed, check-in, check-out, etc.)
+    - subtopics: array of more specific sub-topics (e.g. "breakfast variety", "shower pressure")
+    - staff_mentioned: array of staff first names mentioned (empty if none)
+    - refund_requested: boolean (guest explicitly asks for money back)
+    - compensation_requested: boolean (asks for discount/voucher/compensation)
+    - safety_issue: boolean (physical safety, fire, injury, bed bugs, food poisoning)
+    - legal_issue: boolean (lawyer, lawsuit, police, court, legal threats)
+    - discrimination: boolean, harassment: boolean, fraud_allegation: boolean (theft/scam/overcharge), medical_issue: boolean
+    - spam_probability: float 0-1 (ads, links, off-topic promotion)
+    - fake_probability: float 0-1 (generic, implausible, pattern-like review)
+    - customer_intent: "complaint", "praise", "feedback", "warning_others", "seeking_refund"
     - suggested_tone: "professional", "friendly", or "apologetic" based on what response tone would work best
     - suggested_category: "positive", "negative", "neutral", "complaint", or "praise" for template matching
     - key_issues: array of specific problems mentioned
@@ -256,21 +615,11 @@ def create_reviews_router(db, require_roles, get_current_user, verify_api_key, L
             cleaned = cleaned.strip()
 
             result = json.loads(cleaned)
-            return result
+            result["source"] = "llm"
+            return _enrich_analysis(result, review_text, rating)
         except Exception as e:
             logger.error(f"Sentiment analysis error: {str(e)}")
-            # Fallback to basic analysis
-            sentiment = "positive" if rating >= 4 else "negative" if rating <= 2 else "neutral"
-            return {
-                "sentiment": sentiment,
-                "score": (rating - 3) / 2,
-                "urgency": "critical" if rating == 1 else "high" if rating == 2 else "low",
-                "topics": [],
-                "suggested_tone": "apologetic" if rating <= 2 else "friendly" if rating >= 4 else "professional",
-                "suggested_category": "negative" if rating <= 2 else "positive" if rating >= 4 else "neutral",
-                "key_issues": [],
-                "key_praises": []
-            }
+            return _enrich_analysis(_basic_analysis(review_text, rating), review_text, rating)
 
     async def send_negative_review_notification(review: dict):
         """Send email notification for negative reviews (1-2 stars)"""
@@ -424,6 +773,9 @@ def create_reviews_router(db, require_roles, get_current_user, verify_api_key, L
         review = Review(**input.model_dump())
         doc = review.model_dump()
         doc = serialize_review(doc)
+        for k in ("events", "rating_history", "ai_candidates", "regeneration_count"):
+            if doc.get(k) is None:
+                doc.pop(k, None)
         await db.reviews.insert_one(doc)
 
         # Trigger notification for negative reviews (1-2 stars)
@@ -439,6 +791,10 @@ def create_reviews_router(db, require_roles, get_current_user, verify_api_key, L
         if not review:
             raise HTTPException(status_code=404, detail="Review not found")
 
+        pv = await privacy_check_db(db, response.response_text, review.get("property_id", ""))
+        if not pv["ok"]:
+            await log_review_event(db, review_id, "publish_blocked_privacy", "user", violations=[v["type"] for v in pv["violations"]])
+            raise HTTPException(status_code=400, detail="Gizlilik ihlali — yayın engellendi: " + ", ".join(v["type"] for v in pv["violations"]))
         update_data = {
             "response_text": response.response_text,
             "response_status": "responded",
@@ -449,6 +805,8 @@ def create_reviews_router(db, require_roles, get_current_user, verify_api_key, L
             {"id": review_id},
             {"$set": update_data}
         )
+        await log_review_event(db, review_id, "published", "user", channel=review.get("platform"),
+                               edited=bool(review.get("ai_candidates")) and response.response_text not in [c.get("text") for c in (review.get("ai_candidates") or [])])
 
         # Attempt outbound platform sync in the background
         platform = review.get("platform")
@@ -609,11 +967,11 @@ def create_reviews_router(db, require_roles, get_current_user, verify_api_key, L
             lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
             language_instruction = f"Write your entire response in {lang_name}."
 
-        # Fetch recent responses for uniqueness context
+        # Fetch recent responses for uniqueness context (same property, last 100)
         recent_responses = await db.reviews.find(
-            {"response_text": {"$ne": None}, "id": {"$ne": request.review_id}},
+            {"response_text": {"$nin": [None, ""]}, "id": {"$ne": request.review_id}, "property_id": review.get("property_id", "default")},
             {"response_text": 1, "_id": 0}
-        ).sort("response_date", -1).limit(5).to_list(5)
+        ).sort("response_date", -1).limit(100).to_list(100)
         recent_texts = [r["response_text"] for r in recent_responses if r.get("response_text")]
 
         avoid_phrases = ""
@@ -624,23 +982,37 @@ def create_reviews_router(db, require_roles, get_current_user, verify_api_key, L
                 avoid_phrases += f"- Avoid: \"{first_line}...\"\n"
             avoid_phrases += "Use a fresh, creative opening. Vary your sentence structure. Reference specific details from the guest's review."
 
-        # Unique session ID each time to prevent caching
-        unique_session = f"review-{request.review_id}-{lang}-{uuid.uuid4().hex[:8]}"
+        # Review Intelligence (analyze once, reuse)
+        analysis = review.get("sentiment_analysis")
+        if not analysis or "risk_score" not in analysis:
+            analysis = await analyze_sentiment(review.get("review_text", ""), int(review.get("rating") or 3))
+            await db.reviews.update_one({"id": request.review_id}, {"$set": {"sentiment_analysis": analysis}})
+        cfg = await get_review_agent_cfg(db, review.get("property_id", "default"))
+        identity = (cfg.get("sign_off") or "").strip()
+        sign_line = f"Sign off exactly as '{identity}' (an authorised real person/team — never invent a name)." if identity and identity != "Yönetim" \
+            else "Sign off as 'The Management Team' or similar — never invent a personal name."
+        policy_line = ("POLICY: never ask the guest to change/remove the review or rating, never mention room numbers, booking references "
+                       "or payment details, never promise a refund unless the hotel explicitly decided so; if the guest raised safety/legal "
+                       "issues, invite them to contact management privately.")
+        if analysis.get("staff_mentioned"):
+            policy_line += f" You may thank staff by first name only if praised: {', '.join(analysis['staff_mentioned'][:3])}."
 
-        system_message = f"""You are a professional hotel manager responding to guest reviews. 
-    Your responses should be {tone}.
+        def _system(tone_desc: str) -> str:
+            return f"""You are a professional hotel manager responding to guest reviews. 
+    Your responses should be {tone_desc}.
     Keep responses concise (2-3 paragraphs max).
     Always thank the guest for their feedback.
     If the review is negative, acknowledge their concerns and offer to make things right.
     If positive, express gratitude and invite them back.
     {language_instruction}
+    {policy_line}
 
     CRITICAL: Every response must be UNIQUE and PERSONALIZED. 
     - Reference SPECIFIC details from the review (room type, dates, specific experiences mentioned).
     - Vary your opening line, sentence structure, and sign-off every time.
     - Never use generic phrases like "Thank you for your feedback" as an opener.
     - Be creative and genuine — guests can tell when responses are automated.
-    Sign off creatively as 'The Management Team' or similar.{avoid_phrases}"""
+    {sign_line}{avoid_phrases}"""
 
         prompt = f"""Please write a response to this hotel review:
 
@@ -653,21 +1025,47 @@ def create_reviews_router(db, require_roles, get_current_user, verify_api_key, L
 
     Write a {tone}, UNIQUE and personalized response. {language_instruction}"""
 
+        async def _one(style: str, tone_desc: str) -> dict:
+            chat = LlmChat(api_key=api_key, session_id=f"review-{request.review_id}-{lang}-{style}-{uuid.uuid4().hex[:8]}",
+                           system_message=_system(tone_desc)).with_model("openai", "gpt-5.2")
+            text = (await chat.send_message(UserMessage(text=prompt))).strip()
+            sim = similarity_score(text, recent_texts)
+            q = quality_score(text, review, analysis, sim["max_pct"])
+            pv = privacy_check(text, staff_surnames)
+            if not pv["ok"]:
+                q["policy_safety"] = min(q["policy_safety"], 20); q["total"] = min(q["total"], 40)
+            return {"style": style, "text": text, "quality": q, "similarity": sim, "privacy": pv}
+
+        staff_surnames = await staff_surnames_db(db)
+        variants = [("selected", tone)]
+        if request.candidates:
+            variants = [("warm", "warm, empathetic and personable"), ("professional", "professional, courteous, and business-like"),
+                        ("concise", "concise, direct and sincere (max 4 sentences)")]
         try:
-            chat = LlmChat(
-                api_key=api_key,
-                session_id=unique_session,
-                system_message=system_message
-            ).with_model("openai", "gpt-5.2")
-
-            user_message = UserMessage(text=prompt)
-            response = await chat.send_message(user_message)
-
-            # Store uniqueness hash
-            import hashlib
-            uniqueness_hash = hashlib.md5(response.encode()).hexdigest()[:12]
-
-            return AIGenerateResponse(generated_text=response, detected_language=lang if lang != "auto" else None)
+            results = await asyncio.gather(*[_one(s, d) for s, d in variants])
+            # regenerate once if best is too similar to history
+            best = max(results, key=lambda c: (c["quality"]["total"], -c["similarity"]["max_pct"]))
+            if best["similarity"]["action"] == "regenerate":
+                retry = await _one(best["style"] + "_regen", tone)
+                results.append(retry)
+                best = max(results, key=lambda c: (c["quality"]["total"], -c["similarity"]["max_pct"]))
+            decision = decide_action(analysis, int(review.get("rating") or 3), best["quality"]["total"], best["similarity"]["max_pct"], cfg)
+            if not best["privacy"]["ok"]:
+                decision = {**decision, "action": "human_approval" if decision["action"] == "auto_approve" else decision["action"],
+                            "reasons": decision["reasons"] + ["privacy"]}
+            await db.reviews.update_one({"id": request.review_id, "regeneration_count": None}, {"$set": {"regeneration_count": 0}})
+            await db.reviews.update_one({"id": request.review_id}, {
+                "$set": {"response_quality": best["quality"], "response_similarity": best["similarity"], "ai_decision": decision,
+                         "response_privacy": best["privacy"], "ai_draft": best["text"], "ai_draft_at": datetime.now(timezone.utc).isoformat(),
+                         "ai_candidates": [{k: c[k] for k in ("style", "text")} | {"quality": c["quality"]["total"], "similarity": c["similarity"]["max_pct"]} for c in results],
+                         "response_uniqueness_hash": __import__("hashlib").md5(best["text"].encode()).hexdigest()[:12]},
+                "$inc": {"regeneration_count": 1}})
+            await log_review_event(db, request.review_id, "draft_generated", "ai", style=best["style"], quality=best["quality"]["total"],
+                                   similarity=best["similarity"]["max_pct"], decision=decision["action"], candidates=len(results))
+            return AIGenerateResponse(generated_text=best["text"], detected_language=lang if lang != "auto" else None,
+                                      quality=best["quality"], similarity=best["similarity"], decision=decision, analysis=analysis, privacy=best["privacy"],
+                                      candidates=[{"style": c["style"], "text": c["text"], "quality": c["quality"]["total"],
+                                                   "similarity": c["similarity"]["max_pct"]} for c in results] if request.candidates else None)
         except Exception as e:
             logger.error(f"AI generation error: {str(e)}")
             raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
@@ -861,6 +1259,33 @@ Review: {review.get('review_text', '')}
         platform_result = await db.reviews.aggregate(platform_pipeline).to_list(100)
         platforms = {item["_id"]: item["count"] for item in platform_result}
 
+        # Approval Center + AI performance (Review Ops)
+        pend = await db.reviews.find({**query, "response_status": "pending_approval"},
+                                     {"_id": 0, "sentiment_analysis.risk_level": 1, "sentiment_analysis.spam_suspected": 1, "escalated": 1}).to_list(500)
+        risk_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+        for r in pend:
+            risk_counts[(r.get("sentiment_analysis") or {}).get("risk_level", "low")] += 1
+        spam_suspected = await db.reviews.count_documents({**query, "sentiment_analysis.spam_suspected": True, "response_status": {"$ne": "responded"}})
+        high_risk_open = await db.reviews.count_documents({**query, "sentiment_analysis.risk_level": {"$in": ["high", "critical"]}, "response_status": {"$ne": "responded"}})
+        since30 = (datetime.now(timezone.utc) - __import__("datetime").timedelta(days=30)).isoformat()
+        qa = await db.reviews.aggregate([{"$match": {**query, "response_quality.total": {"$exists": True}}},
+                                         {"$group": {"_id": None, "avg": {"$avg": "$response_quality.total"}, "n": {"$sum": 1},
+                                                     "regen": {"$sum": {"$cond": [{"$gt": ["$regeneration_count", 1]}, 1, 0]}},
+                                                     "policy_risk": {"$sum": {"$cond": [{"$lt": ["$response_quality.policy_safety", 60]}, 1, 0]}}}}]).to_list(1)
+        qa = qa[0] if qa else {"avg": 0, "n": 0, "regen": 0, "policy_risk": 0}
+        auto_pub = await db.reviews.count_documents({**query, "response_method": {"$in": ["ai_autopilot", "ai_agent_auto"]}, "response_date": {"$gte": since30}})
+        human_pub = await db.reviews.count_documents({**query, "approved_by": {"$exists": True, "$ne": None}, "response_status": "responded", "response_date": {"$gte": since30}})
+        tot_pub = auto_pub + human_pub
+        approval_center = {
+            "risk_counts": risk_counts, "escalated": sum(1 for r in pend if r.get("escalated")),
+            "spam_suspected": spam_suspected, "high_risk_open": high_risk_open,
+            "ai_performance": {"avg_response_score": round(qa["avg"] or 0), "scored": qa["n"],
+                               "auto_approval_rate": round(auto_pub / tot_pub * 100) if tot_pub else 0,
+                               "human_approval_rate": round(human_pub / tot_pub * 100) if tot_pub else 0,
+                               "regeneration_rate": round(qa["regen"] / qa["n"] * 100) if qa["n"] else 0,
+                               "policy_risk_pct": round(qa["policy_risk"] / qa["n"] * 100, 1) if qa["n"] else 0},
+        }
+
         return {
             "total_reviews": total,
             "responded": responded,
@@ -868,7 +1293,8 @@ Review: {review.get('review_text', '')}
             "pending_approval": pending_approval,
             "response_rate": round((responded / total * 100) if total > 0 else 0, 1),
             "average_rating": round(avg_rating, 1) if avg_rating else 0,
-            "by_platform": platforms
+            "by_platform": platforms,
+            "approval_center": approval_center,
         }
 
     @router.post("/reviews/seed")
@@ -1226,6 +1652,8 @@ Review: {review.get('review_text', '')}
         return {"message": f"Seeded {len(default_templates)} default templates", "seeded": True}
 
     # ==================== SENTIMENT & ANALYTICS ROUTES ====================
+
+    router.analyze_sentiment = analyze_sentiment
 
     @router.post("/reviews/{review_id}/analyze")
     async def analyze_review_sentiment(review_id: str):

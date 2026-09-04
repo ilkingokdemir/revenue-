@@ -44,6 +44,18 @@ DEFAULT_PERMISSIONS = {
     },
 }
 
+# Review Ops: CAN_GENERATE / CAN_APPROVE / CAN_PUBLISH ayrımı (spec §32)
+REVIEW_ACTIONS = ["generate", "approve", "publish"]
+DEFAULT_PERMISSIONS["admin"]["reviews"] += REVIEW_ACTIONS
+DEFAULT_PERMISSIONS["manager"]["reviews"] += REVIEW_ACTIONS
+DEFAULT_PERMISSIONS["receptionist"]["reviews"] += ["generate"]
+
+
+def has_permission(user: dict, module: str, action: str) -> bool:
+    """custom_permissions varsa onu, yoksa rol varsayılanını kullanır."""
+    perms = (user or {}).get("custom_permissions") or DEFAULT_PERMISSIONS.get((user or {}).get("role", ""), {})
+    return action in (perms.get(module) or [])
+
 
 def create_admin_router(db, require_roles):
     router = APIRouter()
@@ -144,7 +156,9 @@ def create_admin_router(db, require_roles):
         if "color" in data:
             updates["color"] = data["color"]
         if "phone" in data:
-            updates["phone"] = data["phone"]
+            updates["phone"] = (data["phone"] or "").strip()
+        if "karne_whatsapp" in data:
+            updates["karne_whatsapp"] = bool(data["karne_whatsapp"])
         if "name" in data:
             updates["name"] = data["name"]
         if "department" in data:

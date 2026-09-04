@@ -84,6 +84,11 @@ JOB_REGISTRY = {
         "description": "Çıkıştan 1 gün sonra misafire kendi dilinde (TR/EN/DE) teşekkür + yorum isteği e-postası gönderir; zaten yorum yapmışsa atlar, aynı misafire tekrar gitmez.",
         "default_cron": (11, 0), "default_enabled": True, "params": [],
     },
+    "coupon_reminder": {
+        "label": "Kupon Hatırlatma (THANKS)", "category": "guest",
+        "description": "Kullanılmamış yorum teşekkür kuponlarına süresi dolmadan 30 gün önce misafirin dilinde tek seferlik hatırlatma e-postası gönderir.",
+        "default_cron": (12, 0), "default_enabled": True, "params": [],
+    },
     "ota_ab_auto_winner": {
         "label": "OTA Şeridi A/B Kazananı", "category": "revenue",
         "description": "OTA→direkt şerit A/B testinde her varyant ≥20 gösterim ve dönüşüm farkı ≥2 puan olduğunda kazanan yüzdeyi otomatik sabitler, testi kapatır ve yöneticilere bildirir.",

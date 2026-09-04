@@ -126,7 +126,7 @@ async def send_karne(db, pid: str, forced: bool = False) -> Dict:
     prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
     admins = await db.users.find({"role": {"$in": ["admin", "manager"]},
                                   "is_active": {"$ne": False}},
-                                 {"_id": 0, "email": 1, "phone": 1}).to_list(20)
+                                 {"_id": 0, "email": 1, "phone": 1, "karne_whatsapp": 1}).to_list(20)
     html = _karne_html(prop.get("name", pid), karne)
     sent_to = []
     for a in admins:
@@ -144,7 +144,7 @@ async def send_karne(db, pid: str, forced: bool = False) -> Dict:
         text = "\n".join(lines)
         for a in admins:
             phone = (a.get("phone") or "").strip()
-            if not phone:
+            if not phone or a.get("karne_whatsapp") is False:
                 continue
             to = phone if phone.startswith("whatsapp:") else f"whatsapp:{phone if phone.startswith('+') else '+' + phone}"
             r = await _send_whatsapp_reply(to, text)

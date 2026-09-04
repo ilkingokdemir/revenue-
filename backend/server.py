@@ -1244,6 +1244,13 @@ async def _job_review_request(property_id: str) -> dict:
         return {"ok": False, "error": str(e)}
 JOB_HANDLERS["review_request"] = _job_review_request
 
+async def _job_coupon_reminder(property_id: str) -> dict:
+    try:
+        return await bookings_router.run_coupon_reminders_internal(property_id or "all")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+JOB_HANDLERS["coupon_reminder"] = _job_coupon_reminder
+
 async def _job_uk_payroll_run(property_id: str) -> dict:
     try:
         return await uk_payroll_router.run_monthly_payroll_internal(property_id or "all")
@@ -1266,7 +1273,7 @@ async def _job_doc_expiry(property_id: str) -> dict:
 JOB_HANDLERS["doc_expiry_alert"] = _job_doc_expiry
 
 from routes.guests.review_autopilot import create_review_autopilot_router
-review_autopilot_router = create_review_autopilot_router(db, require_roles, LlmChat, UserMessage)
+review_autopilot_router = create_review_autopilot_router(db, require_roles, LlmChat, UserMessage, analyze=reviews_router.analyze_sentiment)
 api_router.include_router(review_autopilot_router)
 
 async def _job_review_autopilot(property_id: str) -> dict:

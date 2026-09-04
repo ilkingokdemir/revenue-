@@ -18,6 +18,8 @@ from datetime import datetime, timezone
 import os
 import logging
 from fastapi import APIRouter, Depends, HTTPException
+from routes.guests.reviews import (DEFAULT_AUTO_RULES, PUBLISHING_MODES, get_review_agent_cfg, decide_action,
+                                   quality_score, similarity_score, heuristic_flags, compute_risk, log_review_event, privacy_check_db)
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,8 @@ def create_review_agent_router(db, require_roles):
         "sign_off": "Yönetim",
         "language": "tr",
         "require_review_before_publish": True,
+        "publishing_mode": "smart_auto",   # manual | smart_auto | full_auto
+        "auto_rules": dict(DEFAULT_AUTO_RULES),
     }
 
     async def _get_config(property_id: str) -> dict:
@@ -44,6 +48,8 @@ def create_review_agent_router(db, require_roles):
             {"property_id": property_id}, {"_id": 0}
         )
         if cfg:
+            cfg.setdefault("publishing_mode", "smart_auto")
+            cfg["auto_rules"] = {**DEFAULT_AUTO_RULES, **(cfg.get("auto_rules") or {})}
             return cfg
         # Lazy seed
         cfg = {"property_id": property_id, **DEFAULT_CONFIG,
@@ -114,10 +120,18 @@ def create_review_agent_router(db, require_roles):
                          _: dict = Depends(require_roles("admin", "manager"))):
         allowed = {"auto_respond_enabled", "min_rating_for_auto",
                    "max_rating_for_auto", "tone", "sign_off",
-                   "language", "require_review_before_publish"}
+                   "language", "require_review_before_publish",
+                   "publishing_mode", "auto_rules", "full_auto_authorised_by"}
         update = {k: v for k, v in body.items() if k in allowed}
         if not update:
             raise HTTPException(400, "Nothing to update")
+        if "publishing_mode" in update:
+            if update["publishing_mode"] not in PUBLISHING_MODES:
+                raise HTTPException(400, "publishing_mode: manual | smart_auto | full_auto")
+            if update["publishing_mode"] == "full_auto" and not (update.get("full_auto_authorised_by") or body.get("full_auto_authorised_by")):
+                raise HTTPException(400, "Full Auto için işletme yetkilendirmesi gerekir (full_auto_authorised_by)")
+        if "auto_rules" in update:
+            update["auto_rules"] = {**DEFAULT_AUTO_RULES, **{k: v for k, v in (update["auto_rules"] or {}).items() if k in DEFAULT_AUTO_RULES}}
         update["updated_at"] = _now_iso()
         await db.review_agent_config.update_one(
             {"property_id": property_id},
@@ -156,6 +170,10 @@ def create_review_agent_router(db, require_roles):
         text = (body.get("response_text") or review.get("ai_draft") or "").strip()
         if not text:
             raise HTTPException(400, "No draft or response_text provided")
+        pv = await privacy_check_db(db, text, review.get("property_id", ""))
+        if not pv["ok"]:
+            await log_review_event(db, review_id, "publish_blocked_privacy", current_user.get("name", ""), violations=[v["type"] for v in pv["violations"]])
+            raise HTTPException(400, "Gizlilik ihlali — yayın engellendi: " + ", ".join(v["type"] for v in pv["violations"]))
         await db.reviews.update_one(
             {"id": review_id},
             {"$set": {
@@ -185,32 +203,56 @@ def create_review_agent_router(db, require_roles):
         ).to_list(limit)
         drafted = []
         auto_published = 0
+        recent = [x["response_text"] for x in await db.reviews.find(
+            {"property_id": property_id, "response_text": {"$nin": [None, ""]}},
+            {"_id": 0, "response_text": 1}).sort("response_date", -1).limit(100).to_list(100)]
         for r in reviews:
             draft = await _generate_response(r, cfg)
             rating = int(r.get("rating") or 0)
-            # auto-publish path
-            should_auto = (
+            analysis = r.get("sentiment_analysis") or {}
+            if "risk_score" not in analysis:
+                analysis = {**analysis, **heuristic_flags(r.get("review_text") or r.get("comment") or "", rating)}
+                analysis.update(compute_risk(analysis, rating))
+                analysis["spam_suspected"] = analysis["spam_probability"] >= 0.8
+            sim = similarity_score(draft, recent)
+            qual = quality_score(draft, r, analysis, sim["max_pct"])
+            decision = decide_action(analysis, rating, qual["total"], sim["max_pct"], cfg)
+            # legacy toggles still honoured: auto only if enabled AND no human-review flag AND decision says auto
+            pv = await privacy_check_db(db, draft, property_id)
+            should_auto = bool(
+                pv["ok"] and
                 cfg.get("auto_respond_enabled") and
                 not cfg.get("require_review_before_publish", True) and
-                cfg.get("min_rating_for_auto", 4) <= rating <=
-                cfg.get("max_rating_for_auto", 5)
+                cfg.get("min_rating_for_auto", 4) <= rating <= cfg.get("max_rating_for_auto", 5) and
+                decision["action"] == "auto_approve"
             )
             update = {
                 "ai_draft": draft,
                 "ai_draft_at": _now_iso(),
                 "ai_draft_status": "published" if should_auto else "pending_review",
+                "sentiment_analysis": analysis, "response_quality": qual,
+                "response_similarity": sim, "ai_decision": decision, "response_privacy": pv,
             }
+            await log_review_event(db, r["id"], "draft_generated", "review-agent", quality=qual["total"],
+                                   similarity=sim["max_pct"], decision=decision["action"])
             if should_auto:
                 update.update({
                     "response_text": draft,
                     "responded_at": _now_iso(),
-                    "responded_by": "ai_agent",
+                    "responded_by": "ai_agent", "response_method": "ai_agent_auto",
+                    "response_status": "responded", "responded": True,
                     "ai_assisted": True,
                 })
                 auto_published += 1
+                recent.insert(0, draft)
             await db.reviews.update_one({"id": r["id"]}, {"$set": update})
+            if should_auto:
+                await log_review_event(db, r["id"], "auto_approved", "review-agent", mode=decision["mode"])
+                await log_review_event(db, r["id"], "published", "review-agent", channel=r.get("platform"))
             drafted.append({"review_id": r["id"], "rating": rating,
-                            "auto_published": should_auto,
+                            "auto_published": should_auto, "decision": decision["action"],
+                            "reasons": decision["reasons"], "quality": qual["total"],
+                            "risk": analysis.get("risk_level"), "similarity": sim["max_pct"],
                             "draft_preview": draft[:120]})
         return {
             "property_id": property_id,

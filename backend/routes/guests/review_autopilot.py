@@ -18,17 +18,21 @@ logger = logging.getLogger(__name__)
 MAX_PER_RUN = 10
 
 
-def create_review_autopilot_router(db, require_roles, LlmChat, UserMessage):
+def create_review_autopilot_router(db, require_roles, LlmChat, UserMessage, analyze=None):
     router = APIRouter()
+    from routes.guests.reviews import (get_review_agent_cfg, decide_action, quality_score, similarity_score,
+                                       log_review_event, heuristic_flags, compute_risk, privacy_check_db)
 
-    async def _generate(review: dict, tone_desc: str, api_key: str) -> str:
+    async def _generate(review: dict, tone_desc: str, api_key: str, sign_off: str = "") -> str:
+        sign = f"Sign off exactly as '{sign_off}' (a real authorised person/team)." if sign_off and sign_off != "Yönetim" else "Sign off as 'The Management Team'."
         system_msg = f"""You are a professional hotel manager responding to guest reviews.
 Your responses should be {tone_desc}. Keep responses concise (2-3 paragraphs max).
 Always thank the guest. If negative, acknowledge concerns and offer to make things right.
 If positive, express gratitude and invite them back.
 Detect the language of the review and respond in the SAME language.
 Every response MUST be UNIQUE and PERSONALIZED — reference specific details from the review.
-Never use generic openings. Sign off as 'The Management Team'."""
+Never use generic openings. Never ask the guest to change the review or rating, never mention room numbers,
+booking references or payment details, never promise refunds. {sign}"""
         prompt = f"""Write a response to this hotel review:
 Platform: {review.get('platform', 'Unknown')}
 Rating: {review.get('rating', 3)}/5 stars
@@ -40,6 +44,7 @@ Review: {review.get('review_text', '')}"""
         return await chat.send_message(UserMessage(text=prompt))
 
     async def _autopilot_core(property_id: str = "") -> dict:
+        """Intake → Analysis (risk/spam) → Response → Quality/Similarity → Decision → Publish/Draft/Escalate/Skip."""
         api_key = os.environ.get("EMERGENT_LLM_KEY")
         if not api_key:
             return {"ok": False, "error": "EMERGENT_LLM_KEY missing"}
@@ -49,33 +54,78 @@ Review: {review.get('review_text', '')}"""
         from routes.platform_ext.automation_settings import get_params
         cfg = await get_params(db, "review_autopilot", {"max_per_run": MAX_PER_RUN})
         pending = await db.reviews.find(q, {"_id": 0}).sort("created_at", -1).to_list(int(cfg["max_per_run"]))
-        published, drafted, errors = 0, 0, 0
+        published, drafted, escalated, skipped_spam, errors = 0, 0, 0, 0, 0
         now = datetime.now(timezone.utc).isoformat()
+        prop_cfg_cache: Dict[str, dict] = {}
         for r in pending:
+            pid = r.get("property_id", "default")
+            pcfg = prop_cfg_cache.get(pid) or await get_review_agent_cfg(db, pid)
+            prop_cfg_cache[pid] = pcfg
             rating = int(r.get("rating") or 3)
+            text_in = r.get("review_text") or r.get("comment") or ""
+            analysis = r.get("sentiment_analysis") or {}
+            if "risk_score" not in analysis:
+                if analyze:
+                    try:
+                        analysis = await analyze(text_in, rating)
+                    except Exception as e:
+                        logger.warning(f"autopilot analyze failed {r['id']}: {e}")
+                if "risk_score" not in analysis:
+                    analysis = {"sentiment": "positive" if rating >= 4 else "negative" if rating <= 2 else "neutral", **heuristic_flags(text_in, rating)}
+                    analysis.update(compute_risk(analysis, rating))
+                    analysis["spam_suspected"] = analysis["spam_probability"] >= 0.8
+                await db.reviews.update_one({"id": r["id"]}, {"$set": {"sentiment_analysis": analysis}})
+                await log_review_event(db, r["id"], "ai_analysed", "autopilot", risk=analysis.get("risk_level"), spam=analysis.get("spam_probability"))
+            if analysis.get("spam_suspected"):
+                await db.reviews.update_one({"id": r["id"]}, {"$set": {"response_status": "do_not_reply", "autopilot_skipped_at": now}})
+                await log_review_event(db, r["id"], "skipped_spam", "autopilot", spam=analysis.get("spam_probability"))
+                skipped_spam += 1
+                continue
             positive = rating >= 4
             try:
-                text = await _generate(
-                    r, "warm, friendly, and personable" if positive
-                    else "sincere, apologetic, and solution-focused", api_key)
+                text = await _generate(r, "warm, friendly, and personable" if positive
+                                       else "sincere, apologetic, and solution-focused", api_key, pcfg.get("sign_off", ""))
             except Exception as e:
                 logger.warning(f"review autopilot generate failed {r['id']}: {e}")
                 errors += 1
                 continue
-            if positive:
-                await db.reviews.update_one({"id": r["id"]}, {"$set": {
-                    "response_text": text, "response_status": "responded",
-                    "response_date": now, "response_by": "AI Autopilot",
-                    "response_method": "ai_autopilot", "responded": True}})
+            recent = [x["response_text"] for x in await db.reviews.find(
+                {"property_id": pid, "response_text": {"$nin": [None, ""]}, "id": {"$ne": r["id"]}},
+                {"_id": 0, "response_text": 1}).sort("response_date", -1).limit(100).to_list(100)]
+            sim = similarity_score(text, recent)
+            qual = quality_score(text, r, analysis, sim["max_pct"])
+            decision = decide_action(analysis, rating, qual["total"], sim["max_pct"], pcfg)
+            pv = await privacy_check_db(db, text, pid)
+            if not pv["ok"] and decision["action"] == "auto_approve":
+                decision = {**decision, "action": "human_approval", "reasons": ["privacy: " + ", ".join(v["type"] for v in pv["violations"])]}
+            base = {"response_text": text, "response_quality": qual, "response_similarity": sim, "ai_decision": decision, "response_privacy": pv,
+                    "draft_generated_at": now, "regeneration_count": 1}
+            await log_review_event(db, r["id"], "draft_generated", "autopilot", quality=qual["total"], similarity=sim["max_pct"], decision=decision["action"])
+            if decision["action"] == "auto_approve":
+                await db.reviews.update_one({"id": r["id"]}, {"$set": {**base,
+                    "response_status": "responded", "response_date": now, "response_by": "AI Autopilot",
+                    "response_method": "ai_autopilot", "responded": True, "auto_approved": True}})
+                await log_review_event(db, r["id"], "auto_approved", "autopilot", mode=decision["mode"])
+                await log_review_event(db, r["id"], "published", "autopilot", channel=r.get("platform"))
                 published += 1
             else:
-                await db.reviews.update_one({"id": r["id"]}, {"$set": {
-                    "response_text": text, "response_status": "pending_approval",
-                    "draft_generated_at": now, "response_method": "ai_autopilot_draft",
-                    "approve_token": secrets.token_urlsafe(20)}})
-                drafted += 1
+                esc = decision["action"] == "escalate"
+                await db.reviews.update_one({"id": r["id"]}, {"$set": {**base,
+                    "response_status": "pending_approval", "response_method": "ai_autopilot_draft",
+                    "approve_token": secrets.token_urlsafe(20), "escalated": esc,
+                    **({"escalation_level": decision.get("escalation_level", "management"), "escalated_by": "autopilot", "escalated_at": now} if esc else {})}})
+                if esc:
+                    await log_review_event(db, r["id"], "escalated", "autopilot", level=decision.get("escalation_level"), reasons=decision["reasons"])
+                    await db.notifications.insert_one({
+                        "id": str(uuid.uuid4()), "category": "review_escalation", "priority": "high",
+                        "title": f"🔺 Kritik yorum eskalasyonu: {r.get('guest_name', '')} {rating}★ (risk {analysis.get('risk_score')})",
+                        "message": f"Otomatik eskalasyon — {', '.join(decision['reasons'])}. \"{text_in[:140]}\"",
+                        "property_id": pid, "review_id": r["id"], "read": False, "created_at": now})
+                    escalated += 1
+                else:
+                    drafted += 1
         return {"ok": True, "scanned": len(pending), "published": published,
-                "drafted_for_approval": drafted, "errors": errors}
+                "drafted_for_approval": drafted, "escalated": escalated, "skipped_spam": skipped_spam, "errors": errors}
 
     @router.post("/reviews/autopilot/run")
     async def run_autopilot(data: Optional[Dict] = None,

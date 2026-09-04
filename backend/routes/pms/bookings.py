@@ -458,6 +458,18 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
                 "property_id": booking.get("property_id", ""), "booking_id": booking.get("id"), "booking_ref": booking.get("booking_ref"),
                 "guest_email": booking.get("guest_email", ""), "rating": doc.get("rating"), "read": False,
                 "created_at": datetime.now(timezone.utc).isoformat()})
+            # Mevcut Service Recovery akışına vaka aç (Arandı/Çözüldü takibi orada)
+            await db.guest_complaints.insert_one({
+                "id": str(uuid.uuid4()), "property_id": booking.get("property_id", ""), "booking_id": booking.get("id", ""),
+                "booking_ref": booking.get("booking_ref", ""), "guest_name": booking.get("guest_name") or doc.get("guest_name", ""),
+                "guest_phone": booking.get("guest_phone", ""), "guest_email": booking.get("guest_email", ""),
+                "room_number": "", "category": "review", "channel": "review",
+                "text": f"{doc.get('rating')}★ yorum — {doc.get('title') or ''}: {doc.get('review_text') or ''}",
+                "severity": "high" if int(doc.get("rating") or 0) <= 1 else "medium", "status": "open",
+                "ai_summary": f"Konaklama sonrası {doc.get('rating')} yıldızlı yorum (otomatik açıldı)", "ai_action": "Misafiri arayın, özür + telafi teklifi",
+                "ai_comp_pct": 0, "ai_reasoning": "", "ai_fallback": True, "compensation_amount": 0.0, "compensation_type": "",
+                "resolution_notes": "", "resolved_at": "", "resolved_by": "", "created_by": "review-robot",
+                "created_at": datetime.now(timezone.utc).isoformat()})
         else:
             coupon = await _issue_review_thanks_coupon(booking, doc)
         return {"status": "success", "message": "Thank you for your review!", "coupon": coupon}
@@ -1375,8 +1387,25 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         </div>"""
         status = await _mail(db, booking.get("guest_email", ""), subj.format(hotel=property_name), html, kind="review_request",
                              meta={"booking_id": booking.get("id"), "booking_ref": booking.get("booking_ref"), "lang": lang})
+        # WhatsApp kanalı (Twilio, anahtar yoksa MOCK/queued) — nötr metin, puan istenmez, herkese gider (gating yok)
+        wa_status = "no_phone"
+        phone = (booking.get("guest_phone") or "").strip()
+        if phone:
+            WA_T = {"en": "Hi {name}, thank you for staying at {hotel}. If you have a moment, we'd love to hear about your experience: {link}",
+                    "tr": "Merhaba {name}, {hotel} tercihiniz için teşekkürler. Vaktiniz olursa deneyiminizi bizimle paylaşır mısınız? {link}",
+                    "de": "Hallo {name}, vielen Dank für Ihren Aufenthalt im {hotel}. Wir würden uns freuen, von Ihrer Erfahrung zu hören: {link}"}
+            try:
+                from routes.marketing.whatsapp_voice import _send_whatsapp_reply
+                to = phone if phone.startswith("whatsapp:") else f"whatsapp:{phone if phone.startswith('+') else '+' + phone}"
+                r = await _send_whatsapp_reply(to, WA_T.get(lang, WA_T["en"]).format(name=booking.get("guest_name", ""), hotel=property_name, link=review_link))
+                wa_status = r.get("status", "queued")
+            except Exception as e:
+                wa_status = f"error:{str(e)[:60]}"
+            await db.review_request_log.insert_one({"id": str(uuid.uuid4()), "booking_id": booking.get("id"), "channel": "whatsapp",
+                                                    "status": wa_status, "lang": lang, "created_at": datetime.now(timezone.utc).isoformat()})
         await db.bookings.update_one({"id": booking.get("id")}, {"$set": {
-            "review_request_sent_at": datetime.now(timezone.utc).isoformat(), "review_request_status": status, "review_request_lang": lang}})
+            "review_request_sent_at": datetime.now(timezone.utc).isoformat(), "review_request_status": status, "review_request_lang": lang,
+            "review_request_whatsapp": wa_status}})
         return status
 
     async def run_review_requests_internal(property_id: str) -> dict:
@@ -1406,6 +1435,45 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return {"ok": True, "candidates": len(bks), "sent": sent, "mocked": mocked, "skipped_reviewed": skipped}
 
     router.run_review_requests_internal = run_review_requests_internal
+
+    REMIND_T = {
+        "en": ("Reminder: your {pct}% thank-you code expires on {until}", "Your {pct}% code is still waiting", "Use code {code} on your next direct booking before {until}.", "Book now"),
+        "tr": ("Hatırlatma: %{pct} teşekkür kodunuz {until} tarihinde sona eriyor", "%{pct} kodunuz sizi bekliyor", "{code} kodunu {until} tarihinden önce bir sonraki direkt rezervasyonunuzda kullanın.", "Hemen rezervasyon yap"),
+        "de": ("Erinnerung: Ihr {pct}%-Dankeschön-Code läuft am {until} ab", "Ihr {pct}%-Code wartet noch", "Nutzen Sie den Code {code} vor dem {until} für Ihre nächste Direktbuchung.", "Jetzt buchen"),
+    }
+
+    async def run_coupon_reminders_internal(property_id: str) -> dict:
+        """Unused THANKS codes expiring in ≤30 days → one reminder e-mail in guest language."""
+        from routes.platform_ext.mailer import send_email as _mail
+        today = datetime.now(timezone.utc).date()
+        q = {"source": "review_thanks", "used": 0, "active": True, "reminder_sent_at": {"$exists": False},
+             "valid_to": {"$gte": today.isoformat(), "$lte": (today + timedelta(days=30)).isoformat()}}
+        if property_id and property_id != "all":
+            q["property_id"] = property_id
+        codes = await db.promo_codes.find(q, {"_id": 0}).to_list(500)
+        sent = mocked = 0
+        for c in codes:
+            bk = await db.bookings.find_one({"booking_ref": c.get("booking_ref")}, {"_id": 0, "guest_lang": 1, "guest_name": 1}) or {}
+            lang = (bk.get("guest_lang") or "en")[:2].lower()
+            subj, title, body, cta = REMIND_T.get(lang, REMIND_T["en"])
+            pct = int(c.get("amount") or 10)
+            url = f"{_get_base_url()}/book/{c.get('property_id','')}?coupon={c['code']}&lang={lang}"
+            html = (f"<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;text-align:center;padding:28px'>"
+                    f"<h2 style='color:#1a3c5e'>🎁 {title.format(pct=pct)}</h2><p style='color:#475569'>{body.format(code=c['code'], until=c['valid_to'])}</p>"
+                    f"<div style='display:inline-block;border:2px dashed #1a3c5e;border-radius:10px;padding:12px 24px;font-size:24px;font-weight:800;letter-spacing:3px;color:#1a3c5e'>{c['code']}</div>"
+                    f"<p><a href='{url}' style='display:inline-block;margin-top:12px;background:#2563eb;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:700'>{cta}</a></p></div>")
+            st = await _mail(db, c.get("guest_email", ""), subj.format(pct=pct, until=c["valid_to"]), html, kind="coupon_reminder",
+                             meta={"code": c["code"], "lang": lang})
+            await db.promo_codes.update_one({"id": c["id"]}, {"$set": {"reminder_sent_at": datetime.now(timezone.utc).isoformat(), "reminder_status": st}})
+            sent += st == "sent"
+            mocked += st == "mocked"
+        return {"ok": True, "candidates": len(codes), "sent": sent, "mocked": mocked}
+
+    router.run_coupon_reminders_internal = run_coupon_reminders_internal
+
+    @router.post("/review-collection/coupon-reminders/{property_id}")
+    async def coupon_reminders_now(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await run_coupon_reminders_internal(property_id)
 
     async def _send_checkin_email(booking: dict, property_name: str):
         """Send pre-arrival self check-in email"""

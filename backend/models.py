@@ -41,6 +41,19 @@ class Review(BaseModel):
     external_review_id: Optional[str] = None
     synced_to_platform: bool = False
     response_uniqueness_hash: Optional[str] = None
+    sentiment_analysis: Optional[dict] = None
+    response_quality: Optional[dict] = None
+    response_similarity: Optional[dict] = None
+    ai_decision: Optional[dict] = None
+    ai_candidates: Optional[list] = None
+    events: Optional[list] = None
+    escalated: Optional[bool] = None
+    escalation_level: Optional[str] = None
+    approval_override: Optional[dict] = None
+    regeneration_count: Optional[int] = None
+    external_url: Optional[str] = None
+    rating_history: Optional[list] = None
+    response_privacy: Optional[dict] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ReviewCreate(BaseModel):
@@ -60,10 +73,17 @@ class AIGenerateRequest(BaseModel):
     review_id: str
     tone: str = "professional"
     language: str = "auto"
+    candidates: bool = False
 
 class AIGenerateResponse(BaseModel):
     generated_text: str
     detected_language: Optional[str] = None
+    quality: Optional[dict] = None
+    similarity: Optional[dict] = None
+    decision: Optional[dict] = None
+    candidates: Optional[list] = None
+    analysis: Optional[dict] = None
+    privacy: Optional[dict] = None
 
 class NotificationSettings(BaseModel):
     model_config = ConfigDict(extra="ignore")

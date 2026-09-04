@@ -30,6 +30,10 @@ SIM_REVIEWS = {
         ("Anna Kowalska", 4, "Great value for money, very clean rooms. WiFi could be faster."),
         ("Mehmet Aydın", 2, "Rezervasyonumda oda tipi karışıklığı oldu, çözülmesi uzun sürdü."),
     ],
+    "Trustpilot": [
+        ("Oliver Grant", 5, "Booked direct through the website — smooth process, quick confirmation and the team answered my questions within minutes."),
+        ("Elif Kaya", 3, "Rezervasyon kolaydı ama iptal koşulları sitede daha net yazılmalı."),
+    ],
 }
 
 
@@ -47,7 +51,21 @@ def create_review_sources_router(db, require_roles):
         return datetime.now(timezone.utc).isoformat()
 
     async def _insert_review(pid, platform, author, rating, comment, external_id, source):
-        if await db.reviews.find_one({"external_id": external_id}, {"_id": 1}):
+        existing = await db.reviews.find_one({"external_id": external_id}, {"_id": 0, "id": 1, "rating": 1, "review_text": 1})
+        if existing:
+            new_r, new_t = int(rating) if rating else 3, comment or ""
+            if new_r != int(existing.get("rating") or 0) or (new_t and new_t != (existing.get("review_text") or "")):
+                await db.reviews.update_one({"id": existing["id"]}, {
+                    "$set": {"rating": new_r, "review_text": new_t, "comment": new_t, "updated_from_source_at": _now()},
+                    "$push": {"rating_history": {"before": existing.get("rating"), "after": new_r, "at": _now()},
+                              "events": {"type": "review_updated", "by": "source-sync", "at": _now(),
+                                         "meta": {"rating_before": existing.get("rating"), "rating_after": new_r, "text_changed": new_t != (existing.get("review_text") or "")}}}})
+                if new_r != int(existing.get("rating") or 0):
+                    await db.notifications.insert_one({
+                        "id": str(uuid.uuid4()), "category": "review_rating_change", "priority": "normal",
+                        "title": f"⭐ Yorum puanı değişti: {author} {existing.get('rating')}★ → {new_r}★",
+                        "message": f"{platform} yorumu güncellendi. Mevcut yanıtı gözden geçirin.",
+                        "property_id": pid, "review_id": existing["id"], "read": False, "created_at": _now()})
             return False
         await db.reviews.insert_one({
             "id": str(uuid.uuid4()), "property_id": pid,
@@ -90,6 +108,21 @@ def create_review_sources_router(db, require_roles):
                 new += 1
         return {"ok": True, "mode": "simulated", "new": new}
 
+    async def _fetch_trustpilot_real(pid, business_unit_id, api_key):
+        url = f"https://api.trustpilot.com/v1/business-units/{business_unit_id}/reviews"
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.get(url, params={"apikey": api_key, "perPage": 20, "orderBy": "createdat.desc"})
+            r.raise_for_status()
+            data = r.json()
+        new = 0
+        for rv in data.get("reviews", []):
+            author = ((rv.get("consumer") or {}).get("displayName")) or "Trustpilot user"
+            text = (rv.get("text") or rv.get("title") or "").strip()
+            ext = f"tp-{rv.get('id')}"
+            if await _insert_review(pid, "Trustpilot", author, rv.get("stars"), text, ext, "trustpilot_api"):
+                new += 1
+        return {"ok": True, "mode": "live", "new": new}
+
     async def _sync_property(pid: str) -> dict:
         cfg = await db.review_source_config.find_one({"property_id": pid}, {"_id": 0}) or {}
         if cfg.get("enabled") is False:
@@ -105,6 +138,15 @@ def create_review_sources_router(db, require_roles):
         else:
             results["google"] = await _fetch_simulated(pid, "Google")
         results["booking"] = await _fetch_simulated(pid, "Booking.com")
+        tp_key = os.environ.get("TRUSTPILOT_API_KEY", "")
+        if tp_key and cfg.get("trustpilot_business_unit_id"):
+            try:
+                results["trustpilot"] = await _fetch_trustpilot_real(pid, cfg["trustpilot_business_unit_id"], tp_key)
+            except Exception as e:
+                logger.warning(f"trustpilot fetch failed {pid}: {e}")
+                results["trustpilot"] = {"ok": False, "error": str(e), "new": 0}
+        else:
+            results["trustpilot"] = await _fetch_simulated(pid, "Trustpilot")
         total_new = sum(r.get("new", 0) for r in results.values())
         await db.review_source_config.update_one(
             {"property_id": pid},
@@ -154,6 +196,8 @@ def create_review_sources_router(db, require_roles):
             upd["booking_url"] = str(body["booking_url"]).strip()[:300]
         if "tripadvisor_url" in body:
             upd["tripadvisor_url"] = str(body["tripadvisor_url"]).strip()[:300]
+        if "trustpilot_business_unit_id" in body:
+            upd["trustpilot_business_unit_id"] = str(body["trustpilot_business_unit_id"]).strip()[:80]
         if "enabled" in body:
             upd["enabled"] = bool(body["enabled"])
         await db.review_source_config.update_one(

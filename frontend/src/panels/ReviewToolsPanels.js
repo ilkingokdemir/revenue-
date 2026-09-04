@@ -177,6 +177,7 @@ import { Progress } from "@/components/ui/progress";
 
 import { API, BACKEND_URL, PLATFORMS, TEMPLATE_CATEGORIES, SENTIMENT_COLORS, URGENCY_COLORS, formatApiErrorDetail } from "@/components/dashboard/config";
 import { StarRating, PlatformBadge, StatsCard, ReviewCard } from "@/components/dashboard/ReviewComponents";
+import { RiskBadge, FlagChips, SpamNotice, PrivacyAlert, QualityPanel, RISK_META } from "@/components/dashboard/ReviewOpsBits";
 import { InlineContent, InlineHeader, InlineTitle } from "./InlineShell";
 
 
@@ -193,6 +194,8 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
   const [sentimentData, setSentimentData] = useState(null);
   const [suggestedTemplates, setSuggestedTemplates] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [genMeta, setGenMeta] = useState(null); // quality / similarity / decision / privacy / candidates
+  const [useCandidates, setUseCandidates] = useState(false);
 
   const LANGUAGES = [
     { code: "auto", name: "Auto-detect" },
@@ -220,6 +223,7 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
       setResponseText("");
     }
     setSentimentData(review?.sentiment_analysis || null);
+    setGenMeta(review?.response_quality ? { quality: review.response_quality, similarity: review.response_similarity, decision: review.ai_decision, privacy: review.response_privacy, candidates: review.ai_candidates } : null);
     setSuggestedTemplates([]);
     setDetectedLang(null);
     setLanguage("auto");
@@ -309,8 +313,12 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
       const response = await axios.post(`${API}/reviews/generate-ai-response`, {
         review_id: review.id,
         tone: tone,
-        language: language
+        language: language,
+        candidates: useCandidates
       });
+      const { quality, similarity, decision, privacy, candidates, analysis } = response.data;
+      setGenMeta({ quality, similarity, decision, privacy, candidates });
+      if (analysis) setSentimentData(analysis);
       
       // Typewriter effect
       const text = response.data.generated_text;
@@ -344,7 +352,7 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
       setIsEditing(false);
     } catch (error) {
       console.error("Error submitting response:", error);
-      toast.error("Failed to publish response");
+      toast.error(formatApiErrorDetail(error.response?.data?.detail) || "Failed to publish response");
     }
   };
 
@@ -473,7 +481,13 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
                 <Badge className="bg-[#E8EDE7] text-[#1C1917]">
                   Suggested: {sentimentData.suggested_tone}
                 </Badge>
+                <RiskBadge analysis={sentimentData} />
               </div>
+              <FlagChips analysis={sentimentData} />
+              <SpamNotice analysis={sentimentData} review={review} />
+              {sentimentData.emotion?.length > 0 && (
+                <div className="text-[11px] text-stone-500">Emotion: {sentimentData.emotion.slice(0, 4).join(", ")}</div>
+              )}
 
               {/* Topics */}
               {sentimentData.topics?.length > 0 && (
@@ -583,6 +597,10 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
                   </SelectContent>
                 </Select>
                 
+                <label className="inline-flex items-center gap-1 text-[11px] text-emerald-900 bg-white/80 border border-emerald-200 rounded-lg px-2 h-8 cursor-pointer" title="Warm / Professional / Concise — en iyisi seçilir">
+                  <input type="checkbox" checked={useCandidates} onChange={e => setUseCandidates(e.target.checked)} data-testid="candidates-toggle" />
+                  3 variants
+                </label>
                 <button
                   onClick={generateAIResponse}
                   disabled={isGenerating || isLoading}
@@ -629,6 +647,23 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
               </button>
             )}
           </div>
+
+          {genMeta && !isGenerating && (
+            <div className="mt-3 space-y-2">
+              <PrivacyAlert privacy={genMeta.privacy} />
+              <QualityPanel quality={genMeta.quality} similarity={genMeta.similarity} decision={genMeta.decision} />
+              {genMeta.candidates?.length > 1 && (
+                <div className="flex flex-wrap gap-1.5" data-testid="candidate-chips">
+                  {genMeta.candidates.map((c) => (
+                    <button key={c.style} onClick={() => setResponseText(c.text)} data-testid={`candidate-${c.style}`}
+                      className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${responseText === c.text ? "bg-emerald-800 text-white border-emerald-800" : "bg-white border-emerald-200 text-emerald-900 hover:bg-emerald-50"}`}>
+                      {c.style} · Q{c.quality} · S{c.similarity}%
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center justify-between mt-4">
             <div className="flex items-center gap-2">
@@ -1213,13 +1248,20 @@ const TemplatesManager = ({ isOpen, onClose, onSelectTemplate }) => {
 const ApprovalQueuePanel = ({ onReviewUpdate }) => {
   const [pendingReviews, setPendingReviews] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [rejectNotes, setRejectNotes] = useState({});
+  const [notes, setNotes] = useState({});
+  const [center, setCenter] = useState(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [riskFilter, setRiskFilter] = useState("");
 
   const fetchPending = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { data } = await axios.get(`${API}/reviews/pending-approval`);
+      const [{ data }, st] = await Promise.all([
+        axios.get(`${API}/reviews/pending-approval`),
+        axios.get(`${API}/reviews/stats/summary`),
+      ]);
       setPendingReviews(data);
+      setCenter(st.data.approval_center || null);
     } catch (e) {
       console.error("Failed to fetch pending approvals");
     } finally {
@@ -1229,10 +1271,18 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
 
   useEffect(() => { fetchPending(); }, [fetchPending]);
 
-  const handleAction = async (reviewId, action, notes) => {
+  const handleAction = async (review, action) => {
+    const a = review.sentiment_analysis || {};
+    const needsReason = action === "approve" && (["high", "critical"].includes(a.risk_level) || review.escalated || a.spam_suspected);
+    const n = notes[review.id] || "";
+    if (needsReason && !n.trim()) {
+      toast.error("Bu yorum için override gerekçesi zorunlu (not alanını doldurun)");
+      return;
+    }
     try {
-      await axios.post(`${API}/reviews/${reviewId}/approve`, { action, notes });
-      toast.success(action === "approve" ? "Response approved & published!" : "Response rejected");
+      const { data } = await axios.post(`${API}/reviews/${review.id}/approve`, { action, notes: n });
+      toast.success(action === "approve" ? (data.override ? "Override ile onaylandı & yayımlandı" : "Response approved & published!")
+        : action === "escalate" ? `Escalated → ${data.escalation_level}` : "Response rejected");
       fetchPending();
       if (onReviewUpdate) onReviewUpdate();
     } catch (e) {
@@ -1240,12 +1290,28 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
     }
   };
 
+  const bulkSafe = async () => {
+    setBulkBusy(true);
+    try {
+      const { data } = await axios.post(`${API}/reviews/approve-bulk`, { property_id: "all" });
+      toast.success(`${data.approved} güvenli yanıt onaylandı, ${data.skipped.length} atlandı`);
+      fetchPending();
+      if (onReviewUpdate) onReviewUpdate();
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally { setBulkBusy(false); }
+  };
+
+  const visible = riskFilter ? pendingReviews.filter(r => ((r.sentiment_analysis || {}).risk_level || "low") === riskFilter) : pendingReviews;
+  const rc = center?.risk_counts || {};
+  const perf = center?.ai_performance;
+
   return (
-    <InlineContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto" data-testid="approval-queue-dialog">
+    <InlineContent className="sm:max-w-[820px] max-h-[85vh] overflow-y-auto" data-testid="approval-queue-dialog">
       <InlineHeader>
         <InlineTitle className="flex items-center gap-2 text-stone-900">
           <ShieldCheck size={20} className="text-[#3E5245]" />
-          Approval Queue
+          Approval Center
           {pendingReviews.length > 0 && (
             <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
               {pendingReviews.length} pending
@@ -1254,50 +1320,93 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
         </InlineTitle>
       </InlineHeader>
 
+      {/* Risk counters */}
+      <div className="grid grid-cols-4 gap-2 mt-2" data-testid="risk-counters">
+        {["critical", "high", "medium", "low"].map(lvl => (
+          <button key={lvl} onClick={() => setRiskFilter(riskFilter === lvl ? "" : lvl)} data-testid={`risk-counter-${lvl}`}
+            className={`rounded-lg border px-3 py-2 text-left transition-all ${riskFilter === lvl ? "ring-2 ring-stone-900" : ""} ${RISK_META[lvl].cls}`}>
+            <div className="text-[10px] font-bold uppercase tracking-wider opacity-80">{RISK_META[lvl].label}</div>
+            <div className="text-xl font-black">{rc[lvl] ?? 0}</div>
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 mt-2 text-[11px] text-stone-500">
+        <div className="flex gap-3">
+          <span data-testid="escalated-count">Escalated: <b className="text-stone-800">{center?.escalated ?? 0}</b></span>
+          <span data-testid="spam-count">Spam suspected: <b className="text-stone-800">{center?.spam_suspected ?? 0}</b></span>
+          {perf && <span>AI score: <b className="text-stone-800">{perf.avg_response_score}</b> · Auto {perf.auto_approval_rate}% / Human {perf.human_approval_rate}% · Regen {perf.regeneration_rate}%</span>}
+        </div>
+        <button onClick={bulkSafe} disabled={bulkBusy || pendingReviews.length === 0} data-testid="bulk-approve-safe-btn"
+          className="px-3 py-1.5 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800 disabled:opacity-50 inline-flex items-center gap-1">
+          <Lightning size={12} weight="fill" /> {bulkBusy ? "Onaylanıyor…" : "Güvenli olanları toplu onayla (4-5★ · low risk · Q≥eşik)"}
+        </button>
+      </div>
+
       {isLoading ? (
         <div className="py-8 text-center">
           <ArrowsClockwise size={24} className="mx-auto mb-2 animate-spin text-stone-300" />
           <p className="text-sm text-stone-400">Loading...</p>
         </div>
-      ) : pendingReviews.length === 0 ? (
+      ) : visible.length === 0 ? (
         <div className="py-8 text-center" data-testid="no-pending-approvals">
           <ShieldCheck size={32} className="mx-auto mb-2 text-emerald-300" />
           <p className="text-sm text-stone-400">No responses pending approval</p>
         </div>
       ) : (
-        <div className="space-y-4 mt-2">
-          {pendingReviews.map((review) => (
-            <div key={review.id} className="border border-stone-200 rounded-xl overflow-hidden" data-testid={`approval-item-${review.id}`}>
-              <div className="bg-stone-50 px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
+        <div className="space-y-4 mt-3">
+          {visible.map((review) => {
+            const a = review.sentiment_analysis || {};
+            const needsReason = ["high", "critical"].includes(a.risk_level) || review.escalated || a.spam_suspected;
+            const privacyBad = review.response_privacy && !review.response_privacy.ok;
+            return (
+            <div key={review.id} className={`border rounded-xl overflow-hidden ${review.escalated ? "border-orange-300" : a.risk_level === "critical" ? "border-red-300" : "border-stone-200"}`} data-testid={`approval-item-${review.id}`}>
+              <div className="bg-stone-50 px-4 py-3 flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
                   <PlatformBadge platform={review.platform} />
                   <span className="text-sm font-medium text-stone-900">{review.guest_name}</span>
                   <StarRating rating={review.rating} size={12} />
+                  <RiskBadge analysis={a} size="xs" />
+                  {review.escalated && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-200" data-testid={`escalated-tag-${review.id}`}>ESCALATED → {review.escalation_level}</span>}
+                  {review.response_quality && <span className="text-[10px] font-semibold text-stone-600" data-testid={`quality-tag-${review.id}`}>Q {review.response_quality.total}{review.response_similarity ? ` · S ${review.response_similarity.max_pct}%` : ""}</span>}
                 </div>
-                {review.drafted_by && (
-                  <span className="text-[11px] text-stone-400">Drafted by: {review.drafted_by}</span>
-                )}
+                <span className="text-[11px] text-stone-400">{review.drafted_by ? `Drafted by: ${review.drafted_by}` : review.response_method || ""}</span>
               </div>
               <div className="p-4 space-y-3">
                 <div>
                   <span className="text-[10px] uppercase tracking-wider text-stone-400 font-semibold">Guest Review</span>
                   <p className="text-sm text-stone-600 mt-1">{review.review_text}</p>
+                  <div className="mt-2"><FlagChips analysis={a} /></div>
                 </div>
+                <SpamNotice analysis={a} review={review} />
+                {privacyBad && <PrivacyAlert privacy={review.response_privacy} />}
                 <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
                   <span className="text-[10px] uppercase tracking-wider text-emerald-600 font-semibold">Proposed Response</span>
-                  <p className="text-sm text-emerald-900 mt-1">{review.response_text}</p>
+                  <p className="text-sm text-emerald-900 mt-1 whitespace-pre-line">{review.response_text}</p>
+                  {review.ai_decision?.reasons && <p className="text-[10px] text-emerald-700/70 mt-1">AI: {review.ai_decision.action} · {review.ai_decision.reasons.join(", ")}</p>}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleAction(review.id, "approve")}
-                    className="flex-1 bg-emerald-700 text-white py-2 rounded-lg hover:bg-emerald-800 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
+                    onClick={() => handleAction(review, "approve")}
+                    disabled={privacyBad || a.spam_suspected}
+                    title={privacyBad ? "Gizlilik ihlali: önce metni düzenleyin" : a.spam_suspected ? "Spam şüpheli: yanıtlamayın" : ""}
+                    className="flex-1 bg-emerald-700 text-white py-2 rounded-lg hover:bg-emerald-800 transition-all text-sm font-medium flex items-center justify-center gap-1.5 disabled:opacity-40"
                     data-testid={`approve-btn-${review.id}`}
                   >
                     <CheckCircle size={14} weight="fill" />
-                    Approve & Publish
+                    {needsReason ? "Override & Publish" : "Approve & Publish"}
                   </button>
+                  {!review.escalated && (
+                    <button
+                      onClick={() => handleAction(review, "escalate")}
+                      className="flex-1 bg-white border border-orange-300 text-orange-700 py-2 rounded-lg hover:bg-orange-50 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
+                      data-testid={`escalate-btn-${review.id}`}
+                    >
+                      <WarningCircle size={14} />
+                      Escalate
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleAction(review.id, "reject", rejectNotes[review.id] || "")}
+                    onClick={() => handleAction(review, "reject")}
                     className="flex-1 bg-white border border-red-200 text-red-600 py-2 rounded-lg hover:bg-red-50 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
                     data-testid={`reject-btn-${review.id}`}
                   >
@@ -1306,15 +1415,15 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
                   </button>
                 </div>
                 <Input
-                  placeholder="Optional notes for rejection..."
-                  value={rejectNotes[review.id] || ""}
-                  onChange={(e) => setRejectNotes(p => ({ ...p, [review.id]: e.target.value }))}
-                  className="border-stone-200 h-8 text-xs"
+                  placeholder={needsReason ? "ZORUNLU: override / eskalasyon gerekçesi (audit'e yazılır)…" : "Optional notes…"}
+                  value={notes[review.id] || ""}
+                  onChange={(e) => setNotes(p => ({ ...p, [review.id]: e.target.value }))}
+                  className={`h-8 text-xs ${needsReason ? "border-orange-300" : "border-stone-200"}`}
                   data-testid={`rejection-notes-${review.id}`}
                 />
               </div>
             </div>
-          ))}
+          ); })}
         </div>
       )}
     </InlineContent>

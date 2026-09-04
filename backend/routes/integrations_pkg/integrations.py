@@ -567,7 +567,7 @@ def create_integrations_router(db, require_roles, resend):
         # Ensure all platforms have an entry
         platforms = [
             "google", "booking.com", "tripadvisor", "airbnb", "expedia", "trip.com",
-            "agoda", "hotels.com", "yelp", "facebook", "makemytrip", "hrs", "despegar", "hostelworld"
+            "agoda", "hotels.com", "yelp", "facebook", "makemytrip", "hrs", "despegar", "hostelworld", "trustpilot"
         ]
         existing_platforms = {i["platform"] for i in integrations}
 
@@ -1134,6 +1134,16 @@ def create_integrations_router(db, require_roles, resend):
                 "setup_url": "https://www.hotels.com/hotel-supplier",
                 "fields_needed": ["api_key", "secret_key", "property_id"],
                 "note": "Hotels.com is part of Expedia Group - use Expedia Partner Central for API"
+            },
+            "trustpilot": {
+                "name": "Trustpilot",
+                "requirements": [
+                    "Trustpilot Business hesabı + Business Unit ID",
+                    "Trustpilot API key (Business → Integrations → Developers)",
+                    "Yanıt için: OAuth access token (reply scope)"
+                ],
+                "setup_url": "https://developers.trustpilot.com/",
+                "note": "API key varsa yorumlar gerçek çekilir; yoksa SIMULATED. CSV import ve inbound webhook her zaman çalışır."
             },
             "yelp": {
                 "name": "Yelp",

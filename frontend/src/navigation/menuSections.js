@@ -250,7 +250,7 @@ export function buildMenuSections(t, user) {
         { id: "concierge-analytics", icon: Robot, name: t("nav.concierge"), testId: "concierge-analytics-btn" },
         { id: "voice-concierge", icon: Microphone, name: "Voice concierge (Whisper)", testId: "voice-concierge-btn" },
         { id: "whatsapp-voice", icon: WhatsappLogo, name: "WhatsApp sesli concierge", testId: "whatsapp-voice-btn" },
-        { id: "review-agent", icon: Star, name: "AI Yorum Yanıt Ajanı", testId: "review-agent-btn" },
+        { id: "review-agent", icon: Star, name: "AI Yorum Yanıt Ajanı", testId: "review-agent-concierge-btn" },
       ],
     },
     {
@@ -488,6 +488,7 @@ export function buildMenuSections(t, user) {
         { divider: true, label: "Reviews & Sentiment" },
         { id: "reviews", icon: ChatText, name: t("nav.reviews"), testId: "nav-reviews", core: true },
         { id: "ai-reply-robot", icon: Sparkle, name: "AI Yanıt Robotu", testId: "ai-reply-robot-btn", core: true },
+        { id: "review-agent", icon: Star, name: "Yayın Modu & Onay Kuralları", testId: "review-agent-btn", core: true },
         { id: "review-sentiment", icon: Sparkle, name: "AI sentiment themes", testId: "review-sentiment-btn" },
         { id: "sentiment-heatmap", icon: ChartLineUp, name: "Sentiment heatmap", testId: "sentiment-heatmap-btn" },
 

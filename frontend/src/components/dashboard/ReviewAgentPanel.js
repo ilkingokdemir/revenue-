@@ -42,9 +42,11 @@ export default function ReviewAgentPanel() {
 
   async function saveConfig() {
     try {
-      await axios.post(`${API}/review-agent/config/${propertyId}`, config, { withCredentials: true });
+      const { property_id, created_at, updated_at, ...body } = config;
+      const r = await axios.post(`${API}/review-agent/config/${propertyId}`, body, { withCredentials: true });
+      setConfig(r.data);
       toast.success("Kaydedildi");
-    } catch (e) { toast.error("Kaydedilemedi"); }
+    } catch (e) { toast.error(e.response?.data?.detail || "Kaydedilemedi"); }
   }
 
   async function batchDraft() {
@@ -65,7 +67,7 @@ export default function ReviewAgentPanel() {
         { withCredentials: true });
       toast.success("Yayımlandı");
       reload();
-    } catch (e) { toast.error("Yayımlanamadı"); }
+    } catch (e) { toast.error(e.response?.data?.detail || "Yayımlanamadı"); }
   }
 
   async function regenDraft(reviewId) {
@@ -122,7 +124,56 @@ export default function ReviewAgentPanel() {
               <option value="friendly">Samimi</option>
             </select>
           </label>
-          <Inp label="İmza" v={config.sign_off} onChange={v => setConfig({...config, sign_off:v})} />
+          <Inp label="Yanıt kimliği / İmza (gerçek takım veya yetkili — uydurma isim yok)" v={config.sign_off} onChange={v => setConfig({...config, sign_off:v})} />
+
+          {/* Publishing mode (Review Ops) */}
+          <div className="md:col-span-2 border-t border-stone-100 pt-3">
+            <div className="text-xs font-semibold text-stone-700 mb-2">Yayın Modu</div>
+            <div className="grid sm:grid-cols-3 gap-2" data-testid="publishing-mode">
+              {[["manual","Manual","Her yanıt tek tek insan onayından geçer."],
+                ["smart_auto","Smart Auto","Kurallara uyan (4-5★, düşük risk, kaliteli, spam değil) otomatik yayımlanır; 1-3★, refund/legal/safety, personel şikâyeti insana düşer."],
+                ["full_auto","Full Auto","İşletme açıkça yetki verdiyse: kritik risk / spam / legal-safety hariç hepsi otomatik. Varsayılan kapalı."]].map(([v,l,d]) => (
+                <label key={v} className={`border rounded-lg p-2.5 cursor-pointer text-xs ${config.publishing_mode===v ? "border-stone-900 bg-stone-50" : "border-stone-200"}`}>
+                  <div className="flex items-center gap-2 font-semibold">
+                    <input type="radio" name="pubmode" value={v} checked={config.publishing_mode===v}
+                           onChange={() => setConfig({...config, publishing_mode:v})} data-testid={`pubmode-${v}`} /> {l}
+                  </div>
+                  <p className="text-[11px] text-stone-500 mt-1">{d}</p>
+                </label>
+              ))}
+            </div>
+            {config.publishing_mode === "full_auto" && (
+              <div className="mt-2">
+                <Inp label="Full Auto yetkilendiren (ad + unvan, zorunlu)" v={config.full_auto_authorised_by}
+                     onChange={v => setConfig({...config, full_auto_authorised_by:v})} />
+              </div>
+            )}
+          </div>
+
+          {/* Auto-approval rules */}
+          <div className="md:col-span-2 border-t border-stone-100 pt-3">
+            <div className="text-xs font-semibold text-stone-700 mb-2">Otomatik Onay Kuralları (Smart Auto)</div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2" data-testid="auto-rules">
+              {[["min_rating","Min puan"],["max_spam_pct","Maks spam %"],["max_risk","Maks risk"],["min_quality","Min kalite"],["max_similarity","Maks benzerlik %"]].map(([k,l]) => (
+                <label key={k} className="block">
+                  <span className="text-[11px] text-stone-600">{l}</span>
+                  <input type="number" value={config.auto_rules?.[k] ?? ""} data-testid={`rule-${k}`}
+                         onChange={e => setConfig({...config, auto_rules:{...(config.auto_rules||{}), [k]: parseInt(e.target.value)||0}})}
+                         className="w-full px-2 py-1 text-sm border border-stone-300 rounded-lg mt-0.5" />
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-4 mt-2 text-xs">
+              {[["block_refund","Refund/telafi isteyen → insan"],["block_legal","Legal → insan"],["block_safety","Safety → insan"]].map(([k,l]) => (
+                <label key={k} className="inline-flex items-center gap-1.5">
+                  <input type="checkbox" checked={config.auto_rules?.[k] !== false} data-testid={`rule-${k}`}
+                         onChange={e => setConfig({...config, auto_rules:{...(config.auto_rules||{}), [k]: e.target.checked}})} /> {l}
+                </label>
+              ))}
+            </div>
+            <p className="text-[11px] text-stone-400 mt-2">Sabit güvenlik: kritik risk → yönetim eskalasyonu; spam ≥80% → yanıt yok; gizlilik ihlali (rezervasyon no, telefon, e-posta, ödeme, oda no, iç not, personel bilgisi) → yayın engellenir; puan/yorum değiştirme talebi → politika cezası.</p>
+          </div>
+
           <div className="md:col-span-2 flex gap-2">
             <button onClick={saveConfig} data-testid="ra-save-config"
                     className="text-sm px-4 py-1.5 bg-stone-900 text-white rounded-lg">
@@ -160,6 +211,13 @@ export default function ReviewAgentPanel() {
             <div className="text-sm bg-stone-50 border border-stone-200 rounded p-3 mb-2">
               {r.comment || r.text}
             </div>
+            {(r.response_quality || r.ai_decision) && (
+              <div className="text-[11px] text-stone-500 mb-1" data-testid={`ra-meta-${r.id}`}>
+                Kalite <b>{r.response_quality?.total}</b> · Benzerlik <b>{r.response_similarity?.max_pct}%</b> · Risk <b>{r.sentiment_analysis?.risk_level}</b>
+                {r.ai_decision && <> · Karar <b>{r.ai_decision.action}</b> ({r.ai_decision.reasons?.join(", ")})</>}
+                {r.response_privacy && !r.response_privacy.ok && <span className="ml-1 text-red-600 font-semibold">· Gizlilik ihlali: {r.response_privacy.violations.map(v=>v.type).join(", ")}</span>}
+              </div>
+            )}
             <div className="text-xs text-stone-500 mb-1">AI Taslak:</div>
             <textarea defaultValue={editing[r.id] ?? r.ai_draft ?? ""} rows={4}
                       onChange={e => setEditing({...editing, [r.id]: e.target.value})}

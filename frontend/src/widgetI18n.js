@@ -4,6 +4,7 @@ export const WIDGET_LANGS = ["en", "tr", "de"];
 
 const D = {
   en: {
+    meet_team: "MEET OUR TEAM", star_of_week: "Star of the week", praised_by_guests: "praised by {n} guests in reviews this week", 
     official_site: "OFFICIAL SITE", home: "Home", rooms: "Rooms", book_now: "Book Now", dates: "Dates", guests_rooms: "Guests & Rooms",
     adults: "Adults", children: "Children", room: "Room", rooms_n: "Rooms", done: "Done", search: "Search",
     accommodation: "ACCOMMODATION", our_rooms: "Our Rooms & Suites", gallery: "GALLERY", explore: "Explore Our Property",
@@ -29,6 +30,7 @@ const D = {
     events_kicker: "WHAT'S ON IN THE CITY", events_title: "Upcoming events — book early", events_hint: "Rooms fill up fast on these dates", events_book_early: "Book early for these dates →", events_book_package: "Book with event package",
   },
   tr: {
+    meet_team: "EKİBİMİZLE TANIŞIN", star_of_week: "Haftanın yıldızı", praised_by_guests: "bu hafta yorumlarda {n} misafirimiz tarafından övüldü", 
     official_site: "RESMİ SİTE", home: "Ana Sayfa", rooms: "Odalar", book_now: "Rezervasyon", dates: "Tarihler", guests_rooms: "Misafir & Oda",
     adults: "Yetişkin", children: "Çocuk", room: "Oda", rooms_n: "Oda", done: "Tamam", search: "Ara",
     accommodation: "KONAKLAMA", our_rooms: "Odalarımız & Süitler", gallery: "GALERİ", explore: "Otelimizi Keşfedin",
@@ -54,6 +56,7 @@ const D = {
     events_kicker: "ŞEHİRDE NELER VAR", events_title: "Yaklaşan etkinlikler — erken rezervasyon yapın", events_hint: "Bu tarihlerde odalar hızla doluyor", events_book_early: "Bu tarihlerde erken rezervasyon yapın →", events_book_package: "Paketli rezerve et",
   },
   de: {
+    meet_team: "UNSER TEAM", star_of_week: "Star der Woche", praised_by_guests: "diese Woche von {n} Gästen in Bewertungen gelobt", 
     official_site: "OFFIZIELLE SEITE", home: "Start", rooms: "Zimmer", book_now: "Jetzt buchen", dates: "Daten", guests_rooms: "Gäste & Zimmer",
     adults: "Erwachsene", children: "Kinder", room: "Zimmer", rooms_n: "Zimmer", done: "Fertig", search: "Suchen",
     accommodation: "UNTERKUNFT", our_rooms: "Unsere Zimmer & Suiten", gallery: "GALERIE", explore: "Entdecken Sie unser Haus",

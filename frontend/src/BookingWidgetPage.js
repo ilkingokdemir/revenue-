@@ -114,6 +114,7 @@ export default function BookingWidgetPage({ propertyId }) {
   const [otaDismissed, setOtaDismissed] = useState(false);
   const { lang, setLang, t, nightsLabel, pick } = useWidgetLang();
   const [upcomingEvents, setUpcomingEvents] = useState([]);
+  const [teamStar, setTeamStar] = useState(null);
   const [eventPackages, setEventPackages] = useState([]);
   const [selectedPackage, setSelectedPackage] = useState(null);
   const abVariant = useMemo(() => {
@@ -249,6 +250,7 @@ export default function BookingWidgetPage({ propertyId }) {
 
   useEffect(() => {
     axios.get(`${API}/booking-widget/info/${propertyId}`).then(r => setHotel(r.data)).catch(() => {});
+    axios.get(`${API}/booking-widget/team-star/${propertyId}`).then(r => setTeamStar(r.data?.enabled ? r.data.star : null)).catch(() => {});
     axios.get(`${API}/booking-widget/gallery/${propertyId}`).then(r => setGallery(r.data)).catch(() => {});
     axios.get(`${API}/esg/${propertyId}/public-badge`).then(r => setEcoBadge(r.data)).catch(() => {});
     const urlp = new URLSearchParams(window.location.search);
@@ -711,6 +713,17 @@ export default function BookingWidgetPage({ propertyId }) {
     return (
       <section className="bg-white py-16 border-t border-stone-100" data-testid="be-reviews-section">
         <div className="max-w-6xl mx-auto px-4">
+          {teamStar && (
+            <div className="mb-10 rounded-2xl border border-stone-200 bg-stone-50 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4" data-testid="be-team-star">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center text-white text-xl font-bold shrink-0" style={{ backgroundColor: ac }}>{teamStar.name?.[0]}</div>
+              <div className="flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: ac }}>{t("meet_team")}</p>
+                <p className="text-lg text-stone-800 font-medium" data-testid="be-team-star-name">⭐ {t("star_of_week")}: {teamStar.name}</p>
+                <p className="text-xs text-stone-500">{t("praised_by_guests").replace("{n}", teamStar.positive)}</p>
+                {teamStar.quote && <p className="text-sm text-stone-600 italic mt-1">“{teamStar.quote}”{teamStar.quote_by ? ` — ${teamStar.quote_by}` : ""}</p>}
+              </div>
+            </div>
+          )}
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-10 gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] mb-2" style={{ color: ac }}>{t("guest_reviews")}</p>

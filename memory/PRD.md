@@ -1551,3 +1551,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Kök Neden Görevleri artık görünür: /my-tasks.root_cause_tasks (staff_tasks source root_cause, açık) + PUT /my-tasks/staff-task/{id}/complete → done/completed_at. UI: MyTasksPanel root-cause-tasks-section 'Tamamla'.
 - Kapanış Etkisi: reviews.run_root_cause_impact_internal → kapanıştan ≥30g sonra konu 30g önce/sonra (topic_avg_rating, negative_pct) → db.root_cause_impacts + staff_tasks.impact_* + notification (verdict improved/worse/unchanged/insufficient_data). POST /reviews/root-cause/impact/run, GET /reviews/root-cause/impact. JOB 'root_cause_impact' 07:30. UI: AnalyticsPanel root-cause-impact bloğu + 'Şimdi hesapla'.
 - Google OAuth: hâlâ GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET bekleniyor (kullanıcı paylaşmadı).
+
+## Güncelleme (Faz 36 — Olanak Fırsat Kartı + Yıldız Duyurusu + Etki Panosu) — iteration_615 backend 5/5, frontend %100
+- Fırsat Kartı: POST /reputation/competitor-intel/{pid}/act {item, action add_amenity|feasibility_task} → properties.amenities $addToSet + db.amenity_changes | staff_tasks {source competitor_gap, topic item} (açık varsa duplicate). my-tasks.root_cause_tasks artık root_cause + competitor_gap. UI: AnalyticsPanel gap-add-amenity-*/gap-feasibility-*; MyTasksPanel 'Kök Neden & Fırsat Görevleri' + FIRSAT etiketi.
+- Yıldız Duyurusu: public GET /booking-widget/team-star/{pid} (staff_praise_log son kayıt + 4★+ alıntı; review_agent_config.show_team_star=false kapatır). Widget be-team-star bloğu (i18n meet_team/star_of_week/praised_by_guests TR/EN/DE).
+- Etki Panosu: build_monthly_report.impact (ay içinde kapanan kök neden görevleri, raporlanan etki, improved/worse, total_rating_gain, cumulative) + _impact_html aylık rapor e-postasında.
+- Google OAuth: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET hâlâ bekleniyor.

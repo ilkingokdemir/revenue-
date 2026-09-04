@@ -687,6 +687,25 @@ def create_booking_widget_router(db, require_roles):
         out.sort(key=lambda x: x["date"])
         return {"property_id": property_id, "events": out}
 
+    @router.get("/booking-widget/team-star/{property_id}")
+    async def team_star(property_id: str):
+        """Public: haftanın yıldızı (misafir yorumlarında en çok övülen çalışan) — sadece ad + övgü sayısı, kişisel veri yok."""
+        cfg = await db.review_agent_config.find_one({"property_id": property_id}, {"_id": 0, "show_team_star": 1}) or {}
+        if cfg.get("show_team_star") is False:
+            return {"enabled": False}
+        w = await db.staff_praise_log.find_one({"property_id": property_id}, {"_id": 0, "staff": 1, "positive": 1, "mentions": 1, "week": 1, "created_at": 1},
+                                               sort=[("created_at", -1)])
+        if not w:
+            return {"enabled": True, "star": None}
+        rv = await db.reviews.find_one({"property_id": property_id, "sentiment_analysis.staff_mentioned": {"$regex": f"^{w['staff']}$", "$options": "i"}, "rating": {"$gte": 4}},
+                                       {"_id": 0, "review_text": 1, "guest_name": 1, "rating": 1}, sort=[("created_at", -1)])
+        quote = None
+        if rv and rv.get("review_text"):
+            txt = rv["review_text"]
+            quote = (txt[:140] + "…") if len(txt) > 140 else txt
+        return {"enabled": True, "star": {"name": w["staff"], "positive": w.get("positive", 0), "week": w.get("week"),
+                                         "quote": quote, "quote_by": (rv or {}).get("guest_name", "").split(" ")[0] if rv else None}}
+
     @router.get("/booking-widget/social-proof/{property_id}")
     async def social_proof(property_id: str):
         """Public: live activity signals for conversion (real data only)."""

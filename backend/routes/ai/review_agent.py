@@ -121,7 +121,7 @@ def create_review_agent_router(db, require_roles):
         allowed = {"auto_respond_enabled", "min_rating_for_auto",
                    "max_rating_for_auto", "tone", "sign_off",
                    "language", "require_review_before_publish",
-                   "publishing_mode", "auto_rules", "full_auto_authorised_by"}
+                   "publishing_mode", "auto_rules", "full_auto_authorised_by", "show_team_star"}
         update = {k: v for k, v in body.items() if k in allowed}
         if not update:
             raise HTTPException(400, "Nothing to update")

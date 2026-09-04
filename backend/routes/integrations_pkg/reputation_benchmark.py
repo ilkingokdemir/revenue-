@@ -162,6 +162,32 @@ def create_reputation_router(db, require_roles):
                 "insight": (f"Rakipler {', '.join(their_strong_our_weak)} konularında güçlü, biz zayıfız." if their_strong_our_weak else "Rakiplerin güçlü olduğu konularda zayıf noktamız yok.")
                            + (f" Onlarda var bizde yok: {', '.join(x['item'] for x in they_have_we_dont[:4])}." if they_have_we_dont else "")}
 
+    @router.post("/reputation/competitor-intel/{property_id}/act")
+    async def competitor_intel_act(property_id: str, body: dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """'Onlarda var bizde yok' → add_amenity (properties.amenities + widget/OTA listesi) | feasibility_task (staff_tasks source competitor_gap)."""
+        item = str(body.get("item") or "").strip().lower()
+        action = body.get("action")
+        if not item or action not in ("add_amenity", "feasibility_task"):
+            raise HTTPException(400, "item ve action (add_amenity | feasibility_task) gerekli")
+        now = datetime.now(timezone.utc).isoformat()
+        who = current_user.get("name", current_user.get("email", ""))
+        if action == "add_amenity":
+            r = await db.properties.update_one({"id": property_id}, {"$addToSet": {"amenities": item}, "$set": {"updated_at": now}})
+            await db.amenity_changes.insert_one({"id": str(uuid.uuid4()), "property_id": property_id, "amenity": item, "source": "competitor_gap",
+                                                 "by": who, "created_at": now, "channels": ["website_widget", "ota_listing"]})
+            return {"ok": True, "action": "add_amenity", "item": item, "matched": r.matched_count,
+                    "note": "Olanak web sitesi/OTA olanak listesine eklendi (properties.amenities). OTA senkronu bir sonraki listing push'unda gider."}
+        exists = await db.staff_tasks.find_one({"property_id": property_id, "source": "competitor_gap", "topic": item,
+                                                "status": {"$nin": ["done", "resolved", "completed", "closed"]}}, {"_id": 0, "id": 1})
+        if exists:
+            return {"ok": True, "action": "feasibility_task", "item": item, "task_id": exists["id"], "duplicate": True}
+        task = {"id": str(uuid.uuid4()), "property_id": property_id, "title": f"Fizibilite: {item}",
+                "description": f"Rakip yorumlarında övülen '{item}' bizde yok. Maliyet / talep / uygulama süresi değerlendirin; sonucu görev notuna yazın.",
+                "status": "open", "priority": "high", "department": "management", "source": "competitor_gap", "topic": item,
+                "created_by": who, "created_at": now}
+        await db.staff_tasks.insert_one(dict(task))
+        return {"ok": True, "action": "feasibility_task", "item": item, "task_id": task["id"], "duplicate": False}
+
     @router.get("/reputation/topic-compare/{property_id}")
     async def topic_compare(property_id: str, days: int = 90,
                             _: dict = Depends(require_roles("admin", "manager"))):

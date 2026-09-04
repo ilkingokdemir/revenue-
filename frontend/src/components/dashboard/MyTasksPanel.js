@@ -145,12 +145,12 @@ export const MyTasksPanel = ({ user }) => {
       {/* Kök Neden Görevleri */}
       {(data?.root_cause_tasks || []).length > 0 && (
         <div className="mb-6 bg-white border-2 border-red-200 rounded-2xl p-5" data-testid="root-cause-tasks-section">
-          <h3 className="font-bold text-stone-800 mb-1">🔎 Kök Neden Görevleri ({data.root_cause_tasks.length})</h3>
-          <p className="text-[11px] text-stone-500 mb-3">Yorumlarda tekrarlayan sorunlardan otomatik açıldı. Kapattıktan 30 gün sonra etkisi raporlanır.</p>
+          <h3 className="font-bold text-stone-800 mb-1">🔎 Kök Neden & Fırsat Görevleri ({data.root_cause_tasks.length})</h3>
+          <p className="text-[11px] text-stone-500 mb-3">Yorumlarda tekrarlayan sorunlardan ve rakip fırsatlarından otomatik açıldı. Kök neden görevleri kapandıktan 30 gün sonra etkisi raporlanır.</p>
           {data.root_cause_tasks.map(t => (
             <div key={t.id} className="flex items-start justify-between gap-3 py-2 border-b border-stone-100" data-testid={`rc-task-${t.id}`}>
               <div>
-                <div className="text-sm font-medium text-stone-800">{t.title} <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 uppercase">{t.department}</span></div>
+                <div className="text-sm font-medium text-stone-800">{t.title} <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 uppercase">{t.department}</span>{t.source === "competitor_gap" && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">FIRSAT</span>}</div>
                 <div className="text-xs text-stone-500">{t.description}</div>
               </div>
               <button onClick={() => completeRc(t.id)} data-testid={`rc-task-complete-${t.id}`} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 whitespace-nowrap">Tamamla</button>

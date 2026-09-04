@@ -68,7 +68,17 @@ async def build_monthly_report(db, pid: str, month_key: str) -> dict:
     rebase = await db.rebase_reports.find_one(
         {"property_id": pid, "created_at": {"$gte": f"{month_key}-01"}},
         {"_id": 0, "rows": 0}, sort=[("created_at", -1)])
-    return {"month": month_key, "metrics": cur, "prev": prev,
+    impacts = await db.root_cause_impacts.find({"property_id": pid, "created_at": {"$gte": f"{month_key}-01"}}, {"_id": 0}).to_list(50)
+    imp_all = await db.root_cause_impacts.find({"property_id": pid}, {"_id": 0, "rating_delta": 1, "verdict": 1}).to_list(500)
+    closed_month = await db.staff_tasks.count_documents({"property_id": pid, "source": "root_cause", "status": {"$in": ["done", "resolved", "completed", "closed"]},
+                                                         "completed_at": {"$gte": f"{month_key}-01"}})
+    impact = {"closed_tasks_month": closed_month, "reported_month": len(impacts),
+              "improved": sum(1 for i in impacts if i.get("verdict") == "improved"), "worse": sum(1 for i in impacts if i.get("verdict") == "worse"),
+              "total_rating_gain": round(sum(float(i.get("rating_delta") or 0) for i in impacts), 2),
+              "cumulative_rating_gain": round(sum(float(i.get("rating_delta") or 0) for i in imp_all), 2),
+              "items": [{"topic": i.get("topic"), "verdict": i.get("verdict"), "rating_delta": i.get("rating_delta"),
+                         "before": (i.get("before") or {}).get("topic_avg_rating"), "after": (i.get("after") or {}).get("topic_avg_rating")} for i in impacts[:8]]}
+    return {"month": month_key, "metrics": cur, "prev": prev, "impact": impact,
             "targets": {"revenue_target": float(t.get("revenue_target") or 0),
                         "occupancy_target": float(t.get("occupancy_target") or 0),
                         "abs_target": float(abs_s.get("abs_monthly_target") or 0)},
@@ -92,6 +102,22 @@ def _target_line(label, actual, target, unit="£"):
     a = f"{unit}{actual:,}" if unit == "£" else f"{actual}{unit}"
     tt = f"{unit}{target:,}" if unit == "£" else f"{target}{unit}"
     return f"<div style='margin-bottom:6px;font-size:13px'>🎯 <b>{label}:</b> {a} / {tt} — <b style='color:{color}'>%{pct}</b></div>"
+
+
+def _impact_html(imp: dict) -> str:
+    if not imp:
+        return ""
+    rows = "".join(f"<tr><td style='padding:4px 8px;text-transform:capitalize'>{i['topic']}</td><td style='padding:4px 8px'>{i['before'] or '—'}★ → {i['after'] or '—'}★</td>"
+                   f"<td style='padding:4px 8px;color:{'#15803d' if i['verdict']=='improved' else '#b91c1c' if i['verdict']=='worse' else '#78716c'}'>{'+' if (i['rating_delta'] or 0) > 0 else ''}{i['rating_delta'] if i['rating_delta'] is not None else '—'} · {i['verdict']}</td></tr>"
+                   for i in imp.get("items", []))
+    gain = imp.get("total_rating_gain", 0)
+    return (f"<div style='background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px;margin-top:12px'>"
+            f"<b>Etki Panosu — Kök Neden Görevleri</b><br/>"
+            f"<span style='font-size:13px'>Bu ay kapanan görev: <b>{imp.get('closed_tasks_month', 0)}</b> · Raporlanan etki: <b>{imp.get('reported_month', 0)}</b> "
+            f"(📈 {imp.get('improved', 0)} iyileşti · 📉 {imp.get('worse', 0)} kötüleşti) · Toplam puan kazancı: <b style='color:{'#15803d' if gain >= 0 else '#b91c1c'}'>{'+' if gain > 0 else ''}{gain}★</b> "
+            f"· Kümülatif: <b>{'+' if imp.get('cumulative_rating_gain', 0) > 0 else ''}{imp.get('cumulative_rating_gain', 0)}★</b></span>"
+            + (f"<table style='font-size:12px;margin-top:8px;border-collapse:collapse'>{rows}</table>" if rows else "")
+            + "</div>")
 
 
 def _monthly_html(prop_name: str, r: dict) -> str:
@@ -120,6 +146,7 @@ def _monthly_html(prop_name: str, r: dict) -> str:
             + f"</table>"
             + (f"<div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px;margin-top:12px'>{targets_html}</div>" if targets_html else "")
             + rebase_html
+            + _impact_html(r.get("impact") or {})
             + f"<p style='color:#a8a29e;font-size:11px;margin-top:20px'>MyHotelBox — her ay kapanışında otomatik hazırlanır. Önceki ay ({prev['month']}) ile karşılaştırmalıdır.</p></div></div>")
 
 

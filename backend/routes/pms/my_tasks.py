@@ -79,7 +79,7 @@ def create_my_tasks_router(db, require_roles):
         notif_q = {"read": False, "$or": [{"target_user": user_email}, {"target_user": ""}, {"target_role": user_role}]}
         unread_notifs = await db.notifications.count_documents(notif_q)
 
-        rc_q = {"source": "root_cause", "status": {"$nin": ["done", "resolved", "completed", "closed"]}}
+        rc_q = {"source": {"$in": ["root_cause", "competitor_gap"]}, "status": {"$nin": ["done", "resolved", "completed", "closed"]}}
         root_cause_tasks = await db.staff_tasks.find(rc_q, {"_id": 0}).sort("created_at", -1).to_list(20)
 
         return {

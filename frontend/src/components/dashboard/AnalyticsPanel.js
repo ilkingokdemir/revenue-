@@ -30,6 +30,13 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [topicCompare, setTopicCompare] = useState(null);
   const [compIntel, setCompIntel] = useState(null);
+  const actGap = async (item, action) => {
+    try {
+      const { data } = await axios.post(`${API}/reputation/competitor-intel/default/act`, { item, action });
+      toast.success(action === "add_amenity" ? `'${item}' web sitesi/OTA olanak listesine eklendi` : data.duplicate ? "Bu fizibilite görevi zaten açık" : `Fizibilite görevi açıldı: ${item}`);
+      if (action === "add_amenity") { const r = await axios.get(`${API}/reputation/competitor-intel/default`); setCompIntel(r.data); }
+    } catch (e) { toast.error(e.response?.data?.detail || "İşlem yapılamadı"); }
+  };
   const [impacts, setImpacts] = useState([]);
   const runImpact = async () => {
     try {
@@ -443,7 +450,16 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
                     <div className="text-xs font-semibold text-red-800 mb-1">Onlarda var, bizde yok</div>
                     {compIntel.they_have_we_dont.length === 0 && <p className="text-[11px] text-stone-400">Fark bulunamadı.</p>}
                     {compIntel.they_have_we_dont.slice(0, 6).map(x => (
-                      <div key={x.item} className="text-[11px] mb-1.5"><span className="capitalize font-semibold">{x.item}</span> <span className="text-stone-400">({x.competitors} rakip)</span><div className="text-stone-500">{x.action}</div></div>
+                      <div key={x.item} className="text-[11px] mb-2 border-b border-red-100 pb-1.5" data-testid={`gap-item-${x.item.replace(/\s+/g, "-")}`}>
+                        <span className="capitalize font-semibold">{x.item}</span> <span className="text-stone-400">({x.competitors} rakip)</span>
+                        <div className="text-stone-500">{x.action}</div>
+                        <div className="flex gap-1.5 mt-1">
+                          <button onClick={() => actGap(x.item, "add_amenity")} data-testid={`gap-add-amenity-${x.item.replace(/\s+/g, "-")}`}
+                            className="px-2 py-0.5 rounded bg-emerald-700 text-white text-[10px] hover:bg-emerald-800">Zaten var → olanak listesine ekle</button>
+                          <button onClick={() => actGap(x.item, "feasibility_task")} data-testid={`gap-feasibility-${x.item.replace(/\s+/g, "-")}`}
+                            className="px-2 py-0.5 rounded bg-stone-800 text-white text-[10px] hover:bg-stone-900">Fizibilite görevi aç</button>
+                        </div>
+                      </div>
                     ))}
                     {compIntel.their_strength_our_weakness?.length > 0 && <p className="text-[11px] text-red-700 mt-1">Onların gücü / bizim zayıflığımız: {compIntel.their_strength_our_weakness.join(", ")}</p>}
                   </div>

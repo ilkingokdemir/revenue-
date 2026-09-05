@@ -5,6 +5,7 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import AccountingConnectorsCard from "./AccountingConnectorsCard";
 import {
   Download, RefreshCw, Loader2, FileSpreadsheet, Calendar, Calculator, Settings, X, Check,
 } from "lucide-react";
@@ -83,6 +84,7 @@ export default function AccountingExportPanel({ propertyId, hotelName = "" }) {
 
   return (
     <div className="p-5 space-y-5" data-testid="accounting-export-panel">
+      <AccountingConnectorsCard propertyId={propertyId} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-stone-100 flex items-center gap-2">

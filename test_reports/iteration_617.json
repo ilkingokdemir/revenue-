@@ -1,0 +1,32 @@
+{
+  "summary": "Iter617: Accounting Connectors (Xero/QBO/e-Fatura), Job Queue, Tenant SSO, Organizations & property-scoped RBAC tested end-to-end. 15/16 backend tests passed; only failure is PUT /api/orgs/users/{user_id}/property-roles returning 404 because users collection is keyed by Mongo _id (ObjectId hex) but tenant_sso.py updates by field 'id'. Frontend fully functional: SSO buttons disabled with not-configured text; login?sso=error&reason=no_org_for_domain shows Turkish toast; AdminPanel → Team Members shows OrganizationsCard with 'HotelBox Group … 2 tesis'; org creation toast 'Organizasyon oluşturuldu' works and new row appears; System Health → JobQueueCard shows counters (done 2, failed 1) and retry works (toast 'Yeniden kuyruğa alındı'); Reports & Analytics → Accounting export shows AccountingConnectorsCard, connect-xero/qbo DISABLED, preview shows block, run shows toast with 'Yevmiye/Xero/mock', efatura toggle works.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PUT /api/orgs/users/{user_id}/property-roles", "issue": "Returns 404 'User not found' for every user because users collection stores primary key as MongoDB _id (ObjectId), but the handler queries db.users.update_one({'id': user_id}, ...). Same user_id returned by /api/users list. Fix: either query by _id (ObjectId(user_id)) or ensure users have an 'id' string field mirroring _id.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter617.py", "/app/test_reports/pytest/iter617.xml"],
+  "action_items": [
+    "Fix property-roles handler in /app/backend/routes/security/tenant_sso.py to match user_id against ObjectId(_id) since users collection uses Mongo _id (not string 'id')."
+  ],
+  "critical_code_review_comments": [
+    "tenant_sso.py assign() and set_property_roles() use {'id': user_id} but /api/users endpoint returns str(_id) as 'id' — inconsistent identifier strategy will break Org→User assignments in production.",
+    "sso_callback verify_iss uses bool(provider=='google' or MS_SSO_TENANT_ID) — when Microsoft tenant not set, issuer verification is skipped even though token is still trusted; consider hardening.",
+    "accounting_sync.py push_journal returns dict containing possibly injected _id via insert_one dict copy — mitigated by rec.pop('_id', None), but be cautious.",
+    "e-Fatura invoice numbering uses count_documents+1 → not race-safe under concurrent daily runs; consider atomic counter."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter617.py"],
+  "success_rate": {"backend": "94% (15/16)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Created test organizations TEST_Org_617, TEST_Org_617_v2, TEST_UI_Org_617 in db.organizations",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iter617.py covers all iter617 endpoints. Only property-roles test fails — needs backend fix (ObjectId lookup). All UI testids present: sso-google-btn, sso-microsoft-btn, sso-not-configured, organizations-card, org-row-*, org-name-input, org-create-btn, job-queue-card, queue-count-*, queue-retry-*, accounting-connectors-card, acct-provider-xero/qbo, acct-connect-xero/qbo (disabled), acct-preview-btn, acct-preview, acct-run-btn, acct-efatura-toggle. Accounting export lives under Reports & Analytics → Exports & BI section.",
+  "rca of the issue": "PUT /api/orgs/users/{user_id}/property-roles returns 404. RCA: /api/users list endpoint returns each user's Mongo ObjectId converted to hex string as 'id' (e.g. 69d94ce991623ac1e12675b3). However tenant_sso.py's set_property_roles does db.users.update_one({'id': user_id}, ...) — the users collection does not have a top-level 'id' field, only _id. Fix: `from bson import ObjectId; await db.users.update_one({'_id': ObjectId(user_id)}, ...)` (with try/except for invalid ObjectId → 404). Same issue in POST /api/orgs/{id}/assign for user_ids array."
+}

@@ -50,6 +50,13 @@ INDEX_SPECS = [
     ("folios", [("booking_id", ASCENDING)], {"sparse": True}),
     ("rates", [("property_id", ASCENDING), ("date", ASCENDING)], {}),
     ("housekeeping_tasks", [("property_id", ASCENDING), ("status", ASCENDING)], {}),
+    ("organizations", [("id", ASCENDING)], {"unique": True}),
+    ("organizations", [("allowed_domains", ASCENDING)], {}),
+    ("users", [("org_id", ASCENDING)], {"sparse": True}),
+    ("accounting_journal", [("idem_key", ASCENDING)], {"unique": True}),
+    ("accounting_connections", [("provider", ASCENDING), ("property_id", ASCENDING)], {"unique": True}),
+    ("efatura", [("property_id", ASCENDING), ("created_at", DESCENDING)], {}),
+    ("sso_logins", [("at", ASCENDING)], {"expireAfterSeconds": 90 * 86400}),
 ]
 
 

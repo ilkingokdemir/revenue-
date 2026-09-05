@@ -218,6 +218,7 @@ export function AdminPanel({ properties, user, activePropertyId }) {
         {/* ========== TEAM MEMBERS ========== */}
         {tab === "users" && (
           <div className="max-w-5xl mx-auto space-y-4" data-testid="users-tab">
+            <OrganizationsCard />
             <h3 className="text-base font-bold text-stone-900">Team Members</h3>
             <div className="space-y-2">
               {users.map(u => (
@@ -529,3 +530,45 @@ const SystemHealthTab = () => {
     </div>
   );
 };
+
+
+function OrganizationsCard() {
+  const [orgs, setOrgs] = useState([]);
+  const [form, setForm] = useState({ name: "", allowed_domains: "", google_hd: "", ms_tid: "", default_role: "receptionist" });
+  const load = async () => { try { const r = await axios.get(`${API}/orgs`); setOrgs(r.data.items || []); } catch { setOrgs([]); } };
+  useEffect(() => { load(); }, []);
+  const create = async () => {
+    if (!form.name.trim()) return toast.error("Organizasyon adı gerekli");
+    try {
+      await axios.post(`${API}/orgs`, { ...form, allowed_domains: form.allowed_domains.split(",").map(x => x.trim()).filter(Boolean), sso_provider: form.google_hd ? "google" : form.ms_tid ? "microsoft" : "" });
+      toast.success("Organizasyon oluşturuldu"); setForm({ name: "", allowed_domains: "", google_hd: "", ms_tid: "", default_role: "receptionist" }); load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Oluşturulamadı"); }
+  };
+  return (
+    <div className="bg-white rounded-2xl border border-stone-200 p-4 mb-4" data-testid="organizations-card">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <h3 className="font-semibold text-stone-800">🏢 Organizasyonlar (tenant) & SSO</h3>
+        <span className="text-[11px] text-stone-400">E-posta alanı / Workspace hd / Entra tenant → otomatik kullanıcı açma; tesise özel roller kullanıcı satırından</span>
+      </div>
+      <div className="grid md:grid-cols-6 gap-2 text-xs">
+        <Input placeholder="Ad" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} data-testid="org-name-input" className="h-8 text-xs" />
+        <Input placeholder="İzinli alanlar (virgül)" value={form.allowed_domains} onChange={e => setForm({ ...form, allowed_domains: e.target.value })} data-testid="org-domains-input" className="h-8 text-xs" />
+        <Input placeholder="Google hd (ör. otel.com)" value={form.google_hd} onChange={e => setForm({ ...form, google_hd: e.target.value })} data-testid="org-hd-input" className="h-8 text-xs" />
+        <Input placeholder="Entra tenant id" value={form.ms_tid} onChange={e => setForm({ ...form, ms_tid: e.target.value })} data-testid="org-tid-input" className="h-8 text-xs" />
+        <select value={form.default_role} onChange={e => setForm({ ...form, default_role: e.target.value })} data-testid="org-role-select" className="h-8 text-xs border border-stone-200 rounded-md px-2">
+          {["receptionist", "manager", "housekeeper", "staff", "viewer"].map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+        <button onClick={create} data-testid="org-create-btn" className="h-8 rounded-md bg-stone-900 text-white text-xs px-3">Oluştur</button>
+      </div>
+      <div className="mt-3 divide-y divide-stone-100">
+        {orgs.length === 0 && <p className="text-xs text-stone-400">Henüz organizasyon yok — tek tesisli kurulumlarda gerekmez.</p>}
+        {orgs.map(o => (
+          <div key={o.id} className="py-1.5 flex items-center justify-between text-xs" data-testid={`org-row-${o.id}`}>
+            <span className="font-medium text-stone-800">{o.name} <span className="text-stone-400">· {(o.allowed_domains || []).join(", ") || "alan yok"}{o.sso?.google_hd ? ` · Google ${o.sso.google_hd}` : ""}{o.sso?.ms_tid ? " · Entra" : ""}</span></span>
+            <span className="text-stone-500">{o.property_count} tesis · {o.user_count} kullanıcı · varsayılan rol {o.sso?.default_role}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

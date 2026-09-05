@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
+import JobQueueCard from "./JobQueueCard";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -37,6 +38,7 @@ export default function SystemHealthPanel() {
 
   return (
     <div className="p-5 lg:p-7 max-w-[1100px] mx-auto space-y-4" data-testid="system-health-page">
+      <JobQueueCard />
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="text-2xl font-semibold text-stone-900">🩺 Sistem Sağlığı</h1>
         <span className="text-[11px] text-stone-400">30 sn'de bir yenilenir · pencere: {d.window}</span>

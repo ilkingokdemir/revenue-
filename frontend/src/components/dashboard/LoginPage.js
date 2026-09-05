@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -173,6 +173,8 @@ const LoginPage = ({ onLogin }) => {
               </button>
             </div>
           </form>
+
+          <SsoButtons />
           
           <div className="px-8 pb-6 text-center">
             <p className="text-xs text-stone-400">Hotel staff accounts are created by administrators</p>
@@ -184,3 +186,33 @@ const LoginPage = ({ onLogin }) => {
 };
 
 export { LoginPage };
+
+
+function SsoButtons() {
+  const [prov, setProv] = useState(null);
+  useEffect(() => {
+    axios.get(`${API}/auth/sso/providers`).then(r => setProv(r.data)).catch(() => setProv(null));
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("sso") === "error") {
+      const m = { invalid_state: "Oturum doğrulaması başarısız", token_exchange: "Kimlik sağlayıcı yanıt vermedi", invalid_token: "Kimlik jetonu geçersiz",
+        no_org_for_domain: "E-posta alanınız hiçbir organizasyona tanımlı değil — yöneticinize başvurun", inactive: "Hesabınız pasif" };
+      toast.error("SSO: " + (m[q.get("reason")] || q.get("reason") || "hata"));
+    }
+  }, []);
+  if (!prov) return null;
+  const go = (p) => { window.location.href = `${API}/auth/sso/${p}/start`; };
+  return (
+    <div className="px-8 pb-2" data-testid="sso-buttons">
+      <div className="flex items-center gap-2 my-3"><div className="flex-1 h-px bg-stone-200" /><span className="text-[10px] uppercase tracking-wider text-stone-400">veya kurumsal giriş</span><div className="flex-1 h-px bg-stone-200" /></div>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={() => go("google")} disabled={!prov.google?.configured} data-testid="sso-google-btn"
+          title={prov.google?.configured ? "" : "GOOGLE_SSO_CLIENT_ID yapılandırılmadı"}
+          className="h-10 rounded-lg border border-stone-200 bg-white text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed">Google Workspace</button>
+        <button type="button" onClick={() => go("microsoft")} disabled={!prov.microsoft?.configured} data-testid="sso-microsoft-btn"
+          title={prov.microsoft?.configured ? "" : "MS_SSO_CLIENT_ID yapılandırılmadı"}
+          className="h-10 rounded-lg border border-stone-200 bg-white text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed">Microsoft 365</button>
+      </div>
+      {!(prov.google?.configured || prov.microsoft?.configured) && <p className="text-[10px] text-stone-400 mt-1.5 text-center" data-testid="sso-not-configured">Kurumsal giriş henüz yapılandırılmadı (yönetici: SSO istemci anahtarları)</p>}
+    </div>
+  );
+}

@@ -1737,6 +1737,19 @@ from routes.integrations_pkg.gbp_publish import create_gbp_router
 api_router.include_router(create_gbp_router(db, require_roles))
 from routes.platform_ext.db_indexes import create_db_indexes_router
 api_router.include_router(create_db_indexes_router(db, require_roles))
+from routes.security.tenant_sso import create_tenant_sso_router
+from auth import create_access_token as _cat, create_refresh_token as _crt
+api_router.include_router(create_tenant_sso_router(db, require_roles, _cat, _crt))
+from routes.finance_ext.accounting_sync import create_accounting_sync_router
+accounting_sync_router = create_accounting_sync_router(db, require_roles)
+api_router.include_router(accounting_sync_router)
+
+async def _job_accounting_daily_sync(property_id: str) -> dict:
+    try:
+        return await accounting_sync_router.run_daily_sync_internal(property_id or "all")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+JOB_HANDLERS["accounting_daily_sync"] = _job_accounting_daily_sync
 
 from routes.integrations_pkg.review_sources import create_review_sources_router, run_review_source_sync
 api_router.include_router(create_review_sources_router(db, require_roles))

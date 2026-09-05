@@ -84,6 +84,11 @@ JOB_REGISTRY = {
         "description": "Çıkıştan 1 gün sonra misafire kendi dilinde (TR/EN/DE) teşekkür + yorum isteği e-postası gönderir; zaten yorum yapmışsa atlar, aynı misafire tekrar gitmez.",
         "default_cron": (11, 0), "default_enabled": True, "params": [],
     },
+    "accounting_daily_sync": {
+        "label": "Muhasebe Günlük Yevmiye (Xero/QBO + e-Fatura)", "category": "finance",
+        "description": "Dünün tahsilat/gelir/vergi yevmiyesini Xero veya QuickBooks'a gönderir; e-Fatura açıksa çıkış yapan konaklamalar için UBL-TR taslağı keser. 03:30.",
+        "default_cron": (3, 30), "default_enabled": True, "params": [],
+    },
     "root_cause_impact": {
         "label": "Görev Kapanış Etkisi (30g sonra)", "category": "guest",
         "description": "Kök neden görevi kapandıktan 30 gün sonra konunun yorum puanı/olumsuz % değişimini raporlar ve bildirim üretir. Günlük 07:30.",

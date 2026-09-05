@@ -496,18 +496,18 @@ def create_reviews_router(db, require_roles, get_current_user, verify_api_key, L
     async def approve_response(review_id: str, action: ApprovalAction, request: Request):
         current_user = await get_current_user(request)
         from routes.platform_ext.admin import has_permission
-        if not has_permission(current_user, "reviews", "approve"):
-            raise HTTPException(status_code=403, detail="CAN_APPROVE_RESPONSE izniniz yok")
         review = await db.reviews.find_one({"id": review_id}, {"_id": 0})
         if not review:
             raise HTTPException(status_code=404, detail="Review not found")
+        if not has_permission(current_user, "reviews", "approve", review.get("property_id")):
+            raise HTTPException(status_code=403, detail="CAN_APPROVE_RESPONSE izniniz yok (bu tesis için)")
         who = current_user.get("name", current_user.get("email"))
         now = datetime.now(timezone.utc).isoformat()
         analysis = review.get("sentiment_analysis") or {}
         risk_level = analysis.get("risk_level", "low")
 
         if action.action == "approve":
-            if not has_permission(current_user, "reviews", "publish"):
+            if not has_permission(current_user, "reviews", "publish", review.get("property_id")):
                 raise HTTPException(status_code=403, detail="CAN_PUBLISH_RESPONSE izniniz yok")
             if analysis.get("spam_suspected") and not (action.notes or "").strip():
                 raise HTTPException(status_code=400, detail="Spam şüpheli yorum: yayımlamak için gerekçe (notes) zorunlu")

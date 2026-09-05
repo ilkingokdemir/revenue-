@@ -51,9 +51,14 @@ DEFAULT_PERMISSIONS["manager"]["reviews"] += REVIEW_ACTIONS
 DEFAULT_PERMISSIONS["receptionist"]["reviews"] += ["generate"]
 
 
-def has_permission(user: dict, module: str, action: str) -> bool:
-    """custom_permissions varsa onu, yoksa rol varsayılanını kullanır."""
-    perms = (user or {}).get("custom_permissions") or DEFAULT_PERMISSIONS.get((user or {}).get("role", ""), {})
+def has_permission(user: dict, module: str, action: str, property_id: str = None) -> bool:
+    """custom_permissions varsa onu; property_roles[property_id] varsa o rolü; yoksa genel rolü kullanır."""
+    u = user or {}
+    if u.get("custom_permissions") and not (property_id and property_id in (u.get("property_roles") or {})):
+        perms = u["custom_permissions"]
+    else:
+        role = (u.get("property_roles") or {}).get(property_id) if property_id else None
+        perms = DEFAULT_PERMISSIONS.get(role or u.get("role", ""), {})
     return action in (perms.get(module) or [])
 
 

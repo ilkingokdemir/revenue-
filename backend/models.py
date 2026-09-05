@@ -299,6 +299,8 @@ class PropertyUpdate(BaseModel):
     country: Optional[str] = None
     property_type: Optional[str] = None
     is_active: Optional[bool] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 VALID_ROLES = ["admin", "manager", "receptionist", "housekeeper", "maintenance"]
 VALID_DEPARTMENTS = ["front_desk", "management", "housekeeping", "food_beverage", "maintenance", "spa_wellness", "concierge"]

@@ -228,6 +228,11 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
             raise HTTPException(status_code=400, detail="Invalid role")
         if "department" in update_data and update_data["department"] not in VALID_DEPARTMENTS:
             raise HTTPException(status_code=400, detail="Invalid department")
+        if "role" in update_data:
+            _before = await db.users.find_one({"_id": ObjectId(user_id)}, {"_id": 1, "id": 1, "name": 1, "email": 1, "role": 1})
+            if _before and _before.get("role") != update_data["role"]:
+                from routes.security.permission_matrix import log_perm_change
+                await log_perm_change(db, current_user, _before, "role", _before.get("role"), update_data["role"])
         result = await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": update_data})
         if result.modified_count == 0:
             raise HTTPException(status_code=404, detail="User not found")

@@ -193,6 +193,13 @@ def create_payments_router(db, require_roles):
             # Process successful payment
             if tx.get("type") == "gift_card":
                 await db.gift_cards.update_one({"id": tx["reference_id"]}, {"$set": {"status": "active", "paid_at": update["paid_at"], "payment_method": "stripe"}})
+                try:
+                    from routes.finance_ext.gift_cards import send_gift_card_emails
+                    _gc = await db.gift_cards.find_one({"id": tx["reference_id"]}, {"_id": 0})
+                    if _gc:
+                        await send_gift_card_emails(db, _gc, os.environ.get("PUBLIC_BASE_URL", "").rstrip("/"))
+                except Exception as _e:
+                    logger.warning(f"gift card email failed: {_e}")
             if tx.get("type") == "booking":
                 await db.bookings.update_one(
                     {"id": tx["reference_id"]},

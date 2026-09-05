@@ -18,6 +18,56 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def gift_card_html(card: dict, hotel_name: str, accent: str = "#0f4c5c", book_url: str = "") -> str:
+    sym = {"TRY": "₺", "EUR": "€", "USD": "$"}.get(card.get("currency", "GBP"), "£")
+    amt = f"{sym}{float(card.get('initial_amount', 0)):,.0f}"
+    exp = (card.get("expires_at") or "")[:10]
+    msg = (card.get("message") or "").replace("<", "&lt;")
+    rec = card.get("recipient_name") or "Sevgili Misafir"
+    frm = card.get("purchaser_name") or hotel_name
+    return f"""<!doctype html><html><body style="margin:0;background:#f4f4f5;font-family:Georgia,serif;color:#1c1917">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 12px"><tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.08)">
+<tr><td style="background:{accent};padding:36px 32px;color:#fff;text-align:center">
+<div style="font-size:11px;letter-spacing:.3em;text-transform:uppercase;opacity:.8">HEDİYE ÇEKİ · GIFT CARD</div>
+<div style="font-size:52px;font-weight:700;margin:12px 0 4px">{amt}</div>
+<div style="font-size:16px;opacity:.9">{hotel_name}</div></td></tr>
+<tr><td style="padding:28px 32px">
+<p style="font-size:16px;margin:0 0 12px">Merhaba {rec},</p>
+<p style="font-size:14px;line-height:1.6;margin:0 0 16px;color:#44403c">{frm} size <b>{hotel_name}</b>'da unutulmaz bir konaklama hediye etti.{(' <br><br><i>“' + msg + '”</i>') if msg else ''}</p>
+<div style="border:2px dashed {accent};border-radius:14px;padding:18px;text-align:center;margin:20px 0">
+<div style="font-size:11px;letter-spacing:.2em;color:#78716c;text-transform:uppercase">Çek kodunuz</div>
+<div style="font-family:Menlo,Consolas,monospace;font-size:24px;font-weight:700;color:{accent};margin-top:6px">{card.get('code', '')}</div></div>
+<p style="font-size:13px;color:#57534e;line-height:1.6;margin:0 0 20px">Rezervasyon sırasında ödeme adımında “Hediye çekiniz var mı?” alanına kodu girin; tutar toplamdan düşülür. Kalan bakiye sonraki rezervasyonlarınızda kullanılabilir.{(' Son kullanma: <b>' + exp + '</b>.') if exp else ''}</p>
+{('<p style="text-align:center;margin:0 0 8px"><a href="' + book_url + '" style="display:inline-block;background:' + accent + ';color:#fff;text-decoration:none;padding:14px 28px;border-radius:999px;font-weight:700;font-size:14px">Rezervasyon Yap</a></p>') if book_url else ''}
+</td></tr>
+<tr><td style="padding:16px 32px;background:#fafaf9;font-size:11px;color:#a8a29e;text-align:center">{hotel_name} · Powered by MyHotelBox</td></tr>
+</table></td></tr></table></body></html>"""
+
+
+async def send_gift_card_emails(db, card: dict, base_url: str = "") -> dict:
+    """Alıcıya (ve satın alana kopya) markalı hediye çeki e-postası. Idempotent: gift_cards.email_sent_at."""
+    if card.get("email_sent_at"):
+        return {"skipped": "already_sent"}
+    from routes.platform_ext.mailer import send_email
+    prop = await db.properties.find_one({"id": card.get("property_id")}, {"_id": 0, "name": 1}) or {}
+    ts = await db.template_settings.find_one({"property_id": card.get("property_id")}, {"_id": 0, "accent_color": 1, "primary_color": 1}) or {}
+    hotel = prop.get("name") or "Hotel"
+    accent = ts.get("accent_color") or ts.get("primary_color") or "#0f4c5c"
+    book_url = f"{base_url}/book?property={card.get('property_id')}" if base_url else ""
+    html = gift_card_html(card, hotel, accent, book_url)
+    sym = {"TRY": "₺", "EUR": "€", "USD": "$"}.get(card.get("currency", "GBP"), "£")
+    subject = f"🎁 {hotel} hediye çekiniz — {sym}{float(card.get('initial_amount', 0)):,.0f}"
+    out = {}
+    if card.get("recipient_email"):
+        out["recipient"] = await send_email(db, card["recipient_email"], subject, html, kind="gift_card", meta={"card_id": card.get("id"), "property_id": card.get("property_id")})
+    if card.get("purchaser_email") and card.get("purchaser_email") != card.get("recipient_email"):
+        out["purchaser"] = await send_email(db, card["purchaser_email"], f"Satın alma onayı — {subject}", html, kind="gift_card_receipt", meta={"card_id": card.get("id"), "property_id": card.get("property_id")})
+    if out:
+        await db.gift_cards.update_one({"id": card["id"]}, {"$set": {"email_sent_at": datetime.now(timezone.utc).isoformat(), "email_result": out}})
+    return out
+
+
 def _gen_code(prefix: str = "MHB") -> str:
     """Readable code like MHB-XJ4F-R9K2-8N7P."""
     alphabet = string.ascii_uppercase + string.digits
@@ -93,7 +143,23 @@ def create_gift_cards_router(db, require_roles):
         }
         await db.gift_cards.insert_one(card)
         card.pop("_id", None)
+        if data.get("send_email", True) and (card["recipient_email"] or data.get("purchaser_email")):
+            card["purchaser_email"] = (data.get("purchaser_email") or "").strip()
+            card["email_result"] = await send_gift_card_emails(db, card, (data.get("origin_url") or "").rstrip("/"))
         return card
+
+    @router.post("/gift-cards/{card_id}/resend-email")
+    async def resend_email(card_id: str, data: Dict = None,
+                           current_user: dict = Depends(require_roles("admin", "manager"))):
+        card = await db.gift_cards.find_one({"id": card_id}, {"_id": 0})
+        if not card:
+            raise HTTPException(status_code=404, detail="Card not found")
+        if (data or {}).get("recipient_email"):
+            card["recipient_email"] = data["recipient_email"].strip()
+            await db.gift_cards.update_one({"id": card_id}, {"$set": {"recipient_email": card["recipient_email"]}})
+        card.pop("email_sent_at", None)
+        res = await send_gift_card_emails(db, card, ((data or {}).get("origin_url") or "").rstrip("/"))
+        return {"ok": True, "result": res}
 
     @router.post("/gift-cards/{card_id}/redeem")
     async def redeem(card_id: str, data: Dict,

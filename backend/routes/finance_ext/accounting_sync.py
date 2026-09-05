@@ -292,6 +292,57 @@ def create_accounting_sync_router(db, require_roles):
     async def journal_list(property_id: str, limit: int = 30, _: dict = Depends(require_roles("admin", "manager"))):
         return {"items": await db.accounting_journal.find({"property_id": property_id}, {"_id": 0, "request_body": 0, "journal.lines": 0}).sort("created_at", -1).to_list(limit)}
 
+    @router.get("/accounting/journal/calendar/{property_id}")
+    async def journal_calendar(property_id: str, month: Optional[str] = None, _: dict = Depends(require_roles("admin", "manager"))):
+        """Ay bazında gün gün yevmiye durumu: pushed / mock / failed / missing (bugünden önceki günler)."""
+        from datetime import date as _date
+        try:
+            y, m = (int(x) for x in (month or _now().strftime("%Y-%m")).split("-"))
+            first = _date(y, m, 1)
+        except Exception:
+            raise HTTPException(422, "month=YYYY-MM")
+        last = _date(y + (m == 12), (m % 12) + 1, 1) - timedelta(days=1)
+        yesterday = (_now() - timedelta(days=1)).date()
+        providers = [c["provider"] for c in await db.accounting_connections.find({"property_id": property_id}, {"_id": 0, "provider": 1}).to_list(5)] or ["xero", "qbo"]
+        recs = await db.accounting_journal.find({"property_id": property_id, "business_date": {"$gte": first.isoformat(), "$lte": last.isoformat()}},
+                                                {"_id": 0, "request_body": 0, "journal.lines": 0}).sort("created_at", 1).to_list(2000)
+        by = {}
+        for r in recs:
+            by.setdefault(r["business_date"], {})[r["provider"]] = r
+        days, counts = [], {"pushed": 0, "mock": 0, "failed": 0, "missing": 0, "future": 0}
+        d = first
+        while d <= last:
+            iso = d.isoformat()
+            per = {}
+            for p in providers:
+                r = by.get(iso, {}).get(p)
+                if d > yesterday:
+                    st = "future"
+                elif not r:
+                    st = "missing"
+                else:
+                    st = r.get("status") if r.get("status") in ("pushed", "mock", "failed") else "failed"
+                per[p] = {"status": st, "id": (r or {}).get("id"), "total": ((r or {}).get("journal") or {}).get("gross"),
+                          "error": (str((r or {}).get("response"))[:160] if st == "failed" else None), "at": (r or {}).get("created_at")}
+            worst = "future" if d > yesterday else ("failed" if any(x["status"] == "failed" for x in per.values()) else "missing" if any(x["status"] == "missing" for x in per.values()) else "mock" if any(x["status"] == "mock" for x in per.values()) else "pushed")
+            counts[worst] += 1
+            days.append({"date": iso, "status": worst, "providers": per, "weekend": d.weekday() >= 5})
+            d += timedelta(days=1)
+        return {"month": f"{y:04d}-{m:02d}", "providers": providers, "days": days, "counts": counts,
+                "resend_candidates": [x["date"] for x in days if x["status"] in ("failed", "missing")]}
+
+    @router.post("/accounting/journal/resend/{property_id}")
+    async def journal_resend(property_id: str, body: dict, _: dict = Depends(require_roles("admin", "manager"))):
+        """Eksik/başarısız günleri tek tıkla yeniden gönder. body: {dates: [..]} veya {business_date}"""
+        dates = body.get("dates") or ([body["business_date"]] if body.get("business_date") else [])
+        if not dates or len(dates) > 31:
+            raise HTTPException(422, "1-31 tarih verin")
+        out = []
+        for bd in dates:
+            await db.accounting_journal.update_many({"property_id": property_id, "business_date": bd, "status": "failed"}, {"$set": {"status": "superseded"}})
+            out.append({"business_date": bd, "result": await run_daily_sync_internal(property_id, bd)})
+        return {"ok": True, "items": out}
+
     @router.post("/accounting/efatura/issue/{property_id}")
     async def efatura_issue(property_id: str, business_date: Optional[str] = None, _: dict = Depends(require_roles("admin", "manager"))):
         return await issue_efatura_internal(property_id, business_date or (_now() - timedelta(days=1)).date().isoformat())

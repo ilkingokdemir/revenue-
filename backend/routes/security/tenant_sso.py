@@ -98,12 +98,15 @@ def create_tenant_sso_router(db, require_roles, create_access_token, create_refr
         return {"ok": True, "properties": p.modified_count, "users": u.modified_count}
 
     @router.put("/orgs/users/{user_id}/property-roles")
-    async def set_property_roles(user_id: str, body: dict, _: dict = Depends(require_roles("admin"))):
+    async def set_property_roles(user_id: str, body: dict, actor: dict = Depends(require_roles("admin"))):
         roles = {str(k): v for k, v in (body.get("property_roles") or {}).items() if v in ROLE_RANK}
         from bson import ObjectId
         q = {"$or": [{"id": user_id}] + ([{"_id": ObjectId(user_id)}] if ObjectId.is_valid(user_id) else [])}
+        before = await db.users.find_one(q, {"_id": 1, "id": 1, "name": 1, "email": 1, "property_roles": 1})
         r = await db.users.update_one(q, {"$set": {"property_roles": roles}})
         if not r.matched_count: raise HTTPException(404, "User not found")
+        from routes.security.permission_matrix import log_perm_change
+        await log_perm_change(db, actor, before or {}, "property_roles", (before or {}).get("property_roles") or {}, roles)
         return {"ok": True, "property_roles": roles}
 
     # ---------------- SSO ----------------

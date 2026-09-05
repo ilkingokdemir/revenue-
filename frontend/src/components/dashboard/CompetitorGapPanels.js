@@ -329,14 +329,19 @@ export const GiftCardsPanel = ({ activePropertyId }) => {
   const issue = async () => {
     if (!form.amount || form.amount <= 0) return toast.error("Amount required");
     try {
-      const { data } = await axios.post(`${API}/gift-cards`, { ...form, property_id: pid });
-      toast.success(`Gift card issued: ${data.code}`);
+      const { data } = await axios.post(`${API}/gift-cards`, { ...form, property_id: pid, origin_url: window.location.origin });
+      toast.success(`Gift card issued: ${data.code}${data.email_result?.recipient ? " · e-posta gönderildi" : ""}`);
       setShowNew(false); setForm({ amount: 50, recipient_name: "", recipient_email: "", purchaser_name: "", message: "", expires_days: 365 }); load();
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
   const cancel = async (id) => {
     const reason = prompt("Cancel reason?"); if (!reason) return;
     try { await axios.post(`${API}/gift-cards/${id}/cancel`, { reason }); load(); } catch { /* */ }
+  };
+  const resendEmail = async (c) => {
+    const to = prompt("Alıcı e-postası", c.recipient_email || ""); if (!to) return;
+    try { await axios.post(`${API}/gift-cards/${c.id}/resend-email`, { recipient_email: to, origin_url: window.location.origin }); toast.success("Hediye çeki e-postası gönderildi"); load(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Gönderilemedi"); }
   };
 
   return (
@@ -389,6 +394,7 @@ export const GiftCardsPanel = ({ activePropertyId }) => {
                 <div className="text-[10px] text-stone-400">of {cur(c.initial_amount, c.currency)}</div>
               </div>
               <Badge className={c.status === "active" ? "bg-emerald-100 text-emerald-700" : c.status === "redeemed" ? "bg-stone-100 text-stone-600" : "bg-rose-100 text-rose-700"}>{c.status}</Badge>
+              {c.status === "active" && <button onClick={() => resendEmail(c)} className="text-indigo-600 text-xs" title={c.email_sent_at ? `Gönderildi: ${new Date(c.email_sent_at).toLocaleString("tr-TR")}` : "Henüz gönderilmedi"} data-testid={`gc-email-${c.id}`}>{c.email_sent_at ? "E-posta ↻" : "E-posta gönder"}</button>}
               {c.status === "active" && <button onClick={() => cancel(c.id)} className="text-rose-600 text-xs" data-testid={`gc-cancel-${c.id}`}>Cancel</button>}
             </div>
           ))}

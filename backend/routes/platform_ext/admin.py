@@ -46,6 +46,10 @@ DEFAULT_PERMISSIONS = {
 
 # Review Ops: CAN_GENERATE / CAN_APPROVE / CAN_PUBLISH ayrımı (spec §32)
 REVIEW_ACTIONS = ["generate", "approve", "publish"]
+DEFAULT_PERMISSIONS["viewer"] = {m: ["view"] for m in MODULES}
+DEFAULT_PERMISSIONS["staff"] = {"dashboard": ["view"], "bookings": ["view"], "messaging": ["view", "create"], "guest_profiles": ["view"], "staff_performance": ["view"]}
+DEFAULT_PERMISSIONS["housekeeper"] = {"dashboard": ["view"], "bookings": ["view"], "messaging": ["view", "create"], "stock": ["view"]}
+DEFAULT_PERMISSIONS["maintenance"] = {"dashboard": ["view"], "messaging": ["view", "create"], "stock": ["view", "create"]}
 DEFAULT_PERMISSIONS["admin"]["reviews"] += REVIEW_ACTIONS
 DEFAULT_PERMISSIONS["manager"]["reviews"] += REVIEW_ACTIONS
 DEFAULT_PERMISSIONS["receptionist"]["reviews"] += ["generate"]
@@ -150,10 +154,13 @@ def create_admin_router(db, require_roles):
         if not user:
             raise HTTPException(404, "User not found")
         updates = {}
+        from routes.security.permission_matrix import log_perm_change
         if "role" in data:
             updates["role"] = data["role"]
+            await log_perm_change(db, current_user, user, "role", user.get("role"), data["role"])
         if "permissions" in data:
             updates["custom_permissions"] = data["permissions"]
+            await log_perm_change(db, current_user, user, "custom_permissions", user.get("custom_permissions") or {}, data["permissions"])
         if "property_access" in data:
             updates["property_access"] = data["property_access"]
         if "branch_payments" in data:

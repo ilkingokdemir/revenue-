@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Copy, CheckCircle, XCircle, GoogleLogo, Code, Tag, Gift } from "@phosphor-icons/react";
+import PropertyLocationCard from "./PropertyLocationCard";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const W = { withCredentials: true };
@@ -31,9 +32,10 @@ export default function DistributionCard({ propertyId }) {
     axios.get(`${API}/properties`, W).then(({ data }) => { const l = Array.isArray(data) ? data : data.items || data.properties || []; setProps(l); if (!pid && l[0]) setPid(l[0].id); }).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const loadAds = () => axios.get(`${API}/hotel-ads/status/${pid}`, W).then(({ data }) => setAds(data)).catch(() => {});
   useEffect(() => {
     if (!pid) return;
-    axios.get(`${API}/hotel-ads/status/${pid}`, W).then(({ data }) => setAds(data)).catch(() => {});
+    loadAds();
     axios.get(`${API}/embed/snippet/${pid}`, W).then(({ data }) => setEmbed(data)).catch(() => {});
     axios.get(`${API}/exit-intent/config/${pid}`, W).then(({ data }) => setExit(data)).catch(() => {});
     axios.get(`${API}/booking/gift-cards/config/${pid}`).then(({ data }) => setGift(data)).catch(() => {});
@@ -66,6 +68,7 @@ export default function DistributionCard({ propertyId }) {
               <ul className="space-y-1">
                 {ads.checks.map((c) => <li key={c.key} className="flex items-center gap-2 text-xs" data-testid={`hotel-ads-check-${c.key}`}>{c.ok ? <CheckCircle size={14} weight="fill" className="text-emerald-600" /> : <XCircle size={14} weight="fill" className="text-stone-300" />}<span className={c.ok ? "text-stone-700" : "text-stone-400"}>{c.label}</span></li>)}
               </ul>
+              <PropertyLocationCard pid={pid} onSaved={loadAds} />
               <CopyField label="Hotel List Feed (XML)" value={ads.feeds.hotel_list} testId="hotel-ads-feed-list" />
               <CopyField label="ARI / Fiyat Feed (Pull, XML)" value={ads.feeds.ari} testId="hotel-ads-feed-ari" />
               <CopyField label="Point-of-Sale (Landing) URL şablonu" value={ads.feeds.point_of_sale} testId="hotel-ads-pos" />

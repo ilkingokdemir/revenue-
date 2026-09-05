@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import PermissionMatrixCard from "./PermissionMatrixCard";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -107,6 +108,7 @@ export function AdminPanel({ properties, user, activePropertyId }) {
     { id: "purchase-orders", label: "Purchase Orders", icon: Truck },
     { id: "system-health", label: "Sistem Sağlığı", icon: Activity },
     { id: "certifications", label: "Canlıya Geçiş", icon: Shield },
+    { id: "matrix", label: "Yetki Matrisi", icon: Shield },
   ];
 
   if (loading) return <div className="flex items-center justify-center h-96"><div className="w-8 h-8 border-3 border-stone-300 border-t-[#2C4C3B] rounded-full animate-spin" /></div>;
@@ -308,6 +310,7 @@ export function AdminPanel({ properties, user, activePropertyId }) {
         {/* ========== SİSTEM SAĞLIĞI (iter 379) ========== */}
         {tab === "system-health" && <SystemHealthTab />}
         {tab === "certifications" && <CertificationGuideTab />}
+        {tab === "matrix" && <PermissionMatrixCard />}
 
         {/* ========== PURCHASE ORDERS ========== */}
         {tab === "purchase-orders" && (

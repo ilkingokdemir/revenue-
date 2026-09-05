@@ -1,0 +1,30 @@
+{
+  "summary": "Iter 621 (Paket 24: Permission Matrix + Journal Calendar + Property Location/Hotel Ads + Gift Card branded email). Wrote pytest with 20 tests — all PASS (20/20, 100%). Frontend: Admin Panel Permission Matrix tab (pm-property-select, pm-search, pm-table, pm-row-*, pm-history, pm-download → CSV yetki-matrisi-all.csv) works; AccountingExportPanel Journal Calendar (jc-month=Eylül 2026, jc-count-pushed/mock/failed/missing, 30 day cells, jc-day-2026-09-04 with data-status=mock, jc-day-detail, jc-resend-day → toast '1 gün yeniden gönderildi', jc-prev/jc-next/jc-resend-all) works; Booking Engine v2 → be-tab-distribution → property-location-card for aldgate-flats shows loc-status='Tanımlı', loc-lat=51.5142, loc-lng=-0.0755, loc-map (OSM) rendered, edit + loc-save → toast 'Konum kaydedildi — Hotel Ads feedi güncellendi', hotel-ads-ready='Hazır'; Gift Cards panel gc-email-* resend triggers toast 'Hediye çeki e-postası gönderildi'. Backend resend + list persistence confirmed via pytest.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      { "screen": "Accounting Export navigation", "issues": ["'Accounting export' lives under Reports & Analytics sidebar section, not Finance — users looking for it near other accounting tools may miss it. Consider mirroring under Finance hub or adding cross-link."] }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter621_paket24.py",
+    "/app/test_reports/pytest/iter621.xml"
+  ],
+  "action_items": [
+    "(Optional) gc-issue form was not visible in the current GiftCardsPanel view — verify whether it is intended in the current panel or a separate admin route; task expectation was to submit issue form and check 'e-posta gönderildi' toast."
+  ],
+  "critical_code_review_comments": [
+    "Backend permission-matrix, permission-changes, property location, geocode (OSM), journal calendar/resend, and gift card email endpoints all return proper 200/422/404 and persist data correctly.",
+    "Sidebar has both id 'gift-cards' (Finance section) but no equivalent in Guests & Loyalty hub — fine, matches menuSections.js."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter621_paket24.py"],
+  "success_rate": { "backend": "100%", "frontend": "95%" },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test gift cards created via API with recipient qa-rec@test.com / qa-rec2@test.com — remain in DB (prefixed QA).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Journal calendar 'accounting-export-btn' lives under nav-section-Reports & Analytics (line 502 of menuSections.js), NOT Finance. GiftCardsPanel is under nav-section-Finance (gift-cards-btn). Permission Matrix is under Admin Panel tab data-testid='admin-tab-matrix'. Property Location card is inside Booking Engine v2 → be-tab-distribution → property must be switched from default (Zurich) to 'aldgate-flats' to see filled location. Session-based auth returns 401 on some prefetch resources during login redirect (cosmetic only).",
+  "rca of the issue": "N/A — no issues found."
+}

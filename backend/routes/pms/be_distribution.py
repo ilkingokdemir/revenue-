@@ -205,6 +205,8 @@ window.open(u,'{target}');}});
         origin = (data.get("origin_url") or _base(request)).rstrip("/")
         if not stripe_key:
             await db.gift_cards.update_one({"id": card["id"]}, {"$set": {"status": "active", "paid_at": now.isoformat(), "payment": "MOCK"}})
+            from routes.finance_ext.gift_cards import send_gift_card_emails
+            await send_gift_card_emails(db, {**card, "status": "active"}, origin)
             return {"mock": True, "card_id": card["id"], "code": card["code"], "url": f"{origin}/book?property={pid}&gift=success&gift_id={card['id']}"}
         from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
         sc = StripeCheckout(api_key=stripe_key, webhook_url=f"{str(request.base_url).rstrip('/')}/api/webhook/stripe")
@@ -233,6 +235,8 @@ window.open(u,'{target}');}});
                     await db.gift_cards.update_one({"id": card_id}, {"$set": {"status": "active", "paid_at": datetime.now(timezone.utc).isoformat()}})
                     await db.payment_transactions.update_one({"session_id": session_id}, {"$set": {"payment_status": "paid"}})
                     card["status"] = "active"
+                    from routes.finance_ext.gift_cards import send_gift_card_emails
+                    await send_gift_card_emails(db, card, os.environ.get("PUBLIC_BASE_URL", "").rstrip("/"))
             except Exception:
                 pass
         return {"status": card["status"], "code": card["code"] if card["status"] in ("active", "redeemed") else None,

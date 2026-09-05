@@ -1,0 +1,51 @@
+{
+  "summary": "Iter 622 (Paket 25: Finance shortcut + Journal Alerts + Permission Audit PDF + Gift seasonal designs). Wrote pytest test_iter622_paket25.py with 16 tests; 14/16 PASS. 2 backend FAIL — POST /api/gift-cards ignores/does not persist 'design' field so the response.design is missing. FRONTEND (Pro mode): sidebar Finance → finance-accounting-btn renders Accounting Export panel + journal-calendar-card; jc-alerts-btn opens jc-alerts-panel; jc-alert-emails/whatsapp save shows toast 'Uyarı ayarları kaydedildi'; jc-alert-run shows toast (Sorun yok — uyarı gerekmedi). Admin Panel → admin-tab-matrix → pm-audit-month + pm-audit-pdf-btn triggers download 'yetki-denetim-2026-09.pdf' with toast 'Denetim raporu indirildi'. Booking Engine v2 → be-tab-distribution → gift-config-card shows gift-design-grid with all 4 designs (classic/festive/summer/spring); gift-design-preview-festive renders (though iframe src attribute is null when inspected via querySelector — likely uses srcDoc; visually preview cards work). gift-design-enable-* checkboxes and gift-save (toast 'Hediye çeki ayarları kaydedildi') work. Public /book?property=aldgate-flats&lang=tr → gift-card-section shows gift-design-chips with 4 chips; clicking gift-design-chip-summer sets aria-pressed=true and changes gift-card-visual style. Finance → gift-cards-btn → Issue Card toggle → gc-design-select with 4 options + gc-design-preview-btn opens gc-design-preview-frame.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/gift-cards",
+        "issue": "Admin gift-card issue endpoint does not accept/persist the 'design' field. Response body has no 'design' key so per-card design cannot be set from admin form. Similar POST for /api/booking/gift-cards/purchase does persist design (with fallback), but the admin POST at gift_cards.py:133-165 never reads data.get('design') nor writes card['design']. Per spec: response.design should be 'spring' when body.design='spring'.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/gift-cards",
+        "issue": "email_result payload check (recipient contains 'mocked') could not be validated because prior 'design' missing failure short-circuits — need to add design storage + verify email_result stays 'mocked'."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Sidebar / Simple (Basit) mode",
+       "issues": ["'finance-accounting-btn' (Accounting export & journal calendar) is NOT visible in Basit mode — item lacks `core: true` in menuSections.js line 466. Users on Simple mode cannot reach the new Finance shortcut. Consider adding core:true or a favorites star so Basit users can access it."]},
+      {"screen": "Booking Engine v2 gift-design-preview",
+       "issues": ["'gift-design-preview-frame' iframe has null 'src' attribute when queried via querySelector — likely rendered via srcDoc. Cannot be asserted programmatically to include /gift-cards/preview?design=festive. If the intent was to load via src URL, verify iframe src is set; visually preview cards render correctly."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter622_paket25.py",
+    "/app/test_reports/pytest/iter622.xml"
+  ],
+  "action_items": [
+    "FIX BACKEND: In /app/backend/routes/finance_ext/gift_cards.py POST /gift-cards (line 133), read data.get('design'), validate against GIFT_DESIGNS (fallback to property config design or 'classic' if disabled), store card['design'] in DB and return it in response.",
+    "MENU: Consider marking finance-accounting item with core:true in menuSections.js so it appears in Basit mode too (matches spec of exposing shortcut under Finance).",
+    "GIFT PREVIEW IFRAME: In DistributionCard gift-design-preview-frame ensure the iframe uses src=... /api/gift-cards/preview?property_id=<pid>&design=<d>&... so that the src attribute is inspectable (test spec expects src contains /gift-cards/preview?…design=festive)."
+  ],
+  "critical_code_review_comments": [
+    "gift_cards.py POST /gift-cards is missing 'design' handling — inconsistent with public purchase (be_distribution.py) and preview endpoints which honor design + property config designs_enabled fallback.",
+    "gift_card.html preview endpoint correctly falls back to classic when unknown design supplied.",
+    "run_journal_alert_check correctly filters emails/whatsapp on save; mailer returns 'mocked'; Twilio queues without creds — verified with forced accounting_journal doc + notifications 'journal_alert' entry.",
+    "Permission audit PDF endpoint validates month regex (returns 422 on 'abc'), sets Content-Disposition attachment, size > 2KB, %PDF header — all correct."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter622_paket25.py"],
+  "success_rate": {"backend": "87.5% (14/16)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test gift card via public purchase (design fallback test) with purchaser d@test.com and a spring gift card via admin POST with recipient r@test.com — persisted, un-cleaned (small).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend needs 'design' persisted on admin POST /api/gift-cards. Frontend finance-accounting-btn is only visible in Pro mode (nav-mode-pro) — Basit mode hides it since no core:true flag. Booking Engine v2 iframe preview may use srcDoc not src. Server date ≈ 2026-09-05, property aldgate-flats.",
+  "rca of the issue": "POST /api/gift-cards handler in gift_cards.py builds `card` dict without reading data.get('design'); therefore card.design is undefined in both DB record and response. Public purchase in be_distribution.py properly stores design with designs_enabled fallback — admin path should mirror that logic (or at minimum call the same helper)."
+}

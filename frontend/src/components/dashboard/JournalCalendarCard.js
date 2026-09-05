@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { CaretLeft, CaretRight, ArrowsClockwise, CalendarBlank } from "@phosphor-icons/react";
+import { CaretLeft, CaretRight, ArrowsClockwise, CalendarBlank, BellRinging } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const COLOR = { pushed: "bg-emerald-500", mock: "bg-amber-400", failed: "bg-rose-500", missing: "bg-stone-300", future: "bg-transparent border border-dashed border-stone-200" };
@@ -14,6 +14,19 @@ export default function JournalCalendarCard({ propertyId }) {
   const [data, setData] = useState(null);
   const [sel, setSel] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [alerts, setAlerts] = useState(null);
+  const [showAlerts, setShowAlerts] = useState(false);
+
+  const loadAlerts = useCallback(() => axios.get(`${API}/accounting/journal/alerts/config/${pid}`).then(({ data: d }) => setAlerts(d)).catch(() => {}), [pid]);
+  useEffect(() => { loadAlerts(); }, [loadAlerts]);
+  const saveAlerts = async () => {
+    try { await axios.put(`${API}/accounting/journal/alerts/config/${pid}`, alerts); toast.success("Uyarı ayarları kaydedildi"); loadAlerts(); }
+    catch (e) { toast.error(e.response?.data?.detail || "Kaydedilemedi"); }
+  };
+  const runAlerts = async () => {
+    try { const { data: r } = await axios.post(`${API}/accounting/journal/alerts/run/${pid}?force=true`); toast.success(r.alerts.length ? `${r.alerts.length} uyarı gönderildi` : "Sorun yok — uyarı gerekmedi"); loadAlerts(); }
+    catch { toast.error("Kontrol çalıştırılamadı"); }
+  };
 
   const load = useCallback(() => {
     axios.get(`${API}/accounting/journal/calendar/${pid}?month=${ym}`).then(({ data: d }) => setData(d)).catch(() => toast.error("Takvim yüklenemedi"));
@@ -42,6 +55,7 @@ export default function JournalCalendarCard({ propertyId }) {
         <h3 className="text-sm font-semibold text-stone-900">Yevmiye Takvimi</h3>
         <span className="text-xs text-stone-500">{data.providers.join(" · ").toUpperCase()}</span>
         <div className="ml-auto flex items-center gap-1">
+          <button onClick={() => setShowAlerts(!showAlerts)} className={`mr-2 px-2.5 h-7 rounded-full border text-[11px] font-bold inline-flex items-center gap-1 ${alerts?.enabled !== false ? "border-amber-300 bg-amber-50 text-amber-700" : "border-stone-200 text-stone-500"}`} data-testid="jc-alerts-btn"><BellRinging size={12} weight="fill" /> Uyarılar</button>
           <button onClick={() => setYm(addM(ym, -1))} className="w-7 h-7 rounded-full border border-stone-200 flex items-center justify-center hover:bg-stone-50" data-testid="jc-prev"><CaretLeft size={12} /></button>
           <span className="text-xs font-semibold capitalize w-32 text-center" data-testid="jc-month">{label}</span>
           <button onClick={() => setYm(addM(ym, 1))} className="w-7 h-7 rounded-full border border-stone-200 flex items-center justify-center hover:bg-stone-50" data-testid="jc-next"><CaretRight size={12} /></button>
@@ -55,6 +69,23 @@ export default function JournalCalendarCard({ propertyId }) {
           </button>
         )}
       </div>
+      {showAlerts && alerts && (
+        <div className="border border-amber-200 bg-amber-50/40 rounded-xl p-3 space-y-2 text-xs" data-testid="jc-alerts-panel">
+          <p className="text-stone-600">Bir günün yevmiyesi <b>başarısız</b> olursa anında, <b>2 gün üst üste eksik</b> kalırsa yöneticilere e-posta + WhatsApp uyarısı gider (6 saatte bir kontrol). E-posta listesi boşsa tüm admin/manager'lara gider.</p>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={alerts.enabled !== false} onChange={(e) => setAlerts({ ...alerts, enabled: e.target.checked })} data-testid="jc-alert-enabled" /> Uyarılar aktif</label>
+          <input className="w-full border border-stone-200 rounded-lg px-2.5 py-1.5" placeholder="E-postalar (virgülle) — boş: tüm admin/manager" value={(alerts.emails || []).join(", ")} onChange={(e) => setAlerts({ ...alerts, emails: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} data-testid="jc-alert-emails" />
+          <input className="w-full border border-stone-200 rounded-lg px-2.5 py-1.5" placeholder="WhatsApp numaraları (virgülle, +44…)" value={(alerts.whatsapp || []).join(", ")} onChange={(e) => setAlerts({ ...alerts, whatsapp: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} data-testid="jc-alert-whatsapp" />
+          <div className="flex gap-2">
+            <button onClick={saveAlerts} className="px-3 py-1.5 rounded-lg bg-stone-900 text-white font-bold" data-testid="jc-alert-save">Kaydet</button>
+            <button onClick={runAlerts} className="px-3 py-1.5 rounded-lg border border-stone-200 font-bold" data-testid="jc-alert-run">Şimdi kontrol et</button>
+          </div>
+          {alerts.log?.length > 0 && (
+            <div className="max-h-28 overflow-y-auto space-y-1" data-testid="jc-alert-log">
+              {alerts.log.map((l) => <div key={l.id} className="text-[11px] text-stone-600"><span className="text-stone-400">{new Date(l.created_at).toLocaleString("tr-TR")}</span> · <b>{l.kind === "failed" ? "Başarısız" : "Eksik"}</b> {l.business_date} → {l.recipients?.length || 0} e-posta{l.sent?.whatsapp?.length ? `, ${l.sent.whatsapp.length} WhatsApp` : ""}</div>)}
+            </div>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-7 gap-1 text-[10px] text-stone-400 font-bold uppercase">{["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"].map((d) => <div key={d} className="text-center">{d}</div>)}</div>
       <div className="grid grid-cols-7 gap-1">
         {Array.from({ length: lead }).map((_, i) => <div key={`e${i}`} />)}

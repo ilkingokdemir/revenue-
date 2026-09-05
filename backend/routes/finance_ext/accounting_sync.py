@@ -81,6 +81,64 @@ async def build_daily_journal(db, property_id: str, business_date: str) -> dict:
             "balanced": round(sum(l["amount"] for l in lines if l["side"] == "debit") - sum(l["amount"] for l in lines if l["side"] == "credit"), 2) == 0}
 
 
+
+# ==================== YEVMİYE UYARILARI ====================
+async def run_journal_alert_check(db, property_id: Optional[str] = None, force: bool = False) -> dict:
+    """Son 2 gün için: başarısız yevmiye → anında; eksik yevmiye 2 gün üst üste → uyarı. E-posta + WhatsApp + bildirim."""
+    from routes.platform_ext.mailer import send_email
+    today = _now().date()
+    d1, d2 = (today - timedelta(days=1)).isoformat(), (today - timedelta(days=2)).isoformat()
+    q = {"property_id": property_id} if property_id else {}
+    cfgs = {c["property_id"]: c async for c in db.journal_alert_config.find(q, {"_id": 0})}
+    pids = [property_id] if property_id else sorted({*cfgs.keys(), *[c["property_id"] async for c in db.accounting_connections.find({}, {"_id": 0, "property_id": 1})]})
+    out = {"checked": 0, "alerts": []}
+    for pid in pids:
+        cfg = cfgs.get(pid) or {"enabled": True, "emails": [], "whatsapp": [], "missing_days": 2}
+        if not cfg.get("enabled", True):
+            continue
+        out["checked"] += 1
+        recs = await db.accounting_journal.find({"property_id": pid, "business_date": {"$in": [d1, d2]}}, {"_id": 0, "business_date": 1, "provider": 1, "status": 1, "response": 1}).to_list(50)
+        failed = [r for r in recs if r.get("status") == "failed"]
+        have = {r["business_date"] for r in recs if r.get("status") in ("pushed", "mock")}
+        missing_both = d1 not in have and d2 not in have and int(cfg.get("missing_days") or 2) <= 2
+        issues = []
+        if failed:
+            issues.append(("failed", d1 if any(r["business_date"] == d1 for r in failed) else d2, f"{len(failed)} yevmiye kaydı başarısız: " + "; ".join(f"{r['provider'].upper()} {r['business_date']}: {str(r.get('response'))[:80]}" for r in failed[:3])))
+        if missing_both:
+            issues.append(("missing", d1, f"{d2} ve {d1} günlerine ait yevmiye Xero/QuickBooks'a gönderilmedi (2 gün eksik)."))
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+        for kind, bd, text in issues:
+            key = {"property_id": pid, "kind": kind, "business_date": bd}
+            if not force and await db.journal_alerts.find_one(key):
+                continue
+            recipients = list(cfg.get("emails") or [])
+            if not recipients:
+                async for u in db.users.find({"role": {"$in": ["admin", "manager"]}, "is_active": {"$ne": False}}, {"_id": 0, "email": 1, "property_access": 1}):
+                    if u.get("email") and (not u.get("property_access") or pid in u["property_access"]):
+                        recipients.append(u["email"])
+            title = f"⚠️ Yevmiye uyarısı — {prop.get('name', pid)}"
+            html = (f"<div style='font-family:system-ui;max-width:560px'><h2 style='color:#b91c1c'>Yevmiye {('başarısız' if kind == 'failed' else 'eksik')}</h2>"
+                    f"<p><b>{prop.get('name', pid)}</b></p><p>{text}</p>"
+                    f"<p style='color:#57534e;font-size:13px'>Muhasebe → Yevmiye Takvimi'nden tek tıkla yeniden gönderebilirsiniz.</p></div>")
+            sent = {"email": [], "whatsapp": []}
+            for em in recipients[:10]:
+                try:
+                    sent["email"].append({em: await send_email(db, em, title, html, kind="journal_alert", meta={"property_id": pid, "business_date": bd})})
+                except Exception as e:
+                    sent["email"].append({em: f"error:{str(e)[:60]}"})
+            for num in (cfg.get("whatsapp") or [])[:5]:
+                try:
+                    from routes.marketing.whatsapp_voice import _send_whatsapp_reply
+                    to = num if num.startswith("whatsapp:") else f"whatsapp:{num}"
+                    sent["whatsapp"].append({num: (await _send_whatsapp_reply(to, f"{title}\n{text}\nMuhasebe → Yevmiye Takvimi'nden yeniden gönderin.")).get("status")})
+                except Exception as e:
+                    sent["whatsapp"].append({num: f"error:{str(e)[:60]}"})
+            await db.notifications.insert_one({"id": str(uuid.uuid4()), "property_id": pid, "type": "journal_alert", "title": title, "body": text, "read": False, "created_at": _now().isoformat()})
+            await db.journal_alerts.insert_one({**key, "id": str(uuid.uuid4()), "text": text, "recipients": recipients, "sent": sent, "created_at": _now().isoformat()})
+            out["alerts"].append({"property_id": pid, "kind": kind, "business_date": bd, "recipients": len(recipients), "whatsapp": len(cfg.get("whatsapp") or [])})
+    return out
+
+
 def _xero_body(j, m):
     return {"ManualJournals": [{"Date": j["business_date"], "Narration": f"Hotel daily journal {j['business_date']}", "LineAmountTypes": "NoTax",
                                 "JournalLines": [{"Description": l["desc"], "AccountCode": m[l["account"]], "TaxType": "NONE",
@@ -342,6 +400,24 @@ def create_accounting_sync_router(db, require_roles):
             await db.accounting_journal.update_many({"property_id": property_id, "business_date": bd, "status": "failed"}, {"$set": {"status": "superseded"}})
             out.append({"business_date": bd, "result": await run_daily_sync_internal(property_id, bd)})
         return {"ok": True, "items": out}
+
+    @router.get("/accounting/journal/alerts/config/{property_id}")
+    async def journal_alert_cfg(property_id: str, _: dict = Depends(require_roles("admin", "manager"))):
+        cfg = await db.journal_alert_config.find_one({"property_id": property_id}, {"_id": 0}) or {"property_id": property_id, "enabled": True, "emails": [], "whatsapp": [], "missing_days": 2}
+        log = await db.journal_alerts.find({"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(20)
+        return {**cfg, "log": log}
+
+    @router.put("/accounting/journal/alerts/config/{property_id}")
+    async def journal_alert_cfg_save(property_id: str, body: dict, _: dict = Depends(require_roles("admin", "manager"))):
+        emails = [e.strip() for e in (body.get("emails") or []) if isinstance(e, str) and "@" in e][:10]
+        wa = [w.strip() for w in (body.get("whatsapp") or []) if isinstance(w, str) and w.strip().lstrip("whatsapp:+").isdigit()][:5]
+        upd = {"property_id": property_id, "enabled": bool(body.get("enabled", True)), "emails": emails, "whatsapp": wa, "missing_days": 2, "updated_at": _now().isoformat()}
+        await db.journal_alert_config.update_one({"property_id": property_id}, {"$set": upd}, upsert=True)
+        return {"ok": True, **upd}
+
+    @router.post("/accounting/journal/alerts/run/{property_id}")
+    async def journal_alert_run(property_id: str, force: bool = False, _: dict = Depends(require_roles("admin", "manager"))):
+        return await run_journal_alert_check(db, property_id, force=force)
 
     @router.post("/accounting/efatura/issue/{property_id}")
     async def efatura_issue(property_id: str, business_date: Optional[str] = None, _: dict = Depends(require_roles("admin", "manager"))):

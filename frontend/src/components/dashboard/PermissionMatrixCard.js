@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { DownloadSimple, ClockCounterClockwise, Check } from "@phosphor-icons/react";
+import { DownloadSimple, ClockCounterClockwise, Check, FilePdf } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const SHORT = { view: "G", create: "O", edit: "D", delete: "S", export: "E", manage_settings: "A", generate: "Ü", approve: "On", publish: "Y" };
@@ -13,6 +13,7 @@ export default function PermissionMatrixCard() {
   const [changes, setChanges] = useState([]);
   const [showHist, setShowHist] = useState(false);
   const [q, setQ] = useState("");
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
 
   const load = useCallback(async () => {
     try {
@@ -28,6 +29,14 @@ export default function PermissionMatrixCard() {
       const r = await axios.get(`${API}/admin/permission-matrix.csv?property_id=${pid}`, { responseType: "blob" });
       const url = URL.createObjectURL(r.data); const a = document.createElement("a"); a.href = url; a.download = `yetki-matrisi-${pid}.csv`; a.click(); URL.revokeObjectURL(url);
     } catch { toast.error("İndirilemedi"); }
+  };
+
+  const downloadPdf = async () => {
+    try {
+      const r = await axios.get(`${API}/admin/permission-changes/report.pdf?month=${month}&property_id=${pid}`, { responseType: "blob" });
+      const url = URL.createObjectURL(r.data); const a = document.createElement("a"); a.href = url; a.download = `yetki-denetim-${month}.pdf`; a.click(); URL.revokeObjectURL(url);
+      toast.success("Denetim raporu indirildi");
+    } catch { toast.error("PDF oluşturulamadı"); }
   };
 
   if (!data) return <div className="text-sm text-stone-400 p-6">Yükleniyor…</div>;
@@ -46,6 +55,8 @@ export default function PermissionMatrixCard() {
         <div className="ml-auto flex gap-2">
           <button onClick={() => setShowHist(!showHist)} className="px-3 py-1.5 text-xs rounded-lg border border-stone-200 inline-flex items-center gap-1.5 hover:bg-stone-50" data-testid="pm-history-btn"><ClockCounterClockwise size={13} /> Değişiklikler ({changes.length})</button>
           <button onClick={download} className="px-3 py-1.5 text-xs rounded-lg bg-stone-900 text-white inline-flex items-center gap-1.5" data-testid="pm-download-btn"><DownloadSimple size={13} /> CSV indir</button>
+          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="border border-stone-200 rounded-lg px-2 py-1 text-xs" data-testid="pm-audit-month" />
+          <button onClick={downloadPdf} className="px-3 py-1.5 text-xs rounded-lg bg-rose-600 text-white inline-flex items-center gap-1.5" data-testid="pm-audit-pdf-btn"><FilePdf size={13} /> Denetim PDF</button>
         </div>
       </div>
 

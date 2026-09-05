@@ -172,14 +172,23 @@ window.open(u,'{target}');}});
     async def gift_config(pid: str):
         cfg = await db.gift_card_config.find_one({"property_id": pid}, {"_id": 0}) or {}
         prop = await db.properties.find_one({"id": pid}, {"_id": 0, "currency": 1, "name": 1}) or {}
+        from routes.finance_ext.gift_cards import GIFT_DESIGNS
+        allowed = cfg.get("designs_enabled") or list(GIFT_DESIGNS.keys())
         return {"enabled": cfg.get("enabled", True), "presets": cfg.get("presets") or GIFT_PRESETS, "min": cfg.get("min", 25), "max": cfg.get("max", 2000),
-                "currency": prop.get("currency", "GBP"), "property_name": prop.get("name", ""), "expires_days": cfg.get("expires_days", 365)}
+                "currency": prop.get("currency", "GBP"), "property_name": prop.get("name", ""), "expires_days": cfg.get("expires_days", 365),
+                "design": cfg.get("design") or "classic",
+                "designs": [{"id": k, "name": v["name"], "desc": v["desc"], "season": v["season"], "bg": v["bg"] or "", "text": v["text"]} for k, v in GIFT_DESIGNS.items() if k in allowed]}
 
     @router.put("/gift-cards/config/{pid}")
     async def gift_config_save(pid: str, data: Dict, _u: dict = Depends(require_roles(*ROLES))):
         upd = {"property_id": pid, "enabled": bool(data.get("enabled", True)),
                "presets": [int(x) for x in (data.get("presets") or GIFT_PRESETS) if int(x) > 0][:8],
                "min": int(data.get("min") or 25), "max": int(data.get("max") or 2000), "expires_days": int(data.get("expires_days") or 365)}
+        from routes.finance_ext.gift_cards import GIFT_DESIGNS
+        if data.get("design") in GIFT_DESIGNS:
+            upd["design"] = data["design"]
+        if isinstance(data.get("designs_enabled"), list):
+            upd["designs_enabled"] = [d for d in data["designs_enabled"] if d in GIFT_DESIGNS] or list(GIFT_DESIGNS.keys())
         await db.gift_card_config.update_one({"property_id": pid}, {"$set": upd}, upsert=True)
         return {"ok": True}
 
@@ -199,6 +208,7 @@ window.open(u,'{target}');}});
         card = {"id": str(uuid.uuid4()), "code": _code(), "property_id": pid, "initial_amount": round(amount, 2), "balance": round(amount, 2),
                 "currency": cfg["currency"], "recipient_name": (data.get("recipient_name") or "")[:80], "recipient_email": (data.get("recipient_email") or "")[:120],
                 "purchaser_name": (data.get("purchaser_name") or "")[:80], "purchaser_email": p_email[:120], "message": (data.get("message") or "")[:300],
+                "design": data.get("design") if data.get("design") in [d["id"] for d in cfg["designs"]] else cfg["design"],
                 "status": "pending_payment", "source": "booking_engine", "expires_at": (now + timedelta(days=cfg["expires_days"])).isoformat(),
                 "created_at": now.isoformat(), "created_by": "guest", "redemption_log": []}
         await db.gift_cards.insert_one(dict(card))

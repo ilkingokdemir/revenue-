@@ -83,6 +83,74 @@ def create_permission_matrix_router(db, require_roles):
         q = {"target_id": user_id} if user_id else {}
         return {"items": await db.permission_changes.find(q, {"_id": 0}).sort("created_at", -1).to_list(max(1, min(500, limit)))}
 
+    @router.get("/admin/permission-changes/report.pdf")
+    async def permission_audit_pdf(month: str = "", property_id: str = "all", _u: dict = Depends(require_roles("admin"))):
+        """Denetçiler için aylık yetki değişikliği PDF raporu (reportlab)."""
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        import glob
+        font = "Helvetica"
+        for cand in glob.glob("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf") + glob.glob("/usr/share/fonts/**/DejaVuSans.ttf", recursive=True):
+            try:
+                pdfmetrics.registerFont(TTFont("DejaVu", cand)); font = "DejaVu"; break
+            except Exception:
+                pass
+        try:
+            y, m = (int(x) for x in (month or datetime.now(timezone.utc).strftime("%Y-%m")).split("-"))
+        except Exception:
+            raise HTTPException(422, "month=YYYY-MM")
+        start = f"{y:04d}-{m:02d}-01"; end = f"{y + (m == 12):04d}-{(m % 12) + 1:02d}-01"
+        changes = await db.permission_changes.find({"created_at": {"$gte": start, "$lt": end}}, {"_id": 0}).sort("created_at", 1).to_list(2000)
+        matrix = await _matrix(property_id)
+        org = await db.properties.find_one({"id": property_id}, {"_id": 0, "name": 1}) if property_id != "all" else None
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=14 * mm, rightMargin=14 * mm, topMargin=14 * mm, bottomMargin=14 * mm,
+                                title=f"Yetki Denetim Raporu {y:04d}-{m:02d}", author=_u.get("name") or "MyHotelBox")
+        ss = getSampleStyleSheet()
+        h1 = ParagraphStyle("h1", parent=ss["Title"], fontName=font, fontSize=18, spaceAfter=4)
+        body = ParagraphStyle("b", parent=ss["Normal"], fontName=font, fontSize=8.5, leading=11)
+        small = ParagraphStyle("s", parent=body, fontSize=7.5, leading=9.5, textColor=colors.HexColor("#57534e"))
+        gen = datetime.now(timezone.utc)
+        el = [Paragraph("Yetki Denetim Raporu / Permission Audit Report", h1),
+              Paragraph(f"Dönem: <b>{y:04d}-{m:02d}</b> &nbsp;·&nbsp; Kapsam: <b>{(org or {}).get('name', 'Tüm tesisler')}</b> &nbsp;·&nbsp; Oluşturan: {_u.get('name') or _u.get('email')} &nbsp;·&nbsp; {gen.strftime('%Y-%m-%d %H:%M UTC')}", body),
+              Spacer(1, 6)]
+        by_field = {}
+        for c in changes:
+            by_field[c["field"]] = by_field.get(c["field"], 0) + 1
+        el.append(Paragraph(f"<b>Özet:</b> {len(changes)} değişiklik · " + (", ".join(f"{k}: {v}" for k, v in by_field.items()) or "değişiklik yok") + f" · {len(matrix['rows'])} kullanıcı · {len(matrix['properties'])} tesis", body))
+        el.append(Spacer(1, 8))
+        el.append(Paragraph("<b>1. Değişiklik Günlüğü</b>", body))
+        rows = [["Tarih (UTC)", "İşlemi yapan", "Hedef kullanıcı", "Alan", "Önce", "Sonra"]]
+        for c in changes:
+            rows.append([c["created_at"][:16].replace("T", " "), c.get("actor_name", ""), c.get("target_name", ""), c.get("field", ""),
+                         Paragraph(str(c.get("before"))[:180], small), Paragraph(str(c.get("after"))[:180], small)])
+        if len(rows) == 1:
+            rows.append(["—", "Bu dönemde yetki değişikliği kaydedilmedi", "", "", "", ""])
+        t = Table(rows, colWidths=[26 * mm, 36 * mm, 40 * mm, 30 * mm, 68 * mm, 68 * mm], repeatRows=1)
+        t.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), font), ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+                               ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1c1917")), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                               ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#fafaf9")]),
+                               ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#e7e5e4")), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        el += [t, Spacer(1, 10), Paragraph("<b>2. Dönem Sonu Etkin Roller (kullanıcı × tesis)</b>", body)]
+        rows2 = [["Kullanıcı", "E-posta", "Genel rol"] + [p["name"][:22] for p in matrix["properties"]]]
+        for r in matrix["rows"]:
+            rows2.append([r["name"], r["email"], r["role"]] + [(r["per_property"].get(p["id"]) or {}).get("role", "") + ("*" if r["property_roles"].get(p["id"]) else "") for p in matrix["properties"]])
+        cw = [40 * mm, 55 * mm, 22 * mm] + [max(18, min(40, 150 / max(1, len(matrix["properties"])))) * mm] * len(matrix["properties"])
+        t2 = Table(rows2, colWidths=cw, repeatRows=1)
+        t2.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), font), ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+                                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#44403c")), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#fafaf9")]),
+                                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#e7e5e4"))]))
+        el += [t2, Spacer(1, 6), Paragraph("* tesise özel rol. Etkin izin önceliği: özel izinler &gt; tesis rolü &gt; genel rol. Bu rapor sistem tarafından otomatik üretilmiştir; değişiklik günlüğü değiştirilemez (append-only).", small)]
+        doc.build(el)
+        fn = f"yetki-denetim-{y:04d}-{m:02d}.pdf"
+        return Response(buf.getvalue(), media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{fn}"'})
+
     # ---------------- TESİS KONUMU (Google Hotel Ads için) ----------------
     @router.post("/properties/{pid}/geocode")
     async def geocode(pid: str, data: Dict, _u: dict = Depends(require_roles("admin", "manager"))):

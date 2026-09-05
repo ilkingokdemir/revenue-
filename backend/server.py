@@ -2470,6 +2470,8 @@ async def startup_event():
     # tick workers (workers.py — ROADMAP P1 refactor)
     from workers import scheduled_checkout_loop, reports_loop, otb_snapshot_loop, str_scan_loop, revenue_brain_loop, complaint_task_sync_loop, complaint_sla_loop, rating_trend_alert_loop, winback_reminder_loop, publish_day_alert_loop, praise_hunter_loop, profit_autopilot_loop, data_quality_sentinel_loop, open_pricing_optimizer_loop
     _spawn(scheduled_checkout_loop(db))
+    from workers import journal_alert_loop
+    _spawn(journal_alert_loop(db))
     _spawn(reports_loop(db))
     _spawn(otb_snapshot_loop(db))
     from workers import price_guard_loop

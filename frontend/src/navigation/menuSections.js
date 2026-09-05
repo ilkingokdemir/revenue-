@@ -463,6 +463,7 @@ export function buildMenuSections(t, user) {
         { id: "folio-split", icon: Receipt, name: "Folio split-billing", testId: "folio-split-btn" },
         { id: "cash-drawer", icon: Wallet, name: "Cash drawer", testId: "cash-drawer-btn" },
         { id: "gift-cards", icon: Tag, name: "Gift cards", testId: "gift-cards-btn" },
+        { id: "finance-accounting", icon: ChartLine, name: "Accounting export & journal calendar", testId: "finance-accounting-btn", core: true },
         { id: "currency", icon: CurrencyDollar, name: "Currency / FX", testId: "currency-btn" },
         { id: "currency-fx", icon: Globe, name: "Multi-currency settings", testId: "currency-fx-btn" },
 

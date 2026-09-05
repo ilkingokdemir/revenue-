@@ -1489,7 +1489,7 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         )}
 
         {/* Accounting Export */}
-        {activeView === "accounting-export" && (
+        {(activeView === "accounting-export" || activeView === "finance-accounting") && (
           <AccountingExportPanel
             propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
             hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}

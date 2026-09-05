@@ -10,12 +10,13 @@ export function GiftCardSection({ t, propertyId }) {
   const [cfg, setCfg] = useState(null);
   const [amount, setAmount] = useState(100);
   const [f, setF] = useState({ purchaser_name: "", purchaser_email: "", recipient_name: "", recipient_email: "", message: "" });
+  const [design, setDesign] = useState("classic");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [result, setResult] = useState(null);
 
   useEffect(() => {
-    axios.get(`${API}/booking/gift-cards/config/${propertyId}`).then(({ data }) => { setCfg(data); setAmount(data.presets?.[1] || 100); }).catch(() => {});
+    axios.get(`${API}/booking/gift-cards/config/${propertyId}`).then(({ data }) => { setCfg(data); setAmount(data.presets?.[1] || 100); setDesign(data.design || "classic"); }).catch(() => {});
     const p = new URLSearchParams(window.location.search);
     if (p.get("gift") === "success" && p.get("gift_id")) {
       axios.get(`${API}/booking/gift-cards/status/${p.get("gift_id")}?session_id=${p.get("session_id") || ""}`).then(({ data }) => setResult(data)).catch(() => {});
@@ -23,11 +24,12 @@ export function GiftCardSection({ t, propertyId }) {
   }, [propertyId]);
 
   if (!cfg?.enabled) return null;
+  const sel = cfg.designs?.find((d) => d.id === design);
   const sym = cfg.currency === "TRY" ? "₺" : cfg.currency === "EUR" ? "€" : cfg.currency === "USD" ? "$" : "£";
   const buy = async () => {
     setBusy(true); setErr("");
     try {
-      const { data } = await axios.post(`${API}/booking/gift-cards/purchase`, { property_id: propertyId, amount, ...f, origin_url: window.location.origin });
+      const { data } = await axios.post(`${API}/booking/gift-cards/purchase`, { property_id: propertyId, amount, design, ...f, origin_url: window.location.origin });
       if (data.url) window.location.href = data.url;
     } catch (e) { setErr(e.response?.data?.detail || "Hata"); } finally { setBusy(false); }
   };
@@ -40,13 +42,22 @@ export function GiftCardSection({ t, propertyId }) {
           <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest mb-3" style={{ color: t.colors.accent }}><Gift size={16} weight="fill" /> {tr("gift.eyebrow")}</div>
           <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900 mb-3" style={{ fontFamily: t.fonts.heading }}>{tr("gift.title", { name: cfg.property_name })}</h2>
           <p className="text-slate-600 text-sm leading-relaxed">{tr("gift.desc", { days: Math.round(cfg.expires_days / 30) })}</p>
-          <div className="mt-6 p-6 text-white relative overflow-hidden" style={{ background: t.colors.primary, borderRadius: t.borderRadius }} aria-hidden="true">
-            <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full opacity-20" style={{ background: t.colors.accent }} />
-            <div className="text-xs uppercase tracking-widest opacity-70">{tr("gift.card")}</div>
+          <div className="mt-6 p-6 relative overflow-hidden transition-all duration-500" style={{ background: sel?.bg || t.colors.primary, color: sel?.text || "#fff", borderRadius: t.borderRadius }} aria-hidden="true" data-testid="gift-card-visual">
+            <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full opacity-20" style={{ background: sel?.bg ? "#fff" : t.colors.accent }} />
+            <div className="text-xs uppercase tracking-widest opacity-70">{tr("gift.card")}{sel && sel.id !== "classic" ? ` · ${sel.name}` : ""}</div>
             <div className="text-4xl font-bold mt-2">{sym}{amount}</div>
             <div className="text-sm mt-4 opacity-80">{cfg.property_name}</div>
             <div className="text-[11px] mt-1 opacity-60 font-mono">MHB-XXXX-XXXX-XXXX</div>
           </div>
+          {cfg.designs?.length > 1 && (
+            <div className="mt-3 flex flex-wrap gap-2" data-testid="gift-design-chips">
+              {cfg.designs.map((d) => (
+                <button key={d.id} type="button" onClick={() => setDesign(d.id)} className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border-2 text-xs font-semibold transition-colors" style={{ borderColor: design === d.id ? t.colors.accent : "#e5e7eb", color: design === d.id ? t.colors.accent : "#475569" }} data-testid={`gift-design-chip-${d.id}`} aria-pressed={design === d.id}>
+                  <span className="w-5 h-5 rounded-full border border-white/50" style={{ background: d.bg || t.colors.primary }} /> {d.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="bg-white border border-gray-200 p-6" style={{ borderRadius: t.borderRadius }}>
           <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 block">{tr("gift.amount")}</label>

@@ -1476,3 +1476,17 @@ async def ical_sync_loop(db, interval_seconds: int = 14400):
         except Exception as e:
             logger.warning(f"ical_sync_loop error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+async def journal_alert_loop(db, interval_seconds: int = 21600):
+    """Her 6 saatte: yevmiye başarısız / 2 gün eksik → yönetici uyarısı."""
+    await asyncio.sleep(120)
+    while True:
+        try:
+            from routes.finance_ext.accounting_sync import run_journal_alert_check
+            res = await run_journal_alert_check(db)
+            if res.get("alerts"):
+                logger.info(f"journal alerts: {res}")
+        except Exception as e:
+            logger.warning(f"journal alert tick error: {e}")
+        await asyncio.sleep(interval_seconds)

@@ -313,7 +313,10 @@ export const GiftCardsPanel = ({ activePropertyId }) => {
   const [cards, setCards] = useState([]);
   const [summary, setSummary] = useState({});
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ amount: 50, recipient_name: "", recipient_email: "", purchaser_name: "", message: "", expires_days: 365 });
+  const [form, setForm] = useState({ amount: 50, recipient_name: "", recipient_email: "", purchaser_name: "", message: "", expires_days: 365, design: "classic" });
+  const [designs, setDesigns] = useState([]);
+  const [showPreview, setShowPreview] = useState(false);
+  useEffect(() => { axios.get(`${API}/gift-cards/designs`).then(({ data }) => setDesigns(data || [])).catch(() => {}); }, []);
 
   const load = useCallback(async () => {
     try {
@@ -331,7 +334,7 @@ export const GiftCardsPanel = ({ activePropertyId }) => {
     try {
       const { data } = await axios.post(`${API}/gift-cards`, { ...form, property_id: pid, origin_url: window.location.origin });
       toast.success(`Gift card issued: ${data.code}${data.email_result?.recipient ? " · e-posta gönderildi" : ""}`);
-      setShowNew(false); setForm({ amount: 50, recipient_name: "", recipient_email: "", purchaser_name: "", message: "", expires_days: 365 }); load();
+      setShowNew(false); setForm({ amount: 50, recipient_name: "", recipient_email: "", purchaser_name: "", message: "", expires_days: 365, design: "classic" }); load();
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
   const cancel = async (id) => {
@@ -369,6 +372,13 @@ export const GiftCardsPanel = ({ activePropertyId }) => {
             <div><label className="text-[10px] font-bold uppercase text-stone-500">Expires in (days)</label><input type="number" value={form.expires_days} onChange={e => setForm({ ...form, expires_days: parseInt(e.target.value) })} className="w-full border rounded px-3 py-2 text-sm" data-testid="gc-expires" /></div>
             <div><label className="text-[10px] font-bold uppercase text-stone-500">Recipient Name</label><input value={form.recipient_name} onChange={e => setForm({ ...form, recipient_name: e.target.value })} className="w-full border rounded px-3 py-2 text-sm" data-testid="gc-recipient" /></div>
             <div><label className="text-[10px] font-bold uppercase text-stone-500">Recipient Email</label><input value={form.recipient_email} onChange={e => setForm({ ...form, recipient_email: e.target.value })} className="w-full border rounded px-3 py-2 text-sm" /></div>
+            <div><label className="text-[10px] font-bold uppercase text-stone-500">E-posta tasarımı</label>
+              <div className="flex gap-2">
+                <select value={form.design} onChange={e => setForm({ ...form, design: e.target.value })} className="flex-1 border rounded px-3 py-2 text-sm" data-testid="gc-design-select">{designs.map(d => <option key={d.id} value={d.id}>{d.name} — {d.desc}</option>)}</select>
+                <button type="button" onClick={() => setShowPreview(!showPreview)} className="px-3 py-2 text-xs font-bold border rounded" data-testid="gc-design-preview-btn">{showPreview ? "Gizle" : "Önizle"}</button>
+              </div>
+            </div>
+            {showPreview && <iframe title="gift preview" className="sm:col-span-2 w-full h-[420px] rounded-lg border bg-white" data-testid="gc-design-preview-frame" src={`${API}/gift-cards/preview?property_id=${pid}&design=${form.design}&amount=${form.amount || 50}&recipient_name=${encodeURIComponent(form.recipient_name || "Ayşe Yılmaz")}&purchaser_name=${encodeURIComponent(form.purchaser_name || "")}&message=${encodeURIComponent(form.message || "")}`} />}
             <div><label className="text-[10px] font-bold uppercase text-stone-500">Purchaser</label><input value={form.purchaser_name} onChange={e => setForm({ ...form, purchaser_name: e.target.value })} className="w-full border rounded px-3 py-2 text-sm" /></div>
           </div>
           <textarea value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} placeholder="Gift message" className="w-full border rounded px-3 py-2 text-sm mb-3" />

@@ -27,6 +27,7 @@ export default function DistributionCard({ propertyId }) {
   const [embed, setEmbed] = useState(null);
   const [exit, setExit] = useState(null);
   const [gift, setGift] = useState(null);
+  const [previewDesign, setPreviewDesign] = useState(null);
 
   useEffect(() => {
     axios.get(`${API}/properties`, W).then(({ data }) => { const l = Array.isArray(data) ? data : data.items || data.properties || []; setProps(l); if (!pid && l[0]) setPid(l[0].id); }).catch(() => {});
@@ -109,6 +110,26 @@ export default function DistributionCard({ propertyId }) {
                 <input className={`${inp} col-span-2`} placeholder="Tutar seçenekleri (virgülle)" value={(gift.presets || []).join(",")} onChange={(e) => setGift({ ...gift, presets: e.target.value.split(",").map((x) => Number(x.trim())).filter(Boolean) })} data-testid="gift-presets" />
                 <input className={inp} type="number" placeholder="Min" value={gift.min} onChange={(e) => setGift({ ...gift, min: e.target.value })} />
                 <input className={inp} type="number" placeholder="Geçerlilik (gün)" value={gift.expires_days} onChange={(e) => setGift({ ...gift, expires_days: e.target.value })} />
+                <div className="col-span-2">
+                  <div className="text-[10px] font-bold uppercase text-stone-500 mb-1">E-posta tasarımı (varsayılan + misafire açık olanlar)</div>
+                  <div className="grid grid-cols-4 gap-1.5" data-testid="gift-design-grid">
+                    {(gift.designs || []).map((d) => {
+                      const enabledList = gift.designs_enabled || gift.designs.map((x) => x.id);
+                      const on = enabledList.includes(d.id);
+                      return (
+                        <div key={d.id} className={`rounded-lg border p-1.5 text-[10px] ${gift.design === d.id ? "border-stone-900" : "border-stone-200"}`} data-testid={`gift-design-${d.id}`}>
+                          <button onClick={() => setGift({ ...gift, design: d.id })} className="w-full h-10 rounded-md mb-1" style={{ background: d.bg || "#0f4c5c", color: d.text }} title="Varsayılan yap"><span className="font-bold">£100</span></button>
+                          <div className="font-semibold truncate">{d.name}</div>
+                          <div className="flex items-center justify-between mt-0.5">
+                            <label className="flex items-center gap-1"><input type="checkbox" checked={on} onChange={(e) => setGift({ ...gift, designs_enabled: e.target.checked ? [...enabledList, d.id] : enabledList.filter((x) => x !== d.id) })} data-testid={`gift-design-enable-${d.id}`} /> açık</label>
+                            <button onClick={() => setPreviewDesign(previewDesign === d.id ? null : d.id)} className="text-indigo-600 font-bold" data-testid={`gift-design-preview-${d.id}`}>önizle</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {previewDesign && <iframe title="gift preview" className="w-full h-[420px] mt-2 rounded-lg border border-stone-200 bg-white" src={`${API}/gift-cards/preview?property_id=${pid}&design=${previewDesign}&amount=100`} data-testid="gift-design-preview-frame" />}
+                </div>
                 <button onClick={saveGift} className="col-span-2 py-2 text-xs font-bold text-white bg-stone-900 rounded-lg" data-testid="gift-save">Kaydet</button>
               </div>
             )}

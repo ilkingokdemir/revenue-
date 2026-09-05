@@ -893,6 +893,10 @@ api_router.include_router(create_scheduler_router(db, require_roles, JOB_HANDLER
 async def _start_scheduler():
     import asyncio as _asyncio
     _spawn(scheduler_loop(db, JOB_HANDLERS))
+    from routes.hotel_ops.scheduler import queue_worker_loop
+    _spawn(queue_worker_loop(db, JOB_HANDLERS, concurrency=int(os.environ.get("JOB_QUEUE_CONCURRENCY", "3"))))
+    from routes.platform_ext.db_indexes import ensure_indexes
+    _spawn(ensure_indexes(db))
     # Market Robot auto-scan loop (Iter 167.1)
     _mr_loop = getattr(market_robot_router, "auto_scan_loop", None)
     if _mr_loop:
@@ -1731,6 +1735,8 @@ JOB_HANDLERS["ai_monthly_karne"] = run_monthly_karne
 
 from routes.integrations_pkg.gbp_publish import create_gbp_router
 api_router.include_router(create_gbp_router(db, require_roles))
+from routes.platform_ext.db_indexes import create_db_indexes_router
+api_router.include_router(create_db_indexes_router(db, require_roles))
 
 from routes.integrations_pkg.review_sources import create_review_sources_router, run_review_source_sync
 api_router.include_router(create_review_sources_router(db, require_roles))
@@ -2060,6 +2066,57 @@ app.add_middleware(
 
 # ---------- SAĞLIK METRİKLERİ (istek süresi + hata kaydı) ----------
 import time as _time
+
+
+# ==================== Global rate limiting (bellek içi sliding window; IP + rota sınıfı) ====================
+import collections as _collections
+_RL_BUCKETS: dict = _collections.defaultdict(_collections.deque)
+_RL_RULES = (  # (prefix, limit/dakika)
+    ("/api/auth/login", int(os.environ.get("RL_LOGIN_PER_MIN", "30"))),
+    ("/api/auth/", int(os.environ.get("RL_AUTH_PER_MIN", "60"))),
+    ("/api/booking-widget/", int(os.environ.get("RL_PUBLIC_PER_MIN", "120"))),
+    ("/api/public/", int(os.environ.get("RL_PUBLIC_PER_MIN", "120"))),
+    ("/api/partner/", int(os.environ.get("RL_PARTNER_PER_MIN", "600"))),
+)
+_RL_DEFAULT = int(os.environ.get("RL_DEFAULT_PER_MIN", "600"))
+_RL_EXEMPT = ("/api/health", "/api/system-health", "/api/gbp/oauth/callback")
+
+
+def _rl_key_limit(path: str):
+    for prefix, lim in _RL_RULES:
+        if path.startswith(prefix):
+            return prefix, lim
+    return "default", _RL_DEFAULT
+
+
+@app.middleware("http")
+async def rate_limit_mw(request, call_next):
+    path = request.url.path
+    if not path.startswith("/api") or path.startswith(_RL_EXEMPT) or os.environ.get("RATE_LIMIT_DISABLED") == "true":
+        return await call_next(request)
+    ip = (request.headers.get("x-forwarded-for") or request.client.host or "?").split(",")[0].strip()
+    bucket_key, limit = _rl_key_limit(path)
+    now = _time.monotonic()
+    dq = _RL_BUCKETS[(ip, bucket_key)]
+    while dq and now - dq[0] > 60:
+        dq.popleft()
+    if len(dq) >= limit:
+        retry = max(1, int(60 - (now - dq[0])))
+        try:
+            await db.rate_limit_events.insert_one({"ip": ip, "bucket": bucket_key, "path": path, "limit": limit,
+                                                   "created_at": datetime.now(timezone.utc)})
+        except Exception:
+            pass
+        return _JSONResponse({"detail": "Too many requests — lütfen biraz sonra tekrar deneyin", "retry_after_sec": retry},
+                            status_code=429, headers={"Retry-After": str(retry), "X-RateLimit-Limit": str(limit), "X-RateLimit-Remaining": "0"})
+    dq.append(now)
+    if len(_RL_BUCKETS) > 20000:  # bellek koruması
+        for k in [k for k, v in list(_RL_BUCKETS.items()) if not v or now - v[-1] > 120][:5000]:
+            _RL_BUCKETS.pop(k, None)
+    resp = await call_next(request)
+    resp.headers["X-RateLimit-Limit"] = str(limit)
+    resp.headers["X-RateLimit-Remaining"] = str(max(0, limit - len(dq)))
+    return resp
 
 
 @app.middleware("http")

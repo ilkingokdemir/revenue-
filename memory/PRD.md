@@ -1557,3 +1557,10 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Yıldız Duyurusu: public GET /booking-widget/team-star/{pid} (staff_praise_log son kayıt + 4★+ alıntı; review_agent_config.show_team_star=false kapatır). Widget be-team-star bloğu (i18n meet_team/star_of_week/praised_by_guests TR/EN/DE).
 - Etki Panosu: build_monthly_report.impact (ay içinde kapanan kök neden görevleri, raporlanan etki, improved/worse, total_rating_gain, cumulative) + _impact_html aylık rapor e-postasında.
 - Google OAuth: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET hâlâ bekleniyor.
+
+## Güncelleme (Faz 37 — Ölçek Altyapısı P0-a: index + rate limit + iş kuyruğu) — iteration_616 backend 13/13, frontend smoke OK
+- Rakip gap analizi yapıldı (sohbette). Sıra: (a) ölçek ✅ → (b) tenant+RBAC+SSO → (c) Xero/QuickBooks+e-Fatura → (d) UI i18n + frontend testleri → (e) sertifika rehberi.
+- routes/platform_ext/db_indexes.py: INDEX_SPECS (39) startup'ta ensure_indexes (background); GET /system/indexes, POST /system/indexes/ensure (admin). TTL: scheduler_history 60g, job_queue.finished_at 14g, oauth_states 15dk, rate_limit_events 7g.
+- server.py rate_limit_mw: bellek içi sliding window (IP+prefix). ENV: RL_LOGIN_PER_MIN=30, RL_AUTH_PER_MIN=60, RL_PUBLIC_PER_MIN=120, RL_PARTNER_PER_MIN=600, RL_DEFAULT_PER_MIN=600, RATE_LIMIT_DISABLED=true kapatır. 429 + Retry-After + X-RateLimit-*; muaf: /api/health, /api/system-health, /api/gbp/oauth/callback. 429 olayları db.rate_limit_events. NOT: çoklu replika için Redis'e taşınmalı (şimdilik tek süreç).
+- routes/hotel_ops/scheduler.py: enqueue_job (dedupe queued/running), queue_worker_loop (JOB_QUEUE_CONCURRENCY=3, JOB_TIMEOUT_SEC=900, atomik claim find_one_and_update, restart'ta running→queued), retry 3 / backoff 30-120-600 sn, scheduler_history 'queue:<source>'. scheduler_loop artık inline değil enqueue eder. GET /scheduler/queue, POST /scheduler/queue/{id}/retry, POST /scheduler/trigger/{pid}/{job}?background=true.
+- Test kaydı: job_queue.id 'test-fail-1' (nonexistent_job) bilerek bırakıldı → failed olur.

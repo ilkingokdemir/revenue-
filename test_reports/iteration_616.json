@@ -1,0 +1,23 @@
+{
+  "summary": "Iter 616 (Scale P0: Mongo indexes, Global rate limiting, Persistent job queue). BACKEND (13/13 pytest PASS, test_iter616.py): (1) GET /api/system/indexes → specs=39, collections include reviews (with 'reviews__property_id_1_created_at_-1'), bookings, job_queue; last_run has ensured/skipped/errors. POST /api/system/indexes/ensure → errors=[] (promo_codes.code no longer unique — confirmed). (2) Rate limit: X-RateLimit-Limit & X-RateLimit-Remaining headers present on /api/reviews/stats/summary; /api/health is EXEMPT (no RL headers). Public widget /api/booking-widget/team-star/default returns 429 after ~120 requests with Retry-After header, X-RateLimit-Remaining=0, and body {detail, retry_after_sec}. (3) POST /api/scheduler/trigger/default/staff_praise_weekly?background=true → {status:'queued', queue_id}; polling /api/scheduler/queue confirmed status→done, attempts=1, result populated. (4) /api/scheduler/queue → {counts, items, concurrency:3}; test-fail-1 exists (job='nonexistent_job', status='queued', attempts=1, last_error='Unknown job: nonexistent_job'). Retry endpoint returns 404 for unknown/still-queued items per spec. (5) POST /api/scheduler/trigger/default/coupon_reminder (no background) → {status:'triggered', result:{...}}. (6) REGRESSION: /api/reviews/stats/summary, /api/reviews/pending-approval, /api/my-tasks, /api/analytics/dashboard all 200 OK.\nFRONTEND (smoke pass): admin login → dashboard loads (Basit/Pro toggle visible). Clicked nav-mode-pro → Pro sidebar rendered. Clicked Analytics sidebar item → Analytics loaded without any 429. Clicked Reviews → Reviews list with 105 reviews, 3.5/5 avg, filters, AI Auto-Respond banner rendered normally. Rate limit test executed LAST followed by 65s sleep before frontend smoke — no rate limit interference. No console errors beyond expected pre-login 401s.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iter616.py", "/app/test_reports/pytest/iter616.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ensure_indexes correctly classifies 'already exists'/IndexOptionsConflict/IndexKeySpecsConflict as skipped rather than errors — good idempotency at startup.",
+    "Rate limit uses deque per (ip, bucket_key) with 60s sliding window; bellek koruması (20k threshold cleanup) present. LGTM.",
+    "queue_worker_loop resets 'running' items to 'queued' on startup — handles pod restarts cleanly.",
+    "_run_queued has 900s default job timeout via asyncio.wait_for and retry backoff 30/120/600s matching spec.",
+    "retry endpoint returns 404 for unknown OR still queued/running items — matches spec (deduped semantics).",
+    "Consider: rate_limit_events insert on every 429 could itself be write-heavy under sustained attack; ok for now with 7d TTL."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter616.py", "/app/test_reports/iteration_616.json"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (smoke)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (single login reused, 30/dk limit respected)",
+  "seed_data_creation": "None new. Pre-existing test-fail-1 queue item verified (id='test-fail-1', job='nonexistent_job', status='queued', attempts>=1, last_error='Unknown job').",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter 616 fully green. Rate limit tests MUST be run last (60s reset window). test-fail-1 remains in job_queue as a permanent seeded failing item for retry endpoint testing — since it re-queues with backoff, its status oscillates between queued/failed. Public widget bucket is 120/min; other buckets: login 30/min, /api/auth 60/min, /api/partner 600/min, default 600/min. /api/health, /api/system-health, /api/gbp/oauth/callback are exempt.",
+  "rca of the issue": "N/A — all iter 616 backend and frontend paths function per spec."
+}

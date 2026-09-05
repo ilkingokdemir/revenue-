@@ -51,7 +51,19 @@ TEMPLATES = [
     {"id": "classic", "name": "Klasik", "desc": "Sıcak tonlar, geleneksel otel havası"},
     {"id": "modern", "name": "Modern", "desc": "Koyu zemin, keskin tipografi"},
     {"id": "boutique", "name": "Butik", "desc": "Zarif, minimal, yüksek beyaz alan"},
+    {"id": "coastal", "name": "Sahil", "desc": "Kum tonları, derin turkuaz vurgular"},
+    {"id": "urban", "name": "Urban", "desc": "Antrasit zemin, amber vurgu, şehir oteli"},
+    {"id": "nature", "name": "Doğa", "desc": "Krem zemin, orman yeşili, dağ/köy evi"},
 ]
+
+DEFAULT_BLOCKS = [
+    {"id": "hero", "enabled": True}, {"id": "availability", "enabled": True}, {"id": "about", "enabled": True},
+    {"id": "rooms", "enabled": True}, {"id": "amenities", "enabled": True}, {"id": "gallery", "enabled": True},
+    {"id": "reviews", "enabled": True}, {"id": "map", "enabled": True}, {"id": "faq", "enabled": True},
+    {"id": "contact", "enabled": True},
+]
+BLOCK_IDS = {b["id"] for b in DEFAULT_BLOCKS}
+SITE_PAGES = ["home", "rooms", "gallery", "location", "faq", "contact"]
 
 
 def create_site_builder_router(db, require_roles):
@@ -134,9 +146,16 @@ def create_site_builder_router(db, require_roles):
         if isinstance(content.get("amenities"), list):
             content["amenities"] = ", ".join(str(x) for x in content["amenities"])
         for k in ("headline", "about", "amenities", "phone", "email", "address",
-                  "seo_title", "seo_description", "seo_keywords"):
+                  "seo_title", "seo_description", "seo_keywords", "map_query"):
             if k in content and not isinstance(content[k], str):
                 content[k] = str(content[k])
+        blocks = [b for b in (content.get("blocks") or []) if isinstance(b, dict) and b.get("id") in BLOCK_IDS]
+        seen = {b["id"] for b in blocks}
+        blocks += [b for b in DEFAULT_BLOCKS if b["id"] not in seen]
+        content["blocks"] = [{"id": b["id"], "enabled": bool(b.get("enabled", True))} for b in blocks]
+        content["faqs"] = [{"q": str(f.get("q", ""))[:200], "a": str(f.get("a", ""))[:1000]}
+                           for f in (content.get("faqs") or []) if isinstance(f, dict) and f.get("q")][:20]
+        content["pages_enabled"] = [p for p in (content.get("pages_enabled") or SITE_PAGES) if p in SITE_PAGES] or ["home"]
         upd = {"property_id": pid, "template": tpl, "content": content,
                "mode": data.get("mode") if data.get("mode") in ("simple", "pro") else "simple",
                "engine_template": (data.get("engine_template") or "")[:40],
@@ -150,12 +169,55 @@ def create_site_builder_router(db, require_roles):
         cfg = await db.hotel_sites.find_one({"property_id": pid}, {"_id": 0})
         if not cfg or not cfg.get("published"):
             raise HTTPException(404, "Site yayında değil")
-        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1, "city": 1, "country": 1}) or {}
-        rts = await db.room_types.find({"property_id": pid}, {"_id": 0, "id": 1, "name": 1, "base_rate": 1, "base_price": 1}).to_list(20)
+        content = cfg.get("content") or {}
+        if not content.get("blocks"):
+            content["blocks"] = DEFAULT_BLOCKS
+        if not content.get("pages_enabled"):
+            content["pages_enabled"] = SITE_PAGES
+        cfg["content"] = content
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1, "city": 1, "country": 1, "address": 1, "currency": 1}) or {}
+        rts = await db.room_types.find({"property_id": pid, "is_active": {"$ne": False}},
+                                       {"_id": 0, "id": 1, "name": 1, "base_rate": 1, "base_price": 1, "photos": 1,
+                                        "description": 1, "max_guests": 1, "bed_type": 1, "size_sqm": 1, "amenities": 1}).to_list(20)
         photos = await db.site_photos.find({"property_id": pid, "is_deleted": False},
                                            {"_id": 0, "id": 1, "kind": 1}).sort("created_at", 1).to_list(30)
-        return {"site": cfg, "property": prop, "room_types": rts,
+        reviews = await db.reviews.find({"property_id": pid, "rating": {"$gte": 4}},
+                                        {"_id": 0, "id": 1, "guest_name": 1, "rating": 1, "review_text": 1, "created_at": 1}).sort("created_at", -1).to_list(6)
+        agg = await db.reviews.aggregate([{"$match": {"property_id": pid}}, {"$group": {"_id": None, "avg": {"$avg": "$rating"}, "n": {"$sum": 1}}}]).to_list(1)
+        return {"site": cfg, "property": prop, "room_types": rts, "reviews": reviews,
+                "rating": {"avg": round(agg[0]["avg"], 1), "count": agg[0]["n"]} if agg else None,
                 "photos": [{"id": p["id"], "kind": p["kind"], "url": f"/api/site-builder/photo/{p['id']}"} for p in photos]}
+
+    # ---------------- İLETİŞİM FORMU ----------------
+    @router.post("/public/contact")
+    async def public_contact(data: dict):
+        pid = (data.get("property_id") or "").strip()
+        name, email, msg = (data.get("name") or "").strip(), (data.get("email") or "").strip(), (data.get("message") or "").strip()
+        if not pid or not name or "@" not in email or len(msg) < 5:
+            raise HTTPException(422, "Ad, geçerli e-posta ve mesaj zorunlu")
+        now = datetime.now(timezone.utc).isoformat()
+        doc = {"id": str(uuid.uuid4()), "property_id": pid, "name": name[:80], "email": email[:120],
+               "phone": (data.get("phone") or "")[:40], "message": msg[:2000],
+               "check_in": (data.get("check_in") or "")[:10], "check_out": (data.get("check_out") or "")[:10],
+               "status": "new", "source": "website", "created_at": now}
+        await db.site_inquiries.insert_one(dict(doc))
+        await db.notifications.insert_one({"id": str(uuid.uuid4()), "property_id": pid, "type": "site_inquiry",
+                                           "title": f"Web sitesi mesajı: {name}", "body": msg[:140],
+                                           "read": False, "created_at": now})
+        return {"ok": True, "id": doc["id"]}
+
+    @router.get("/{pid}/inquiries")
+    async def list_inquiries(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        rows = await db.site_inquiries.find({"property_id": pid}, {"_id": 0}).sort("created_at", -1).to_list(100)
+        return {"items": rows, "new_count": sum(1 for r in rows if r.get("status") == "new")}
+
+    @router.put("/{pid}/inquiries/{iid}")
+    async def update_inquiry(pid: str, iid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        st = data.get("status")
+        if st not in ("new", "replied", "closed"):
+            raise HTTPException(422, "status: new|replied|closed")
+        await db.site_inquiries.update_one({"id": iid, "property_id": pid}, {"$set": {"status": st, "updated_at": datetime.now(timezone.utc).isoformat()}})
+        return {"ok": True}
 
     # ---------------- ÖZEL ALAN ADI ----------------
     @router.post("/{pid}/domain")

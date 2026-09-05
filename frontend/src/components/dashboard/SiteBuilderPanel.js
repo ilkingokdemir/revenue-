@@ -3,6 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Globe, ArrowSquareOut } from "@phosphor-icons/react";
 import { TEMPLATES as PRO_TEMPLATES } from "../../templates/templateConfig";
+import { BlocksEditor, FaqEditor, InquiriesCard } from "./SiteBuilderExtras";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -71,7 +72,7 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
       setPublished(!!s.published);
       if (s.mode) setMode(s.mode);
       if (s.engine_template) setEngineTpl(s.engine_template);
-      setContent({ headline: "", about: "", amenities: "", phone: "", email: "", address: "", seo_title: "", seo_description: "", ...(s.content || {}) });
+      setContent({ headline: "", about: "", amenities: "", phone: "", email: "", address: "", seo_title: "", seo_description: "", map_query: "", blocks: [], faqs: [], pages_enabled: [], ...(s.content || {}) });
       setPhotos(data.photos || []);
       if (s.custom_domain) { setDomain(s.custom_domain); setDomainStatus(s.domain_status || "pending"); }
       try {
@@ -114,7 +115,7 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
 
       {/* Mod seçimi: basit tema vs profesyonel platform şablonları */}
       <div className="flex gap-2 mb-4" data-testid="site-mode-toggle">
-        {[["simple", "Basit Tema (3)"], ["pro", "Profesyonel Şablonlar (10) — Booking.com / Airbnb / Expedia görünümü"]].map(([m, l]) => (
+        {[["simple", "Tema Siteleri (6) — çok sayfalı"], ["pro", "Profesyonel Şablonlar (10) — Booking.com / Airbnb / Expedia görünümü"]].map(([m, l]) => (
           <button key={m} onClick={() => setMode(m)} data-testid={`site-mode-${m}`}
             className={`px-4 py-2 rounded-full text-[11px] font-bold ${mode === m ? "bg-indigo-600 text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"}`}>
             {l}
@@ -123,7 +124,7 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
       </div>
 
       {mode === "simple" ? (
-      <div className="grid grid-cols-3 gap-3 mb-5">
+      <div className="grid grid-cols-3 gap-3 mb-5" data-testid="site-templates-grid">
         {templates.map((t) => (
           <button key={t.id} onClick={() => setTpl(t.id)} data-testid={`site-tpl-${t.id}`}
             className={`text-left rounded-xl border-2 p-4 ${tpl === t.id ? "border-indigo-600 bg-indigo-50" : "border-stone-200 hover:border-indigo-300"}`}>
@@ -206,6 +207,15 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
           <input value={content.email} onChange={(e) => setContent({ ...content, email: e.target.value })} placeholder="E-posta" className={inputCls} data-testid="site-email-input" />
           <input value={content.address} onChange={(e) => setContent({ ...content, address: e.target.value })} placeholder="Adres" className={inputCls} data-testid="site-address-input" />
         </div>
+        <input value={content.map_query || ""} onChange={(e) => setContent({ ...content, map_query: e.target.value })}
+          placeholder="Harita arama metni (boşsa adres kullanılır — örn. 'Aldgate Flats, London')" className={inputCls} data-testid="site-map-query-input" />
+        {mode === "simple" && (
+          <div className="grid md:grid-cols-2 gap-3 pt-1">
+            <BlocksEditor blocks={content.blocks} onChange={(b) => setContent({ ...content, blocks: b })}
+              pagesEnabled={content.pages_enabled} onPagesChange={(p) => setContent({ ...content, pages_enabled: p })} />
+            <FaqEditor faqs={content.faqs} onChange={(f) => setContent({ ...content, faqs: f })} />
+          </div>
+        )}
 
         {/* Fotoğraflar */}
         <div className="grid grid-cols-2 gap-3 pt-1">
@@ -286,6 +296,8 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
             </div>
           </div>
         </div>
+
+        <InquiriesCard pid={pid} />
 
         {/* Özel alan adı */}
         <div className="rounded-xl border border-stone-200 p-3 mt-2" data-testid="site-domain-card">

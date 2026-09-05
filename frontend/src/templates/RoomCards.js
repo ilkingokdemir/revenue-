@@ -3,6 +3,7 @@ import {
   WifiHigh, Snowflake, Television, Coffee, Bathtub,
 } from "@phosphor-icons/react";
 import { PhotoCarousel } from "./PhotoCarousel";
+import { RatePlanRows } from "./RatePlanRows";
 import { useLanguage } from "../i18n/LanguageContext";
 
 const amenityIcons = {
@@ -65,7 +66,7 @@ export function RoomPreviewCards({ t, rooms, searchRooms }) {
   );
 }
 
-export function RoomSelectionStep({ t, rooms, loading, nights, adults, children, roomCount, checkIn, checkOut, onSelectRoom, onChangeSearch }) {
+export function RoomSelectionStep({ t, rooms, loading, nights, adults, children, roomCount, checkIn, checkOut, onSelectRoom, onChangeSearch, ratePlans, cart, flexData, onApplyDates }) {
   const { t: tr } = useLanguage();
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" data-testid="room-selection">
@@ -83,7 +84,12 @@ export function RoomSelectionStep({ t, rooms, loading, nights, adults, children,
         <button onClick={onChangeSearch} className="ml-auto text-sm font-semibold hover:underline" style={{ color: t.colors.accent }} data-testid="change-search-btn">{tr("room.changeSearch")}</button>
       </div>
 
-      <h2 className="text-2xl font-semibold text-slate-900 mb-6" style={{ fontFamily: t.fonts.heading }}>{tr("room.availableRooms")}</h2>
+      <FlexDatesStrip t={t} flexData={flexData} onApplyDates={onApplyDates} />
+
+      <div className="flex items-end justify-between mb-6 gap-4 flex-wrap">
+        <h2 className="text-2xl font-semibold text-slate-900" style={{ fontFamily: t.fonts.heading }}>{tr("room.availableRooms")}</h2>
+        {ratePlans?.length > 1 && <p className="text-sm text-slate-500">{tr("plan.chooseHint")}</p>}
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-20">
@@ -98,7 +104,7 @@ export function RoomSelectionStep({ t, rooms, loading, nights, adults, children,
       ) : (
         <div className="space-y-4">
           {rooms.map((room) => (
-            <RoomCard key={room.id} room={room} t={t} nights={nights} adults={adults} roomCount={roomCount} onSelect={onSelectRoom} />
+            <RoomCard key={room.id} room={room} t={t} nights={nights} adults={adults} roomCount={roomCount} onSelect={onSelectRoom} ratePlans={ratePlans} cart={cart} />
           ))}
         </div>
       )}
@@ -106,7 +112,33 @@ export function RoomSelectionStep({ t, rooms, loading, nights, adults, children,
   );
 }
 
-function RoomCard({ room, t, nights, adults, roomCount, onSelect }) {
+function FlexDatesStrip({ t, flexData, onApplyDates }) {
+  const { t: tr } = useLanguage();
+  const alts = flexData?.alternatives?.filter((a) => a.saving > 0) || [];
+  if (!alts.length) return null;
+  const fmt = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return (
+    <div className="mb-6 rounded-lg border p-4" style={{ borderRadius: t.borderRadius, borderColor: `${t.colors.success}55`, background: `${t.colors.success}08` }} data-testid="flex-dates-strip">
+      <div className="flex items-center gap-2 mb-3">
+        <Lightning size={16} weight="fill" style={{ color: t.colors.success }} />
+        <span className="text-sm font-semibold text-slate-800">{tr("flex.title")}</span>
+        <span className="text-xs text-slate-500">{tr("flex.sub", { pct: alts[0].saving_pct })}</span>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {alts.slice(0, 5).map((a) => (
+          <button key={a.offset} type="button" onClick={() => onApplyDates(a.check_in, a.check_out)}
+            className="flex-shrink-0 bg-white border border-gray-200 rounded-lg px-3 py-2 text-left hover:shadow-md transition-shadow" style={{ borderRadius: t.borderRadius }}
+            data-testid={`flex-date-${a.offset}`}>
+            <div className="text-xs font-semibold text-slate-800">{fmt(a.check_in)} → {fmt(a.check_out)}</div>
+            <div className="text-[11px] mt-0.5"><span className="font-bold text-slate-900">£{Math.round(a.total)}</span> <span className="font-semibold" style={{ color: t.colors.success }}>−£{Math.round(a.saving)} ({a.saving_pct}%)</span></div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RoomCard({ room, t, nights, adults, onSelect, ratePlans, cart }) {
   const { t: tr } = useLanguage();
   return (
     <div className="bg-white border border-gray-200 overflow-hidden hover:shadow-md transition-shadow" style={{ borderRadius: t.borderRadius }} data-testid={`room-card-${room.id}`}>
@@ -131,40 +163,15 @@ function RoomCard({ room, t, nights, adults, roomCount, onSelect }) {
             )}
           </div>
           <p className="text-sm text-slate-600 mb-3 line-clamp-2">{room.description}</p>
-          <div className="flex flex-wrap gap-2 mb-4">
+          <div className="flex flex-wrap gap-2">
             {room.amenities?.slice(0, 6).map((a) => {
               const Icon = amenityIcons[a];
               return <span key={a} className="text-xs text-slate-600 flex items-center gap-1">{Icon ? <Icon size={12} style={{ color: t.colors.accent }} /> : <Check size={12} style={{ color: t.colors.success }} />}{a}</span>;
             })}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {t.showFreeCancellation && room.free_cancellation && (
-              <span className="text-xs font-semibold px-2.5 py-1 rounded flex items-center gap-1" style={{ background: t.colors.badgeBg, color: t.colors.success }}>
-                <CheckCircle size={13} weight="fill" /> {tr("room.freeCancellation")}
-              </span>
-            )}
-            {room.breakfast_included && (
-              <span className="text-xs font-semibold px-2.5 py-1 rounded flex items-center gap-1" style={{ background: t.colors.badgeBg, color: t.colors.success }}>
-                <CheckCircle size={13} weight="fill" /> {tr("room.breakfastIncluded")}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="md:w-56 p-5 border-l border-gray-200 flex flex-col justify-between" style={{ background: t.colors.priceBg }}>
-          <div>
-            <div className="text-xs text-slate-500 mb-1">{nights} {nights !== 1 ? tr("room.nights") : tr("room.night")}, {adults} {adults !== 1 ? tr("search.adults") : tr("search.adult")}</div>
-            <div className="text-3xl font-bold text-slate-900">&pound;{(room.base_price * nights * roomCount).toFixed(0)}</div>
-            <div className="text-xs text-slate-500 mt-0.5">{tr("room.includesTaxes")}</div>
-          </div>
-          <button onClick={() => onSelect(room)} disabled={!room.is_available}
-            className="mt-4 w-full py-3 rounded-lg font-semibold text-sm transition-colors text-white disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
-            style={{ background: room.is_available ? t.colors.accent : undefined, borderRadius: t.borderRadius }}
-            data-testid={`select-room-${room.id}`}>
-            {room.is_available ? (t.custom?.bookingButtonText || tr("room.reserve")) : tr("room.soldOut")}
-          </button>
-          <div className="mt-2 text-center text-[10px] text-slate-400 flex items-center justify-center gap-1">{tr("room.secureBooking")}</div>
         </div>
       </div>
+      <RatePlanRows t={t} room={room} plans={ratePlans} nights={nights} adults={adults} cart={cart} onAdd={onSelect} />
     </div>
   );
 }

@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 620: Comprehensive testing of Paket 2 (multi-page site builder) & Paket 3 (Google Hotel Ads, embed script, gift cards, exit-intent, deposit payment, cookie banner). Backend: 27/27 pytest cases passed. Frontend: public site (all blocks, nav, contact form, cookie banner), booking engine (gift-card purchase → Stripe checkout, landing URL auto-search, gift-redeem in details, wallet badges, summary logic), exit-intent popup with correct code, and admin distribution + site-builder panel all verified working. Site was left published on 'coastal' with all pages enabled and default block order per requirements.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "HotelSitePage (root site)", "issues": ["Console hydration warning: '<span> cannot be a child of <option>' — minor DOM structure warning, non-blocking"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter620_paket23.py",
+    "/app/test_reports/pytest/iter620.xml"
+  ],
+  "action_items": [
+    "Fix minor React hydration warning on site page: an <option> element contains a <span> child (see language/currency selector likely)."
+  ],
+  "critical_code_review_comments": [
+    "site_builder.public_site: reviews aggregation uses $match on rating>=4 for list but $group total on all — inconsistency where 'rating.count' includes low-rating reviews but list only shows 4+ stars. Consider aligning or clarifying semantics.",
+    "be_distribution.exit_intent_save creates promo_codes with $setOnInsert but the id may be missing on updates for existing legacy promos; ensure id is always populated for downstream code paths.",
+    "payments.booking-checkout: deposit calculation only stores deposit_due/balance_due on master booking; other cart line bookings do not carry payment_plan flag which could confuse reservation-level views."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter620_paket23.py"
+  ],
+  "success_rate": {"backend": "100% (27/27)", "frontend": "100% of user-visible flows"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (from review request; matches /app/memory/test_credentials.md conventions)",
+  "seed_data_creation": "Created 1 gift card via admin API (code MHB-WC8D-UMS6-NEX7, 60 GBP, later redeemed to 0 during redemption flow test). Site inquiries created via contact form during tests remain in DB with status 'replied' or 'new'. Multiple test bookings created for source-tag and deposit tests (guests: 'QA Redeem', 'QA Source', 'QA Src2', 'QA Dep').",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Site 'aldgate-flats' is currently published with template='coastal', all 6 pages enabled, default block order, headline & contact info preserved per spec. Exit-intent config restored to STAYDIRECT10 / 10% / delay 8s. Gift-card config defaults (min 25, max 2000, presets [50,100,150,200,300,500]). Rate plans: flexible / non_refundable / breakfast confirmed via GET /api/booking/rate-plans/aldgate-flats. Base rate 89 GBP for double-aldgate-flats verified. All Paket 2/3 features fully functional.",
+  "rca_of_the_issue": "N/A — no issues found."
+}

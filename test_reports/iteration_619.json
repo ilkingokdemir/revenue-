@@ -1,0 +1,35 @@
+{
+  "summary": "Iter 619 (Booking Engine Conversion Pack — Paket 1) tested end-to-end. Backend: 6/6 pytest passed (price-calendar, public/admin rate-plans CRUD, flex-dates, reserve-multi + child booking + 422/404 edge cases, regression property/rooms). Frontend public /book?property=aldgate-flats&lang=tr: price calendar (2 months, 61 days, £ prices, click sets check-in/out, '2 gece' Turkish hint, prev/next nav) OK; rate-plan rows for all 3 codes visible with correct totals (flex=£178, non_refundable=£160 (=10% off), breakfast=£208 (+£15/night)); cart with 2 lines from 2 different rooms works, cart-total sums correctly (£446), continue → guest-details → complete-booking-btn (Pay at Hotel) → confirmation-step with booking-ref and both cart line items. Admin (Pro nav → Direct Booking → Booking engine v2 → Fiyat Planları): rate-plans-card + rp-row-flexible/non_refundable/breakfast + rp-add-btn opens rate-plan-form, save shows toast, rp-delete-custom removes row.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "RatePlansCard tbody", "issue": "React console warning: 'Each child in a list should have a unique \"key\" prop' when rendering rate plan rows.", "selector": "[data-testid='rate-plans-card'] tbody", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Confirmation step (lang=tr)", "issues": ["Button label 'Başka Oda Ayırt' appears to be a Turkish typo — likely should be 'Başka Oda Ayır' (imperative of 'ayırmak' = to reserve). Not blocking."]},
+      {"screen": "Widget /book (lang=tr)", "issues": ["Turkish word 'Devam' (as in 'Devam Et') not found on initial widget page — appears only on the guest-details step which was reached; not a bug, translations verified for 'Müsait', 'Rezervasyon Özeti', '2 gece'."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter619_be_conversion.py",
+    "/app/test_reports/pytest/iter619.xml"
+  ],
+  "action_items": [
+    "Add unique key prop to rate plan row list in /app/frontend/src/components/dashboard/RatePlansCard.js (map should key by plan.id or plan.code).",
+    "(Optional) Fix Turkish label 'Başka Oda Ayırt' → 'Başka Oda Ayır' in translations."
+  ],
+  "critical_code_review_comments": [
+    "be_conversion.py reserve-multi: math verified (89 × 2 nights = 178 for flexible, 89 × 0.9 × 2 rooms × 2 nights = 320.4 for non_refundable, total 498.4 for the test payload). Endpoint returns cart_master flag on master booking and creates one Booking doc per line with shared cart_ref — clean.",
+    "be_conversion.py _plans auto-seeds default plans if none exist per property — idempotent-friendly but seeding is triggered by any GET which could seed for non-target properties. Acceptable for MVP.",
+    "RatePlansCard.js missing React key on mapped rows (warning above)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (works)",
+  "seed_data_creation": "Created and cleaned up 1 test rate plan 'TEST_QA_Plan' via API and 'QA Plan' via UI (both deleted). Created ~3 confirmed cart bookings via API and 1 via UI with guest 'TEST QA' at aldgate-flats (not cleaned; optional per request).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Widget URL: /book?property=aldgate-flats&lang=tr. Admin: /login → login → nav-mode-pro → nav-section-Direct Booking → booking-engine-v2-btn → be-tab-rateplans. Under BASIT (default simple) nav mode, booking-engine-v2-btn is hidden — must switch to Pro. Server date is 2026-09-05. Property double-aldgate-flats base_price=89 GBP.",
+  "rca of the issue": "N/A — no blocking bugs. Only a low-severity React key warning in RatePlansCard and a possible Turkish label typo."
+}

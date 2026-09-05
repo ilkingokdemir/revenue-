@@ -25,6 +25,10 @@ import { useCurrency, CurrencySelector } from "./i18n/CurrencySelector";
 import { GroupBookingModal } from "./templates/GroupBookingModal";
 import { AIConciergeChat } from "./templates/AIConciergeChat";
 import { SpaceBookingSection } from "./templates/SpaceBookingSection";
+import { CartBar } from "./templates/CartBar";
+import { planNightPrice } from "./templates/RatePlanRows";
+import { GiftCardSection } from "./templates/GiftCardSection";
+import { ExitIntentPopup, CookieBanner } from "./templates/ExitIntentPopup";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -43,6 +47,9 @@ function BookingEngineInner() {
   const [customSettings, setCustomSettings] = useState(null);
   const [rooms, setRooms] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [ratePlans, setRatePlans] = useState([]);
+  const [cart, setCart] = useState([]);
+  const [flexData, setFlexData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
@@ -63,6 +70,10 @@ function BookingEngineInner() {
   const [selectedUpsells, setSelectedUpsells] = useState([]);
   const [showGroupBooking, setShowGroupBooking] = useState(false);
   const [cartSaved, setCartSaved] = useState(false);
+  const [giftCode, setGiftCode] = useState("");
+  const [giftCard, setGiftCard] = useState(null);
+  const [pendingPromo, setPendingPromo] = useState("");
+  const utmSource = (() => { const s = params.get("utm_source") || ""; return ["google_hotel_ads", "embed", "website", "metasearch"].includes(s) ? s : "booking_engine"; })();
 
   // Merge template defaults with custom overrides
   const tmpl = (() => {
@@ -106,12 +117,26 @@ function BookingEngineInner() {
   })();
 
   useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
     const today = new Date();
     const d1 = new Date(today); d1.setDate(d1.getDate() + 1);
     const d2 = new Date(today); d2.setDate(d2.getDate() + 2);
-    setCheckIn(d1.toISOString().split("T")[0]);
-    setCheckOut(d2.toISOString().split("T")[0]);
+    const ci = p.get("check_in"), co = p.get("check_out");
+    const valid = ci && co && /^\d{4}-\d{2}-\d{2}$/.test(ci) && co > ci;
+    setCheckIn(valid ? ci : d1.toISOString().split("T")[0]);
+    setCheckOut(valid ? co : d2.toISOString().split("T")[0]);
+    if (p.get("adults")) setAdults(Math.max(1, Math.min(10, Number(p.get("adults")) || 2)));
   }, []);
+
+  const [autoSearched, setAutoSearched] = useState(false);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (!autoSearched && property && p.get("check_in") && checkIn && checkOut && checkIn === p.get("check_in")) {
+      setAutoSearched(true);
+      searchRooms(checkIn, checkOut);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [property, checkIn, checkOut]);
 
   useEffect(() => {
     const load = async () => {
@@ -124,6 +149,9 @@ function BookingEngineInner() {
         setReviews(revRes.data);
         axios.get(`${API}/booking/damage-waiver/${propertyId}`)
           .then(r => setDwConfig(r.data?.enabled ? r.data : null))
+          .catch(() => {});
+        axios.get(`${API}/booking/rate-plans/${propertyId}`)
+          .then(r => setRatePlans(Array.isArray(r.data) ? r.data : []))
           .catch(() => {});
         if (propRes.data.template_settings && Object.keys(propRes.data.template_settings).length > 1) {
           setCustomSettings(propRes.data.template_settings);
@@ -164,23 +192,40 @@ function BookingEngineInner() {
     } catch (e) { setTimeout(() => pollPaymentStatus(sessionId, attempts + 1), 2000); }
   };
 
-  const searchRooms = useCallback(async () => {
-    if (!checkIn || !checkOut) return;
+  const searchRooms = useCallback(async (ci = checkIn, co = checkOut) => {
+    if (!ci || !co) return;
     setLoading(true);
+    setCart([]);
     try {
-      const { data } = await axios.get(`${API}/booking/rooms/${propertyId}?check_in=${checkIn}&check_out=${checkOut}&adults=${adults}&children=${children}`);
+      const { data } = await axios.get(`${API}/booking/rooms/${propertyId}?check_in=${ci}&check_out=${co}&adults=${adults}&children=${children}`);
       setRooms(data);
       setStep(STEPS.ROOMS);
+      axios.get(`${API}/booking/flex-dates/${propertyId}?check_in=${ci}&check_out=${co}&adults=${adults}`)
+        .then(r => setFlexData(r.data)).catch(() => setFlexData(null));
     } catch (e) { console.error("Search failed:", e); }
     finally { setLoading(false); }
   }, [propertyId, checkIn, checkOut, adults, children]);
 
-  const handleSelectRoom = (room) => { setSelectedRoom(room); setStep(STEPS.DETAILS); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const applyFlexDates = (ci, co) => { setCheckIn(ci); setCheckOut(co); searchRooms(ci, co); window.scrollTo({ top: 0, behavior: "smooth" }); };
+
+  const addToCart = (room, plan, qty = 1) => {
+    setCart(prev => {
+      const key = (c) => `${c.room.id}|${c.plan?.id || ""}`;
+      const k = `${room.id}|${plan?.id || ""}`;
+      const existing = prev.find(c => key(c) === k);
+      if (existing) return prev.map(c => key(c) === k ? { ...c, qty } : c);
+      return [...prev, { room, plan, qty }];
+    });
+  };
+  const removeFromCart = (i) => setCart(prev => prev.filter((_, idx) => idx !== i));
+  const continueToDetails = () => { if (!cart.length) return; setSelectedRoom(cart[0].room); setStep(STEPS.DETAILS); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   const nights = (() => {
     if (!checkIn || !checkOut) return 1;
     return Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000));
   })();
+
+  const cartRooms = cart.reduce((s, c) => s + c.qty, 0) || roomCount;
 
   const addOnsTotal = selectedAddOns.reduce((sum, ao) => {
     if (ao.price_type === "per_night") return sum + ao.price * nights;
@@ -196,10 +241,29 @@ function BookingEngineInner() {
     return sum + u.price;
   }, 0);
 
-  const subtotal = selectedRoom ? selectedRoom.base_price * nights * roomCount : 0;
+  const subtotal = cart.length ? cart.reduce((s, c) => s + planNightPrice(c.room.base_price, c.plan) * nights * c.qty, 0) : (selectedRoom ? selectedRoom.base_price * nights * roomCount : 0);
   const discountAmount = promoDiscount ? promoDiscount.discount_amount : 0;
-  const waiverTotal = damageWaiver && dwConfig ? dwConfig.fee_per_night * nights * roomCount : 0;
-  const totalPrice = Math.max(0, subtotal + addOnsTotal + upsellsTotal + waiverTotal - discountAmount);
+  const waiverTotal = damageWaiver && dwConfig ? dwConfig.fee_per_night * nights * cartRooms : 0;
+  const totalBeforeGift = Math.max(0, subtotal + addOnsTotal + upsellsTotal + waiverTotal - discountAmount);
+  const giftApplied = giftCard ? Math.min(giftCard.balance, totalBeforeGift) : 0;
+  const totalPrice = Math.max(0, totalBeforeGift - giftApplied);
+  const depositDue = cart.length ? Math.round(cart.reduce((s, c) => s + planNightPrice(c.room.base_price, c.plan) * nights * c.qty * ((c.plan?.deposit_pct || 0) / 100), 0) * 100) / 100 : 0;
+
+  const applyGift = async () => {
+    if (!giftCode.trim()) return;
+    try {
+      const { data } = await axios.post(`${API}/booking/gift-cards/check`, { code: giftCode.trim(), property_id: propertyId });
+      setGiftCard(data);
+    } catch (e) { setGiftCard(null); alert(e.response?.data?.detail || "Invalid gift card"); }
+  };
+
+  useEffect(() => {
+    if (step === STEPS.DETAILS && pendingPromo && subtotal > 0) {
+      const code = pendingPromo; setPendingPromo("");
+      axios.post(`${API}/promo-codes/validate?code=${code}&property_id=${propertyId}&nights=${nights}&subtotal=${subtotal}`)
+        .then(({ data }) => { setPromoCode(code); setPromoDiscount(data); }).catch(() => {});
+    }
+  }, [step, pendingPromo, subtotal, propertyId, nights]);
 
   const applyPromo = async () => {
     if (!promoCode.trim()) return;
@@ -240,16 +304,24 @@ function BookingEngineInner() {
     if (!guestForm.guest_name || !guestForm.guest_email) return;
     setBookingLoading(true);
     try {
-      const { data } = await axios.post(`${API}/booking/reserve`, {
-        property_id: propertyId, room_type_id: selectedRoom.id,
+      const payload = {
+        property_id: propertyId,
         guest_name: guestForm.guest_name, guest_email: guestForm.guest_email,
         guest_phone: guestForm.guest_phone, check_in: checkIn, check_out: checkOut,
-        adults, children, rooms: roomCount, special_requests: guestForm.special_requests,
+        adults, children, special_requests: guestForm.special_requests,
         damage_waiver: damageWaiver && !!dwConfig,
-      });
-      if (paymentMethod === "card") {
+        promo_code: promoDiscount?.code || "",
+        gift_card_code: giftCard?.code || "",
+        source: utmSource,
+        items: (cart.length ? cart : [{ room: selectedRoom, plan: null, qty: roomCount }]).map(c => ({ room_type_id: c.room.id, rate_plan_id: c.plan?.id || "", qty: c.qty })),
+      };
+      const { data } = await axios.post(`${API}/booking/reserve-multi`, payload);
+      if (totalPrice <= 0 && paymentMethod !== "hotel") {
+        setConfirmation(data); setStep(STEPS.CONFIRM); window.scrollTo({ top: 0, behavior: "smooth" }); return;
+      }
+      if (paymentMethod === "card" || paymentMethod === "deposit") {
         const { data: pd } = await axios.post(`${API}/payments/booking-checkout`, {
-          booking_id: data.id, origin_url: window.location.origin
+          booking_id: data.id, origin_url: window.location.origin, amount_mode: paymentMethod === "deposit" ? "deposit" : "full"
         });
         if (pd.url) window.location.href = pd.url;
       } else if (paymentMethod === "iyzico") {
@@ -274,6 +346,8 @@ function BookingEngineInner() {
   const handleBookAnother = () => {
     setStep(STEPS.SEARCH);
     setSelectedRoom(null);
+    setCart([]);
+    setGiftCard(null); setGiftCode("");
     setConfirmation(null);
     setGuestForm({ guest_name: "", guest_email: "", guest_phone: "", special_requests: "" });
   };
@@ -285,7 +359,7 @@ function BookingEngineInner() {
     checkIn, setCheckIn, checkOut, setCheckOut,
     adults, setAdults, children, setChildren,
     roomCount, setRoomCount, showGuestPicker, setShowGuestPicker,
-    searchRooms,
+    searchRooms: () => searchRooms(), propertyId,
   };
 
   if (loading && !property) {
@@ -301,6 +375,7 @@ function BookingEngineInner() {
 
   return (
     <div className="min-h-screen" dir={isRTL ? "rtl" : "ltr"} style={{ background: tmpl.colors.bodyBg, fontFamily: tmpl.fonts.body }} data-testid="booking-engine" data-template={templateId}>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-white focus:px-3 focus:py-2 focus:rounded-lg focus:shadow-lg text-sm font-semibold">{t("a11y.skip")}</a>
 
       {/* Google Hotel Structured Data (SEO) */}
       <GoogleHotelStructuredData property={property} rooms={rooms.length > 0 ? rooms : property?.room_types} reviews={reviews} templateSettings={customSettings} />
@@ -366,11 +441,12 @@ function BookingEngineInner() {
         </div>
       )}
 
+      <main id="main-content">
       {/* Step 0: Landing / Search */}
       {step === STEPS.SEARCH && (
         <>
           <HeroSection t={tmpl} property={property} ratingScore={ratingScore} getRatingLabel={getRatingLabel} searchProps={searchProps} />
-          <RoomPreviewCards t={tmpl} rooms={property?.room_types} searchRooms={searchRooms} />
+          <RoomPreviewCards t={tmpl} rooms={property?.room_types} searchRooms={() => searchRooms()} />
           {/* Facilities */}
           {property?.facilities?.length > 0 && (
             <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12" data-testid="facilities-section">
@@ -441,14 +517,20 @@ function BookingEngineInner() {
           <ReviewsSection t={tmpl} reviews={reviews} property={property} ratingScore={ratingScore} getRatingLabel={getRatingLabel} />
           {/* Hourly/Space Bookings */}
           <SpaceBookingSection propertyId={propertyId} tmpl={tmpl} />
+          <GiftCardSection t={tmpl} propertyId={propertyId} />
           <TrustFooter t={tmpl} />
         </>
       )}
 
       {/* Step 1: Room Selection */}
       {step === STEPS.ROOMS && (
-        <RoomSelectionStep t={tmpl} rooms={rooms} loading={loading} nights={nights} adults={adults} children={children} roomCount={roomCount}
-          checkIn={checkIn} checkOut={checkOut} onSelectRoom={handleSelectRoom} onChangeSearch={() => setStep(STEPS.SEARCH)} />
+        <>
+          <RoomSelectionStep t={tmpl} rooms={rooms} loading={loading} nights={nights} adults={adults} children={children} roomCount={roomCount}
+            checkIn={checkIn} checkOut={checkOut} onSelectRoom={addToCart} onChangeSearch={() => setStep(STEPS.SEARCH)}
+            ratePlans={ratePlans} cart={cart} flexData={flexData} onApplyDates={applyFlexDates} />
+          <CartBar t={tmpl} cart={cart} nights={nights} onRemove={removeFromCart} onContinue={continueToDetails} />
+          {cart.length > 0 && <div className="h-28" />}
+        </>
       )}
 
       {/* Step 2: Guest Details */}
@@ -459,9 +541,11 @@ function BookingEngineInner() {
           promoCode={promoCode} setPromoCode={setPromoCode} promoDiscount={promoDiscount} applyPromo={applyPromo} setPromoDiscount={setPromoDiscount}
           addOns={property?.add_ons || []} selectedAddOns={selectedAddOns} toggleAddOn={toggleAddOn}
           upsells={property?.upsells || []} selectedUpsells={selectedUpsells} toggleUpsell={toggleUpsell}
-          nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut}
+          nights={nights} adults={adults} children={children} roomCount={cartRooms} checkIn={checkIn} checkOut={checkOut}
           dwConfig={dwConfig} damageWaiver={damageWaiver} setDamageWaiver={setDamageWaiver} waiverTotal={waiverTotal}
-          socialProofSettings={property?.social_proof?.settings} />
+          socialProofSettings={property?.social_proof?.settings} cart={cart} onBackToRooms={() => setStep(STEPS.ROOMS)}
+          giftCode={giftCode} setGiftCode={setGiftCode} giftCard={giftCard} applyGift={applyGift} clearGift={() => { setGiftCard(null); setGiftCode(""); }} giftApplied={giftApplied}
+          depositDue={depositDue} />
       )}
 
       {/* Step 3: Payment Processing */}
@@ -477,11 +561,12 @@ function BookingEngineInner() {
 
       {/* Step 4: Confirmation */}
       {step === STEPS.CONFIRM && <ConfirmationStep t={tmpl} confirmation={confirmation} onBookAnother={handleBookAnother} />}
+      </main>
 
       {/* Mobile Sticky Search */}
       {step === STEPS.SEARCH && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-3 sm:hidden z-50" data-testid="mobile-sticky-bar">
-          <button onClick={searchRooms} className="w-full text-white py-3.5 rounded-lg font-bold text-base flex items-center justify-center gap-2" style={{ background: tmpl.colors.accent }}>
+          <button onClick={() => searchRooms()} className="w-full text-white py-3.5 rounded-lg font-bold text-base flex items-center justify-center gap-2" style={{ background: tmpl.colors.accent }}>
             <MagnifyingGlass size={18} weight="bold" /> {t("search.searchRooms")}
           </button>
         </div>
@@ -517,6 +602,8 @@ function BookingEngineInner() {
 
       {/* AI Concierge Floating Chat */}
       <AIConciergeChat propertyId={propertyId} tmpl={tmpl} />
+      <ExitIntentPopup t={tmpl} propertyId={propertyId} active={step < STEPS.PAYMENT} onApply={(code) => { setPendingPromo(code); setPromoCode(code); if (step < STEPS.DETAILS && cart.length) continueToDetails(); }} />
+      <CookieBanner accent={tmpl.colors.accent} radius={tmpl.borderRadius} />
     </div>
   );
 }

@@ -1,10 +1,13 @@
+import { useState } from "react";
 import {
-  CalendarBlank, Users, CaretDown, MagnifyingGlass,
+  CalendarBlank, Users, CaretDown, MagnifyingGlass, Tag,
 } from "@phosphor-icons/react";
 import { useLanguage } from "../i18n/LanguageContext";
+import { PriceCalendar } from "./PriceCalendar";
 
-export function SearchWidget({ t, checkIn, setCheckIn, checkOut, setCheckOut, adults, setAdults, children, setChildren, roomCount, setRoomCount, showGuestPicker, setShowGuestPicker, searchRooms }) {
+export function SearchWidget({ t, checkIn, setCheckIn, checkOut, setCheckOut, adults, setAdults, children, setChildren, roomCount, setRoomCount, showGuestPicker, setShowGuestPicker, searchRooms, propertyId }) {
   const { t: tr } = useLanguage();
+  const [showCal, setShowCal] = useState(false);
   const isAirbnb = t.layout === "airbnb";
   return (
     <div className={`${isAirbnb ? "bg-white border border-gray-200 shadow-md" : "bg-white shadow-2xl border border-gray-200"} p-6 sm:p-8`}
@@ -65,6 +68,17 @@ export function SearchWidget({ t, checkIn, setCheckIn, checkOut, setCheckOut, ad
           </button>
         </div>
       </div>
+      {propertyId && (
+        <div className="mt-3 flex items-center justify-between">
+          <button type="button" onClick={() => setShowCal((v) => !v)} className="text-sm font-semibold flex items-center gap-1.5 hover:underline" style={{ color: t.colors.accent }} data-testid="price-calendar-toggle">
+            <Tag size={15} weight="fill" /> {showCal ? tr("cal.hide") : tr("cal.show")}
+          </button>
+        </div>
+      )}
+      {showCal && propertyId && (
+        <PriceCalendar t={t} propertyId={propertyId} checkIn={checkIn} checkOut={checkOut} adults={adults}
+          onChange={(ci, co) => { setCheckIn(ci); setCheckOut(co || ""); }} onClose={() => setShowCal(false)} />
+      )}
     </div>
   );
 }

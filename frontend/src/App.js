@@ -1476,8 +1476,8 @@ function App() {
     return <UpsellOfferPage token={token} />;
   }
   if (window.location.pathname.startsWith("/site/")) {
-    const sitePid = window.location.pathname.split("/site/")[1];
-    return <HotelSitePage propertyId={sitePid} />;
+    const [sitePid, sitePage] = window.location.pathname.split("/site/")[1].split("/");
+    return <HotelSitePage propertyId={sitePid} initialPage={sitePage || "home"} basePath={`/site/${sitePid}`} />;
   }
   {
     let appHost = "";

@@ -1,15 +1,20 @@
 import {
   User, EnvelopeSimple, Phone, CreditCard, ShieldCheck,
-  Lock, Buildings, CheckCircle, Bed, Tag, Plus, X, Sparkle,
+  Lock, Buildings, CheckCircle, Bed, Tag, Plus, X, Sparkle, Gift,
 } from "@phosphor-icons/react";
 import { useLanguage } from "../i18n/LanguageContext";
 import { SmartUpsellEngine } from "./SmartUpsellEngine";
 import { PriceComparisonWidget } from "./PriceComparisonWidget";
+import { planNightPrice, planName } from "./RatePlanRows";
 
-export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, upsells, selectedUpsells, toggleUpsell, nights, adults, children, roomCount, checkIn, checkOut, socialProofSettings, dwConfig, damageWaiver, setDamageWaiver, waiverTotal }) {
+export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, upsells, selectedUpsells, toggleUpsell, nights, adults, children, roomCount, checkIn, checkOut, socialProofSettings, dwConfig, damageWaiver, setDamageWaiver, waiverTotal, cart, onBackToRooms, giftCode, setGiftCode, giftCard, applyGift, clearGift, giftApplied, depositDue }) {
   const { t: tr } = useLanguage();
+  const showDeposit = depositDue > 0 && depositDue < totalPrice - 0.5;
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8" data-testid="guest-details-step">
+      {onBackToRooms && (
+        <button type="button" onClick={onBackToRooms} className="text-sm font-semibold mb-4 hover:underline" style={{ color: t.colors.accent }} data-testid="back-to-rooms-btn">← {tr("cart.addMoreRooms")}</button>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           {/* Guest Info Form */}
@@ -102,6 +107,26 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
             )}
           </div>
 
+          {/* Gift card */}
+          {setGiftCode && (
+            <div className="bg-white rounded-lg border border-gray-200 p-6" style={{ borderRadius: t.borderRadius }} data-testid="gift-redeem-section">
+              <h2 className="text-lg font-semibold text-slate-900 mb-3 flex items-center gap-2" style={{ fontFamily: t.fonts.heading }}>
+                <Gift size={20} style={{ color: t.colors.accent }} /> {tr("gift.redeemTitle")}
+              </h2>
+              {giftCard ? (
+                <div className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: `${t.colors.success}10` }} data-testid="gift-applied">
+                  <span className="text-sm font-medium" style={{ color: t.colors.success }}>{giftCard.code} — {tr("gift.balance")} £{Number(giftCard.balance).toFixed(0)} · {tr("gift.applied")} £{giftApplied.toFixed(0)}</span>
+                  <button onClick={clearGift} className="text-slate-400 hover:text-slate-600" aria-label="remove" data-testid="gift-remove-btn"><X size={16} /></button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input value={giftCode} onChange={e => setGiftCode(e.target.value.toUpperCase())} placeholder="MHB-XXXX-XXXX-XXXX" className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono uppercase" onKeyDown={e => e.key === "Enter" && applyGift()} data-testid="gift-code-input" aria-label={tr("gift.redeemTitle")} />
+                  <button onClick={applyGift} className="px-4 py-2.5 text-white rounded-lg text-sm font-semibold" style={{ background: t.colors.accent, borderRadius: t.borderRadius }} data-testid="gift-apply-btn">{tr("promo.apply")}</button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Damage Waiver opt-in */}
           {dwConfig && (
             <div className="bg-white rounded-lg border border-gray-200 p-6" style={{ borderRadius: t.borderRadius }} data-testid="damage-waiver-section">
@@ -132,11 +157,12 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
             </h2>
             <div className="space-y-3">
               {[
-                { value: "card", icon: CreditCard, label: tr("payment.payNow"), sub: tr("payment.payNowSub"), showSecure: true },
+                { value: "card", icon: CreditCard, label: tr("payment.payNow"), sub: tr("payment.payNowSub"), showSecure: true, wallets: true },
+                ...(showDeposit ? [{ value: "deposit", icon: ShieldCheck, label: tr("payment.payDeposit", { amount: depositDue.toFixed(0) }), sub: tr("payment.payDepositSub", { rest: (totalPrice - depositDue).toFixed(0) }), showSecure: true, wallets: true }] : []),
                 { value: "iyzico", icon: CreditCard, label: "iyzico ile Ode", sub: "Turkey — All Turkish banks, taksit (installments)", showSecure: true, flag: "🇹🇷" },
                 { value: "paytr", icon: CreditCard, label: "PayTR ile Ode", sub: "Turkey — Sanal POS, SMS payment, taksitli odeme", showSecure: true, flag: "🇹🇷" },
                 { value: "hotel", icon: Buildings, label: tr("payment.payHotel"), sub: tr("payment.payHotelSub") },
-              ].map(({ value, icon: Icon, label, sub, showSecure, flag }) => (
+              ].map(({ value, icon: Icon, label, sub, showSecure, wallets }) => (
                 <label key={value} className="flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors"
                   style={{ borderColor: paymentMethod === value ? t.colors.accent : "#e5e7eb", background: paymentMethod === value ? `${t.colors.accent}08` : "transparent", borderRadius: t.borderRadius }}
                   data-testid={`payment-${value}-option`}>
@@ -150,6 +176,7 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
                       <span className="font-semibold text-slate-800 text-sm">{label}</span>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">{sub}</p>
+                    {wallets && <div className="flex gap-1.5 mt-1.5">{["Visa", "Mastercard", "Apple Pay", "Google Pay"].map(w => <span key={w} className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-gray-200 text-slate-500">{w}</span>)}</div>}
                   </div>
                   {showSecure && <div className="flex items-center gap-1 text-xs text-slate-400"><ShieldCheck size={14} weight="fill" style={{ color: t.colors.success }} /><span>{tr("payment.secure")}</span></div>}
                 </label>
@@ -163,6 +190,7 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
             style={{ background: t.colors.accent, borderRadius: t.borderRadius }} data-testid="complete-booking-btn">
             {bookingLoading ? <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
               : paymentMethod === "card" ? <><CreditCard size={20} weight="fill" /> {tr("payment.payAndComplete", { amount: totalPrice.toFixed(0) })}</>
+              : paymentMethod === "deposit" ? <><ShieldCheck size={20} weight="fill" /> {tr("payment.payAndComplete", { amount: depositDue.toFixed(0) })}</>
               : paymentMethod === "iyzico" ? <><CreditCard size={20} weight="fill" /> iyzico ile {totalPrice.toFixed(0)} {selectedRoom?.currency || "TRY"} Ode</>
               : paymentMethod === "paytr" ? <><CreditCard size={20} weight="fill" /> PayTR ile {totalPrice.toFixed(0)} {selectedRoom?.currency || "TRY"} Ode</>
               : <><Lock size={20} weight="fill" /> {tr("payment.completePayAtHotel")}</>}
@@ -176,27 +204,46 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
         <div className="lg:col-span-1 space-y-4">
           {/* Price Comparison Widget */}
           <PriceComparisonWidget t={t} roomPrice={selectedRoom.base_price * nights} settings={socialProofSettings} />
-          <BookingSummary t={t} room={selectedRoom} property={property} totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount} promoDiscount={promoDiscount} selectedAddOns={selectedAddOns} selectedUpsells={selectedUpsells} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} waiverTotal={waiverTotal} />
+          <BookingSummary t={t} room={selectedRoom} property={property} totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount} promoDiscount={promoDiscount} selectedAddOns={selectedAddOns} selectedUpsells={selectedUpsells} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} waiverTotal={waiverTotal} cart={cart} giftApplied={giftApplied} />
         </div>
       </div>
     </div>
   );
 }
 
-function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, discountAmount, promoDiscount, selectedAddOns, selectedUpsells, nights, adults, children, roomCount, checkIn, checkOut, waiverTotal }) {
-  const { t: tr } = useLanguage();
+function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, discountAmount, promoDiscount, selectedAddOns, selectedUpsells, nights, adults, children, roomCount, checkIn, checkOut, waiverTotal, cart, giftApplied = 0 }) {
+  const { t: tr, lang } = useLanguage();
+  const multi = cart?.length > 0;
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-5 sticky top-20" style={{ borderRadius: t.borderRadius }} data-testid="booking-summary">
       <h3 className="font-semibold text-slate-900 mb-4" style={{ fontFamily: t.fonts.heading }}>{tr("summary.title")}</h3>
-      <div className="flex gap-3 mb-4 pb-4 border-b border-gray-100">
-        <div className="w-20 h-16 rounded-lg bg-slate-200 overflow-hidden flex-shrink-0">
-          {room.photos?.[0] ? <img src={room.photos[0]} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Bed size={20} className="text-slate-300" /></div>}
+      {multi ? (
+        <div className="space-y-2 mb-4 pb-4 border-b border-gray-100" data-testid="summary-cart-items">
+          {cart.map((c, i) => (
+            <div key={i} className="flex gap-3">
+              <div className="w-14 h-12 rounded-lg bg-slate-200 overflow-hidden flex-shrink-0">
+                {c.room.photos?.[0] ? <img src={c.room.photos[0]} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Bed size={16} className="text-slate-300" /></div>}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-sm text-slate-900 truncate">{c.qty}× {c.room.name}</div>
+                {c.plan && <div className="text-xs text-slate-500">{planName(c.plan, lang)}</div>}
+              </div>
+              <div className="text-sm font-semibold text-slate-800">&pound;{(planNightPrice(c.room.base_price, c.plan) * nights * c.qty).toFixed(0)}</div>
+            </div>
+          ))}
+          <div className="text-xs text-slate-500 pt-1">{property?.name}</div>
         </div>
-        <div>
-          <div className="font-semibold text-sm text-slate-900">{room.name}</div>
-          <div className="text-xs text-slate-500 mt-0.5">{property?.name}</div>
+      ) : (
+        <div className="flex gap-3 mb-4 pb-4 border-b border-gray-100">
+          <div className="w-20 h-16 rounded-lg bg-slate-200 overflow-hidden flex-shrink-0">
+            {room.photos?.[0] ? <img src={room.photos[0]} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Bed size={20} className="text-slate-300" /></div>}
+          </div>
+          <div>
+            <div className="font-semibold text-sm text-slate-900">{room.name}</div>
+            <div className="text-xs text-slate-500 mt-0.5">{property?.name}</div>
+          </div>
         </div>
-      </div>
+      )}
       <div className="space-y-2 text-sm mb-4 pb-4 border-b border-gray-100">
         {[
           [tr("summary.checkIn"), new Date(checkIn).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })],
@@ -207,7 +254,7 @@ function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, 
         ].map(([l, v]) => <div key={l} className="flex justify-between"><span className="text-slate-500">{l}</span><span className="font-medium text-slate-800">{v}</span></div>)}
       </div>
       <div className="space-y-2 text-sm mb-4 pb-4 border-b border-gray-100">
-        <div className="flex justify-between"><span className="text-slate-500">&pound;{room.base_price} x {nights} {nights !== 1 ? tr("room.nights") : tr("room.night")}</span><span>&pound;{subtotal?.toFixed(0) || (room.base_price * nights * roomCount).toFixed(0)}</span></div>
+        <div className="flex justify-between"><span className="text-slate-500">{multi ? tr("summary.roomsSubtotal") : <>&pound;{room.base_price} x {nights} {nights !== 1 ? tr("room.nights") : tr("room.night")}</>}</span><span>&pound;{subtotal?.toFixed(0) || (room.base_price * nights * roomCount).toFixed(0)}</span></div>
         {selectedAddOns?.length > 0 && selectedAddOns.map(ao => (
           <div key={ao.id} className="flex justify-between text-xs"><span className="text-slate-500">{ao.name}</span><span>&pound;{ao.price}</span></div>
         ))}
@@ -225,14 +272,19 @@ function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, 
             <span>-&pound;{discountAmount.toFixed(0)}</span>
           </div>
         )}
+        {giftApplied > 0 && (
+          <div className="flex justify-between" style={{ color: t.colors.success }} data-testid="summary-gift">
+            <span>{tr("gift.card")}</span><span>-&pound;{giftApplied.toFixed(0)}</span>
+          </div>
+        )}
         <div className="flex justify-between"><span className="text-slate-500">{tr("summary.taxesFees")}</span><span>{tr("summary.included")}</span></div>
       </div>
       <div className="flex justify-between items-baseline">
         <span className="font-semibold text-slate-900">{tr("summary.total")}</span>
         <span className="text-2xl font-bold text-slate-900">&pound;{totalPrice.toFixed(0)}</span>
       </div>
-      {room.free_cancellation && (
-        <div className="mt-3 rounded-lg p-3 text-xs font-medium flex items-center gap-1.5" style={{ background: t.colors.badgeBg, color: t.colors.success }}>
+      {(multi ? cart.every((c) => !c.plan || c.plan.cancellation_type === "free") : room.free_cancellation) && (
+        <div className="mt-3 rounded-lg p-3 text-xs font-medium flex items-center gap-1.5" style={{ background: t.colors.badgeBg, color: t.colors.success }} data-testid="summary-free-cancel">
           <CheckCircle size={14} weight="fill" /> {tr("summary.freeCancellation")}
         </div>
       )}

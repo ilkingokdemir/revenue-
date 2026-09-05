@@ -1691,6 +1691,10 @@ api_router.include_router(create_price_guards_router(db, require_roles))
 api_router.include_router(create_cm_onboarding_router(db, require_roles))
 api_router.include_router(create_ical_router(db, require_roles))
 api_router.include_router(create_site_builder_router(db, require_roles))
+from routes.pms.be_conversion import create_be_conversion_router
+api_router.include_router(create_be_conversion_router(db, require_roles))
+from routes.pms.be_distribution import create_be_distribution_router
+api_router.include_router(create_be_distribution_router(db, require_roles))
 api_router.include_router(create_terminal_router(db, require_roles))
 api_router.include_router(create_ai_copilot_router(db, require_roles))
 api_router.include_router(create_presets_router(db, require_roles))

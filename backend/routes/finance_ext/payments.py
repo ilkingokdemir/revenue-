@@ -32,7 +32,17 @@ def create_payments_router(db, require_roles):
         if not booking:
             raise HTTPException(404, "Booking not found")
 
-        amount = float(booking.get("total_price", 0))
+        amount = float(booking.get("cart_total") or booking.get("total_price", 0))
+        if data.get("amount_mode") == "deposit":
+            plan_ids = [b.get("rate_plan_id") for b in await db.bookings.find({"cart_ref": booking.get("cart_ref")}, {"_id": 0, "rate_plan_id": 1, "total_price": 1}).to_list(20)] if booking.get("cart_ref") else []
+            plans = {p["id"]: p for p in await db.be_rate_plans.find({"id": {"$in": [x for x in plan_ids if x]}}, {"_id": 0, "id": 1, "deposit_pct": 1}).to_list(20)}
+            dep = 0.0
+            async for b in db.bookings.find({"cart_ref": booking.get("cart_ref")}, {"_id": 0, "rate_plan_id": 1, "total_price": 1}):
+                dep += float(b.get("total_price", 0)) * (float(plans.get(b.get("rate_plan_id"), {}).get("deposit_pct") or 0) / 100.0)
+            if 0 < dep < amount:
+                amount = round(dep, 2)
+                await db.bookings.update_one({"id": booking_id}, {"$set": {"deposit_due": amount, "balance_due": round(float(booking.get("cart_total") or booking.get("total_price", 0)) - amount, 2), "payment_plan": "deposit"}})
+                await db.bookings.update_many({"cart_ref": booking.get("cart_ref")}, {"$set": {"payment_plan": "deposit"}})
         if amount <= 0:
             raise HTTPException(400, "Invalid booking amount")
 
@@ -181,11 +191,18 @@ def create_payments_router(db, require_roles):
             update["paid_at"] = datetime.now(timezone.utc).isoformat()
 
             # Process successful payment
+            if tx.get("type") == "gift_card":
+                await db.gift_cards.update_one({"id": tx["reference_id"]}, {"$set": {"status": "active", "paid_at": update["paid_at"], "payment_method": "stripe"}})
             if tx.get("type") == "booking":
                 await db.bookings.update_one(
                     {"id": tx["reference_id"]},
                     {"$set": {"payment_status": "paid", "payment_method": "stripe", "paid_at": update["paid_at"]}}
                 )
+                _m = await db.bookings.find_one({"id": tx["reference_id"]}, {"_id": 0, "cart_ref": 1, "cart_master": 1})
+                if _m and _m.get("cart_master") and _m.get("cart_ref"):
+                    await db.bookings.update_many(
+                        {"cart_ref": _m["cart_ref"], "payment_status": {"$ne": "paid"}},
+                        {"$set": {"payment_status": "paid", "payment_method": "stripe", "paid_at": update["paid_at"]}})
                 # Create income entry
                 booking = await db.bookings.find_one({"id": tx["reference_id"]}, {"_id": 0})
                 if booking:

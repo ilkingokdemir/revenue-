@@ -5,6 +5,7 @@
  */
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { useTranslation } from "@/i18n";
 import { toast } from "sonner";
 import { Wrench, X, Plus, Camera } from "lucide-react";
 
@@ -64,6 +65,7 @@ const CATEGORIES = [
 export default function GlobalReportIssueFAB({ propertyId, currentUser, properties = [] }) {
   const [open, setOpen] = useState(false);
   const [lang, setLang] = useState(() => localStorage.getItem("maint_lang") || "en");
+  const { setLang: setGlobalLang } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", category: "general", priority: "medium", location: "", room_number: "" });
   const [photos, setPhotos] = useState([]);
@@ -140,7 +142,7 @@ export default function GlobalReportIssueFAB({ propertyId, currentUser, properti
       <div className="fixed bottom-20 right-6 z-40 flex flex-col items-end gap-2" data-testid="fab-cluster">
         <div className="flex gap-0.5 bg-white rounded-full shadow-lg p-1 border border-stone-200" data-testid="fab-lang-pill">
           {Object.keys(FAB_I18N).map(c => (
-            <button key={c} onClick={() => { setLang(c); localStorage.setItem("maint_lang", c); }}
+            <button key={c} onClick={() => { setLang(c); localStorage.setItem("maint_lang", c); try { setGlobalLang && setGlobalLang(c); } catch {} }}
               className={`px-2 py-0.5 text-[10px] font-semibold rounded-full transition ${lang === c ? "bg-orange-500 text-white shadow" : "text-stone-500 hover:text-stone-700"}`}
               data-testid={`fab-pill-lang-${c}`}>
               {FAB_I18N[c].flag} {c.toUpperCase()}

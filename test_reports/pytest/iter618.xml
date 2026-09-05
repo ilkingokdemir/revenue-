@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="3" time="4.849" timestamp="2026-09-05T14:23:06.384529+00:00" hostname="agent-env-a9d7a5c1-de72-4617-a5b9-ed7dde4401f0"><testcase classname="backend.tests.test_iter618" name="test_cert_guide_shape" time="3.797"><failure message="KeyError: 'access_token'">backend/tests/test_iter618.py:34: in test_cert_guide_shape
+    r = requests.get(f"{BASE_URL}/api/certifications/guide", headers=_h(), timeout=15)
+                                                                     ^^^^
+backend/tests/test_iter618.py:28: in _h
+    TOKEN = _login()
+            ^^^^^^^^
+backend/tests/test_iter618.py:19: in _login
+    return r.json()["access_token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'access_token'</failure></testcase><testcase classname="backend.tests.test_iter618" name="test_accounting_mapping_qbo" time="0.431"><failure message="KeyError: 'access_token'">backend/tests/test_iter618.py:54: in test_accounting_mapping_qbo
+    headers=_h(), json={"revenue": "81", "bogus": "x"}, timeout=15)
+            ^^^^
+backend/tests/test_iter618.py:28: in _h
+    TOKEN = _login()
+            ^^^^^^^^
+backend/tests/test_iter618.py:19: in _login
+    return r.json()["access_token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'access_token'</failure></testcase><testcase classname="backend.tests.test_iter618" name="test_accounting_mapping_invalid_provider" time="0.465"><failure message="KeyError: 'access_token'">backend/tests/test_iter618.py:69: in test_accounting_mapping_invalid_provider
+    headers=_h(), json={"revenue": "1"}, timeout=15)
+            ^^^^
+backend/tests/test_iter618.py:28: in _h
+    TOKEN = _login()
+            ^^^^^^^^
+backend/tests/test_iter618.py:19: in _login
+    return r.json()["access_token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'access_token'</failure></testcase></testsuite></testsuites>

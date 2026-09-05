@@ -1,0 +1,27 @@
+{
+  "summary": "Iteration 618 backend+frontend tests: (1) GET /api/certifications/guide returns 8-item checklist with correct shape; (2) POST /api/accounting/mapping/qbo/aldgate-flats persists revenue='81' and drops unknown fields, verified via GET connectors; (3) Frontend AdminPanel 'Canlıya Geçiş' tab shows certification-guide, cert-progress '2/8 · %25', cert-toggle-gbp expands with ol steps + 'Başvuru sayfası' apply link; (4) Team Members prop-roles popover: pid+role selection produces preview 'etkin rol → viewer', Ekle saves with toast 'Tesis rolleri kaydedildi' and creates prop-role-row-*; (5) AccountingConnectorsCard MappingEditor: changing acct-map-xero-payments shows acct-map-save-xero, save produces toast 'Hesap eşlemesi kaydedildi'. Language switch partially works — FAB pill toggles (Report Issue → Ariza Bildir) but ApprovalQueuePanel and sidebar nav titles remained in EN when TR was selected (i18n not fully reactive across those panels in same session).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Language selector (fab-pill-lang-tr / fab-pill-lang-en) — Approval Center title and bulk button", "issue": "After clicking fab-pill-lang-tr, Approval Center header still renders EN 'Approval Center' and 'Approve safe ones in bulk...' — sidebar nav items also remain in English while the FAB Report Issue button correctly switches to 'Ariza Bildir'. Suggests some components (ApprovalQueuePanel, menuSections consumer, AnalyticsPanel sentiment cards) are not re-rendering on language change or use a separate/stale i18n hook. i18n keys (ro.approval_center, ro.bulk_safe, ro.root_cause, nav.approvals) ARE present in both tr.json and en.json.", "affected_selectors": ["[data-testid=\"approval-queue-btn\"]", "[data-testid=\"fab-pill-lang-tr\"]", "[data-testid=\"fab-pill-lang-en\"]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter618.py", "/app/test_reports/pytest/iter618.xml"],
+  "action_items": [
+    "Investigate language reactivity: ApprovalQueuePanel/AnalyticsPanel/menu titles do not re-render immediately when fab-pill-lang-tr is toggled (verify LanguageSelector broadcasts change and consumers subscribe correctly, or force full-page re-render). Note FAB 'Report Issue' does switch correctly, so i18n context is loaded — issue is likely component-level subscription."
+  ],
+  "critical_code_review_comments": [
+    "certification_guide.py: 'accounting' item computes done as OR of xero/qbo/efatura which is correct; consider also including CLIENT_SECRET presence check for completeness.",
+    "accounting_sync.py save_mapping: correctly filters keys via DEFAULT_MAPPING allowlist; upsert path creates connection with status='mapping_only' — good defensive design.",
+    "AccountingConnectorsCard MappingEditor: no debounce; on rapid typing might trigger multiple state updates, but functionally fine."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter618.py"],
+  "success_rate": {"backend": "100%", "frontend": "85%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test wrote QBO mapping {revenue:'81'} to aldgate-flats (accounting_connections) and Xero mapping payments='999' to default property. Also added prop_roles entry for admin user Hotel Admin on 'default' property with role viewer.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend endpoints for iteration 618 fully verified: /api/certifications/guide (8 items, correct shape), /api/accounting/mapping/{provider}/{pid} (filters unknown keys, persists to accounting_connections). Frontend all 4 scenarios (CertGuide, PropertyRoleEditor, Mapping save, i18n) exercised. i18n note: language switch works for FAB but Approval/Analytics panels appear unresponsive to same-session language toggle — verify LanguageSelector wiring."
+}

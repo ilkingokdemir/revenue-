@@ -17,6 +17,7 @@ const DialogHeader = ({ children, className = "" }) => <div className={`mb-4 ${c
 const DialogTitle = ({ children, className = "" }) => <h2 className={`text-lg font-semibold ${className}`}>{children}</h2>;
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { useTranslation } from "@/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { API, PLATFORMS, SENTIMENT_COLORS, URGENCY_COLORS } from "./config";
@@ -29,6 +30,7 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [topicCompare, setTopicCompare] = useState(null);
+  const { t } = useTranslation();
   const [compIntel, setCompIntel] = useState(null);
   const actGap = async (item, action) => {
     try {
@@ -315,7 +317,7 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-white border border-stone-200 rounded-md p-4" data-testid="root-cause-card">
                 <h4 className="font-medium text-[#1C1917] mb-1 flex items-center gap-2">
-                  <TrendDown size={18} className="text-[#C05A44]" /> Root Cause (30d)
+                  <TrendDown size={18} className="text-[#C05A44]" /> {t("ro.root_cause")}
                 </h4>
                 <p className="text-[11px] text-stone-400 mb-3">{analytics?.root_cause?.negative_reviews ?? 0} negative reviews vs {analytics?.root_cause?.previous_negative_reviews ?? 0} previous period</p>
                 <div className="space-y-2">
@@ -353,7 +355,7 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
               </div>
               <div className="bg-white border border-stone-200 rounded-md p-4" data-testid="staff-intel-card">
                 <h4 className="font-medium text-[#1C1917] mb-1 flex items-center gap-2">
-                  <Users size={18} className="text-[#3E5245]" /> Staff Intelligence (90d)
+                  <Users size={18} className="text-[#3E5245]" /> {t("ro.staff_intel")}
                 </h4>
                 <p className="text-[11px] text-stone-400 mb-3">Staff names mentioned in reviews — praise vs complaints</p>
                 <div className="space-y-1.5">
@@ -441,13 +443,13 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
             {compIntel && (
               <div className="bg-white border border-stone-200 rounded-md p-4" data-testid="competitor-intel-card">
                 <div className="flex items-center justify-between mb-1">
-                  <h4 className="font-medium text-[#1C1917] flex items-center gap-2"><Lightning size={18} className="text-[#C05A44]" /> Competitor Review Intelligence</h4>
+                  <h4 className="font-medium text-[#1C1917] flex items-center gap-2"><Lightning size={18} className="text-[#C05A44]" /> {t("ro.comp_intel")}</h4>
                   <Badge className={compIntel.mode === "live" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}>{compIntel.mode === "live" ? "LIVE" : "SIMULATED"}</Badge>
                 </div>
                 <p className="text-[11px] text-stone-600 mb-3" data-testid="competitor-intel-insight">{compIntel.insight}</p>
                 <div className="grid md:grid-cols-2 gap-3">
                   <div className="border border-red-100 bg-red-50/40 rounded p-3" data-testid="they-have-we-dont">
-                    <div className="text-xs font-semibold text-red-800 mb-1">Onlarda var, bizde yok</div>
+                    <div className="text-xs font-semibold text-red-800 mb-1">{t("ro.they_have")}</div>
                     {compIntel.they_have_we_dont.length === 0 && <p className="text-[11px] text-stone-400">Fark bulunamadı.</p>}
                     {compIntel.they_have_we_dont.slice(0, 6).map(x => (
                       <div key={x.item} className="text-[11px] mb-2 border-b border-red-100 pb-1.5" data-testid={`gap-item-${x.item.replace(/\s+/g, "-")}`}>
@@ -479,7 +481,7 @@ const AnalyticsPanel = ({ isOpen, onClose }) => {
             {topicCompare && (
               <div className="bg-white border border-stone-200 rounded-md p-4" data-testid="topic-compare-card">
                 <div className="flex items-center justify-between mb-1">
-                  <h4 className="font-medium text-[#1C1917] flex items-center gap-2"><Tag size={18} className="text-[#3E5245]" /> Topic Benchmark vs Competitors ({topicCompare.days}d)</h4>
+                  <h4 className="font-medium text-[#1C1917] flex items-center gap-2"><Tag size={18} className="text-[#3E5245]" /> {t("ro.topic_benchmark")} ({topicCompare.days}d)</h4>
                   <Badge className={topicCompare.mode === "live" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}>{topicCompare.mode === "live" ? "LIVE (Places API)" : "SIMULATED"}</Badge>
                 </div>
                 <p className="text-[11px] text-stone-500 mb-3" data-testid="topic-compare-insight">{topicCompare.insight}</p>

@@ -1737,6 +1737,8 @@ from routes.integrations_pkg.gbp_publish import create_gbp_router
 api_router.include_router(create_gbp_router(db, require_roles))
 from routes.platform_ext.db_indexes import create_db_indexes_router
 api_router.include_router(create_db_indexes_router(db, require_roles))
+from routes.platform_ext.certification_guide import create_certification_guide_router
+api_router.include_router(create_certification_guide_router(db, require_roles))
 from routes.security.tenant_sso import create_tenant_sso_router
 from auth import create_access_token as _cat, create_refresh_token as _crt
 api_router.include_router(create_tenant_sso_router(db, require_roles, _cat, _crt))

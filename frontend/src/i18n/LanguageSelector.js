@@ -1,8 +1,28 @@
 import { useState, useRef, useEffect } from "react";
 import { GlobeSimple, CaretDown, Check } from "@phosphor-icons/react";
 import { useLanguage } from "./LanguageContext";
+import { useTranslation, LANGUAGES } from "./index";
 
 export function LanguageSelector({ variant = "header" }) {
+  return variant === "dashboard" ? <DashboardLanguageSelector /> : <WidgetLanguageSelector variant={variant} />;
+}
+
+function DashboardLanguageSelector() {
+  const { lang, setLang } = useTranslation();
+  const langs = (LANGUAGES || []).filter(l => ["tr", "en", "de"].includes(l.code));
+  return (
+    <div className="flex rounded-lg bg-stone-800 p-0.5 w-full" data-testid="language-selector">
+      {langs.map(l => (
+        <button key={l.code} onClick={() => setLang(l.code)} data-testid={`lang-${l.code}`}
+          className={`flex-1 h-7 text-[11px] font-medium rounded-md transition-colors ${lang === l.code ? "bg-indigo-600 text-white" : "text-stone-400 hover:text-stone-200"}`}>
+          {l.code.toUpperCase()}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function WidgetLanguageSelector({ variant }) {
   const { lang, setLang, languages } = useLanguage();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);

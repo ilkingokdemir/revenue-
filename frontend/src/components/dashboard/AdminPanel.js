@@ -106,6 +106,7 @@ export function AdminPanel({ properties, user, activePropertyId }) {
     { id: "module-settings", label: "Module Settings", icon: Settings },
     { id: "purchase-orders", label: "Purchase Orders", icon: Truck },
     { id: "system-health", label: "Sistem Sağlığı", icon: Activity },
+    { id: "certifications", label: "Canlıya Geçiş", icon: Shield },
   ];
 
   if (loading) return <div className="flex items-center justify-center h-96"><div className="w-8 h-8 border-3 border-stone-300 border-t-[#2C4C3B] rounded-full animate-spin" /></div>;
@@ -242,6 +243,7 @@ export function AdminPanel({ properties, user, activePropertyId }) {
                         Karne WA
                       </label>
                     </div>
+                    <PropertyRoleEditor u={u} onSaved={fetchUsers} />
                     <Select value={u.role} onValueChange={v => updateUserRole(u.id, v)}>
                       <SelectTrigger className="h-8 text-xs w-40 border-stone-200" data-testid={`role-select-${u.id}`}><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -305,6 +307,7 @@ export function AdminPanel({ properties, user, activePropertyId }) {
 
         {/* ========== SİSTEM SAĞLIĞI (iter 379) ========== */}
         {tab === "system-health" && <SystemHealthTab />}
+        {tab === "certifications" && <CertificationGuideTab />}
 
         {/* ========== PURCHASE ORDERS ========== */}
         {tab === "purchase-orders" && (
@@ -569,6 +572,84 @@ function OrganizationsCard() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+
+function PropertyRoleEditor({ u, onSaved }) {
+  const [open, setOpen] = useState(false);
+  const [props, setProps] = useState([]);
+  const [pid, setPid] = useState("");
+  const [role, setRole] = useState("manager");
+  const pr = u.property_roles || {};
+  useEffect(() => { if (open && props.length === 0) axios.get(`${API}/properties`).then(r => setProps(Array.isArray(r.data) ? r.data : (r.data.properties || r.data.items || []))).catch(() => {}); }, [open, props.length]);
+  const save = async (next) => {
+    try { await axios.put(`${API}/orgs/users/${u.id}/property-roles`, { property_roles: next }); toast.success("Tesis rolleri kaydedildi"); onSaved(); }
+    catch (e) { toast.error(e.response?.data?.detail || "Kaydedilemedi"); }
+  };
+  const n = Object.keys(pr).length;
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(!open)} data-testid={`prop-roles-btn-${u.id}`}
+        className={`h-8 px-2 rounded-lg border text-[11px] ${n ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-stone-200 text-stone-500"}`}>
+        Tesis rolleri{n ? ` (${n})` : ""}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-9 z-20 w-80 bg-white border border-stone-200 rounded-xl shadow-lg p-3 text-xs" data-testid={`prop-roles-popover-${u.id}`}>
+          <div className="font-semibold text-stone-800 mb-1">Tesise özel roller</div>
+          <p className="text-[10px] text-stone-400 mb-2">Etkin rol: tesis rolü varsa o, yoksa genel rol (<b>{u.role}</b>).</p>
+          {Object.entries(pr).map(([p, r]) => (
+            <div key={p} className="flex items-center justify-between py-1 border-b border-stone-100" data-testid={`prop-role-row-${u.id}-${p}`}>
+              <span>{props.find(x => x.id === p)?.name || p} → <b>{r}</b> <span className="text-stone-400">(etkin)</span></span>
+              <button onClick={() => { const next = { ...pr }; delete next[p]; save(next); }} className="text-red-600">kaldır</button>
+            </div>
+          ))}
+          <div className="flex gap-1 mt-2">
+            <select value={pid} onChange={e => setPid(e.target.value)} data-testid={`prop-role-pid-${u.id}`} className="flex-1 h-7 border border-stone-200 rounded px-1">
+              <option value="">Tesis seç…</option>
+              {props.map(p => <option key={p.id} value={p.id}>{p.name || p.id}</option>)}
+            </select>
+            <select value={role} onChange={e => setRole(e.target.value)} data-testid={`prop-role-role-${u.id}`} className="h-7 border border-stone-200 rounded px-1">
+              {["admin", "manager", "receptionist", "housekeeper", "staff", "viewer"].map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <button disabled={!pid} onClick={() => save({ ...pr, [pid]: role })} data-testid={`prop-role-add-${u.id}`} className="h-7 px-2 rounded bg-stone-900 text-white disabled:opacity-40">Ekle</button>
+          </div>
+          {pid && <p className="text-[10px] text-emerald-700 mt-1.5" data-testid={`prop-role-preview-${u.id}`}>Önizleme: {props.find(x => x.id === pid)?.name || pid} tesisinde etkin rol → <b>{role}</b></p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CertificationGuideTab() {
+  const [g, setG] = useState(null);
+  const [openId, setOpenId] = useState("");
+  useEffect(() => { axios.get(`${API}/certifications/guide`).then(r => setG(r.data)).catch(() => setG(null)); }, []);
+  if (!g) return <div className="p-6 text-sm text-stone-400">Yükleniyor…</div>;
+  return (
+    <div className="max-w-4xl mx-auto space-y-3" data-testid="certification-guide">
+      <div className="bg-white rounded-2xl border border-stone-200 p-4">
+        <div className="flex items-center justify-between"><h3 className="font-semibold text-stone-800">Canlıya Geçiş Rehberi — sertifika & anahtar checklist</h3>
+          <span className="text-sm font-bold text-emerald-700" data-testid="cert-progress">{g.done}/{g.total} · %{g.progress_pct}</span></div>
+        <div className="h-2 bg-stone-100 rounded-full mt-2"><div className="h-2 bg-emerald-600 rounded-full" style={{ width: `${g.progress_pct}%` }} /></div>
+        <p className="text-[11px] text-stone-400 mt-2">Kod tarafı hazır; her madde bir dış başvuru/anahtar gerektirir. Anahtar geldiğinde backend .env'e eklenir ve durum otomatik ✓ olur.</p>
+      </div>
+      {g.items.map(it => (
+        <div key={it.id} className={`bg-white rounded-2xl border p-4 ${it.done ? "border-emerald-200" : "border-stone-200"}`} data-testid={`cert-item-${it.id}`}>
+          <button className="w-full flex items-center justify-between text-left" onClick={() => setOpenId(openId === it.id ? "" : it.id)} data-testid={`cert-toggle-${it.id}`}>
+            <span className="font-medium text-stone-800">{it.done ? "✅" : "⬜"} {it.title} <span className="text-[11px] text-stone-400">· {it.eta}</span></span>
+            <span className="text-xs text-stone-400">{openId === it.id ? "▲" : "▼"}</span>
+          </button>
+          {openId === it.id && (
+            <div className="mt-3 text-xs text-stone-600 space-y-1">
+              <ol className="list-decimal ml-4 space-y-1">{it.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
+              <p className="text-[11px] text-stone-400 mt-2">ENV: {it.env.join(", ")}{it.note ? ` · ${it.note}` : ""}</p>
+              <a href={it.url} target="_blank" rel="noreferrer" className="text-[11px] text-sky-700 underline">Başvuru sayfası ↗</a>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

@@ -50,7 +50,7 @@ export default function AccountingConnectorsCard({ propertyId }) {
           <div key={p} className="border border-stone-700 rounded-lg p-3 text-xs" data-testid={`acct-provider-${p}`}>
             <div className="font-semibold text-stone-100">{NAMES[p]} {v.connected ? <span className="text-emerald-400">● bağlı</span> : <span className="text-stone-500">○ bağlı değil</span>}</div>
             <div className="text-stone-400 mt-1">{v.client_configured ? "OAuth istemcisi hazır" : <>Env'de {p.toUpperCase()}_CLIENT_ID/SECRET yok · redirect: <code className="break-all">{v.redirect_uri}</code></>}</div>
-            <div className="text-stone-500 mt-1">Hesaplar: tahsilat {v.mapping.payments} · gelir {v.mapping.revenue} · vergi {v.mapping.tax} · AR {v.mapping.ar}</div>
+            <MappingEditor provider={p} propertyId={propertyId} mapping={v.mapping} onSaved={load} />
             <div className="mt-2 flex gap-1.5">
               {!v.connected ? <button onClick={() => connect(p)} disabled={!v.client_configured} data-testid={`acct-connect-${p}`} className="px-2 py-1 rounded bg-sky-600 text-white disabled:opacity-40">Bağlan</button>
                 : <button onClick={() => disconnect(p)} data-testid={`acct-disconnect-${p}`} className="px-2 py-1 rounded bg-red-700 text-white">Bağlantıyı kes</button>}
@@ -74,6 +74,27 @@ export default function AccountingConnectorsCard({ propertyId }) {
           Son gönderimler: {d.recent_journals.slice(0, 5).map(j => `${j.business_date} ${NAMES[j.provider]} → ${j.status}`).join(" · ")}
         </div>
       )}
+    </div>
+  );
+}
+
+
+function MappingEditor({ provider, propertyId, mapping, onSaved }) {
+  const [m, setM] = useState(mapping);
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => { setM(mapping); setDirty(false); }, [mapping]);
+  const save = async () => {
+    try { await axios.post(`${API}/accounting/mapping/${provider}/${propertyId}`, m); toast.success("Hesap eşlemesi kaydedildi"); setDirty(false); onSaved(); }
+    catch (e) { toast.error(e.response?.data?.detail || "Kaydedilemedi"); }
+  };
+  return (
+    <div className="mt-2 grid grid-cols-4 gap-1" data-testid={`acct-mapping-${provider}`}>
+      {[["payments", "Tahsilat"], ["revenue", "Gelir"], ["tax", "Vergi"], ["ar", "AR"]].map(([k, l]) => (
+        <label key={k} className="block"><span className="text-[9px] text-stone-500">{l}</span>
+          <input value={m[k] ?? ""} onChange={e => { setM({ ...m, [k]: e.target.value }); setDirty(true); }} data-testid={`acct-map-${provider}-${k}`}
+            className="w-full h-6 px-1 rounded bg-stone-800 border border-stone-600 text-stone-100 text-[11px]" /></label>
+      ))}
+      {dirty && <button onClick={save} data-testid={`acct-map-save-${provider}`} className="col-span-4 h-6 mt-1 rounded bg-emerald-600 text-white text-[10px]">Eşlemeyi kaydet</button>}
     </div>
   );
 }

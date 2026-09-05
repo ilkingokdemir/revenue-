@@ -1252,6 +1252,7 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
   const [center, setCenter] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [riskFilter, setRiskFilter] = useState("");
+  const { t } = useTranslation();
 
   const fetchPending = useCallback(async () => {
     setIsLoading(true);
@@ -1311,10 +1312,10 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
       <InlineHeader>
         <InlineTitle className="flex items-center gap-2 text-stone-900">
           <ShieldCheck size={20} className="text-[#3E5245]" />
-          Approval Center
+          {t("ro.approval_center")}
           {pendingReviews.length > 0 && (
             <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
-              {pendingReviews.length} pending
+              {pendingReviews.length} {t("ro.pending")}
             </span>
           )}
         </InlineTitle>
@@ -1332,13 +1333,13 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 mt-2 text-[11px] text-stone-500">
         <div className="flex gap-3">
-          <span data-testid="escalated-count">Escalated: <b className="text-stone-800">{center?.escalated ?? 0}</b></span>
-          <span data-testid="spam-count">Spam suspected: <b className="text-stone-800">{center?.spam_suspected ?? 0}</b></span>
-          {perf && <span>AI score: <b className="text-stone-800">{perf.avg_response_score}</b> · Auto {perf.auto_approval_rate}% / Human {perf.human_approval_rate}% · Regen {perf.regeneration_rate}%</span>}
+          <span data-testid="escalated-count">{t("ro.escalated")}: <b className="text-stone-800">{center?.escalated ?? 0}</b></span>
+          <span data-testid="spam-count">{t("ro.spam_suspected")}: <b className="text-stone-800">{center?.spam_suspected ?? 0}</b></span>
+          {perf && <span>{t("ro.ai_score")}: <b className="text-stone-800">{perf.avg_response_score}</b> · Auto {perf.auto_approval_rate}% / Human {perf.human_approval_rate}% · Regen {perf.regeneration_rate}%</span>}
         </div>
         <button onClick={bulkSafe} disabled={bulkBusy || pendingReviews.length === 0} data-testid="bulk-approve-safe-btn"
           className="px-3 py-1.5 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800 disabled:opacity-50 inline-flex items-center gap-1">
-          <Lightning size={12} weight="fill" /> {bulkBusy ? "Onaylanıyor…" : "Güvenli olanları toplu onayla (4-5★ · low risk · Q≥eşik)"}
+          <Lightning size={12} weight="fill" /> {bulkBusy ? t("ro.approving") : t("ro.bulk_safe")}
         </button>
       </div>
 
@@ -1350,7 +1351,7 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
       ) : visible.length === 0 ? (
         <div className="py-8 text-center" data-testid="no-pending-approvals">
           <ShieldCheck size={32} className="mx-auto mb-2 text-emerald-300" />
-          <p className="text-sm text-stone-400">No responses pending approval</p>
+          <p className="text-sm text-stone-400">{t("ro.no_pending")}</p>
         </div>
       ) : (
         <div className="space-y-4 mt-3">
@@ -1373,14 +1374,14 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
               </div>
               <div className="p-4 space-y-3">
                 <div>
-                  <span className="text-[10px] uppercase tracking-wider text-stone-400 font-semibold">Guest Review</span>
+                  <span className="text-[10px] uppercase tracking-wider text-stone-400 font-semibold">{t("ro.guest_review")}</span>
                   <p className="text-sm text-stone-600 mt-1">{review.review_text}</p>
                   <div className="mt-2"><FlagChips analysis={a} /></div>
                 </div>
                 <SpamNotice analysis={a} review={review} />
                 {privacyBad && <PrivacyAlert privacy={review.response_privacy} />}
                 <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
-                  <span className="text-[10px] uppercase tracking-wider text-emerald-600 font-semibold">Proposed Response</span>
+                  <span className="text-[10px] uppercase tracking-wider text-emerald-600 font-semibold">{t("ro.proposed")}</span>
                   <p className="text-sm text-emerald-900 mt-1 whitespace-pre-line">{review.response_text}</p>
                   {review.ai_decision?.reasons && <p className="text-[10px] text-emerald-700/70 mt-1">AI: {review.ai_decision.action} · {review.ai_decision.reasons.join(", ")}</p>}
                 </div>
@@ -1393,7 +1394,7 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
                     data-testid={`approve-btn-${review.id}`}
                   >
                     <CheckCircle size={14} weight="fill" />
-                    {needsReason ? "Override & Publish" : "Approve & Publish"}
+                    {needsReason ? t("ro.override_publish") : t("ro.approve_publish")}
                   </button>
                   {!review.escalated && (
                     <button
@@ -1402,7 +1403,7 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
                       data-testid={`escalate-btn-${review.id}`}
                     >
                       <WarningCircle size={14} />
-                      Escalate
+                      {t("ro.escalate")}
                     </button>
                   )}
                   <button
@@ -1411,11 +1412,11 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
                     data-testid={`reject-btn-${review.id}`}
                   >
                     <X size={14} />
-                    Reject
+                    {t("ro.reject")}
                   </button>
                 </div>
                 <Input
-                  placeholder={needsReason ? "ZORUNLU: override / eskalasyon gerekçesi (audit'e yazılır)…" : "Optional notes…"}
+                  placeholder={needsReason ? t("ro.notes_required") : t("ro.notes_optional")}
                   value={notes[review.id] || ""}
                   onChange={(e) => setNotes(p => ({ ...p, [review.id]: e.target.value }))}
                   className={`h-8 text-xs ${needsReason ? "border-orange-300" : "border-stone-200"}`}

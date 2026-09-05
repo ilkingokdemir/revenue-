@@ -1,4 +1,5 @@
 import { ShieldWarning, Warning, Prohibit, Gauge } from "@phosphor-icons/react";
+import { useTranslation } from "@/i18n";
 
 export const RISK_META = {
   critical: { label: "CRITICAL", cls: "bg-red-600 text-white border-red-700" },
@@ -50,12 +51,13 @@ export const FlagChips = ({ analysis }) => {
 };
 
 export const SpamNotice = ({ analysis, review }) => {
+  const { t } = useTranslation();
   if (!analysis?.spam_suspected) return null;
   return (
     <div data-testid="spam-notice" className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800">
       <Prohibit size={16} weight="fill" className="mt-0.5 shrink-0" />
       <div>
-        <p className="font-bold">Possible spam ({Math.round(analysis.spam_probability * 100)}%) — DO NOT REPLY</p>
+        <p className="font-bold">{t("ro.spam_notice")} ({Math.round(analysis.spam_probability * 100)}%)</p>
         <p>Report it on the platform instead. Reviews can't be edited or removed via API; use the platform's report flow.</p>
         {review?.external_url && <a href={review.external_url} target="_blank" rel="noreferrer" className="underline font-semibold">Open review on {review.platform}</a>}
       </div>
@@ -64,12 +66,13 @@ export const SpamNotice = ({ analysis, review }) => {
 };
 
 export const PrivacyAlert = ({ privacy }) => {
+  const { t } = useTranslation();
   if (!privacy || privacy.ok) return null;
   return (
     <div data-testid="privacy-alert" className="flex items-start gap-2 bg-red-600 text-white rounded-lg p-3 text-xs">
       <Warning size={16} weight="fill" className="mt-0.5 shrink-0" />
       <div>
-        <p className="font-bold">Gizlilik ihlali — yayın engellenir</p>
+        <p className="font-bold">{t("ro.privacy_block")}</p>
         <p>{privacy.violations.map(v => `${v.type} (${v.sample})`).join(" · ")}. Metni düzenleyin: rezervasyon no, telefon, e-posta, ödeme, oda no, iç notlar ve personel bilgileri yayınlanamaz.</p>
       </div>
     </div>
@@ -80,13 +83,14 @@ const DIMS = [["personalisation", "Personalisation"], ["relevance", "Relevance"]
   ["originality", "Originality"], ["professionalism", "Professionalism"], ["policy_safety", "Policy safety"]];
 
 export const QualityPanel = ({ quality, similarity, decision }) => {
+  const { t } = useTranslation();
   if (!quality) return null;
   const tot = quality.total ?? 0;
   const col = tot >= 90 ? "text-emerald-700" : tot >= 75 ? "text-amber-700" : "text-red-700";
   return (
     <div data-testid="quality-panel" className="bg-white border border-stone-200 rounded-lg p-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-stone-700 inline-flex items-center gap-1"><Gauge size={14} /> Response Quality</span>
+        <span className="text-xs font-semibold text-stone-700 inline-flex items-center gap-1"><Gauge size={14} /> {t("ro.quality")}</span>
         <span className={`text-lg font-black ${col}`} data-testid="quality-total">{tot}</span>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1">
@@ -97,14 +101,14 @@ export const QualityPanel = ({ quality, similarity, decision }) => {
         ))}
         {similarity && (
           <div className="flex items-center justify-between text-[10px] text-stone-500">
-            <span>Similarity</span>
+            <span>{t("ro.similarity")}</span>
             <span className={`font-semibold ${similarity.max_pct >= 70 ? "text-red-600" : "text-stone-800"}`} data-testid="similarity-pct">{similarity.max_pct}% <span className="text-stone-400">/ {similarity.compared}</span></span>
           </div>
         )}
       </div>
       {decision && (
         <div className="mt-2 pt-2 border-t border-stone-100 text-[11px]" data-testid="decision-line">
-          <span className="font-semibold">Decision: </span>
+          <span className="font-semibold">{t("ro.decision")}: </span>
           <span className={decision.action === "auto_approve" ? "text-emerald-700" : decision.action === "escalate" ? "text-red-700" : "text-amber-700"}>{decision.action.replace("_", " ")}</span>
           <span className="text-stone-400"> · {decision.mode} · {decision.reasons?.join(", ")}</span>
         </div>

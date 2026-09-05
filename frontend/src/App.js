@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { LanguageProvider, useTranslation } from "@/i18n";
+import { LanguageSelector } from "@/i18n/LanguageSelector";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { PWAInstall } from "@/components/PWAInstall";
 import { NotificationBridge } from "@/components/NotificationBridge";
@@ -712,6 +713,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
               Pro
             </button>
           </div>
+          <div className="mt-2" data-testid="sidebar-language-selector"><LanguageSelector variant="dashboard" /></div>
           {/* Branch Selector — always visible */}
           <div className="mt-3" data-testid="branch-selector-container">
             <label className="text-[9px] uppercase tracking-[0.15em] font-semibold text-stone-600 mb-1 block px-0.5">Branch</label>

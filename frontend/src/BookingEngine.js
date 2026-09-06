@@ -26,9 +26,10 @@ import { GroupBookingModal } from "./templates/GroupBookingModal";
 import { AIConciergeChat } from "./templates/AIConciergeChat";
 import { SpaceBookingSection } from "./templates/SpaceBookingSection";
 import { CartBar } from "./templates/CartBar";
-import { planNightPrice } from "./templates/RatePlanRows";
+import { planNightPrice, roomNightBase } from "./templates/RatePlanRows";
 import { GiftCardSection } from "./templates/GiftCardSection";
 import { ExitIntentPopup, CookieBanner } from "./templates/ExitIntentPopup";
+import { useAnalytics, trackEvent } from "./site/analytics";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -50,6 +51,7 @@ function BookingEngineInner() {
   const [ratePlans, setRatePlans] = useState([]);
   const [cart, setCart] = useState([]);
   const [flexData, setFlexData] = useState(null);
+  useAnalytics(propertyId);
   const [loading, setLoading] = useState(true);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
@@ -73,6 +75,12 @@ function BookingEngineInner() {
   const [giftCode, setGiftCode] = useState("");
   const [giftCard, setGiftCard] = useState(null);
   const [pendingPromo, setPendingPromo] = useState("");
+  const [member, setMember] = useState(null);
+  const memberPct = member?.discount_pct || 0;
+  const checkMember = async (email) => {
+    try { const { data } = await axios.post(`${API}/booking/member-rate`, { email }); setMember(data.member ? { ...data, email } : { member: false, email }); if (!data.member) alert(t("member.notFound")); }
+    catch { /* ignore */ }
+  };
   const utmSource = (() => { const s = params.get("utm_source") || ""; return ["google_hotel_ads", "embed", "website", "metasearch"].includes(s) ? s : "booking_engine"; })();
 
   // Merge template defaults with custom overrides
@@ -208,17 +216,17 @@ function BookingEngineInner() {
 
   const applyFlexDates = (ci, co) => { setCheckIn(ci); setCheckOut(co); searchRooms(ci, co); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
-  const addToCart = (room, plan, qty = 1) => {
+  const addToCart = (room, plan, qty = 1, extraBeds = 0) => {
     setCart(prev => {
       const key = (c) => `${c.room.id}|${c.plan?.id || ""}`;
       const k = `${room.id}|${plan?.id || ""}`;
       const existing = prev.find(c => key(c) === k);
-      if (existing) return prev.map(c => key(c) === k ? { ...c, qty } : c);
-      return [...prev, { room, plan, qty }];
+      if (existing) return prev.map(c => key(c) === k ? { ...c, qty, extraBeds } : c);
+      return [...prev, { room, plan, qty, extraBeds }];
     });
   };
   const removeFromCart = (i) => setCart(prev => prev.filter((_, idx) => idx !== i));
-  const continueToDetails = () => { if (!cart.length) return; setSelectedRoom(cart[0].room); setStep(STEPS.DETAILS); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const continueToDetails = () => { if (!cart.length) return; setSelectedRoom(cart[0].room); setStep(STEPS.DETAILS); trackEvent("begin_checkout", { items: cart.length }); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   const nights = (() => {
     if (!checkIn || !checkOut) return 1;
@@ -241,13 +249,16 @@ function BookingEngineInner() {
     return sum + u.price;
   }, 0);
 
-  const subtotal = cart.length ? cart.reduce((s, c) => s + planNightPrice(c.room.base_price, c.plan) * nights * c.qty, 0) : (selectedRoom ? selectedRoom.base_price * nights * roomCount : 0);
+  const subtotal = cart.length ? cart.reduce((s, c) => s + planNightPrice(roomNightBase(c.room), c.plan) * (1 - memberPct / 100) * nights * c.qty + (Number(c.room.extra_bed_price) || 0) * nights * (c.extraBeds || 0), 0) : (selectedRoom ? roomNightBase(selectedRoom) * nights * roomCount : 0);
+  const taxRoom = cart[0]?.room || selectedRoom || {};
+  const cityTax = (Number(taxRoom.city_tax_per_night) || 0) * nights * (cart.reduce((s, c) => s + c.qty, 0) || roomCount);
+  const vatRate = Number(taxRoom.vat_rate) || 0;
   const discountAmount = promoDiscount ? promoDiscount.discount_amount : 0;
   const waiverTotal = damageWaiver && dwConfig ? dwConfig.fee_per_night * nights * cartRooms : 0;
-  const totalBeforeGift = Math.max(0, subtotal + addOnsTotal + upsellsTotal + waiverTotal - discountAmount);
+  const totalBeforeGift = Math.max(0, subtotal + addOnsTotal + upsellsTotal + waiverTotal + cityTax - discountAmount);
   const giftApplied = giftCard ? Math.min(giftCard.balance, totalBeforeGift) : 0;
   const totalPrice = Math.max(0, totalBeforeGift - giftApplied);
-  const depositDue = cart.length ? Math.round(cart.reduce((s, c) => s + planNightPrice(c.room.base_price, c.plan) * nights * c.qty * ((c.plan?.deposit_pct || 0) / 100), 0) * 100) / 100 : 0;
+  const depositDue = cart.length ? Math.round(cart.reduce((s, c) => s + planNightPrice(roomNightBase(c.room), c.plan) * (1 - memberPct / 100) * nights * c.qty * ((c.plan?.deposit_pct || 0) / 100), 0) * 100) / 100 : 0;
 
   const applyGift = async () => {
     if (!giftCode.trim()) return;
@@ -313,9 +324,11 @@ function BookingEngineInner() {
         promo_code: promoDiscount?.code || "",
         gift_card_code: giftCard?.code || "",
         source: utmSource,
-        items: (cart.length ? cart : [{ room: selectedRoom, plan: null, qty: roomCount }]).map(c => ({ room_type_id: c.room.id, rate_plan_id: c.plan?.id || "", qty: c.qty })),
+        loyalty_email: member?.member ? member.email : "",
+        items: (cart.length ? cart : [{ room: selectedRoom, plan: null, qty: roomCount }]).map(c => ({ room_type_id: c.room.id, rate_plan_id: c.plan?.id || "", qty: c.qty, extra_beds: c.extraBeds || 0 })),
       };
       const { data } = await axios.post(`${API}/booking/reserve-multi`, payload);
+      trackEvent("purchase", { transaction_id: data.booking_ref, value: data.total_price, currency: data.currency || "GBP", items: payload.items.length });
       if (totalPrice <= 0 && paymentMethod !== "hotel") {
         setConfirmation(data); setStep(STEPS.CONFIRM); window.scrollTo({ top: 0, behavior: "smooth" }); return;
       }
@@ -527,8 +540,8 @@ function BookingEngineInner() {
         <>
           <RoomSelectionStep t={tmpl} rooms={rooms} loading={loading} nights={nights} adults={adults} children={children} roomCount={roomCount}
             checkIn={checkIn} checkOut={checkOut} onSelectRoom={addToCart} onChangeSearch={() => setStep(STEPS.SEARCH)}
-            ratePlans={ratePlans} cart={cart} flexData={flexData} onApplyDates={applyFlexDates} />
-          <CartBar t={tmpl} cart={cart} nights={nights} onRemove={removeFromCart} onContinue={continueToDetails} />
+            ratePlans={ratePlans} cart={cart} flexData={flexData} onApplyDates={applyFlexDates} fmt={formatPrice} memberPct={memberPct} onMemberCheck={checkMember} />
+          <CartBar t={tmpl} cart={cart} nights={nights} onRemove={removeFromCart} onContinue={continueToDetails} fmt={formatPrice} memberPct={memberPct} />
           {cart.length > 0 && <div className="h-28" />}
         </>
       )}
@@ -545,7 +558,7 @@ function BookingEngineInner() {
           dwConfig={dwConfig} damageWaiver={damageWaiver} setDamageWaiver={setDamageWaiver} waiverTotal={waiverTotal}
           socialProofSettings={property?.social_proof?.settings} cart={cart} onBackToRooms={() => setStep(STEPS.ROOMS)}
           giftCode={giftCode} setGiftCode={setGiftCode} giftCard={giftCard} applyGift={applyGift} clearGift={() => { setGiftCard(null); setGiftCode(""); }} giftApplied={giftApplied}
-          depositDue={depositDue} />
+          depositDue={depositDue} fmt={formatPrice} memberPct={memberPct} cityTax={cityTax} vatRate={vatRate} />
       )}
 
       {/* Step 3: Payment Processing */}
@@ -560,7 +573,7 @@ function BookingEngineInner() {
       )}
 
       {/* Step 4: Confirmation */}
-      {step === STEPS.CONFIRM && <ConfirmationStep t={tmpl} confirmation={confirmation} onBookAnother={handleBookAnother} />}
+      {step === STEPS.CONFIRM && <ConfirmationStep t={tmpl} confirmation={confirmation} onBookAnother={handleBookAnother} fmt={formatPrice} />}
       </main>
 
       {/* Mobile Sticky Search */}

@@ -4,6 +4,8 @@ import {
 } from "@phosphor-icons/react";
 import { PhotoCarousel } from "./PhotoCarousel";
 import { RatePlanRows } from "./RatePlanRows";
+import { RoomDetailModal } from "./RoomDetailModal";
+import { useState } from "react";
 import { useLanguage } from "../i18n/LanguageContext";
 
 const amenityIcons = {
@@ -66,7 +68,7 @@ export function RoomPreviewCards({ t, rooms, searchRooms }) {
   );
 }
 
-export function RoomSelectionStep({ t, rooms, loading, nights, adults, children, roomCount, checkIn, checkOut, onSelectRoom, onChangeSearch, ratePlans, cart, flexData, onApplyDates }) {
+export function RoomSelectionStep({ t, rooms, loading, nights, adults, children, roomCount, checkIn, checkOut, onSelectRoom, onChangeSearch, ratePlans, cart, flexData, onApplyDates, fmt, memberPct, onMemberCheck }) {
   const { t: tr } = useLanguage();
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" data-testid="room-selection">
@@ -84,7 +86,8 @@ export function RoomSelectionStep({ t, rooms, loading, nights, adults, children,
         <button onClick={onChangeSearch} className="ml-auto text-sm font-semibold hover:underline" style={{ color: t.colors.accent }} data-testid="change-search-btn">{tr("room.changeSearch")}</button>
       </div>
 
-      <FlexDatesStrip t={t} flexData={flexData} onApplyDates={onApplyDates} />
+      <FlexDatesStrip t={t} flexData={flexData} onApplyDates={onApplyDates} fmt={fmt} />
+      {onMemberCheck && <MemberRateBar t={t} memberPct={memberPct} onMemberCheck={onMemberCheck} />}
 
       <div className="flex items-end justify-between mb-6 gap-4 flex-wrap">
         <h2 className="text-2xl font-semibold text-slate-900" style={{ fontFamily: t.fonts.heading }}>{tr("room.availableRooms")}</h2>
@@ -104,7 +107,7 @@ export function RoomSelectionStep({ t, rooms, loading, nights, adults, children,
       ) : (
         <div className="space-y-4">
           {rooms.map((room) => (
-            <RoomCard key={room.id} room={room} t={t} nights={nights} adults={adults} roomCount={roomCount} onSelect={onSelectRoom} ratePlans={ratePlans} cart={cart} />
+            <RoomCard key={room.id} room={room} t={t} nights={nights} adults={adults} roomCount={roomCount} onSelect={onSelectRoom} ratePlans={ratePlans} cart={cart} fmt={fmt} memberPct={memberPct} />
           ))}
         </div>
       )}
@@ -112,11 +115,30 @@ export function RoomSelectionStep({ t, rooms, loading, nights, adults, children,
   );
 }
 
-function FlexDatesStrip({ t, flexData, onApplyDates }) {
+function MemberRateBar({ t, memberPct, onMemberCheck }) {
+  const { t: tr } = useLanguage();
+  const [email, setEmail] = useState("");
+  const [open, setOpen] = useState(false);
+  if (memberPct > 0) return null;
+  return (
+    <div className="mb-6 rounded-lg border border-gray-200 bg-white p-3 flex flex-wrap items-center gap-3" style={{ borderRadius: t.borderRadius }} data-testid="member-rate-bar">
+      <span className="text-sm font-semibold text-slate-800">★ {tr("member.title")}</span>
+      <span className="text-xs text-slate-500">{tr("member.sub")}</span>
+      {open ? (
+        <form className="ml-auto flex gap-2" onSubmit={(e) => { e.preventDefault(); onMemberCheck(email); }}>
+          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email" className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm" data-testid="member-email-input" />
+          <button type="submit" className="px-3 py-1.5 rounded-lg text-white text-sm font-semibold" style={{ background: t.colors.accent }} data-testid="member-check-btn">{tr("member.check")}</button>
+        </form>
+      ) : <button onClick={() => setOpen(true)} className="ml-auto text-sm font-semibold hover:underline" style={{ color: t.colors.accent }} data-testid="member-open-btn">{tr("member.iAm")}</button>}
+    </div>
+  );
+}
+
+function FlexDatesStrip({ t, flexData, onApplyDates, fmt = (v) => `£${Math.round(v)}` }) {
   const { t: tr } = useLanguage();
   const alts = flexData?.alternatives?.filter((a) => a.saving > 0) || [];
   if (!alts.length) return null;
-  const fmt = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const fd = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   return (
     <div className="mb-6 rounded-lg border p-4" style={{ borderRadius: t.borderRadius, borderColor: `${t.colors.success}55`, background: `${t.colors.success}08` }} data-testid="flex-dates-strip">
       <div className="flex items-center gap-2 mb-3">
@@ -129,8 +151,8 @@ function FlexDatesStrip({ t, flexData, onApplyDates }) {
           <button key={a.offset} type="button" onClick={() => onApplyDates(a.check_in, a.check_out)}
             className="flex-shrink-0 bg-white border border-gray-200 rounded-lg px-3 py-2 text-left hover:shadow-md transition-shadow" style={{ borderRadius: t.borderRadius }}
             data-testid={`flex-date-${a.offset}`}>
-            <div className="text-xs font-semibold text-slate-800">{fmt(a.check_in)} → {fmt(a.check_out)}</div>
-            <div className="text-[11px] mt-0.5"><span className="font-bold text-slate-900">£{Math.round(a.total)}</span> <span className="font-semibold" style={{ color: t.colors.success }}>−£{Math.round(a.saving)} ({a.saving_pct}%)</span></div>
+            <div className="text-xs font-semibold text-slate-800">{fd(a.check_in)} → {fd(a.check_out)}</div>
+            <div className="text-[11px] mt-0.5"><span className="font-bold text-slate-900">{fmt(a.total)}</span> <span className="font-semibold" style={{ color: t.colors.success }}>−{fmt(a.saving)} ({a.saving_pct}%)</span></div>
           </button>
         ))}
       </div>
@@ -138,10 +160,12 @@ function FlexDatesStrip({ t, flexData, onApplyDates }) {
   );
 }
 
-function RoomCard({ room, t, nights, adults, onSelect, ratePlans, cart }) {
+function RoomCard({ room, t, nights, adults, onSelect, ratePlans, cart, fmt = (v) => `£${Math.round(v)}`, memberPct = 0 }) {
   const { t: tr } = useLanguage();
+  const [detail, setDetail] = useState(false);
   return (
     <div className="bg-white border border-gray-200 overflow-hidden hover:shadow-md transition-shadow" style={{ borderRadius: t.borderRadius }} data-testid={`room-card-${room.id}`}>
+      {detail && <RoomDetailModal t={t} room={room} onClose={() => setDetail(false)} fmt={fmt} nights={nights} />}
       <div className="flex flex-col md:flex-row">
         <div className="md:w-72 h-48 md:h-auto bg-slate-200 flex-shrink-0 overflow-hidden" style={{ minHeight: "180px" }}>
           <PhotoCarousel photos={room.photos} borderRadius="0" />
@@ -162,7 +186,8 @@ function RoomCard({ room, t, nights, adults, onSelect, ratePlans, cart }) {
               </span>
             )}
           </div>
-          <p className="text-sm text-slate-600 mb-3 line-clamp-2">{room.description}</p>
+          <p className="text-sm text-slate-600 mb-1 line-clamp-2">{room.description}</p>
+          <button type="button" onClick={() => setDetail(true)} className="text-sm font-semibold hover:underline mb-3" style={{ color: t.colors.accent }} data-testid={`room-detail-btn-${room.id}`}>{tr("detail.open")} →</button>
           <div className="flex flex-wrap gap-2">
             {room.amenities?.slice(0, 6).map((a) => {
               const Icon = amenityIcons[a];
@@ -171,7 +196,7 @@ function RoomCard({ room, t, nights, adults, onSelect, ratePlans, cart }) {
           </div>
         </div>
       </div>
-      <RatePlanRows t={t} room={room} plans={ratePlans} nights={nights} adults={adults} cart={cart} onAdd={onSelect} />
+      <RatePlanRows t={t} room={room} plans={ratePlans} nights={nights} adults={adults} cart={cart} onAdd={onSelect} fmt={fmt} memberPct={memberPct} />
     </div>
   );
 }

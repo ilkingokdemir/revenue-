@@ -14,9 +14,16 @@ export const SITE_PAGES = [
   { id: "location", label: "Konum", blocks: ["map", "amenities"] },
   { id: "faq", label: "SSS", blocks: ["faq"] },
   { id: "contact", label: "İletişim", blocks: ["contact", "map"] },
+  { id: "blog", label: "Blog & Kampanyalar", blocks: ["posts"] },
 ];
+export const PAGE_LABELS = { tr: { home: "Ana Sayfa", rooms: "Odalar", gallery: "Galeri", location: "Konum", faq: "SSS", contact: "İletişim", blog: "Blog & Kampanyalar" },
+  en: { home: "Home", rooms: "Rooms", gallery: "Gallery", location: "Location", faq: "FAQ", contact: "Contact", blog: "Blog & Offers" },
+  de: { home: "Start", rooms: "Zimmer", gallery: "Galerie", location: "Lage", faq: "FAQ", contact: "Kontakt", blog: "Blog & Angebote" } };
+export const UI = { tr: { book: "Rezervasyon Yap", rooms: "Odaları Gör", about: "Hakkımızda", amen: "Olanaklar", from: "gece'den", avail: "Müsaitliğe bak →", back: "← Geri", readMore: "Devamını oku", offer: "Kampanya", allRooms: "Tüm odalar", ourRooms: "Odalarımız", reviews: "Misafirlerimiz Ne Diyor", location: "Konum", faq: "Sık Sorulan Sorular", contact: "Bize Ulaşın", gallery: "Galeri", posts: "Blog & Kampanyalar", directions: "Yol tarifi al", send: "Gönder", ci: "Giriş", co: "Çıkış", guests: "Misafir", adults: "yetişkin", search: "Müsaitlik & Fiyat", noRooms: "Bu tarihlerde müsait oda bulunamadı.", nights: "gece", reserve: "Rezerve Et", sent: "Mesajınız alındı, en kısa sürede dönüş yapacağız." },
+  en: { book: "Book now", rooms: "See rooms", about: "About us", amen: "Amenities", from: "per night from", avail: "Check availability →", back: "← Back", readMore: "Read more", offer: "Offer", allRooms: "All rooms", ourRooms: "Our rooms", reviews: "What our guests say", location: "Location", faq: "Frequently asked questions", contact: "Contact us", gallery: "Gallery", posts: "Blog & Offers", directions: "Get directions", send: "Send", ci: "Check-in", co: "Check-out", guests: "Guests", adults: "adults", search: "Availability & rates", noRooms: "No rooms available for these dates.", nights: "nights", reserve: "Reserve", sent: "Thanks — we received your message and will reply shortly." },
+  de: { book: "Jetzt buchen", rooms: "Zimmer ansehen", about: "Über uns", amen: "Ausstattung", from: "pro Nacht ab", avail: "Verfügbarkeit prüfen →", back: "← Zurück", readMore: "Weiterlesen", offer: "Angebot", allRooms: "Alle Zimmer", ourRooms: "Unsere Zimmer", reviews: "Das sagen unsere Gäste", location: "Lage", faq: "Häufige Fragen", contact: "Kontakt", gallery: "Galerie", posts: "Blog & Angebote", directions: "Route planen", send: "Senden", ci: "Anreise", co: "Abreise", guests: "Gäste", adults: "Erwachsene", search: "Verfügbarkeit & Preise", noRooms: "Keine Zimmer für diese Daten verfügbar.", nights: "Nächte", reserve: "Reservieren", sent: "Danke — wir haben Ihre Nachricht erhalten und melden uns bald." } };
 
 export const BLOCK_LABELS = {
-  hero: "Hero (başlık + CTA)", availability: "Canlı müsaitlik arama", about: "Hakkımızda", rooms: "Odalar",
+  hero: "Hero (başlık + CTA)", posts: "Blog & Kampanyalar", availability: "Canlı müsaitlik arama", about: "Hakkımızda", rooms: "Odalar",
   amenities: "Olanaklar", gallery: "Galeri", reviews: "Misafir yorumları", map: "Konum / Harita", faq: "SSS", contact: "İletişim formu",
 };

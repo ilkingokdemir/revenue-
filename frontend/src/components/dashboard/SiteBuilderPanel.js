@@ -3,7 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Globe, ArrowSquareOut } from "@phosphor-icons/react";
 import { TEMPLATES as PRO_TEMPLATES } from "../../templates/templateConfig";
-import { BlocksEditor, FaqEditor, InquiriesCard } from "./SiteBuilderExtras";
+import { BlocksEditor, FaqEditor, InquiriesCard, TranslationsEditor, PostsEditor, AnalyticsBrandEditor } from "./SiteBuilderExtras";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -72,7 +72,7 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
       setPublished(!!s.published);
       if (s.mode) setMode(s.mode);
       if (s.engine_template) setEngineTpl(s.engine_template);
-      setContent({ headline: "", about: "", amenities: "", phone: "", email: "", address: "", seo_title: "", seo_description: "", map_query: "", blocks: [], faqs: [], pages_enabled: [], ...(s.content || {}) });
+      setContent({ headline: "", about: "", amenities: "", phone: "", email: "", address: "", seo_title: "", seo_description: "", map_query: "", blocks: [], faqs: [], pages_enabled: [], translations: {}, posts: [], analytics: {}, brand: {}, ...(s.content || {}) });
       setPhotos(data.photos || []);
       if (s.custom_domain) { setDomain(s.custom_domain); setDomainStatus(s.domain_status || "pending"); }
       try {
@@ -214,6 +214,9 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
             <BlocksEditor blocks={content.blocks} onChange={(b) => setContent({ ...content, blocks: b })}
               pagesEnabled={content.pages_enabled} onPagesChange={(p) => setContent({ ...content, pages_enabled: p })} />
             <FaqEditor faqs={content.faqs} onChange={(f) => setContent({ ...content, faqs: f })} />
+            <TranslationsEditor translations={content.translations} onChange={(tr) => setContent({ ...content, translations: tr })} />
+            <PostsEditor posts={content.posts} onChange={(p) => setContent({ ...content, posts: p })} />
+            <div className="md:col-span-2"><AnalyticsBrandEditor analytics={content.analytics} brand={content.brand} onAnalytics={(a) => setContent({ ...content, analytics: a })} onBrand={(b) => setContent({ ...content, brand: b })} /></div>
           </div>
         )}
 

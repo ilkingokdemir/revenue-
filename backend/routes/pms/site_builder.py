@@ -1,10 +1,12 @@
 """Web Sitesi Oluşturucu — şablonlu otel sitesi, tek tık yayınlama (Cloudbeds Websites paritesi)."""
 import os
+import re
+from typing import Dict
 import uuid
 import requests as _requests
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response
+from fastapi import Request, APIRouter, Depends, HTTPException, UploadFile, File, Response
 
 STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
 STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
@@ -63,7 +65,7 @@ DEFAULT_BLOCKS = [
     {"id": "contact", "enabled": True},
 ]
 BLOCK_IDS = {b["id"] for b in DEFAULT_BLOCKS}
-SITE_PAGES = ["home", "rooms", "gallery", "location", "faq", "contact"]
+SITE_PAGES = ["home", "rooms", "gallery", "location", "faq", "contact", "blog"]
 
 
 def create_site_builder_router(db, require_roles):
@@ -156,6 +158,23 @@ def create_site_builder_router(db, require_roles):
         content["faqs"] = [{"q": str(f.get("q", ""))[:200], "a": str(f.get("a", ""))[:1000]}
                            for f in (content.get("faqs") or []) if isinstance(f, dict) and f.get("q")][:20]
         content["pages_enabled"] = [p for p in (content.get("pages_enabled") or SITE_PAGES) if p in SITE_PAGES] or ["home"]
+        tr_in = content.get("translations") or {}
+        content["translations"] = {lg: {k: str(v)[:2000] for k, v in (tr_in.get(lg) or {}).items() if k in ("headline", "about", "seo_title", "seo_description") and v}
+                                   for lg in ("en", "de", "tr") if isinstance(tr_in.get(lg), dict)}
+        posts = []
+        for po in (content.get("posts") or [])[:50]:
+            if not isinstance(po, dict) or not po.get("title"):
+                continue
+            slug = re.sub(r"[^a-z0-9-]+", "-", str(po.get("slug") or po["title"]).lower()).strip("-")[:80] or str(uuid.uuid4())[:8]
+            posts.append({"id": po.get("id") or str(uuid.uuid4()), "slug": slug, "title": str(po["title"])[:160], "excerpt": str(po.get("excerpt") or "")[:300],
+                          "body": str(po.get("body") or "")[:8000], "image_url": str(po.get("image_url") or "")[:500], "type": po.get("type") if po.get("type") in ("blog", "campaign") else "blog",
+                          "date": str(po.get("date") or datetime.now(timezone.utc).date().isoformat())[:10], "published": bool(po.get("published", True)),
+                          "cta_url": str(po.get("cta_url") or "")[:300]})
+        content["posts"] = posts
+        an = content.get("analytics") or {}
+        content["analytics"] = {k: re.sub(r"[^A-Za-z0-9_-]", "", str(an.get(k) or ""))[:40] for k in ("ga4_id", "gtm_id", "pixel_id")}
+        br = content.get("brand") or {}
+        content["brand"] = {k: v for k, v in {"accent": str(br.get("accent") or "")[:7], "radius": str(br.get("radius") or "")[:6]}.items() if v and (k != "accent" or re.match(r"^#[0-9a-fA-F]{6}$", v))}
         upd = {"property_id": pid, "template": tpl, "content": content,
                "mode": data.get("mode") if data.get("mode") in ("simple", "pro") else "simple",
                "engine_template": (data.get("engine_template") or "")[:40],
@@ -189,8 +208,18 @@ def create_site_builder_router(db, require_roles):
                 "photos": [{"id": p["id"], "kind": p["kind"], "url": f"/api/site-builder/photo/{p['id']}"} for p in photos]}
 
     # ---------------- İLETİŞİM FORMU ----------------
+    _contact_rl: Dict[str, list] = {}
+
     @router.post("/public/contact")
-    async def public_contact(data: dict):
+    async def public_contact(data: dict, request: Request):
+        if (data.get("website") or data.get("hp_field") or "").strip():
+            return {"ok": True, "id": "spam-ignored"}
+        ip = (request.headers.get("x-forwarded-for") or request.client.host or "").split(",")[0].strip()
+        now_ts = datetime.now(timezone.utc).timestamp()
+        hits = [t for t in _contact_rl.get(ip, []) if now_ts - t < 3600]
+        if len(hits) >= 5:
+            raise HTTPException(429, "Çok fazla deneme — lütfen bir saat sonra tekrar deneyin")
+        _contact_rl[ip] = hits + [now_ts]
         pid = (data.get("property_id") or "").strip()
         name, email, msg = (data.get("name") or "").strip(), (data.get("email") or "").strip(), (data.get("message") or "").strip()
         if not pid or not name or "@" not in email or len(msg) < 5:
@@ -205,6 +234,34 @@ def create_site_builder_router(db, require_roles):
                                            "title": f"Web sitesi mesajı: {name}", "body": msg[:140],
                                            "read": False, "created_at": now})
         return {"ok": True, "id": doc["id"]}
+
+    @router.get("/public/analytics/{pid}")
+    async def public_analytics(pid: str):
+        cfg = await db.hotel_sites.find_one({"property_id": pid}, {"_id": 0, "content.analytics": 1, "content.brand": 1}) or {}
+        return {"analytics": (cfg.get("content") or {}).get("analytics") or {}, "brand": (cfg.get("content") or {}).get("brand") or {}}
+
+    @router.get("/public/sitemap/{pid}.xml")
+    async def public_sitemap(pid: str, request: Request):
+        cfg = await db.hotel_sites.find_one({"property_id": pid}, {"_id": 0}) or {}
+        if not cfg.get("published"):
+            raise HTTPException(404)
+        base = f"https://{cfg['custom_domain']}" if cfg.get("custom_domain") and cfg.get("domain_verified") else (os.environ.get("PUBLIC_BASE_URL") or str(request.base_url)).rstrip("/") + f"/site/{pid}"
+        c = cfg.get("content") or {}
+        today = datetime.now(timezone.utc).date().isoformat()
+        urls = [(base or "/", "1.0")] + [(f"{base}/{p}", "0.8") for p in (c.get("pages_enabled") or SITE_PAGES) if p != "home"]
+        for rt in await db.room_types.find({"property_id": pid, "is_active": {"$ne": False}}, {"_id": 0, "id": 1}).to_list(50):
+            urls.append((f"{base}/rooms/{rt['id']}", "0.7"))
+        for po in c.get("posts") or []:
+            if po.get("published", True):
+                urls.append((f"{base}/blog/{po['slug']}", "0.6"))
+        langs = ["tr"] + [lg for lg in ("en", "de") if (c.get("translations") or {}).get(lg)]
+        body = "".join(f"<url><loc>{u}</loc><lastmod>{today}</lastmod><priority>{pr}</priority>" + "".join(f'<xhtml:link rel="alternate" hreflang="{lg}" href="{u}{("&" if "?" in u else "?")}lang={lg}"/>' for lg in langs) + "</url>" for u, pr in urls)
+        return Response(f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">{body}</urlset>', media_type="application/xml")
+
+    @router.get("/public/robots/{pid}.txt")
+    async def public_robots(pid: str, request: Request):
+        base = (os.environ.get("PUBLIC_BASE_URL") or str(request.base_url)).rstrip("/")
+        return Response(f"User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: {base}/api/site-builder/public/sitemap/{pid}.xml\n", media_type="text/plain")
 
     @router.get("/{pid}/inquiries")
     async def list_inquiries(pid: str, _u: dict = Depends(require_roles(*ROLES))):

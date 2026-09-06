@@ -1,0 +1,51 @@
+{
+  "summary": "Iter 623 (Paket 26 - unified pricing / RMS+LOS on /book, room detail modal, member rate, taxes, site translations/posts/analytics/brand, sitemap/robots, contact honeypot+rate-limit). Wrote pytest test_iter623_paket26.py with 17 tests: 16 PASS, 1 SKIP (widget /api/booking-widget/{pid}/search endpoint returned nothing comparable — could not cross-verify totals). Frontend: /book?property=aldgate-flats&lang=tr — price-explain-<rid> present (x5), room-detail-btn opens room-detail-modal with room-detail-explanation, member-rate-bar → gold@test.com check applied '%10 indirim' banner and 5 member-rate lines with plan totals lowered ~10% (£236→£212). extra-bed dropdown visible with '+£15/gece'. /site/aldgate-flats — site-lang-select works, URL gains ?lang=en, hreflang tags present [tr,en,de,x-default], nav labels English, site-nav-blog opens Blog & Offers with 2 posts (Yaz Kampanyası %20 slug 'yaz-kampanyasi-20'), site-contact-hp honeypot input present, cookie-accept sets document.documentElement.dataset.mhbAnalytics='ga4,gtm,pixel' and injects googletagmanager script (mhb-ga4-src). site-room-detail-<rid> navigates to /site/aldgate-flats/rooms/<rid>?lang=en, site-room-detail-title & site-room-detail-book render, site-room-back returns to rooms list. Backend /api/site-builder/public/analytics returns ga4/gtm/pixel + brand accent #b45309. Sitemap XML contains /site/, /rooms/<id>, /blog/<slug> plus hreflang alternates. Robots.txt contains Sitemap:. Contact honeypot returns id 'spam-ignored' without persisting inquiry; rate limit returns 429 on 6th rapid post (backend allows 5/hour).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/booking-widget/aldgate-flats/search",
+       "issue": "Widget cross-verification skipped — endpoint either not present as /search or returns shape without rooms[].stay_total, so unified-pricing parity could not be programmatically asserted. Data-level comparison via /api/booking/rooms nightly totals matches expectations (RMS-driven), but a definitive widget-vs-book endpoint parity test could not be executed."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "HotelSitePage (site/aldgate-flats)",
+       "issue": "content.brand.accent (#b45309) is NOT applied to hero/CTA. site-book-cta computed backgroundColor is rgb(15,76,92) (coastal default) instead of rgb(180,83,9). CSS var --mhb-accent evaluates empty. Backend saves accent correctly (GET /public/analytics returns brand.accent='#b45309'); frontend theme layer isn't reading it.",
+       "selector": "[data-testid=site-book-cta]",
+       "priority": "MEDIUM"},
+      {"component": "HotelSitePage translations (?lang=en)",
+       "issue": "content.translations.en.headline='A calm escape' is NOT applied — hero H1 still shows property name 'Aldgate Flats' when lang=en. Some other translation-controlled strings ('gece'den', 'ODALARIMIZ') also stay Turkish under EN. Backend GET /public/site returns translations correctly; frontend translation resolver isn't wired to override the coastal template hero headline.",
+       "selector": "h1 on /site/aldgate-flats?lang=en",
+       "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Site (any lang)",
+       "issues": ["Hydration warning in console: '<span> cannot be a child of <option>' (language/currency selector) — unchanged from iter 620."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter623_paket26.py",
+    "/app/test_reports/pytest/iter623.xml"
+  ],
+  "action_items": [
+    "FIX FRONTEND (HotelSitePage.js / site theme): apply content.brand.accent as a CSS custom property (e.g. document.documentElement.style.setProperty('--mhb-accent', accent)) and use it in the primary Book/CTA button & nav pill so rgb(180,83,9) actually renders. Same for brand.radius on rounded elements.",
+    "FIX FRONTEND translations: when lang=en/de and content.translations[lang].headline is set, override the coastal template hero headline (currently hard-coded to property.name). Similar override should cover about text and other translatable content strings.",
+    "OPTIONAL: expose GET /api/booking-widget/{pid}/search (or document the correct path) so unified-pricing parity between /widget and /book can be programmatically asserted; today only shape parity is verified."
+  ],
+  "critical_code_review_comments": [
+    "Unified pricing in bookings.get_booking_rooms is correctly delegating to widget_pricing.nightly_rates + explain_price + check_los_restrictions — parity guaranteed at code-path level even if I couldn't hit the widget /search endpoint.",
+    "be_conversion.reserve_multi applies member discount only to nightly (correctly excludes taxes/extra-bed/child). Tax breakdown correct: vat included, city_tax = per-night * nights * rooms. Manage URL prefix /guest-portal-v2?ref=... correct.",
+    "site_builder.public_contact: rate-limit is 5/hour (>=5 hits → 429). Spec said '6th returns 429' — matches since first 5 succeed. Honeypot returns 200 with id 'spam-ignored' and does NOT touch site_inquiries or notifications — good.",
+    "site_builder.save_site strips invalid brand.accent (non #RRGGBB) — verified 'red' is dropped. Translations sanitized per allowed keys. Post slug slugified correctly ('yaz-kampanyasi-20').",
+    "Sitemap XML includes hreflang alternates only for translations present + tr — correct."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter623_paket26.py"],
+  "success_rate": {"backend": "94% (16/17, 1 skipped)", "frontend": "80% (2 issues: brand accent + translations headline not applied)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "During tests: created loyalty_member gold@test.com (deleted after), LOS min_stay=3 (deleted after), pricing settings vat=20/city=2/extra=15/child=10 (restored to zeros), site content updated with translations/posts/analytics — LEFT PUBLISHED coastal per spec, brand accent RESET to '' as instructed. Also created a handful of TEST_ bookings for the reserve-multi assertions; small footprint.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Loyalty gold@test.com is removed; if front-end member-rate re-test needed, re-insert db.loyalty_members {email:'gold@test.com',tier:'gold'}. Pricing settings back to zero — put vat/city/extra bed before testing tax UI again. Site remains published 'coastal' with translations/posts/analytics preserved; brand.accent cleared. Frontend brand-accent CSS wiring & site hero translation override are the two outstanding bugs. Server date ≈ 2026-09-06.",
+  "rca_of_the_issue": "Frontend: HotelSitePage renders coastal template with hardcoded property.name in hero and hardcoded template accent variables. It reads content.translations[lang] and content.brand from public/site payload but does not actually inject brand.accent into the CSS variable pipeline or substitute translations[lang].headline into the hero H1. Backend layer is fully correct."
+}

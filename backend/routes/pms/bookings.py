@@ -1077,6 +1077,26 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
                 })
                 room["available_rooms"] = max(0, room.get("total_rooms", 1) - bookings_count)
                 room["is_available"] = room["available_rooms"] > 0
+            # Tek fiyat motoru: RMS dinamik gecelik fiyat + LOS kısıtı + fiyat açıklaması (widget ile aynı)
+            try:
+                from routes.pms.widget_pricing import nightly_rates, explain_price, check_los_restrictions
+                los = await check_los_restrictions(db, property_id, check_in, check_out)
+                prop_tax = await db.properties.find_one({"id": property_id}, {"_id": 0, "vat_rate": 1, "city_tax_per_night": 1, "child_policy": 1, "extra_bed_price": 1}) or {}
+                for room in rooms:
+                    nightly = await nightly_rates(db, property_id, room, check_in, check_out)
+                    room["nightly"] = nightly
+                    room["stay_total"] = round(sum(n["rate"] for n in nightly), 2)
+                    room["avg_nightly"] = round(room["stay_total"] / max(1, len(nightly)), 2)
+                    room["price_explanation"] = explain_price(nightly)
+                    if los:
+                        room["los_block"] = los
+                        room["is_available"] = False
+                    room["vat_rate"] = prop_tax.get("vat_rate")
+                    room["city_tax_per_night"] = prop_tax.get("city_tax_per_night")
+                    room["extra_bed_price"] = room.get("extra_bed_price") or prop_tax.get("extra_bed_price")
+                    room["child_policy"] = prop_tax.get("child_policy")
+            except Exception as _e:
+                logger.warning(f"pricing unify failed: {_e}")
         else:
             for room in rooms:
                 room["available_rooms"] = room.get("total_rooms", 1)

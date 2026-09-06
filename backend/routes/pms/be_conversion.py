@@ -26,6 +26,8 @@ class CartItem(BaseModel):
     room_type_id: str
     rate_plan_id: str = ""
     qty: int = 1
+    extra_beds: int = 0
+    children_ages: List[int] = Field(default_factory=list)
 
 
 class MultiReserve(BaseModel):
@@ -42,6 +44,7 @@ class MultiReserve(BaseModel):
     promo_code: str = ""
     gift_card_code: str = ""
     source: str = ""
+    loyalty_email: str = ""
     items: List[CartItem] = Field(default_factory=list)
 
 
@@ -73,10 +76,9 @@ def create_be_conversion_router(db, require_roles):
     async def _overrides(pid: str, start: str, end: str) -> Dict[tuple, float]:
         out = {}
         async for ov in db.rate_overrides.find(
-                {"property_id": pid, "set_by": "owner-override", "date": {"$gte": start, "$lte": end}},
+                {"property_id": pid, "date": {"$gte": start, "$lte": end}, "custom_rate": {"$gt": 0}},
                 {"_id": 0, "date": 1, "room_type_id": 1, "custom_rate": 1}):
-            if ov.get("custom_rate"):
-                out[(ov.get("room_type_id") or "", ov["date"])] = float(ov["custom_rate"])
+            out[(ov.get("room_type_id") or "", ov["date"])] = float(ov["custom_rate"])
         return out
 
     def _rate(ovs: dict, rt_id: str, d: str, base: float) -> float:
@@ -189,6 +191,33 @@ def create_be_conversion_router(db, require_roles):
         await db.be_rate_plans.delete_one({"id": plan_id, "property_id": pid})
         return {"ok": True}
 
+    # ---------------- ÜYE FİYATI / VERGİ AYARLARI ----------------
+    @router.post("/booking/member-rate")
+    async def member_rate(data: Dict):
+        email = (data.get("email") or "").lower().strip()
+        if "@" not in email:
+            raise HTTPException(422, "email")
+        mem = await db.loyalty_members.find_one({"email": email}, {"_id": 0, "tier": 1, "name": 1}) or await db.guest_profiles.find_one({"email": email, "loyalty_tier": {"$exists": True}}, {"_id": 0, "loyalty_tier": 1, "name": 1})
+        if not mem:
+            return {"member": False, "discount_pct": 0}
+        tier = (mem.get("tier") or mem.get("loyalty_tier") or "bronze").lower()
+        return {"member": True, "tier": tier, "discount_pct": {"bronze": 5, "silver": 8, "gold": 10, "platinum": 15}.get(tier, 5), "name": mem.get("name", "")}
+
+    @router.get("/booking/pricing-settings/{pid}")
+    async def pricing_settings_get(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        p = await db.properties.find_one({"id": pid}, {"_id": 0, "vat_rate": 1, "city_tax_per_night": 1, "child_policy": 1, "extra_bed_price": 1}) or {}
+        return {"vat_rate": p.get("vat_rate") or 0, "city_tax_per_night": p.get("city_tax_per_night") or 0, "extra_bed_price": p.get("extra_bed_price") or 0,
+                "child_policy": p.get("child_policy") or {"free_under_age": 3, "child_price_per_night": 0, "max_child_age": 12}}
+
+    @router.put("/booking/pricing-settings/{pid}")
+    async def pricing_settings_put(pid: str, data: Dict, _u: dict = Depends(require_roles(*ROLES))):
+        cp = data.get("child_policy") or {}
+        upd = {"vat_rate": max(0.0, min(50.0, float(data.get("vat_rate") or 0))), "city_tax_per_night": max(0.0, float(data.get("city_tax_per_night") or 0)),
+               "extra_bed_price": max(0.0, float(data.get("extra_bed_price") or 0)),
+               "child_policy": {"free_under_age": int(cp.get("free_under_age") or 0), "child_price_per_night": max(0.0, float(cp.get("child_price_per_night") or 0)), "max_child_age": int(cp.get("max_child_age") or 12)}}
+        await db.properties.update_one({"id": pid}, {"$set": upd})
+        return {"ok": True, **upd}
+
     # ---------------- ESNEK TARİH ----------------
     @router.get("/booking/flex-dates/{pid}")
     async def flex_dates(pid: str, check_in: str, check_out: str, adults: int = 2, room_type_id: str = "", span: int = 3):
@@ -256,10 +285,21 @@ def create_be_conversion_router(db, require_roles):
         except Exception:
             raise HTTPException(422, "Geçersiz tarih")
         nights = max(1, (co - ci).days)
+        from routes.pms.widget_pricing import check_los_restrictions
+        los = await check_los_restrictions(db, data.property_id, data.check_in, data.check_out)
+        if los:
+            raise HTTPException(400, los.get("message_tr") or los.get("message") or "Bu tarihler için minimum konaklama kuralı geçerli")
         plans = {p["id"]: p for p in await _plans(data.property_id)}
         ovs = await _overrides(data.property_id, data.check_in, data.check_out)
-        prop = await db.properties.find_one({"id": data.property_id}, {"_id": 0, "currency": 1, "name": 1}) or {}
+        prop = await db.properties.find_one({"id": data.property_id}, {"_id": 0, "currency": 1, "name": 1, "vat_rate": 1, "city_tax_per_night": 1, "child_policy": 1, "extra_bed_price": 1}) or {}
         currency = prop.get("currency") or "GBP"
+        child_policy = prop.get("child_policy") or {}
+        member_pct = 0.0
+        if data.loyalty_email:
+            mem = await db.loyalty_members.find_one({"email": data.loyalty_email.lower().strip()}, {"_id": 0, "tier": 1}) or await db.guest_profiles.find_one({"email": data.loyalty_email.lower().strip(), "loyalty_tier": {"$exists": True}}, {"_id": 0, "loyalty_tier": 1})
+            if mem:
+                tier = (mem.get("tier") or mem.get("loyalty_tier") or "").lower()
+                member_pct = {"bronze": 5, "silver": 8, "gold": 10, "platinum": 15}.get(tier, 5)
         dw_cfg = None
         if data.damage_waiver:
             dw_cfg = await db.damage_protection_config.find_one({"property_id": data.property_id, "enabled": True}, {"_id": 0})
@@ -278,12 +318,24 @@ def create_be_conversion_router(db, require_roles):
             plan = plans.get(it.rate_plan_id) or next((p for p in plans.values() if p.get("is_default")), None)
             nightly = sum(plan_night_price(_rate(ovs, room["id"], (ci + timedelta(days=n)).isoformat(), room.get("base_price", 0)), plan)
                           for n in range(nights))
-            line_total = round(nightly * max(1, it.qty), 2)
+            if member_pct:
+                nightly = round(nightly * (1 - member_pct / 100.0), 2)
+            extra_bed_total = round(float(room.get("extra_bed_price") or prop.get("extra_bed_price") or 0) * nights * max(0, it.extra_beds), 2)
+            child_total = 0.0
+            for age in it.children_ages:
+                free_under = int(child_policy.get("free_under_age") or 0)
+                if age < free_under:
+                    continue
+                child_total += float(child_policy.get("child_price_per_night") or 0) * nights
+            line_total = round(nightly * max(1, it.qty) + extra_bed_total + child_total, 2)
             if dw_cfg:
                 line_total += round(float(dw_cfg.get("fee_per_night", 0) or 0) * nights * it.qty, 2)
-            lines.append({"room": room, "plan": plan, "qty": max(1, it.qty), "total": line_total})
+            lines.append({"room": room, "plan": plan, "qty": max(1, it.qty), "total": line_total, "extra_beds": it.extra_beds, "children_ages": it.children_ages, "extra_bed_total": extra_bed_total, "child_total": child_total})
 
         subtotal = round(sum(l["total"] for l in lines), 2)
+        vat_rate = float(prop.get("vat_rate") or 0)
+        city_tax = round(float(prop.get("city_tax_per_night") or 0) * nights * sum(l["qty"] for l in lines), 2)
+        vat_included = round(subtotal - subtotal / (1 + vat_rate / 100.0), 2) if vat_rate else 0.0
         discount = 0.0
         promo_code = (data.promo_code or "").upper().strip()
         if promo_code:
@@ -292,7 +344,7 @@ def create_be_conversion_router(db, require_roles):
                 discount = float(promo["discount_value"]) if promo.get("discount_type") == "fixed" else round(subtotal * float(promo["discount_value"]) / 100, 2)
                 discount = min(discount, subtotal)
                 await db.promo_codes.update_one({"code": promo_code}, {"$inc": {"used_count": 1}})
-        cart_total = round(subtotal - discount, 2)
+        cart_total = round(subtotal - discount + city_tax, 2)
         gift_applied, gift_code = 0.0, (data.gift_card_code or "").upper().strip()
         if gift_code and cart_total > 0:
             card = await db.gift_cards.find_one({"code": gift_code, "status": "active"}, {"_id": 0, "id": 1, "balance": 1, "property_id": 1, "expires_at": 1})
@@ -318,7 +370,8 @@ def create_be_conversion_router(db, require_roles):
                         "rate_plan_id": (l["plan"] or {}).get("id", ""), "rate_plan_code": (l["plan"] or {}).get("code", ""),
                         "rate_plan_name": (l["plan"] or {}).get("name", ""),
                         "cancellation_type": (l["plan"] or {}).get("cancellation_type", "free"),
-                        "room_name": l["room"].get("name", "")})
+                        "room_name": l["room"].get("name", ""), "extra_beds": l["extra_beds"], "children_ages": l["children_ages"],
+                        "member_discount_pct": member_pct})
             if promo_code and discount:
                 doc["promo_code"] = promo_code
             if dw_cfg:
@@ -332,6 +385,7 @@ def create_be_conversion_router(db, require_roles):
         await db.bookings.update_one({"id": master["id"]}, {"$set": {
             "cart_master": True, "cart_total": cart_total, "cart_items": items, "cart_discount": discount,
             "gift_card_code": gift_code if gift_applied else "", "gift_card_applied": gift_applied,
+            "tax_breakdown": {"vat_rate": vat_rate, "vat_included": vat_included, "city_tax": city_tax}, "member_discount_pct": member_pct,
             "cart_refs": [c["booking_ref"] for c in created]}})
         master.update({"cart_master": True, "cart_total": cart_total, "cart_items": items, "cart_discount": discount, "gift_card_applied": gift_applied})
 
@@ -348,6 +402,8 @@ def create_be_conversion_router(db, require_roles):
                 "total_price": cart_total, "source": source}))
         except Exception:
             pass
-        return {**master, "total_price": cart_total, "subtotal": subtotal, "discount": discount, "nights": nights, "gift_card_applied": gift_applied}
+        return {**master, "total_price": cart_total, "subtotal": subtotal, "discount": discount, "nights": nights, "gift_card_applied": gift_applied,
+                "tax_breakdown": {"vat_rate": vat_rate, "vat_included": vat_included, "city_tax": city_tax}, "member_discount_pct": member_pct,
+                "manage_url": f"/guest-portal-v2?ref={master['booking_ref']}&email={data.guest_email}"}
 
     return router

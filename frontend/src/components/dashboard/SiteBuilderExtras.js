@@ -103,3 +103,88 @@ export function InquiriesCard({ pid }) {
     </div>
   );
 }
+
+
+export function TranslationsEditor({ translations, onChange }) {
+  const [lg, setLg] = useState("en");
+  const tr = translations || {};
+  const cur = tr[lg] || {};
+  const set = (k, v) => onChange({ ...tr, [lg]: { ...cur, [k]: v } });
+  const inp = "w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs";
+  return (
+    <div className="rounded-xl border border-stone-200 p-3" data-testid="site-translations-card">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] font-bold uppercase text-stone-500">Çeviriler (site TR + EN/DE, hreflang otomatik)</span>
+        <div className="flex gap-1">{["en", "de"].map((x) => <button key={x} onClick={() => setLg(x)} className={`text-[10px] font-bold px-2 py-0.5 rounded ${lg === x ? "bg-stone-900 text-white" : "bg-stone-100"}`} data-testid={`site-tr-lang-${x}`}>{x.toUpperCase()}{tr[x]?.headline || tr[x]?.about ? " ✓" : ""}</button>)}</div>
+      </div>
+      <div className="space-y-1.5">
+        <input className={inp} placeholder={`Başlık (${lg.toUpperCase()})`} value={cur.headline || ""} onChange={(e) => set("headline", e.target.value)} data-testid="site-tr-headline" />
+        <textarea className={inp} rows={3} placeholder={`Hakkımızda (${lg.toUpperCase()})`} value={cur.about || ""} onChange={(e) => set("about", e.target.value)} data-testid="site-tr-about" />
+        <input className={inp} placeholder={`SEO başlık (${lg.toUpperCase()})`} value={cur.seo_title || ""} onChange={(e) => set("seo_title", e.target.value)} />
+        <input className={inp} placeholder={`SEO açıklama (${lg.toUpperCase()})`} value={cur.seo_description || ""} onChange={(e) => set("seo_description", e.target.value)} />
+      </div>
+    </div>
+  );
+}
+
+export function PostsEditor({ posts, onChange }) {
+  const list = posts || [];
+  const set = (i, k, v) => onChange(list.map((p, j) => (j === i ? { ...p, [k]: v } : p)));
+  const inp = "w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs";
+  return (
+    <div className="rounded-xl border border-stone-200 p-3" data-testid="site-posts-card">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] font-bold uppercase text-stone-500">Blog & Kampanyalar ({list.length})</span>
+        <button onClick={() => onChange([{ title: "", excerpt: "", body: "", type: "campaign", image_url: "", date: new Date().toISOString().slice(0, 10), published: true, cta_url: "" }, ...list])} className="text-[10px] font-bold px-2 py-1 rounded bg-stone-100 hover:bg-stone-200 inline-flex items-center gap-1" data-testid="site-post-add"><Plus size={10} /> Yazı Ekle</button>
+      </div>
+      <div className="space-y-3 max-h-80 overflow-y-auto">
+        {list.map((p, i) => (
+          <div key={p.id || i} className="border border-stone-100 rounded-lg p-2 space-y-1.5" data-testid={`site-post-edit-${i}`}>
+            <div className="flex gap-1.5">
+              <select value={p.type} onChange={(e) => set(i, "type", e.target.value)} className="rounded-lg border border-stone-200 px-2 py-1.5 text-xs"><option value="campaign">Kampanya</option><option value="blog">Blog</option></select>
+              <input className={inp} placeholder="Başlık" value={p.title} onChange={(e) => set(i, "title", e.target.value)} data-testid={`site-post-title-${i}`} />
+              <input type="date" className="rounded-lg border border-stone-200 px-2 py-1.5 text-xs" value={p.date} onChange={(e) => set(i, "date", e.target.value)} />
+              <button onClick={() => onChange(list.filter((_, j) => j !== i))} className="p-1.5 text-stone-400 hover:text-red-600"><Trash size={13} /></button>
+            </div>
+            <input className={inp} placeholder="Kısa özet (kartta görünür)" value={p.excerpt} onChange={(e) => set(i, "excerpt", e.target.value)} />
+            <textarea className={inp} rows={3} placeholder="İçerik" value={p.body} onChange={(e) => set(i, "body", e.target.value)} />
+            <div className="flex gap-1.5">
+              <input className={inp} placeholder="Görsel URL" value={p.image_url} onChange={(e) => set(i, "image_url", e.target.value)} />
+              <input className={inp} placeholder="CTA linki (örn. /book?property=…&promo=YAZ20)" value={p.cta_url} onChange={(e) => set(i, "cta_url", e.target.value)} />
+              <label className="text-[10px] flex items-center gap-1 whitespace-nowrap"><input type="checkbox" checked={p.published !== false} onChange={(e) => set(i, "published", e.target.checked)} /> Yayında</label>
+            </div>
+          </div>
+        ))}
+        {list.length === 0 && <p className="text-[10px] text-stone-400">Kampanya veya blog yazısı ekleyin — sitede "Blog & Kampanyalar" sayfası otomatik açılır.</p>}
+      </div>
+    </div>
+  );
+}
+
+export function AnalyticsBrandEditor({ analytics, brand, onAnalytics, onBrand }) {
+  const a = analytics || {}; const b = brand || {};
+  const inp = "w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs";
+  return (
+    <div className="rounded-xl border border-stone-200 p-3 grid md:grid-cols-2 gap-3" data-testid="site-analytics-card">
+      <div className="space-y-1.5">
+        <div className="text-[10px] font-bold uppercase text-stone-500">Dönüşüm takibi (site + booking engine)</div>
+        <input className={inp} placeholder="GA4 Measurement ID (G-XXXXXXX)" value={a.ga4_id || ""} onChange={(e) => onAnalytics({ ...a, ga4_id: e.target.value })} data-testid="site-ga4-input" />
+        <input className={inp} placeholder="Google Tag Manager (GTM-XXXXX)" value={a.gtm_id || ""} onChange={(e) => onAnalytics({ ...a, gtm_id: e.target.value })} data-testid="site-gtm-input" />
+        <input className={inp} placeholder="Meta Pixel ID" value={a.pixel_id || ""} onChange={(e) => onAnalytics({ ...a, pixel_id: e.target.value })} data-testid="site-pixel-input" />
+        <p className="text-[10px] text-stone-400">Olaylar: page_view, begin_checkout, purchase (rezervasyon numarası + tutar). Çerez onayı "sadece zorunlu" ise yüklenmez.</p>
+      </div>
+      <div className="space-y-1.5">
+        <div className="text-[10px] font-bold uppercase text-stone-500">Marka rengi & köşe</div>
+        <div className="flex gap-2 items-center">
+          <input type="color" value={b.accent || "#0f4c5c"} onChange={(e) => onBrand({ ...b, accent: e.target.value })} className="w-10 h-8 rounded border border-stone-200" data-testid="site-brand-accent" />
+          <input className={inp} placeholder="#0f4c5c (boş = tema rengi)" value={b.accent || ""} onChange={(e) => onBrand({ ...b, accent: e.target.value })} />
+          <button onClick={() => onBrand({ ...b, accent: "" })} className="text-[10px] font-bold text-stone-500 whitespace-nowrap">Sıfırla</button>
+        </div>
+        <select value={b.radius || ""} onChange={(e) => onBrand({ ...b, radius: e.target.value })} className={inp} data-testid="site-brand-radius">
+          <option value="">Köşe: tema varsayılanı</option><option value="0px">Keskin (0)</option><option value="8px">Hafif (8px)</option><option value="16px">Yuvarlak (16px)</option><option value="24px">Çok yuvarlak (24px)</option>
+        </select>
+        <p className="text-[10px] text-stone-400">Sitemap: <code>/api/site-builder/public/sitemap/&lt;tesis&gt;.xml</code> · robots: <code>/api/site-builder/public/robots/&lt;tesis&gt;.txt</code></p>
+      </div>
+    </div>
+  );
+}

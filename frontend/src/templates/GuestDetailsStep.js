@@ -5,9 +5,9 @@ import {
 import { useLanguage } from "../i18n/LanguageContext";
 import { SmartUpsellEngine } from "./SmartUpsellEngine";
 import { PriceComparisonWidget } from "./PriceComparisonWidget";
-import { planNightPrice, planName } from "./RatePlanRows";
+import { planNightPrice, planName, roomNightBase } from "./RatePlanRows";
 
-export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, upsells, selectedUpsells, toggleUpsell, nights, adults, children, roomCount, checkIn, checkOut, socialProofSettings, dwConfig, damageWaiver, setDamageWaiver, waiverTotal, cart, onBackToRooms, giftCode, setGiftCode, giftCard, applyGift, clearGift, giftApplied, depositDue }) {
+export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, upsells, selectedUpsells, toggleUpsell, nights, adults, children, roomCount, checkIn, checkOut, socialProofSettings, dwConfig, damageWaiver, setDamageWaiver, waiverTotal, cart, onBackToRooms, giftCode, setGiftCode, giftCard, applyGift, clearGift, giftApplied, depositDue, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, cityTax = 0, vatRate = 0 }) {
   const { t: tr } = useLanguage();
   const showDeposit = depositDue > 0 && depositDue < totalPrice - 0.5;
   return (
@@ -204,14 +204,14 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
         <div className="lg:col-span-1 space-y-4">
           {/* Price Comparison Widget */}
           <PriceComparisonWidget t={t} roomPrice={selectedRoom.base_price * nights} settings={socialProofSettings} />
-          <BookingSummary t={t} room={selectedRoom} property={property} totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount} promoDiscount={promoDiscount} selectedAddOns={selectedAddOns} selectedUpsells={selectedUpsells} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} waiverTotal={waiverTotal} cart={cart} giftApplied={giftApplied} />
+          <BookingSummary t={t} room={selectedRoom} property={property} totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount} promoDiscount={promoDiscount} selectedAddOns={selectedAddOns} selectedUpsells={selectedUpsells} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} waiverTotal={waiverTotal} cart={cart} giftApplied={giftApplied} fmt={fmt} memberPct={memberPct} cityTax={cityTax} vatRate={vatRate} />
         </div>
       </div>
     </div>
   );
 }
 
-function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, discountAmount, promoDiscount, selectedAddOns, selectedUpsells, nights, adults, children, roomCount, checkIn, checkOut, waiverTotal, cart, giftApplied = 0 }) {
+function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, discountAmount, promoDiscount, selectedAddOns, selectedUpsells, nights, adults, children, roomCount, checkIn, checkOut, waiverTotal, cart, giftApplied = 0, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, cityTax = 0, vatRate = 0 }) {
   const { t: tr, lang } = useLanguage();
   const multi = cart?.length > 0;
   return (
@@ -226,9 +226,9 @@ function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, 
               </div>
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-sm text-slate-900 truncate">{c.qty}× {c.room.name}</div>
-                {c.plan && <div className="text-xs text-slate-500">{planName(c.plan, lang)}</div>}
+                {c.plan && <div className="text-xs text-slate-500">{planName(c.plan, lang)}{c.extraBeds ? ` · +${c.extraBeds} ${tr("extra.bed")}` : ""}</div>}
               </div>
-              <div className="text-sm font-semibold text-slate-800">&pound;{(planNightPrice(c.room.base_price, c.plan) * nights * c.qty).toFixed(0)}</div>
+              <div className="text-sm font-semibold text-slate-800">{fmt(planNightPrice(roomNightBase(c.room), c.plan) * (1 - memberPct / 100) * nights * c.qty + (Number(c.room.extra_bed_price) || 0) * nights * (c.extraBeds || 0))}</div>
             </div>
           ))}
           <div className="text-xs text-slate-500 pt-1">{property?.name}</div>
@@ -254,34 +254,36 @@ function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, 
         ].map(([l, v]) => <div key={l} className="flex justify-between"><span className="text-slate-500">{l}</span><span className="font-medium text-slate-800">{v}</span></div>)}
       </div>
       <div className="space-y-2 text-sm mb-4 pb-4 border-b border-gray-100">
-        <div className="flex justify-between"><span className="text-slate-500">{multi ? tr("summary.roomsSubtotal") : <>&pound;{room.base_price} x {nights} {nights !== 1 ? tr("room.nights") : tr("room.night")}</>}</span><span>&pound;{subtotal?.toFixed(0) || (room.base_price * nights * roomCount).toFixed(0)}</span></div>
+        <div className="flex justify-between"><span className="text-slate-500">{multi ? tr("summary.roomsSubtotal") : <>{fmt(roomNightBase(room))} x {nights} {nights !== 1 ? tr("room.nights") : tr("room.night")}</>}</span><span data-testid="summary-subtotal">{fmt(subtotal ?? roomNightBase(room) * nights * roomCount)}</span></div>
+        {memberPct > 0 && <div className="flex justify-between" style={{ color: t.colors.success }} data-testid="summary-member"><span>★ {tr("member.line", { pct: memberPct })}</span><span>{tr("summary.included")}</span></div>}
+        {cityTax > 0 && <div className="flex justify-between" data-testid="summary-city-tax"><span className="text-slate-500">{tr("tax.city")}</span><span>{fmt(cityTax)}</span></div>}
         {selectedAddOns?.length > 0 && selectedAddOns.map(ao => (
-          <div key={ao.id} className="flex justify-between text-xs"><span className="text-slate-500">{ao.name}</span><span>&pound;{ao.price}</span></div>
+          <div key={ao.id} className="flex justify-between text-xs"><span className="text-slate-500">{ao.name}</span><span>{fmt(ao.price)}</span></div>
         ))}
         {selectedUpsells?.length > 0 && selectedUpsells.map(u => (
-          <div key={u.id} className="flex justify-between text-xs"><span className="text-amber-600">{u.name}</span><span>&pound;{u.price}</span></div>
+          <div key={u.id} className="flex justify-between text-xs"><span className="text-amber-600">{u.name}</span><span>{fmt(u.price)}</span></div>
         ))}
         {waiverTotal > 0 && (
           <div className="flex justify-between text-xs" data-testid="summary-damage-waiver">
-            <span className="text-slate-500">Hasar koruması</span><span>&pound;{waiverTotal.toFixed(0)}</span>
+            <span className="text-slate-500">Hasar koruması</span><span>{fmt(waiverTotal)}</span>
           </div>
         )}
         {discountAmount > 0 && (
           <div className="flex justify-between" style={{ color: t.colors.success }}>
             <span>{tr("summary.promo")} ({promoDiscount?.code})</span>
-            <span>-&pound;{discountAmount.toFixed(0)}</span>
+            <span>-{fmt(discountAmount)}</span>
           </div>
         )}
         {giftApplied > 0 && (
           <div className="flex justify-between" style={{ color: t.colors.success }} data-testid="summary-gift">
-            <span>{tr("gift.card")}</span><span>-&pound;{giftApplied.toFixed(0)}</span>
+            <span>{tr("gift.card")}</span><span>-{fmt(giftApplied)}</span>
           </div>
         )}
-        <div className="flex justify-between"><span className="text-slate-500">{tr("summary.taxesFees")}</span><span>{tr("summary.included")}</span></div>
+        <div className="flex justify-between"><span className="text-slate-500">{vatRate ? tr("tax.vatIncl", { pct: vatRate }) : tr("summary.taxesFees")}</span><span data-testid="summary-vat">{vatRate ? fmt(totalPrice - totalPrice / (1 + vatRate / 100)) : tr("summary.included")}</span></div>
       </div>
       <div className="flex justify-between items-baseline">
         <span className="font-semibold text-slate-900">{tr("summary.total")}</span>
-        <span className="text-2xl font-bold text-slate-900">&pound;{totalPrice.toFixed(0)}</span>
+        <span className="text-2xl font-bold text-slate-900" data-testid="summary-total">{fmt(totalPrice)}</span>
       </div>
       {(multi ? cart.every((c) => !c.plan || c.plan.cancellation_type === "free") : room.free_cancellation) && (
         <div className="mt-3 rounded-lg p-3 text-xs font-medium flex items-center gap-1.5" style={{ background: t.colors.badgeBg, color: t.colors.success }} data-testid="summary-free-cancel">

@@ -1,7 +1,7 @@
 import { CheckCircle } from "@phosphor-icons/react";
 import { useLanguage } from "../i18n/LanguageContext";
 
-export function ConfirmationStep({ t, confirmation, onBookAnother }) {
+export function ConfirmationStep({ t, confirmation, onBookAnother, fmt = (v) => `£${Math.round(v)}` }) {
   const { t: tr } = useLanguage();
   if (!confirmation) return null;
   return (
@@ -25,7 +25,7 @@ export function ConfirmationStep({ t, confirmation, onBookAnother }) {
               [tr("confirm.checkIn"), new Date(confirmation.check_in).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })],
               [tr("confirm.checkOut"), new Date(confirmation.check_out).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })],
               [tr("confirm.guests"), `${confirmation.adults} ${confirmation.adults !== 1 ? "adults" : "adult"}${confirmation.children > 0 ? `, ${confirmation.children} children` : ""}`],
-              [tr("confirm.total"), `£${(confirmation.cart_total ?? confirmation.total_price)?.toFixed(0)}`],
+              [tr("confirm.total"), fmt(confirmation.cart_total ?? confirmation.total_price ?? 0)],
             ].map(([l, v]) => <div key={l}><span className="text-slate-500 block mb-0.5">{l}</span><span className="font-semibold text-slate-800" data-testid={l === tr("confirm.guestName") ? "confirm-guest-name" : undefined}>{v}</span></div>)}
           </div>
           {confirmation.cart_items?.length > 0 && (
@@ -33,13 +33,16 @@ export function ConfirmationStep({ t, confirmation, onBookAnother }) {
               {confirmation.cart_items.map((it, i) => (
                 <div key={i} className="flex items-center justify-between px-4 py-2.5 text-sm">
                   <div><span className="font-semibold text-slate-800">{it.qty}× {it.room_name}</span>{it.rate_plan_name && <span className="text-slate-500"> · {it.rate_plan_name}</span>}<div className="text-[11px] text-slate-400 font-mono">{it.booking_ref}</div></div>
-                  <span className="font-semibold text-slate-800">£{Number(it.total).toFixed(0)}</span>
+                  <span className="font-semibold text-slate-800">{fmt(Number(it.total))}</span>
                 </div>
               ))}
             </div>
           )}
           <div className="mt-6 pt-6 border-t border-gray-100 flex justify-center">
-            <button onClick={onBookAnother}
+            {(confirmation.manage_url || confirmation.booking_ref) && (
+            <a href={confirmation.manage_url || `/guest-portal-v2?ref=${confirmation.booking_ref}&email=${encodeURIComponent(confirmation.guest_email || "")}`} className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-lg font-semibold text-sm border-2 mb-3" style={{ borderColor: t.colors.accent, color: t.colors.accent, borderRadius: t.borderRadius }} data-testid="manage-booking-link">{tr("confirm.manage")} →</a>
+          )}
+          <button onClick={onBookAnother}
               className="text-white px-6 py-3 rounded-lg font-semibold transition-colors" style={{ background: t.colors.accent, borderRadius: t.borderRadius }} data-testid="book-another-btn">
               {tr("confirm.bookAnother")}
             </button>

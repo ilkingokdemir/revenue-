@@ -194,7 +194,7 @@ export function GalleryBlock({ th, gallery, full, ui }) {
 }
 
 
-export function PostsBlock({ th, posts, ui, onOpen, single }) {
+export function PostsBlock({ th, posts, ui, onOpen, single, propertyId }) {
   const list = (posts || []).filter((p) => p.published !== false);
   if (!list.length) return null;
   if (single) {
@@ -206,7 +206,8 @@ export function PostsBlock({ th, posts, ui, onOpen, single }) {
         <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: th.accent }}>{p.type === "campaign" ? ui.offer : "Blog"} · {p.date}</div>
         <h2 className="text-3xl font-black mb-4" style={{ fontFamily: th.heading }} data-testid="site-post-title">{p.title}</h2>
         <div className="text-base leading-relaxed whitespace-pre-line max-w-3xl">{p.body || p.excerpt}</div>
-        {p.cta_url && <a href={p.cta_url} className="inline-block mt-6 px-6 py-3 text-sm font-black" style={{ background: th.accent, color: th.accentText, borderRadius: th.radius }} data-testid="site-post-cta">{ui.book}</a>}
+        {p.promo_code && <div className="mt-5 inline-flex items-center gap-2 text-sm"><span style={{ color: th.muted }}>{ui.offer}:</span><code className="px-3 py-1 rounded font-bold border-2 border-dashed" style={{ borderColor: th.accent, color: th.accent }} data-testid="site-post-promo">{p.promo_code}</code>{p.discount_pct ? <b>−{p.discount_pct}%</b> : null}</div>}
+        {(p.cta_url || p.promo_code) && <a href={p.cta_url || `/book?property=${propertyId}${p.promo_code ? `&promo=${p.promo_code}` : ""}`} className="inline-block mt-6 ml-0 px-6 py-3 text-sm font-black" style={{ background: th.accent, color: th.accentText, borderRadius: th.radius }} data-testid="site-post-cta">{ui.book}</a>}
       </Section>
     );
   }

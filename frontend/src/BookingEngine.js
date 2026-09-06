@@ -29,6 +29,7 @@ import { CartBar } from "./templates/CartBar";
 import { planNightPrice, roomNightBase } from "./templates/RatePlanRows";
 import { GiftCardSection } from "./templates/GiftCardSection";
 import { ExitIntentPopup, CookieBanner } from "./templates/ExitIntentPopup";
+import { InlinePayment } from "./templates/InlinePayment";
 import { useAnalytics, trackEvent } from "./site/analytics";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -76,6 +77,11 @@ function BookingEngineInner() {
   const [giftCard, setGiftCard] = useState(null);
   const [pendingPromo, setPendingPromo] = useState("");
   const [member, setMember] = useState(null);
+  const [childAges, setChildAges] = useState([]);
+  const [inlineBooking, setInlineBooking] = useState(null);
+  const [inlineEnabled, setInlineEnabled] = useState(false);
+  useEffect(() => { axios.get(`${API}/payments/config`).then(({ data }) => setInlineEnabled(!!data.inline_enabled)).catch(() => {}); }, []);
+  useEffect(() => { const c = params.get("promo"); if (c) setPendingPromo(c.toUpperCase()); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const memberPct = member?.discount_pct || 0;
   const checkMember = async (email) => {
     try { const { data } = await axios.post(`${API}/booking/member-rate`, { email }); setMember(data.member ? { ...data, email } : { member: false, email }); if (!data.member) alert(t("member.notFound")); }
@@ -253,9 +259,10 @@ function BookingEngineInner() {
   const taxRoom = cart[0]?.room || selectedRoom || {};
   const cityTax = (Number(taxRoom.city_tax_per_night) || 0) * nights * (cart.reduce((s, c) => s + c.qty, 0) || roomCount);
   const vatRate = Number(taxRoom.vat_rate) || 0;
+  const childExtra = (() => { const cp = taxRoom.child_policy || {}; return childAges.slice(0, children).reduce((sum, a) => sum + (a < (cp.free_under_age || 0) ? 0 : (Number(cp.child_price_per_night) || 0) * nights), 0); })();
   const discountAmount = promoDiscount ? promoDiscount.discount_amount : 0;
   const waiverTotal = damageWaiver && dwConfig ? dwConfig.fee_per_night * nights * cartRooms : 0;
-  const totalBeforeGift = Math.max(0, subtotal + addOnsTotal + upsellsTotal + waiverTotal + cityTax - discountAmount);
+  const totalBeforeGift = Math.max(0, subtotal + addOnsTotal + upsellsTotal + waiverTotal + cityTax + childExtra - discountAmount);
   const giftApplied = giftCard ? Math.min(giftCard.balance, totalBeforeGift) : 0;
   const totalPrice = Math.max(0, totalBeforeGift - giftApplied);
   const depositDue = cart.length ? Math.round(cart.reduce((s, c) => s + planNightPrice(roomNightBase(c.room), c.plan) * (1 - memberPct / 100) * nights * c.qty * ((c.plan?.deposit_pct || 0) / 100), 0) * 100) / 100 : 0;
@@ -325,12 +332,16 @@ function BookingEngineInner() {
         gift_card_code: giftCard?.code || "",
         source: utmSource,
         loyalty_email: member?.member ? member.email : "",
-        items: (cart.length ? cart : [{ room: selectedRoom, plan: null, qty: roomCount }]).map(c => ({ room_type_id: c.room.id, rate_plan_id: c.plan?.id || "", qty: c.qty, extra_beds: c.extraBeds || 0 })),
+        items: (cart.length ? cart : [{ room: selectedRoom, plan: null, qty: roomCount }]).map((c, i) => ({ room_type_id: c.room.id, rate_plan_id: c.plan?.id || "", qty: c.qty, extra_beds: c.extraBeds || 0, children_ages: i === 0 ? childAges.slice(0, children) : [] })),
       };
       const { data } = await axios.post(`${API}/booking/reserve-multi`, payload);
       trackEvent("purchase", { transaction_id: data.booking_ref, value: data.total_price, currency: data.currency || "GBP", items: payload.items.length });
       if (totalPrice <= 0 && paymentMethod !== "hotel") {
         setConfirmation(data); setStep(STEPS.CONFIRM); window.scrollTo({ top: 0, behavior: "smooth" }); return;
+      }
+      if ((paymentMethod === "card" || paymentMethod === "deposit") && inlineEnabled) {
+        setInlineBooking({ ...data, amountMode: paymentMethod === "deposit" ? "deposit" : "full" });
+        setStep(STEPS.PAYMENT); window.scrollTo({ top: 0, behavior: "smooth" }); return;
       }
       if (paymentMethod === "card" || paymentMethod === "deposit") {
         const { data: pd } = await axios.post(`${API}/payments/booking-checkout`, {
@@ -372,7 +383,7 @@ function BookingEngineInner() {
     checkIn, setCheckIn, checkOut, setCheckOut,
     adults, setAdults, children, setChildren,
     roomCount, setRoomCount, showGuestPicker, setShowGuestPicker,
-    searchRooms: () => searchRooms(), propertyId,
+    searchRooms: () => searchRooms(), propertyId, childAges, setChildAges,
   };
 
   if (loading && !property) {
@@ -558,11 +569,16 @@ function BookingEngineInner() {
           dwConfig={dwConfig} damageWaiver={damageWaiver} setDamageWaiver={setDamageWaiver} waiverTotal={waiverTotal}
           socialProofSettings={property?.social_proof?.settings} cart={cart} onBackToRooms={() => setStep(STEPS.ROOMS)}
           giftCode={giftCode} setGiftCode={setGiftCode} giftCard={giftCard} applyGift={applyGift} clearGift={() => { setGiftCard(null); setGiftCode(""); }} giftApplied={giftApplied}
-          depositDue={depositDue} fmt={formatPrice} memberPct={memberPct} cityTax={cityTax} vatRate={vatRate} />
+          depositDue={depositDue} fmt={formatPrice} memberPct={memberPct} cityTax={cityTax} vatRate={vatRate} childExtra={childExtra} />
       )}
 
       {/* Step 3: Payment Processing */}
-      {step === STEPS.PAYMENT && (
+      {step === STEPS.PAYMENT && inlineBooking && (
+        <InlinePayment t={tmpl} booking={inlineBooking} amountMode={inlineBooking.amountMode} fmt={formatPrice}
+          onPaid={() => { setConfirmation({ ...inlineBooking, payment_status: "paid" }); setInlineBooking(null); setStep(STEPS.CONFIRM); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          onFallback={async () => { try { const { data: pd } = await axios.post(`${API}/payments/booking-checkout`, { booking_id: inlineBooking.id, origin_url: window.location.origin, amount_mode: inlineBooking.amountMode }); if (pd.url) window.location.href = pd.url; } catch { /* ignore */ } }} />
+      )}
+      {step === STEPS.PAYMENT && !inlineBooking && (
         <div className="max-w-lg mx-auto px-4 py-20" data-testid="payment-processing-step">
           <div className="bg-white rounded-xl border border-gray-200 shadow-lg p-10 text-center" style={{ borderRadius: tmpl.borderRadius }}>
             <div className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-6" style={{ borderColor: tmpl.colors.accent, borderTopColor: "transparent" }} />

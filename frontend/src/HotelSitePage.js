@@ -116,7 +116,7 @@ export default function HotelSitePage({ propertyId, initialPage = "home", initia
 
   const render = (id) => {
     switch (id) {
-      case "posts": return <PostsBlock key="posts" th={th} posts={c.posts} ui={ui} onOpen={(slug) => go("blog", slug || "")} single={sub ? (c.posts || []).find((x) => x.slug === sub) : null} />;
+      case "posts": return <PostsBlock key="posts" th={th} posts={c.posts} ui={ui} onOpen={(slug) => go("blog", slug || "")} single={sub ? (c.posts || []).find((x) => x.slug === sub) : null} propertyId={propertyId} />;
       case "hero": return (
         <div key="hero" className="relative px-6 pt-24 pb-28 text-center overflow-hidden" data-testid="site-hero"
           style={{ background: cover ? `linear-gradient(rgba(0,0,0,.35), rgba(0,0,0,.55)), url(${apiBase}${cover.url}) center/cover` : th.heroBg, color: cover ? "#fff" : th.heroText }}>

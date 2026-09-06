@@ -7,7 +7,7 @@ import { SmartUpsellEngine } from "./SmartUpsellEngine";
 import { PriceComparisonWidget } from "./PriceComparisonWidget";
 import { planNightPrice, planName, roomNightBase } from "./RatePlanRows";
 
-export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, upsells, selectedUpsells, toggleUpsell, nights, adults, children, roomCount, checkIn, checkOut, socialProofSettings, dwConfig, damageWaiver, setDamageWaiver, waiverTotal, cart, onBackToRooms, giftCode, setGiftCode, giftCard, applyGift, clearGift, giftApplied, depositDue, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, cityTax = 0, vatRate = 0 }) {
+export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, upsells, selectedUpsells, toggleUpsell, nights, adults, children, roomCount, checkIn, checkOut, socialProofSettings, dwConfig, damageWaiver, setDamageWaiver, waiverTotal, cart, onBackToRooms, giftCode, setGiftCode, giftCard, applyGift, clearGift, giftApplied, depositDue, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, cityTax = 0, vatRate = 0, childExtra = 0 }) {
   const { t: tr } = useLanguage();
   const showDeposit = depositDue > 0 && depositDue < totalPrice - 0.5;
   return (
@@ -204,14 +204,14 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
         <div className="lg:col-span-1 space-y-4">
           {/* Price Comparison Widget */}
           <PriceComparisonWidget t={t} roomPrice={selectedRoom.base_price * nights} settings={socialProofSettings} />
-          <BookingSummary t={t} room={selectedRoom} property={property} totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount} promoDiscount={promoDiscount} selectedAddOns={selectedAddOns} selectedUpsells={selectedUpsells} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} waiverTotal={waiverTotal} cart={cart} giftApplied={giftApplied} fmt={fmt} memberPct={memberPct} cityTax={cityTax} vatRate={vatRate} />
+          <BookingSummary t={t} room={selectedRoom} property={property} totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount} promoDiscount={promoDiscount} selectedAddOns={selectedAddOns} selectedUpsells={selectedUpsells} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} waiverTotal={waiverTotal} cart={cart} giftApplied={giftApplied} fmt={fmt} memberPct={memberPct} cityTax={cityTax} vatRate={vatRate} childExtra={childExtra} />
         </div>
       </div>
     </div>
   );
 }
 
-function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, discountAmount, promoDiscount, selectedAddOns, selectedUpsells, nights, adults, children, roomCount, checkIn, checkOut, waiverTotal, cart, giftApplied = 0, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, cityTax = 0, vatRate = 0 }) {
+function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, discountAmount, promoDiscount, selectedAddOns, selectedUpsells, nights, adults, children, roomCount, checkIn, checkOut, waiverTotal, cart, giftApplied = 0, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, cityTax = 0, vatRate = 0, childExtra = 0 }) {
   const { t: tr, lang } = useLanguage();
   const multi = cart?.length > 0;
   return (
@@ -256,6 +256,7 @@ function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, 
       <div className="space-y-2 text-sm mb-4 pb-4 border-b border-gray-100">
         <div className="flex justify-between"><span className="text-slate-500">{multi ? tr("summary.roomsSubtotal") : <>{fmt(roomNightBase(room))} x {nights} {nights !== 1 ? tr("room.nights") : tr("room.night")}</>}</span><span data-testid="summary-subtotal">{fmt(subtotal ?? roomNightBase(room) * nights * roomCount)}</span></div>
         {memberPct > 0 && <div className="flex justify-between" style={{ color: t.colors.success }} data-testid="summary-member"><span>★ {tr("member.line", { pct: memberPct })}</span><span>{tr("summary.included")}</span></div>}
+        {childExtra > 0 && <div className="flex justify-between" data-testid="summary-child"><span className="text-slate-500">{tr("summary.children")}</span><span>{fmt(childExtra)}</span></div>}
         {cityTax > 0 && <div className="flex justify-between" data-testid="summary-city-tax"><span className="text-slate-500">{tr("tax.city")}</span><span>{fmt(cityTax)}</span></div>}
         {selectedAddOns?.length > 0 && selectedAddOns.map(ao => (
           <div key={ao.id} className="flex justify-between text-xs"><span className="text-slate-500">{ao.name}</span><span>{fmt(ao.price)}</span></div>

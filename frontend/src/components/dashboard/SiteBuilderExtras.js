@@ -105,17 +105,28 @@ export function InquiriesCard({ pid }) {
 }
 
 
-export function TranslationsEditor({ translations, onChange }) {
+export function TranslationsEditor({ translations, onChange, source, pid }) {
   const [lg, setLg] = useState("en");
+  const [busy, setBusy] = useState(false);
   const tr = translations || {};
   const cur = tr[lg] || {};
+  const hasSource = !!(source && (source.headline || source.about || source.seo_title || source.seo_description || source.faqs?.length));
   const set = (k, v) => onChange({ ...tr, [lg]: { ...cur, [k]: v } });
+  const autoTranslate = async () => {
+    setBusy(true);
+    try {
+      const { data } = await axios.post(`${API}/site-builder/${pid}/translate`, { lang: lg, ...(source || {}) });
+      onChange({ ...tr, [lg]: { ...cur, ...data.translation, ...(data.faqs?.length ? { faqs: data.faqs } : {}) } });
+      toast.success(`${lg.toUpperCase()} çevirisi hazır — düzenleyip kaydedin`);
+    } catch (e) { toast.error(e.response?.data?.detail || "Çeviri başarısız"); } finally { setBusy(false); }
+  };
   const inp = "w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs";
   return (
     <div className="rounded-xl border border-stone-200 p-3" data-testid="site-translations-card">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] font-bold uppercase text-stone-500">Çeviriler (site TR + EN/DE, hreflang otomatik)</span>
-        <div className="flex gap-1">{["en", "de"].map((x) => <button key={x} onClick={() => setLg(x)} className={`text-[10px] font-bold px-2 py-0.5 rounded ${lg === x ? "bg-stone-900 text-white" : "bg-stone-100"}`} data-testid={`site-tr-lang-${x}`}>{x.toUpperCase()}{tr[x]?.headline || tr[x]?.about ? " ✓" : ""}</button>)}</div>
+        <div className="flex gap-1 items-center">{["en", "de"].map((x) => <button key={x} onClick={() => setLg(x)} className={`text-[10px] font-bold px-2 py-0.5 rounded ${lg === x ? "bg-stone-900 text-white" : "bg-stone-100"}`} data-testid={`site-tr-lang-${x}`}>{x.toUpperCase()}{tr[x]?.headline || tr[x]?.about ? " ✓" : ""}</button>)}
+          {pid && <button onClick={autoTranslate} disabled={busy || !hasSource} title={hasSource ? "TR içeriği AI ile çevir" : "Önce TR başlık/hakkımızda girin"} className="ml-1 text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-600 text-white disabled:opacity-50" data-testid="site-tr-ai-btn">{busy ? "Çevriliyor…" : hasSource ? "✨ AI ile çevir" : "İçerik yok"}</button>}</div>
       </div>
       <div className="space-y-1.5">
         <input className={inp} placeholder={`Başlık (${lg.toUpperCase()})`} value={cur.headline || ""} onChange={(e) => set("headline", e.target.value)} data-testid="site-tr-headline" />
@@ -150,7 +161,8 @@ export function PostsEditor({ posts, onChange }) {
             <textarea className={inp} rows={3} placeholder="İçerik" value={p.body} onChange={(e) => set(i, "body", e.target.value)} />
             <div className="flex gap-1.5">
               <input className={inp} placeholder="Görsel URL" value={p.image_url} onChange={(e) => set(i, "image_url", e.target.value)} />
-              <input className={inp} placeholder="CTA linki (örn. /book?property=…&promo=YAZ20)" value={p.cta_url} onChange={(e) => set(i, "cta_url", e.target.value)} />
+              <input className={inp} placeholder="Kupon kodu (örn. YAZ20)" value={p.promo_code || ""} onChange={(e) => set(i, "promo_code", e.target.value.toUpperCase())} data-testid={`site-post-promo-${i}`} />
+              <input className={inp} type="number" placeholder="İndirim %" value={p.discount_pct || ""} onChange={(e) => set(i, "discount_pct", e.target.value)} data-testid={`site-post-pct-${i}`} />
               <label className="text-[10px] flex items-center gap-1 whitespace-nowrap"><input type="checkbox" checked={p.published !== false} onChange={(e) => set(i, "published", e.target.checked)} /> Yayında</label>
             </div>
           </div>

@@ -214,7 +214,7 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
             <BlocksEditor blocks={content.blocks} onChange={(b) => setContent({ ...content, blocks: b })}
               pagesEnabled={content.pages_enabled} onPagesChange={(p) => setContent({ ...content, pages_enabled: p })} />
             <FaqEditor faqs={content.faqs} onChange={(f) => setContent({ ...content, faqs: f })} />
-            <TranslationsEditor translations={content.translations} onChange={(tr) => setContent({ ...content, translations: tr })} />
+            <TranslationsEditor translations={content.translations} onChange={(tr) => setContent({ ...content, translations: tr })} pid={pid} source={{ headline: content.headline, about: content.about, seo_title: content.seo_title, seo_description: content.seo_description, faqs: content.faqs }} />
             <PostsEditor posts={content.posts} onChange={(p) => setContent({ ...content, posts: p })} />
             <div className="md:col-span-2"><AnalyticsBrandEditor analytics={content.analytics} brand={content.brand} onAnalytics={(a) => setContent({ ...content, analytics: a })} onBrand={(b) => setContent({ ...content, brand: b })} /></div>
           </div>

@@ -159,8 +159,15 @@ def create_site_builder_router(db, require_roles):
                            for f in (content.get("faqs") or []) if isinstance(f, dict) and f.get("q")][:20]
         content["pages_enabled"] = [p for p in (content.get("pages_enabled") or SITE_PAGES) if p in SITE_PAGES] or ["home"]
         tr_in = content.get("translations") or {}
-        content["translations"] = {lg: {k: str(v)[:2000] for k, v in (tr_in.get(lg) or {}).items() if k in ("headline", "about", "seo_title", "seo_description") and v}
-                                   for lg in ("en", "de", "tr") if isinstance(tr_in.get(lg), dict)}
+        content["translations"] = {}
+        for lg in ("en", "de", "tr"):
+            t_in = tr_in.get(lg)
+            if not isinstance(t_in, dict):
+                continue
+            t_out = {k: str(v)[:2000] for k, v in t_in.items() if k in ("headline", "about", "seo_title", "seo_description") and v}
+            if isinstance(t_in.get("faqs"), list):
+                t_out["faqs"] = [{"q": str(f.get("q", ""))[:200], "a": str(f.get("a", ""))[:1000]} for f in t_in["faqs"] if isinstance(f, dict) and f.get("q")][:20]
+            content["translations"][lg] = t_out
         posts = []
         for po in (content.get("posts") or [])[:50]:
             if not isinstance(po, dict) or not po.get("title"):
@@ -169,8 +176,14 @@ def create_site_builder_router(db, require_roles):
             posts.append({"id": po.get("id") or str(uuid.uuid4()), "slug": slug, "title": str(po["title"])[:160], "excerpt": str(po.get("excerpt") or "")[:300],
                           "body": str(po.get("body") or "")[:8000], "image_url": str(po.get("image_url") or "")[:500], "type": po.get("type") if po.get("type") in ("blog", "campaign") else "blog",
                           "date": str(po.get("date") or datetime.now(timezone.utc).date().isoformat())[:10], "published": bool(po.get("published", True)),
-                          "cta_url": str(po.get("cta_url") or "")[:300]})
+                          "cta_url": str(po.get("cta_url") or "")[:300], "promo_code": re.sub(r"[^A-Z0-9_-]", "", str(po.get("promo_code") or "").upper())[:20],
+                          "discount_pct": max(0, min(90, int(po.get("discount_pct") or 0)))})
         content["posts"] = posts
+        for po in posts:
+            if po.get("promo_code") and po.get("discount_pct"):
+                await db.promo_codes.update_one({"code": po["promo_code"]}, {"$set": {"code": po["promo_code"], "property_id": pid, "discount_type": "percentage", "discount_value": po["discount_pct"],
+                                                                                  "description": f"Kampanya: {po['title']}", "is_active": bool(po.get("published", True)), "source": "campaign_post"},
+                                                                         "$setOnInsert": {"id": str(uuid.uuid4()), "used_count": 0, "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
         an = content.get("analytics") or {}
         content["analytics"] = {k: re.sub(r"[^A-Za-z0-9_-]", "", str(an.get(k) or ""))[:40] for k in ("ga4_id", "gtm_id", "pixel_id")}
         br = content.get("brand") or {}

@@ -5,7 +5,7 @@ import {
 import { useLanguage } from "../i18n/LanguageContext";
 import { PriceCalendar } from "./PriceCalendar";
 
-export function SearchWidget({ t, checkIn, setCheckIn, checkOut, setCheckOut, adults, setAdults, children, setChildren, roomCount, setRoomCount, showGuestPicker, setShowGuestPicker, searchRooms, propertyId }) {
+export function SearchWidget({ t, checkIn, setCheckIn, checkOut, setCheckOut, adults, setAdults, children, setChildren, roomCount, setRoomCount, showGuestPicker, setShowGuestPicker, searchRooms, propertyId, childAges = [], setChildAges }) {
   const { t: tr } = useLanguage();
   const [showCal, setShowCal] = useState(false);
   const isAirbnb = t.layout === "airbnb";
@@ -56,6 +56,18 @@ export function SearchWidget({ t, checkIn, setCheckIn, checkOut, setCheckOut, ad
                     </div>
                   </div>
                 ))}
+                {children > 0 && setChildAges && (
+                  <div className="pt-2 border-t border-gray-100 mt-1" data-testid="child-ages">
+                    <div className="text-xs font-semibold text-slate-500 mb-1.5">{tr("search.childAges")}</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {Array.from({ length: children }).map((_, i) => (
+                        <select key={i} value={childAges[i] ?? 6} onChange={(e) => { const n = [...childAges]; n[i] = Number(e.target.value); setChildAges(n.slice(0, children)); }} className="border border-gray-300 rounded-lg px-2 py-1 text-xs" aria-label={`${tr("search.child")} ${i + 1}`} data-testid={`child-age-${i}`}>
+                          {Array.from({ length: 18 }).map((__, a) => <option key={a} value={a}>{a === 0 ? "<1" : a}</option>)}
+                        </select>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <button onClick={() => setShowGuestPicker(false)} className="w-full mt-2 text-white py-2 rounded-lg font-semibold text-sm" style={{ background: t.colors.accent }}>{tr("search.done")}</button>
               </div>
             )}

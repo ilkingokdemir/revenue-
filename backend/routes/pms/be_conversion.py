@@ -229,7 +229,7 @@ def create_be_conversion_router(db, require_roles):
         if not item:
             raise HTTPException(404, "Ek hizmet yok")
         if any(u.get("id") == item["id"] for u in (b.get("post_upsells") or [])):
-            return {"ok": True, "already": True, "balance_due": b.get("balance_due", 0)}
+            return {"ok": True, "already": True, "balance_due": b.get("balance_due", 0), "upsell_unpaid_total": round(sum(float(u.get("price") or 0) for u in (b.get("post_upsells") or []) if not u.get("paid")), 2)}
         nights = int(b.get("nights") or 1)
         price = float(item.get("price") or 0) * (nights if item.get("price_type") == "per_night" else 1)
         new_total = round(float(b.get("cart_total") or b.get("total_price") or 0) + price, 2)
@@ -239,8 +239,9 @@ def create_be_conversion_router(db, require_roles):
             upd["cart_total"] = new_total
         if b.get("payment_status") == "paid":
             upd["balance_due"] = bal
-        await db.bookings.update_one({"id": b["id"]}, {"$set": upd, "$push": {"post_upsells": {"id": item["id"], "name": item.get("name"), "price": price, "added_at": datetime.now(timezone.utc).isoformat(), "source": "post_payment"}}})
-        return {"ok": True, "added": {"id": item["id"], "name": item.get("name"), "price": price}, "new_total": new_total, "balance_due": bal}
+        await db.bookings.update_one({"id": b["id"]}, {"$set": upd, "$push": {"post_upsells": {"id": item["id"], "name": item.get("name"), "price": price, "added_at": datetime.now(timezone.utc).isoformat(), "source": "post_payment", "paid": False}}})
+        unpaid_total = round(sum(float(u.get("price") or 0) for u in (b.get("post_upsells") or []) if not u.get("paid")) + price, 2)
+        return {"ok": True, "added": {"id": item["id"], "name": item.get("name"), "price": price}, "new_total": new_total, "balance_due": bal, "upsell_unpaid_total": unpaid_total}
 
     # ---------------- ESNEK TARİH ----------------
     @router.get("/booking/flex-dates/{pid}")

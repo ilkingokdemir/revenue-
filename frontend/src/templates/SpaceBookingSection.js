@@ -28,7 +28,7 @@ export function SpaceBookingSection({ propertyId, tmpl }) {
 
   useEffect(() => {
     fetch(`${API}/spaces/public/${propertyId}`)
-      .then(r => r.json()).then(setSpaces).catch(() => {});
+      .then(r => r.json()).then((d) => setSpaces(Array.isArray(d) ? d : [])).catch(() => {});
   }, [propertyId]);
 
   if (spaces.length === 0) return null;

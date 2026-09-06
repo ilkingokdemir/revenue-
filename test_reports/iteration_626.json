@@ -1,0 +1,27 @@
+{
+  "summary": "Iter 626 (Paket 29) — 4 features tested end-to-end: (1) e-Fatura/e-Arşiv settings + build/submit/html/cancel/list/bulk, (2) Translation approval lock filtering public site, (3) Campaign performance card + tracking, (4) Upsell payment (booking engine confirmation → card pay flow). Wrote pytest test_iter626_paket29.py — 31/31 backend tests PASS. Frontend Playwright verified: (a) /login → Finans → e-Fatura/e-Arşiv panel opens on 'tr-efatura-block' tab, 4 stat cards including 'KDV oranı %10', settings toggle reveals form with vat-preset select — 'uk_standard' sets vat-rate=20 & tax-label 'VAT' (disabled), 'custom' unlocks rate; VKN check ✗ for 1234567891, ✓ for 1234567890; booking-select, build, bulk-month, bulk button, settings-save all present; list shows 82 submit / 85 preview / 83 cancel testids. (b) Site Builder default branch → site-translations-card with site-tr-lock-bar showing '1/3 satır onaylı'; site-tr-approve-all click → '3/3 satır onaylı'; editing site-tr-about → '2/3 satır onaylı' (auto-unapprove on keystroke). (c) campaign-perf-card totals (uses/bookings/revenue/conv), camp-row-QAWIN20 & camp-row-QANOW10 both rendered; site-post-stats-0/1 chips visible. (d) /book?property=default → 3-night search → select first room → cart-continue-btn → guest fields → payment-hotel-option → complete-booking-btn → confirmation-step; post-upsells card with 4 add buttons; adding Early Check-in shows post-upsell-pay-options with 'Pay £25 by card now' + 'Pay at the property'; clicking card opens post-upsell-inline-pay with inline-amount '£25' and Stripe Payment Element (9 iframes present). Backend API-level validated the full confirm/paid transitions.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter626_paket29.py",
+    "/app/test_reports/pytest/iter626.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "tr_compliance._build_one: uses `force=True` default parameter and *also* checks for existing tr_invoice_uuid — the force check is inverted (blocks only when force=False, but the public /build endpoint calls without passing force, keeping force=True default which bypasses the duplicate guard). Duplicate invoices from consecutive /build calls are technically possible on same booking; only unique-per-booking guarantee is the last-write on booking.tr_invoice_uuid. Consider tightening.",
+    "tr_compliance.efatura_bulk: `check_out: {'$gte': month-01, '$lte': month-31}` will miss check_out on the actual last day of a 30-day month if compared as strings? Actually YYYY-MM-31 compares OK lexicographically so no bug — but months like Feb would over-scan into March-01. Not incorrect but non-idiomatic.",
+    "be_conversion.add_upsell: `upsell_unpaid_total` on the already-added branch (line 232) sums unpaid items excluding the newly added one; but on new-add branch (line 243) it adds the new price. Consistent — good.",
+    "be_payments.upsell_intent: does not clamp `amount<=0` distinct from missing booking (raises 400 'Ödenecek ekstra yok') — behavior correct.",
+    "site_builder._approved_translations: only keeps keys explicitly in `approved` dict. If translation.faqs exists but approved.faqs missing, faqs never leak — good default-deny.",
+    "site_builder.save_site rebuilds `approved` dict only for keys with non-empty translation values — so approved.headline gets dropped if headline empty. Consistent with UI badge count.",
+    "site_builder.campaign_stats: `status='active'` requires published AND in_window AND promo.is_active — matches promo_codes flag flow correctly."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter626_paket29.py", "/app/test_reports/iteration_626.json"],
+  "success_rate": {"backend": "100% (31/31)", "frontend": "100% (all 4 features UI verified end-to-end)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Backend tests created 1 e-arşiv invoice (then cancelled), triggered a bulk for 2026-11 (may create additional invoices), and a bulk for 2026-10 (idempotent — 0 created). Frontend booking flow created a new booking (MHB-48AEFE66 or similar, guest qa.pay@example.com, 3 nights ~26-29 Oct 2026, hotel-payment) with Early Check-in upsell added but NOT paid via Stripe. Site content preserved: headline 'Şehrin kalbinde butik konfor' + QAWIN20/QANOW10 posts intact.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Booking MHB-A8502A2D / qa.upsell2@example.com still has 1 unpaid Late Check-out £25 + additional upsell(s) added by tests. All e-Fatura settings restored to tr_accommodation (KDV %10). Translation approval on 'en' language for property default currently has headline approved (about may be false after last test). Preview URL: https://review-hub-108.preview.emergentagent.com. Server date: 2026-09-06.",
+  "rca_of_the_issue": "N/A — no defects."
+}

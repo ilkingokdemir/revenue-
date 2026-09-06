@@ -4145,3 +4145,18 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - Site Builder posts: starts_at/ends_at → promo_codes.is_active + valid_from/valid_until; kayıtta ve `workers.campaign_window_loop` (saatlik) ile otomatik aç/kapat.
 - TranslationsEditor: TR kaynak | EN/DE çeviri yan yana grid, satır bazlı ✓ onay, SSS diff.
 - Test: iteration_625.json backend 9/9, frontend 4/4 (upsell UI ayrıca ekran görüntüsüyle doğrulandı).
+
+## Iter 626 (2026-09-06) — e-Fatura genişletme + Çeviri onay kilidi + Kampanya performansı + Upsell kart ödemesi
+- e-Fatura (tr_compliance.py): Finans menüsü "e-Fatura / e-Arşiv" (view id `e-invoice`, TRCompliancePanel initialTab), ayarlar
+  (`/tr-compliance/efatura/{pid}/settings` GET/PUT: entegratör Foriba/Uyumsoft/Paraşüt/…, test/canlı, API key maskeli, KDV preset'leri
+  TR %10/%20, UK %20/0, EU DE/AT/FR/ES/IT/NL/GR, US 0/%14, özel), `/validate-id` (VKN/TCKN algoritması), `/{id}/submit` (SİMÜLE: ETTN,
+  outbox `tr_einvoice_outbox`), `/{id}/cancel`, `/bulk` (aylık toplu, mükerrer atlar), `/{id}/html` (yazdırılabilir fatura).
+  Fatura XML artık ayarlardaki KDV oranı/etiketini kullanır (eski sabit %8 kaldırıldı).
+- Çeviri onay kilidi: `translations[lg].approved` kaydedilir; public site + sitemap yalnızca onaylı satırları döner (`_approved_translations`).
+  UI: kilit çubuğu "X/Y onaylı", "Hepsini onayla", düzenleme onayı düşürür, SSS onayı.
+- Kampanya performansı: `GET /site-builder/{pid}/campaign-stats` (kupon kullanımı, rezervasyon, gelir, sayfa görüntülenme→dönüşüm);
+  track'e `page` alanı, HotelSitePage blog/{slug} görüntülenme izler. UI: CampaignPerfCard + yazı başına chip'ler.
+- Upsell ödemesi: `/payments/upsell-intent` + `/confirm` (client PI id doğrulanır — StrictMode çift istek yarışına karşı), InlinePayment
+  `createIntent/confirmIntent/compact/title/payLabel` prop'ları; onay ekranında "Kartla hemen öde" / "Tesiste öde". Stripe 4242 ile e2e doğrulandı.
+- Düzeltme: SpaceBookingSection API hata cevabında `spaces.map` çökmesi (Array guard).
+- Test: iteration_626.json backend 31/31, frontend 4/4; kart ödemesi ayrıca Playwright ile doğrulandı.

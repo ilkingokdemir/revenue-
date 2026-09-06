@@ -331,6 +331,15 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
           />
         )}
 
+        {activeView === "e-invoice" && (
+          <TRCompliancePanel
+            key="e-invoice"
+            initialTab="efatura"
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+            hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
+          />
+        )}
+
         {/* EU Compliance — 7 country hub */}
         {activeView === "eu-compliance" && (
           <EUCompliancePanel

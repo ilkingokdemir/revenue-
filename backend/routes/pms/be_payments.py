@@ -75,6 +75,68 @@ def create_be_payments_router(db, require_roles):
             pass
         return {"paid": True, "status": "succeeded", "booking_ref": booking.get("booking_ref")}
 
+    # ---------------- UPSELL ÖDEMESİ (onay ekranı) ----------------
+    async def _upsell_booking(data: Dict):
+        b = await db.bookings.find_one({"booking_ref": (data.get("booking_ref") or "").strip(), "guest_email": (data.get("guest_email") or "").strip()}, {"_id": 0})
+        if not b:
+            raise HTTPException(404, "Rezervasyon bulunamadı")
+        unpaid = [u for u in (b.get("post_upsells") or []) if not u.get("paid")]
+        return b, unpaid, round(sum(float(u.get("price") or 0) for u in unpaid), 2)
+
+    @router.post("/payments/upsell-intent")
+    async def upsell_intent(data: Dict):
+        """Public: onay ekranında eklenen ekstralar için PaymentIntent."""
+        if not secret:
+            raise HTTPException(503, "Stripe yapılandırılmamış")
+        b, unpaid, amount = await _upsell_booking(data)
+        if amount <= 0:
+            raise HTTPException(400, "Ödenecek ekstra yok")
+        import stripe
+        stripe.api_key = secret
+        cur = (b.get("currency") or "gbp").lower()
+        if b.get("upsell_pi_id"):
+            try:
+                old = stripe.PaymentIntent.retrieve(b["upsell_pi_id"])
+                if old.status in ("requires_payment_method", "requires_confirmation", "requires_action") and old.amount == int(round(amount * 100)):
+                    return {"client_secret": old.client_secret, "amount": amount, "currency": cur, "publishable_key": publishable, "items": [u.get("name") for u in unpaid]}
+            except Exception:
+                pass
+        pi = stripe.PaymentIntent.create(amount=int(round(amount * 100)), currency=cur, automatic_payment_methods={"enabled": True},
+                                         receipt_email=b.get("guest_email") or None,
+                                         metadata={"type": "upsell", "booking_id": b["id"], "booking_ref": b.get("booking_ref", ""), "property_id": b.get("property_id", ""),
+                                                   "items": ",".join(u.get("name", "")[:30] for u in unpaid)[:400]})
+        await db.bookings.update_one({"id": b["id"]}, {"$set": {"upsell_pi_id": pi.id}})
+        return {"client_secret": pi.client_secret, "amount": amount, "currency": cur, "publishable_key": publishable, "items": [u.get("name") for u in unpaid]}
+
+    @router.post("/payments/upsell-intent/confirm")
+    async def upsell_confirm(data: Dict):
+        if not secret:
+            raise HTTPException(503, "Stripe yapılandırılmamış")
+        b, unpaid, amount = await _upsell_booking(data)
+        pi_id = str(data.get("payment_intent_id") or "").split("_secret")[0] or b.get("upsell_pi_id")
+        if not pi_id:
+            raise HTTPException(404, "Ödeme başlatılmamış")
+        import stripe
+        stripe.api_key = secret
+        pi = stripe.PaymentIntent.retrieve(pi_id)
+        meta = pi.metadata.to_dict() if hasattr(pi.metadata, "to_dict") else dict(pi.metadata or {})
+        if meta.get("type") != "upsell" or meta.get("booking_id") != b["id"]:
+            raise HTTPException(400, "Ödeme bu rezervasyona ait değil")
+        if pi.status != "succeeded":
+            return {"paid": False, "status": pi.status}
+        if not unpaid:
+            return {"paid": True, "already": True, "amount": pi.amount_received / 100.0}
+        now = datetime.now(timezone.utc).isoformat()
+        paid_amt = pi.amount_received / 100.0
+        items = [{**u, "paid": True, "paid_at": now, "payment_method": "stripe"} if not u.get("paid") else u for u in (b.get("post_upsells") or [])]
+        await db.bookings.update_one({"id": b["id"]}, {"$set": {"post_upsells": items, "balance_due": max(0.0, round(float(b.get("balance_due") or 0) - paid_amt, 2)),
+                                                                "post_upsell_paid_total": round(float(b.get("post_upsell_paid_total") or 0) + paid_amt, 2)},
+                                                       "$unset": {"upsell_pi_id": ""}})
+        await db.payment_transactions.insert_one({"id": str(uuid.uuid4()), "session_id": pi.id, "type": "upsell", "reference_id": b["id"], "reference_number": b.get("booking_ref"),
+                                                  "property_id": b.get("property_id"), "amount": paid_amt, "currency": (b.get("currency") or "gbp").lower(), "guest_name": b.get("guest_name"),
+                                                  "guest_email": b.get("guest_email"), "payment_method": "stripe_element", "payment_status": "paid", "paid_at": now, "created_at": now})
+        return {"paid": True, "amount": paid_amt, "items": [u.get("name") for u in unpaid]}
+
     # ---------------- AI ÇEVİRİ ----------------
     @router.post("/site-builder/{pid}/translate")
     async def ai_translate(pid: str, data: Dict, _u: dict = Depends(require_roles("admin", "manager"))):

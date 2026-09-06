@@ -3,7 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Globe, ArrowSquareOut } from "@phosphor-icons/react";
 import { TEMPLATES as PRO_TEMPLATES } from "../../templates/templateConfig";
-import { BlocksEditor, FaqEditor, InquiriesCard, TranslationsEditor, PostsEditor, AnalyticsBrandEditor } from "./SiteBuilderExtras";
+import { BlocksEditor, FaqEditor, InquiriesCard, TranslationsEditor, PostsEditor, AnalyticsBrandEditor, CampaignPerfCard } from "./SiteBuilderExtras";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -17,6 +17,7 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
   const [domain, setDomain] = useState("");
   const [domainStatus, setDomainStatus] = useState(null);
   const [stats, setStats] = useState(null);
+  const [campStats, setCampStats] = useState(null);
   const [mode, setMode] = useState("simple");
   const [engineTpl, setEngineTpl] = useState("booking-classic");
   const [busy, setBusy] = useState(false);
@@ -78,6 +79,10 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
       try {
         const { data: st } = await axios.get(`${API}/site-builder/${pid}/stats`);
         setStats(st);
+      } catch { /* silent */ }
+      try {
+        const { data: cs } = await axios.get(`${API}/site-builder/${pid}/campaign-stats`);
+        setCampStats(cs);
       } catch { /* silent */ }
     } catch { toast.error("Yüklenemedi"); }
   }, [pid]);
@@ -195,6 +200,8 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
         </div>
       )}
 
+      <CampaignPerfCard stats={campStats} />
+
       <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm space-y-3">
         <input value={content.headline} onChange={(e) => setContent({ ...content, headline: e.target.value })}
           placeholder="Ana başlık (örn. Şehrin kalbinde butik konfor)" className={inputCls} data-testid="site-headline-input" />
@@ -215,7 +222,7 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
               pagesEnabled={content.pages_enabled} onPagesChange={(p) => setContent({ ...content, pages_enabled: p })} />
             <FaqEditor faqs={content.faqs} onChange={(f) => setContent({ ...content, faqs: f })} />
             <TranslationsEditor translations={content.translations} onChange={(tr) => setContent({ ...content, translations: tr })} pid={pid} source={{ headline: content.headline, about: content.about, seo_title: content.seo_title, seo_description: content.seo_description, faqs: content.faqs }} />
-            <PostsEditor posts={content.posts} onChange={(p) => setContent({ ...content, posts: p })} />
+            <PostsEditor posts={content.posts} onChange={(p) => setContent({ ...content, posts: p })} stats={campStats} />
             <div className="md:col-span-2"><AnalyticsBrandEditor analytics={content.analytics} brand={content.brand} onAnalytics={(a) => setContent({ ...content, analytics: a })} onBrand={(b) => setContent({ ...content, brand: b })} /></div>
           </div>
         )}

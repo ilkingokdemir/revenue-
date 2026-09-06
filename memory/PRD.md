@@ -35,6 +35,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Admin: `admin@hotelbox.com` / `HotelAdmin2026!` (login cevabında token alanı: `token`)
 - Preview: frontend/.env REACT_APP_BACKEND_URL değerini kullan
 
+## Son Durum (Iter 626, 2026-09-06) — e-Fatura entegratör/KDV preset + çeviri kilidi + kampanya perf + upsell kart ödemesi
+- Finans → "e-Fatura / e-Arşiv": entegratör ayarları (simüle gönderim, ETTN), KDV preset'leri TR/UK/EU/US/özel, toplu fatura, iptal, HTML önizleme.
+- Çeviri onay kilidi canlı sitede aktif; kampanya performans kartı; onay ekranında ekstra için Stripe kart ödemesi.
+- Detay: CHANGELOG.md iter 626. Backlog: offline housekeeping mobil (P2), gerçek GİB entegratör SDK bağlantısı (anahtar gelince).
+
 ## Son Durum (Iter 625, 2026-09-06) — 4 özellik tamamlandı
 - Şube seçici tüm panellere anında yansıyor (DashboardViews key), ödeme sonrası upsell kartı
   (ConfirmationStep + /booking/{ref}/add-upsell), kampanya başlangıç/bitiş → promo otomatik aç/kapat

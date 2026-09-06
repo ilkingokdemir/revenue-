@@ -433,6 +433,7 @@ export function buildMenuSections(t, user) {
         { divider: true, label: "Accounting" },
         { id: "payment-terminal", icon: CreditCard, name: "Ödeme Terminali", testId: "payment-terminal-btn", core: true },
         { id: "accounting", icon: Wallet, name: t("nav.accounting"), testId: "accounting-btn" },
+        { id: "e-invoice", icon: Receipt, name: "e-Fatura / e-Arşiv", testId: "e-invoice-btn", core: true },
         { id: "finance", icon: Wallet, name: "Finance overview", testId: "finance-btn", core: true },
         { id: "finance-pl", icon: ChartLine, name: "Profit & loss", testId: "finance-pl-btn" },
         { id: "cash-flow", icon: ChartLine, name: "Cash flow", testId: "cash-flow-btn" },

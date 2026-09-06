@@ -24,6 +24,58 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+VAT_PRESETS = [
+    {"id": "tr_accommodation", "region": "tr", "label": "Türkiye — Konaklama KDV %10", "rate": 10, "tax_label": "KDV"},
+    {"id": "tr_general", "region": "tr", "label": "Türkiye — Genel KDV %20", "rate": 20, "tax_label": "KDV"},
+    {"id": "uk_standard", "region": "uk", "label": "UK — Standard VAT 20%", "rate": 20, "tax_label": "VAT"},
+    {"id": "uk_zero", "region": "uk", "label": "UK — Zero-rated 0%", "rate": 0, "tax_label": "VAT"},
+    {"id": "eu_de", "region": "eu", "label": "EU — Almanya konaklama %7 (USt)", "rate": 7, "tax_label": "USt"},
+    {"id": "eu_at", "region": "eu", "label": "EU — Avusturya %10 (USt)", "rate": 10, "tax_label": "USt"},
+    {"id": "eu_fr", "region": "eu", "label": "EU — Fransa hébergement %10 (TVA)", "rate": 10, "tax_label": "TVA"},
+    {"id": "eu_es", "region": "eu", "label": "EU — İspanya %10 (IVA)", "rate": 10, "tax_label": "IVA"},
+    {"id": "eu_it", "region": "eu", "label": "EU — İtalya %10 (IVA)", "rate": 10, "tax_label": "IVA"},
+    {"id": "eu_nl", "region": "eu", "label": "EU — Hollanda %9 (BTW)", "rate": 9, "tax_label": "BTW"},
+    {"id": "eu_gr", "region": "eu", "label": "EU — Yunanistan %13 (ΦΠΑ)", "rate": 13, "tax_label": "VAT"},
+    {"id": "us_none", "region": "us", "label": "US — KDV yok (%0, eyalet vergisi ayrı)", "rate": 0, "tax_label": "Tax"},
+    {"id": "us_occupancy", "region": "us", "label": "US — Occupancy tax %14 (örnek)", "rate": 14, "tax_label": "Occupancy Tax"},
+    {"id": "custom", "region": "custom", "label": "Özel oran", "rate": None, "tax_label": "KDV"},
+]
+INTEGRATORS = [
+    {"id": "none", "label": "Entegratör yok (GİB portal / manuel)"},
+    {"id": "foriba", "label": "Foriba (Sovos)"},
+    {"id": "uyumsoft", "label": "Uyumsoft"},
+    {"id": "parasut", "label": "Paraşüt"},
+    {"id": "birfatura", "label": "BirFatura"},
+    {"id": "logo", "label": "Logo e-Fatura"},
+    {"id": "edm", "label": "EDM Bilişim"},
+    {"id": "izibiz", "label": "İzibiz"},
+]
+
+
+def _validate_tr_id(value: str) -> dict:
+    v = "".join(ch for ch in str(value) if ch.isdigit())
+    if len(v) == 10:
+        d = [int(x) for x in v]
+        total = 0
+        for i in range(9):
+            tmp = (d[i] + 9 - i) % 10
+            s = (tmp * (2 ** (9 - i))) % 9
+            if tmp != 0 and s == 0:
+                s = 9
+            total += s
+        ok = (10 - total % 10) % 10 == d[9]
+        return {"valid": ok, "type": "vkn", "value": v}
+    if len(v) == 11:
+        d = [int(x) for x in v]
+        if d[0] == 0:
+            return {"valid": False, "type": "tckn", "value": v}
+        odd = d[0] + d[2] + d[4] + d[6] + d[8]
+        even = d[1] + d[3] + d[5] + d[7]
+        ok = (odd * 7 - even) % 10 == d[9] and sum(d[:10]) % 10 == d[10]
+        return {"valid": ok, "type": "tckn", "value": v}
+    return {"valid": False, "type": "unknown", "value": v}
+
+
 class KbsExportRequest(BaseModel):
     property_id: str
     from_date: str  # YYYY-MM-DD
@@ -214,9 +266,19 @@ def create_tr_compliance_router(db, require_roles):
     async def efatura_build(req: EArsivBuildRequest,
                             current_user: dict = Depends(require_roles("admin", "manager"))):
         """Build a UBL-TR 2.1 InvoiceXML for one booking."""
+        return await _build_one(req, current_user)
+
+    async def _build_one(req: EArsivBuildRequest, current_user: dict, force: bool = True):
         booking = await db.bookings.find_one({"id": req.booking_id}, {"_id": 0})
         if not booking:
             raise HTTPException(404, "Booking not found")
+        if booking.get("tr_invoice_uuid"):
+            prev = await db.tr_invoices.find_one({"id": booking["tr_invoice_uuid"], "status": {"$ne": "cancelled"}}, {"_id": 0, "invoice_no": 1})
+            if prev and not force:
+                raise HTTPException(409, f"Bu rezervasyon için fatura zaten var: {prev['invoice_no']}")
+        settings = await _get_settings(booking.get("property_id") or "")
+        default_rate = float(settings.get("vat_rate") if settings.get("vat_rate") is not None else 10.0)
+        tax_label = settings.get("tax_label") or "KDV"
 
         property_doc = await db.properties.find_one(
             {"id": booking.get("property_id")}, {"_id": 0}
@@ -229,9 +291,9 @@ def create_tr_compliance_router(db, require_roles):
         ).to_list(500)
 
         # Defaults
-        sender_name = req.sender_name or property_doc.get("legal_name") or property_doc.get("name") or "Hotel"
-        sender_vkn = req.sender_vkn or property_doc.get("vkn") or property_doc.get("tax_id") or "0000000000"
-        sender_addr = req.sender_address or property_doc.get("address") or ""
+        sender_name = req.sender_name or settings.get("sender_name") or property_doc.get("legal_name") or property_doc.get("name") or "Hotel"
+        sender_vkn = req.sender_vkn or settings.get("sender_vkn") or property_doc.get("vkn") or property_doc.get("tax_id") or "0000000000"
+        sender_addr = req.sender_address or settings.get("sender_address") or property_doc.get("address") or ""
         recipient_vkn = guest.get("vkn") or guest.get("tc_kimlik_no") or "11111111111"
         recipient_name = f"{guest.get('first_name','')} {guest.get('last_name','')}".strip() or booking.get("guest_name", "Müşteri")
 
@@ -246,7 +308,7 @@ def create_tr_compliance_router(db, require_roles):
             tax_total = 0.0
             for i, c in enumerate(charges, start=1):
                 gross = float(c.get("amount", 0))
-                tax_rate = float(c.get("tax_rate", 8.0))  # konaklama %8 default
+                tax_rate = float(c.get("tax_rate", default_rate))
                 net = round(gross / (1 + tax_rate / 100), 2)
                 tax = round(gross - net, 2)
                 lines.append({
@@ -264,7 +326,7 @@ def create_tr_compliance_router(db, require_roles):
             total = subtotal + tax_total
         else:
             total = float(booking.get("total_price", 0))
-            tax_rate = 8.0
+            tax_rate = default_rate
             net = round(total / (1 + tax_rate / 100), 2)
             tax = round(total - net, 2)
             lines = [{
@@ -289,7 +351,7 @@ def create_tr_compliance_router(db, require_roles):
           <cbc:TaxAmount currencyID="{currency}">{ln["tax_amount"]:.2f}</cbc:TaxAmount>
           <cac:TaxCategory>
             <cbc:Percent>{ln["tax_rate"]:.1f}</cbc:Percent>
-            <cac:TaxScheme><cbc:Name>KDV</cbc:Name><cbc:TaxTypeCode>0015</cbc:TaxTypeCode></cac:TaxScheme>
+            <cac:TaxScheme><cbc:Name>{tax_label}</cbc:Name><cbc:TaxTypeCode>0015</cbc:TaxTypeCode></cac:TaxScheme>
           </cac:TaxCategory>
         </cac:TaxSubtotal>
       </cac:TaxTotal>
@@ -355,7 +417,12 @@ def create_tr_compliance_router(db, require_roles):
             "currency": currency,
             "recipient_name": recipient_name,
             "recipient_vkn": recipient_vkn,
-            "status": "built",  # built → submitted → accepted | rejected
+            "status": "built",  # built → submitted/sent → accepted | rejected | cancelled
+            "tax_rate": default_rate, "tax_label": tax_label, "tax_region": settings.get("tax_region") or "tr",
+            "sender_name": sender_name, "sender_vkn": sender_vkn, "sender_address": sender_addr,
+            "guest_email": booking.get("guest_email", ""), "booking_ref": booking.get("booking_ref", ""),
+            "check_in": booking.get("check_in"), "check_out": booking.get("check_out"),
+            "lines": lines, "xml": xml, "notes": req.notes or "",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "created_by": current_user.get("email"),
         })
@@ -381,7 +448,7 @@ def create_tr_compliance_router(db, require_roles):
                            current_user: dict = Depends(require_roles("admin", "manager"))):
         rows = await db.tr_invoices.find(
             {"property_id": property_id},
-            {"_id": 0}
+            {"_id": 0, "xml": 0, "lines": 0}
         ).sort("created_at", -1).limit(200).to_list(200)
         # Aggregate
         total_count = len(rows)
@@ -410,5 +477,143 @@ def create_tr_compliance_router(db, require_roles):
                       "submitted_by": current_user.get("email")}}
         )
         return {"id": invoice_id, "status": "submitted", "submitted_at": now}
+
+        # -------- e-Fatura ayarları / entegratör / KDV --------
+    async def _get_settings(property_id: str) -> dict:
+        doc = await db.tr_einvoice_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        return {"property_id": property_id, "integrator": "none", "mode": "test", "api_key": "", "tax_region": "tr",
+                "vat_preset": "tr_accommodation", "vat_rate": 10.0, "tax_label": "KDV", "sender_vkn": "", "sender_name": "",
+                "sender_address": "", "auto_issue_on_checkout": False, **doc}
+
+    def _mask(k: str) -> str:
+        return f"••••{k[-4:]}" if k and len(k) > 4 else ("••••" if k else "")
+
+    @router.get("/tr-compliance/efatura/{property_id}/settings")
+    async def efatura_settings_get(property_id: str, _u: dict = Depends(require_roles("admin", "manager"))):
+        st = await _get_settings(property_id)
+        st["api_key_masked"] = _mask(st.pop("api_key", ""))
+        return {"settings": st, "vat_presets": VAT_PRESETS, "integrators": INTEGRATORS}
+
+    @router.put("/tr-compliance/efatura/{property_id}/settings")
+    async def efatura_settings_put(property_id: str, data: dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        cur = await _get_settings(property_id)
+        integ = data.get("integrator") if data.get("integrator") in {i["id"] for i in INTEGRATORS} else cur["integrator"]
+        preset_id = data.get("vat_preset") or cur.get("vat_preset")
+        preset = next((p for p in VAT_PRESETS if p["id"] == preset_id), None)
+        if preset and preset["rate"] is not None:
+            rate = float(preset["rate"]); label = preset["tax_label"]; region = preset["region"]
+        else:
+            try:
+                rate = float(data.get("vat_rate", cur["vat_rate"]))
+            except (TypeError, ValueError):
+                raise HTTPException(422, "vat_rate sayı olmalı")
+            label = str(data.get("tax_label") or cur.get("tax_label") or "KDV")[:20]
+            region = data.get("tax_region") if data.get("tax_region") in ("tr", "uk", "eu", "us", "custom") else cur.get("tax_region", "tr")
+        if not 0 <= rate <= 60:
+            raise HTTPException(422, "KDV oranı 0-60 arasında olmalı")
+        vkn = str(data.get("sender_vkn") or cur.get("sender_vkn") or "").strip()
+        if vkn and not _validate_tr_id(vkn)["valid"]:
+            raise HTTPException(422, "Geçersiz VKN/TCKN")
+        upd = {"property_id": property_id, "integrator": integ, "mode": data.get("mode") if data.get("mode") in ("test", "live") else cur["mode"],
+               "tax_region": region, "vat_preset": preset_id if preset else "custom", "vat_rate": rate, "tax_label": label,
+               "sender_vkn": vkn, "sender_name": str(data.get("sender_name", cur.get("sender_name")) or "")[:160],
+               "sender_address": str(data.get("sender_address", cur.get("sender_address")) or "")[:400],
+               "auto_issue_on_checkout": bool(data.get("auto_issue_on_checkout", cur.get("auto_issue_on_checkout"))),
+               "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": current_user.get("email")}
+        if data.get("api_key") and "•" not in str(data["api_key"]):
+            upd["api_key"] = str(data["api_key"])[:200]
+        await db.tr_einvoice_settings.update_one({"property_id": property_id}, {"$set": upd}, upsert=True)
+        st = await _get_settings(property_id)
+        st["api_key_masked"] = _mask(st.pop("api_key", ""))
+        return {"ok": True, "settings": st}
+
+    @router.post("/tr-compliance/validate-id")
+    async def validate_id(data: dict):
+        return _validate_tr_id(str(data.get("value") or ""))
+
+    @router.post("/tr-compliance/efatura/{invoice_id}/submit")
+    async def efatura_submit(invoice_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Entegratör üzerinden GİB'e gönder. Gerçek API anahtarı yoksa SİMÜLE edilir (outbox)."""
+        rec = await db.tr_invoices.find_one({"id": invoice_id}, {"_id": 0, "xml": 0})
+        if not rec:
+            raise HTTPException(404, "Invoice not found")
+        if rec.get("status") in ("sent", "accepted"):
+            raise HTTPException(409, "Fatura zaten gönderilmiş")
+        if rec.get("status") == "cancelled":
+            raise HTTPException(409, "İptal edilmiş fatura gönderilemez")
+        st = await _get_settings(rec.get("property_id") or "")
+        now = datetime.now(timezone.utc).isoformat()
+        ettn = str(uuid.uuid4())
+        simulated = True  # gerçek entegratör SDK'sı anahtarla bağlanınca False olur
+        provider = st.get("integrator") if st.get("integrator") != "none" else "gib_portal"
+        upd = {"status": "sent", "ettn": ettn, "provider": provider, "provider_mode": st.get("mode", "test"), "simulated": simulated,
+               "sent_at": now, "sent_by": current_user.get("email"), "gib_status": "accepted", "gib_status_at": now}
+        await db.tr_invoices.update_one({"id": invoice_id}, {"$set": upd})
+        await db.tr_einvoice_outbox.insert_one({"id": str(uuid.uuid4()), "invoice_id": invoice_id, "invoice_no": rec.get("invoice_no"),
+                                                 "property_id": rec.get("property_id"), "provider": provider, "mode": st.get("mode", "test"),
+                                                 "has_api_key": bool(st.get("api_key")), "simulated": simulated, "ettn": ettn, "created_at": now})
+        return {"id": invoice_id, **upd}
+
+    @router.post("/tr-compliance/efatura/{invoice_id}/cancel")
+    async def efatura_cancel(invoice_id: str, data: dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        rec = await db.tr_invoices.find_one({"id": invoice_id}, {"_id": 0, "xml": 0})
+        if not rec:
+            raise HTTPException(404, "Invoice not found")
+        if rec.get("status") == "cancelled":
+            raise HTTPException(409, "Zaten iptal")
+        reason = str(data.get("reason") or "").strip()
+        if not reason:
+            raise HTTPException(422, "İptal nedeni zorunlu")
+        now = datetime.now(timezone.utc).isoformat()
+        await db.tr_invoices.update_one({"id": invoice_id}, {"$set": {"status": "cancelled", "cancel_reason": reason[:300], "cancelled_at": now, "cancelled_by": current_user.get("email")}})
+        await db.bookings.update_one({"id": rec.get("booking_id")}, {"$unset": {"tr_invoice_uuid": "", "tr_invoice_no": ""}})
+        return {"id": invoice_id, "status": "cancelled", "cancelled_at": now}
+
+    @router.post("/tr-compliance/efatura/bulk")
+    async def efatura_bulk(data: dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Ay içinde çıkış yapan, faturası olmayan tüm rezervasyonlar için toplu fatura üret."""
+        pid = data.get("property_id") or ""
+        month = str(data.get("month") or "")
+        if not pid or len(month) != 7:
+            raise HTTPException(422, "property_id ve month (YYYY-MM) zorunlu")
+        inv_type = data.get("invoice_type") if data.get("invoice_type") in ("earsiv", "efatura") else "earsiv"
+        q = {"property_id": pid, "check_out": {"$gte": f"{month}-01", "$lte": f"{month}-31"}, "status": {"$nin": ["cancelled", "no_show"]},
+             "tr_invoice_uuid": {"$exists": False}}
+        if data.get("only_paid"):
+            q["payment_status"] = "paid"
+        bookings = await db.bookings.find(q, {"_id": 0, "id": 1}).limit(300).to_list(300)
+        created, failed = [], 0
+        for b in bookings:
+            try:
+                r = await _build_one(EArsivBuildRequest(booking_id=b["id"], invoice_type=inv_type), current_user)
+                created.append({"invoice_no": r["invoice_no"], "total": r["total"], "uuid": r["uuid"]})
+            except HTTPException:
+                failed += 1
+        return {"month": month, "created": len(created), "failed": failed, "invoices": created[:50]}
+
+    @router.get("/tr-compliance/efatura/{invoice_id}/html")
+    async def efatura_html(invoice_id: str, _u: dict = Depends(require_roles("admin", "manager"))):
+        rec = await db.tr_invoices.find_one({"id": invoice_id}, {"_id": 0, "xml": 0})
+        if not rec:
+            raise HTTPException(404, "Invoice not found")
+        cur = rec.get("currency", "TRY")
+        rows = "".join(f"<tr><td>{ln['id']}</td><td>{ln['name']}</td><td class=r>{ln['qty']}</td><td class=r>{ln['price']:.2f}</td><td class=r>%{ln['tax_rate']:.0f}</td><td class=r>{ln['tax_amount']:.2f}</td><td class=r>{ln['gross']:.2f}</td></tr>" for ln in rec.get("lines") or [])
+        status_tr = {"built": "Oluşturuldu", "sent": "GİB'e gönderildi", "submitted": "Gönderildi", "accepted": "Kabul", "rejected": "Red", "cancelled": "İPTAL"}.get(rec.get("status"), rec.get("status"))
+        html = f"""<!doctype html><html lang=tr><head><meta charset=utf-8><title>{rec.get('invoice_no')}</title>
+<style>body{{font-family:system-ui,Arial;margin:32px;color:#1c1917;font-size:13px}} h1{{font-size:20px;margin:0}} .grid{{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:20px 0}}
+.box{{border:1px solid #e7e5e4;border-radius:8px;padding:12px}} .lbl{{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#78716c}} table{{width:100%;border-collapse:collapse;margin-top:16px}}
+th{{text-align:left;font-size:10px;text-transform:uppercase;color:#78716c;border-bottom:2px solid #e7e5e4;padding:6px}} td{{padding:7px 6px;border-bottom:1px solid #f5f5f4}} .r{{text-align:right}}
+.tot{{margin-top:12px;margin-left:auto;width:280px}} .tot div{{display:flex;justify-content:space-between;padding:4px 0}} .tot .g{{font-weight:700;font-size:16px;border-top:2px solid #1c1917;padding-top:8px}}
+.badge{{display:inline-block;padding:2px 8px;border-radius:999px;background:#f5f5f4;font-size:11px}} .cancel{{color:#b91c1c;font-weight:700}} @media print{{button{{display:none}}}}</style></head><body>
+<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h1>{'e-Arşiv Fatura' if rec.get('type')=='earsiv' else 'e-Fatura'}</h1><div class=lbl>UBL-TR 2.1 · {rec.get('tax_region','tr').upper()}</div></div>
+<div style="text-align:right"><div style="font-family:monospace;font-size:15px;font-weight:700">{rec.get('invoice_no')}</div><div class=lbl>Tarih {rec.get('issue_date')}</div><span class="badge {'cancel' if rec.get('status')=='cancelled' else ''}">{status_tr}</span></div></div>
+<div class=grid><div class=box><div class=lbl>Satıcı</div><b>{rec.get('sender_name','')}</b><div>VKN: {rec.get('sender_vkn','')}</div><div>{rec.get('sender_address','')}</div></div>
+<div class=box><div class=lbl>Alıcı</div><b>{rec.get('recipient_name','')}</b><div>VKN/TCKN: {rec.get('recipient_vkn','')}</div><div>{rec.get('guest_email','')}</div><div>Rez. {rec.get('booking_ref','')} · {rec.get('check_in','')} → {rec.get('check_out','')}</div></div></div>
+{('<div class=box><div class=lbl>ETTN</div><code>'+rec['ettn']+'</code> · '+str(rec.get('provider',''))+' ('+str(rec.get('provider_mode',''))+('' if not rec.get('simulated') else ' · simülasyon')+')</div>') if rec.get('ettn') else ''}
+<table><thead><tr><th>#</th><th>Açıklama</th><th class=r>Miktar</th><th class=r>Birim ({cur})</th><th class=r>{rec.get('tax_label','KDV')}</th><th class=r>Vergi</th><th class=r>Toplam</th></tr></thead><tbody>{rows}</tbody></table>
+<div class=tot><div><span>Ara toplam</span><span>{rec.get('subtotal',0):.2f} {cur}</span></div><div><span>{rec.get('tax_label','KDV')} (%{rec.get('tax_rate',0):.0f})</span><span>{rec.get('tax_total',0):.2f} {cur}</span></div><div class=g><span>Genel toplam</span><span>{rec.get('total',0):.2f} {cur}</span></div></div>
+{('<p class=cancel>İptal nedeni: '+rec.get('cancel_reason','')+'</p>') if rec.get('status')=='cancelled' else ''}
+<p style="margin-top:28px;color:#78716c;font-size:11px">{rec.get('notes','')}</p><button onclick="window.print()" style="margin-top:12px;padding:8px 14px;border-radius:8px;border:1px solid #d6d3d1;background:#fff;cursor:pointer">Yazdır / PDF</button></body></html>"""
+        return Response(html, media_type="text/html; charset=utf-8")
 
     return router

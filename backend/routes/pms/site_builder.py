@@ -68,6 +68,22 @@ BLOCK_IDS = {b["id"] for b in DEFAULT_BLOCKS}
 SITE_PAGES = ["home", "rooms", "gallery", "location", "faq", "contact", "blog"]
 
 
+
+TRANSLATION_KEYS = ("headline", "about", "seo_title", "seo_description", "faqs")
+
+
+def _approved_translations(content: dict) -> dict:
+    """Onay kilidi: yalnızca onaylanan satırlar canlı siteye çıkar; onaysız satır TR kaynağa düşer."""
+    out = {}
+    for lg, t in (content.get("translations") or {}).items():
+        if not isinstance(t, dict):
+            continue
+        ap = t.get("approved") or {}
+        kept = {k: v for k, v in t.items() if k in TRANSLATION_KEYS and v and ap.get(k)}
+        if kept:
+            out[lg] = kept
+    return out
+
 def create_site_builder_router(db, require_roles):
     router = APIRouter(prefix="/site-builder", tags=["site-builder"])
     ROLES = ("admin", "manager")
@@ -167,6 +183,8 @@ def create_site_builder_router(db, require_roles):
             t_out = {k: str(v)[:2000] for k, v in t_in.items() if k in ("headline", "about", "seo_title", "seo_description") and v}
             if isinstance(t_in.get("faqs"), list):
                 t_out["faqs"] = [{"q": str(f.get("q", ""))[:200], "a": str(f.get("a", ""))[:1000]} for f in t_in["faqs"] if isinstance(f, dict) and f.get("q")][:20]
+            ap_in = t_in.get("approved") if isinstance(t_in.get("approved"), dict) else {}
+            t_out["approved"] = {k: bool(ap_in.get(k)) for k in TRANSLATION_KEYS if t_out.get(k)}
             content["translations"][lg] = t_out
         posts = []
         for po in (content.get("posts") or [])[:50]:
@@ -211,6 +229,7 @@ def create_site_builder_router(db, require_roles):
             content["pages_enabled"] = SITE_PAGES
         _t = datetime.now(timezone.utc).date().isoformat()
         content["posts"] = [p for p in (content.get("posts") or []) if (not p.get("starts_at") or p["starts_at"] <= _t) and (not p.get("ends_at") or p["ends_at"] >= _t)]
+        content["translations"] = _approved_translations(content)
         cfg["content"] = content
         prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1, "city": 1, "country": 1, "address": 1, "currency": 1}) or {}
         rts = await db.room_types.find({"property_id": pid, "is_active": {"$ne": False}},
@@ -272,7 +291,7 @@ def create_site_builder_router(db, require_roles):
         for po in c.get("posts") or []:
             if po.get("published", True):
                 urls.append((f"{base}/blog/{po['slug']}", "0.6"))
-        langs = ["tr"] + [lg for lg in ("en", "de") if (c.get("translations") or {}).get(lg)]
+        langs = ["tr"] + [lg for lg in ("en", "de") if _approved_translations(c).get(lg)]
         body = "".join(f"<url><loc>{u}</loc><lastmod>{today}</lastmod><priority>{pr}</priority>" + "".join(f'<xhtml:link rel="alternate" hreflang="{lg}" href="{u}{("&" if "?" in u else "?")}lang={lg}"/>' for lg in langs) + "</url>" for u, pr in urls)
         return Response(f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">{body}</urlset>', media_type="application/xml")
 
@@ -370,9 +389,36 @@ def create_site_builder_router(db, require_roles):
         await db.site_visits.insert_one({
             "id": str(uuid.uuid4()), "property_id": pid, "event": event,
             "visitor_id": (data.get("visitor_id") or "")[:64], "source": source,
-            "referrer": ref[:200],
+            "referrer": ref[:200], "page": str(data.get("page") or "")[:120],
             "date": now.date().isoformat(), "created_at": now.isoformat()})
         return {"ok": True}
+
+    @router.get("/{pid}/campaign-stats")
+    async def campaign_stats(pid: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Kampanya performansı: kupon kullanımı, gelir, sayfa görüntülenme → rezervasyon dönüşümü."""
+        cfg = await db.hotel_sites.find_one({"property_id": pid}, {"_id": 0, "content.posts": 1}) or {}
+        posts = [p for p in ((cfg.get("content") or {}).get("posts") or []) if p.get("type") == "campaign" or p.get("promo_code")]
+        today = datetime.now(timezone.utc).date().isoformat()
+        out = []
+        for po in posts:
+            code = po.get("promo_code") or ""
+            promo = await db.promo_codes.find_one({"code": code}, {"_id": 0, "used_count": 1, "is_active": 1}) if code else None
+            agg = await db.bookings.aggregate([{"$match": {"property_id": pid, "promo_code": code, "status": {"$ne": "cancelled"}}},
+                                               {"$group": {"_id": None, "n": {"$sum": 1}, "rev": {"$sum": "$total_price"}}}]).to_list(1) if code else []
+            n = agg[0]["n"] if agg else 0
+            rev = round(float(agg[0]["rev"]), 2) if agg else 0.0
+            pct = float(po.get("discount_pct") or 0)
+            views = await db.site_visits.count_documents({"property_id": pid, "event": "view", "page": f"blog/{po.get('slug', '')}"}) if po.get("slug") else 0
+            in_window = (not po.get("starts_at") or po["starts_at"] <= today) and (not po.get("ends_at") or po["ends_at"] >= today)
+            out.append({"id": po.get("id"), "title": po.get("title"), "slug": po.get("slug"), "promo_code": code, "discount_pct": pct,
+                        "starts_at": po.get("starts_at") or "", "ends_at": po.get("ends_at") or "",
+                        "status": "active" if (po.get("published", True) and in_window and (promo or {}).get("is_active", True)) else ("scheduled" if po.get("starts_at") and po["starts_at"] > today else "ended"),
+                        "coupon_uses": int((promo or {}).get("used_count") or 0), "bookings": n, "revenue": rev,
+                        "discount_given": round(rev * pct / (100 - pct), 2) if pct and pct < 100 else 0.0,
+                        "page_views": views, "conversion_pct": round(min(n / views * 100, 100), 1) if views else 0.0})
+        return {"campaigns": out, "totals": {"campaigns": len(out), "active": sum(1 for c in out if c["status"] == "active"),
+                                             "coupon_uses": sum(c["coupon_uses"] for c in out), "bookings": sum(c["bookings"] for c in out),
+                                             "revenue": round(sum(c["revenue"] for c in out), 2), "page_views": sum(c["page_views"] for c in out)}}
 
     @router.get("/{pid}/stats")
     async def site_stats(pid: str, days: int = 30, _u: dict = Depends(require_roles(*ROLES))):

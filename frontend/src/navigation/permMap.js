@@ -92,6 +92,7 @@ export const SIDEBAR_PERM_MAP = {
     "pass-over-btn":          "operations_notes_view",
     "compliance-btn":         "operations_compliance_view",
     "tr-compliance-btn":      "operations_compliance_view",
+    "e-invoice-btn":          "operations_compliance_view",
     "eu-compliance-btn":      "operations_compliance_view",
     "laundry-btn":            "laundry_reports_view",
     "stock-management-btn":   "view_laundry_stock",

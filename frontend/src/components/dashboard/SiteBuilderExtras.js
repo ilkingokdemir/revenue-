@@ -108,41 +108,52 @@ export function InquiriesCard({ pid }) {
 export function TranslationsEditor({ translations, onChange, source, pid }) {
   const [lg, setLg] = useState("en");
   const [busy, setBusy] = useState(false);
-  const [approved, setApproved] = useState({});
   const tr = translations || {};
   const cur = tr[lg] || {};
+  const approved = cur.approved || {};
   const hasSource = !!(source && (source.headline || source.about || source.seo_title || source.seo_description || source.faqs?.length));
-  const set = (k, v) => onChange({ ...tr, [lg]: { ...cur, [k]: v } });
+  const set = (k, v) => onChange({ ...tr, [lg]: { ...cur, [k]: v, approved: { ...approved, [k]: false } } });
+  const setApproved = (k, val) => onChange({ ...tr, [lg]: { ...cur, approved: { ...approved, [k]: val } } });
+  const keys = ["headline", "about", "seo_title", "seo_description", ...(cur.faqs?.length ? ["faqs"] : [])];
+  const filled = keys.filter((k) => (k === "faqs" ? cur.faqs?.length : cur[k]));
+  const okCount = filled.filter((k) => approved[k]).length;
+  const approveAll = () => onChange({ ...tr, [lg]: { ...cur, approved: Object.fromEntries(filled.map((k) => [k, true])) } });
   const autoTranslate = async () => {
     setBusy(true);
     try {
       const { data } = await axios.post(`${API}/site-builder/${pid}/translate`, { lang: lg, ...(source || {}) });
-      onChange({ ...tr, [lg]: { ...cur, ...data.translation, ...(data.faqs?.length ? { faqs: data.faqs } : {}) } });
-      toast.success(`${lg.toUpperCase()} çevirisi hazır — düzenleyip kaydedin`);
+      onChange({ ...tr, [lg]: { ...cur, ...data.translation, ...(data.faqs?.length ? { faqs: data.faqs } : {}), approved: {} } });
+      toast.success(`${lg.toUpperCase()} çevirisi hazır — satırları kontrol edip onaylayın`);
     } catch (e) { toast.error(e.response?.data?.detail || "Çeviri başarısız"); } finally { setBusy(false); }
   };
   const inp = "w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs";
+  const badge = (x) => { const t = tr[x] || {}; const ks = ["headline", "about", "seo_title", "seo_description", ...(t.faqs?.length ? ["faqs"] : [])].filter((k) => (k === "faqs" ? t.faqs?.length : t[k])); const ok = ks.filter((k) => t.approved?.[k]).length; return ks.length ? ` ${ok}/${ks.length}` : ""; };
   return (
     <div className="rounded-xl border border-stone-200 p-3" data-testid="site-translations-card">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] font-bold uppercase text-stone-500">Çeviriler (site TR + EN/DE, hreflang otomatik)</span>
-        <div className="flex gap-1 items-center">{["en", "de"].map((x) => <button key={x} onClick={() => setLg(x)} className={`text-[10px] font-bold px-2 py-0.5 rounded ${lg === x ? "bg-stone-900 text-white" : "bg-stone-100"}`} data-testid={`site-tr-lang-${x}`}>{x.toUpperCase()}{tr[x]?.headline || tr[x]?.about ? " ✓" : ""}</button>)}
+        <div className="flex gap-1 items-center">{["en", "de"].map((x) => <button key={x} onClick={() => setLg(x)} className={`text-[10px] font-bold px-2 py-0.5 rounded ${lg === x ? "bg-stone-900 text-white" : "bg-stone-100"}`} data-testid={`site-tr-lang-${x}`}>{x.toUpperCase()}{badge(x)}</button>)}
           {pid && <button onClick={autoTranslate} disabled={busy || !hasSource} title={hasSource ? "TR içeriği AI ile çevir" : "Önce TR başlık/hakkımızda girin"} className="ml-1 text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-600 text-white disabled:opacity-50" data-testid="site-tr-ai-btn">{busy ? "Çevriliyor…" : hasSource ? "✨ AI ile çevir" : "İçerik yok"}</button>}</div>
+      </div>
+      <div className="flex items-center justify-between mb-2 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5" data-testid="site-tr-lock-bar">
+        <span className="text-[10px] text-amber-800"><b>Onay kilidi:</b> {filled.length ? `${okCount}/${filled.length} satır onaylı` : "çeviri yok"} — onaysız satırlar canlı sitede TR olarak görünür.</span>
+        <button type="button" onClick={approveAll} disabled={!filled.length || okCount === filled.length} className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-600 text-white disabled:opacity-40" data-testid="site-tr-approve-all">Hepsini onayla</button>
       </div>
       <div className="grid grid-cols-[1fr_1fr_auto] gap-x-2 gap-y-1.5 items-start" data-testid="site-tr-diff">
         <div className="text-[9px] font-bold uppercase text-stone-400">TR (kaynak)</div><div className="text-[9px] font-bold uppercase text-stone-400">{lg.toUpperCase()} (çeviri)</div><div />
         {[["headline", "Başlık", false], ["about", "Hakkımızda", true], ["seo_title", "SEO başlık", false], ["seo_description", "SEO açıklama", false]].map(([k, label, multi]) => {
-          const ok = approved[k]; const Tag = multi ? "textarea" : "input";
+          const ok = !!approved[k]; const Tag = multi ? "textarea" : "input";
           return [
             <div key={`${k}-src`} className="text-xs text-stone-600 bg-stone-50 rounded-lg px-2.5 py-1.5 whitespace-pre-wrap min-h-[30px]">{source?.[k] || <span className="text-stone-300">{label} —</span>}</div>,
-            <Tag key={`${k}-dst`} className={`${inp} ${ok ? "border-emerald-300 bg-emerald-50/40" : ""}`} rows={multi ? 3 : undefined} placeholder={`${label} (${lg.toUpperCase()})`} value={cur[k] || ""} onChange={(e) => { set(k, e.target.value); setApproved((a) => ({ ...a, [k]: false })); }} data-testid={`site-tr-${k}`} />,
-            <button key={`${k}-ok`} type="button" onClick={() => setApproved((a) => ({ ...a, [k]: !a[k] }))} disabled={!cur[k]} title="Satırı onayla" className={`h-7 w-7 rounded-lg border text-xs font-bold disabled:opacity-30 ${ok ? "bg-emerald-600 text-white border-emerald-600" : "border-stone-200 text-stone-400"}`} data-testid={`site-tr-approve-${k}`}>✓</button>,
+            <Tag key={`${k}-dst`} className={`${inp} ${ok ? "border-emerald-300 bg-emerald-50/40" : cur[k] ? "border-amber-300" : ""}`} rows={multi ? 3 : undefined} placeholder={`${label} (${lg.toUpperCase()})`} value={cur[k] || ""} onChange={(e) => set(k, e.target.value)} data-testid={`site-tr-${k}`} />,
+            <button key={`${k}-ok`} type="button" onClick={() => setApproved(k, !ok)} disabled={!cur[k]} title={ok ? "Onayı kaldır" : "Satırı onayla"} className={`h-7 w-7 rounded-lg border text-xs font-bold disabled:opacity-30 ${ok ? "bg-emerald-600 text-white border-emerald-600" : "border-stone-200 text-stone-400"}`} data-testid={`site-tr-approve-${k}`}>✓</button>,
           ];
         })}
       </div>
       {source?.faqs?.length > 0 && cur.faqs?.length > 0 && (
         <div className="mt-2 space-y-1" data-testid="site-tr-faq-diff">
-          <div className="text-[9px] font-bold uppercase text-stone-400">SSS ({cur.faqs.length}/{source.faqs.length})</div>
+          <div className="flex items-center justify-between"><span className="text-[9px] font-bold uppercase text-stone-400">SSS ({cur.faqs.length}/{source.faqs.length})</span>
+            <button type="button" onClick={() => setApproved("faqs", !approved.faqs)} className={`h-6 px-2 rounded-lg border text-[10px] font-bold ${approved.faqs ? "bg-emerald-600 text-white border-emerald-600" : "border-stone-200 text-stone-400"}`} data-testid="site-tr-approve-faqs">✓ SSS {approved.faqs ? "onaylı" : "onayla"}</button></div>
           {cur.faqs.map((f, i) => (
             <div key={i} className="grid grid-cols-2 gap-x-2 text-[11px]">
               <div className="bg-stone-50 rounded px-2 py-1 text-stone-600"><b>{source.faqs[i]?.q}</b><div>{source.faqs[i]?.a}</div></div>
@@ -151,13 +162,14 @@ export function TranslationsEditor({ translations, onChange, source, pid }) {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-stone-400 mt-1">Onaylanan satırlar yeşil görünür; "Yayınla / Kaydet" ile siteye yansır. {Object.values(approved).filter(Boolean).length}/4 satır onaylı.</p>
+      <p className="text-[10px] text-stone-400 mt-1">Onaylanan satırlar yeşil, bekleyenler sarı. Onay durumu "Yayınla / Kaydet" ile kaydedilir.</p>
     </div>
   );
 }
 
-export function PostsEditor({ posts, onChange }) {
+export function PostsEditor({ posts, onChange, stats }) {
   const list = posts || [];
+  const statFor = (p) => (stats?.campaigns || []).find((c) => (p.id && c.id === p.id) || (p.promo_code && c.promo_code === p.promo_code));
   const set = (i, k, v) => onChange(list.map((p, j) => (j === i ? { ...p, [k]: v } : p)));
   const inp = "w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs";
   return (
@@ -185,6 +197,14 @@ export function PostsEditor({ posts, onChange }) {
               <input className={inp} type="number" placeholder="İndirim %" value={p.discount_pct || ""} onChange={(e) => set(i, "discount_pct", e.target.value)} data-testid={`site-post-pct-${i}`} />
               <label className="text-[10px] flex items-center gap-1 whitespace-nowrap"><input type="checkbox" checked={p.published !== false} onChange={(e) => set(i, "published", e.target.checked)} /> Yayında</label>
             </div>
+            {statFor(p) && (() => { const c = statFor(p); return (
+              <div className="flex flex-wrap gap-1 text-[10px]" data-testid={`site-post-stats-${i}`}>
+                <span className={`px-1.5 py-0.5 rounded font-bold ${c.status === "active" ? "bg-emerald-100 text-emerald-700" : c.status === "scheduled" ? "bg-sky-100 text-sky-700" : "bg-stone-100 text-stone-500"}`}>{c.status === "active" ? "Aktif" : c.status === "scheduled" ? "Planlı" : "Bitti"}</span>
+                <span className="px-1.5 py-0.5 rounded bg-stone-100">Kupon: <b>{c.coupon_uses}</b></span>
+                <span className="px-1.5 py-0.5 rounded bg-stone-100">Rez: <b>{c.bookings}</b></span>
+                <span className="px-1.5 py-0.5 rounded bg-stone-100">Gelir: <b>{c.revenue.toLocaleString()}</b></span>
+                <span className="px-1.5 py-0.5 rounded bg-stone-100">Görüntülenme: <b>{c.page_views}</b> · Dönüşüm %{c.conversion_pct}</span>
+              </div>); })()}
           </div>
         ))}
         {list.length === 0 && <p className="text-[10px] text-stone-400">Kampanya veya blog yazısı ekleyin — sitede "Blog & Kampanyalar" sayfası otomatik açılır.</p>}
@@ -217,6 +237,43 @@ export function AnalyticsBrandEditor({ analytics, brand, onAnalytics, onBrand })
         </select>
         <p className="text-[10px] text-stone-400">Sitemap: <code>/api/site-builder/public/sitemap/&lt;tesis&gt;.xml</code> · robots: <code>/api/site-builder/public/robots/&lt;tesis&gt;.txt</code></p>
       </div>
+    </div>
+  );
+}
+
+export function CampaignPerfCard({ stats }) {
+  if (!stats) return null;
+  const t = stats.totals || {};
+  const cell = (label, val, tid) => <div className="rounded-lg bg-stone-50 px-3 py-2"><div className="text-[9px] font-bold uppercase text-stone-400">{label}</div><div className="text-lg font-bold text-stone-900" data-testid={tid}>{val}</div></div>;
+  return (
+    <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm" data-testid="campaign-perf-card">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm font-bold text-stone-900">Kampanya Performansı</div>
+        <span className="text-[10px] text-stone-400">{t.active || 0}/{t.campaigns || 0} aktif kampanya</span>
+      </div>
+      {!t.campaigns ? <p className="text-[11px] text-stone-400">Kupon kodlu kampanya eklediğinizde kullanım, gelir ve dönüşüm burada görünür.</p> : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {cell("Kupon kullanımı", t.coupon_uses || 0, "camp-total-uses")}
+            {cell("Rezervasyon", t.bookings || 0, "camp-total-bookings")}
+            {cell("Kupon geliri", (t.revenue || 0).toLocaleString(), "camp-total-revenue")}
+            {cell("Dönüşüm", `%${t.page_views ? Math.min(100, Math.round(((t.bookings || 0) / t.page_views) * 1000) / 10) : 0}`, "camp-total-conv")}
+          </div>
+          <div className="mt-3 divide-y divide-stone-100">
+            {(stats.campaigns || []).map((c) => (
+              <div key={c.id || c.promo_code} className="flex items-center gap-2 py-1.5 text-[11px]" data-testid={`camp-row-${c.promo_code || c.id}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${c.status === "active" ? "bg-emerald-500" : c.status === "scheduled" ? "bg-sky-500" : "bg-stone-300"}`} />
+                <span className="font-semibold text-stone-800 truncate flex-1">{c.title}</span>
+                {c.promo_code && <span className="font-mono text-[10px] bg-stone-100 px-1.5 rounded">{c.promo_code} −%{c.discount_pct}</span>}
+                <span className="text-stone-500 w-16 text-right">{c.coupon_uses} kupon</span>
+                <span className="text-stone-500 w-14 text-right">{c.bookings} rez</span>
+                <span className="text-stone-800 font-semibold w-20 text-right">{c.revenue.toLocaleString()}</span>
+                <span className="text-stone-400 w-24 text-right">{c.page_views} görünt. · %{c.conversion_pct}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

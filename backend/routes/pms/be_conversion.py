@@ -218,6 +218,30 @@ def create_be_conversion_router(db, require_roles):
         await db.properties.update_one({"id": pid}, {"$set": upd})
         return {"ok": True, **upd}
 
+    # ---------------- ÖDEME SONRASI UPSELL ----------------
+    @router.post("/booking/{booking_ref}/add-upsell")
+    async def add_upsell(booking_ref: str, data: Dict):
+        """Public: onay ekranında tek dokunuşla ek hizmet (kahvaltı, geç çıkış…) ekle; ödendiyse bakiye olarak kaydedilir."""
+        b = await db.bookings.find_one({"booking_ref": booking_ref, "guest_email": (data.get("guest_email") or "").strip()}, {"_id": 0})
+        if not b:
+            raise HTTPException(404, "Rezervasyon bulunamadı")
+        item = await db.upsell_items.find_one({"id": data.get("upsell_id"), "property_id": b["property_id"]}, {"_id": 0})
+        if not item:
+            raise HTTPException(404, "Ek hizmet yok")
+        if any(u.get("id") == item["id"] for u in (b.get("post_upsells") or [])):
+            return {"ok": True, "already": True, "balance_due": b.get("balance_due", 0)}
+        nights = int(b.get("nights") or 1)
+        price = float(item.get("price") or 0) * (nights if item.get("price_type") == "per_night" else 1)
+        new_total = round(float(b.get("cart_total") or b.get("total_price") or 0) + price, 2)
+        bal = round(float(b.get("balance_due") or 0) + price, 2) if b.get("payment_status") == "paid" else 0
+        upd = {"total_price": round(float(b.get("total_price") or 0) + price, 2), "post_upsell_total": round(float(b.get("post_upsell_total") or 0) + price, 2)}
+        if b.get("cart_total") is not None:
+            upd["cart_total"] = new_total
+        if b.get("payment_status") == "paid":
+            upd["balance_due"] = bal
+        await db.bookings.update_one({"id": b["id"]}, {"$set": upd, "$push": {"post_upsells": {"id": item["id"], "name": item.get("name"), "price": price, "added_at": datetime.now(timezone.utc).isoformat(), "source": "post_payment"}}})
+        return {"ok": True, "added": {"id": item["id"], "name": item.get("name"), "price": price}, "new_total": new_total, "balance_due": bal}
+
     # ---------------- ESNEK TARİH ----------------
     @router.get("/booking/flex-dates/{pid}")
     async def flex_dates(pid: str, check_in: str, check_out: str, adults: int = 2, room_type_id: str = "", span: int = 3):

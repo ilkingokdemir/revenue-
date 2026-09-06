@@ -4138,3 +4138,10 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   supervisorctl restart backend. Kod hazır, otomatik canlıya geçer.
 - Test: iteration_604.json — kümülatif 44/44 pytest (bug fix sonrası), frontend %100
   (takvim, SSP sütunu, expiring banner, testid'ler). nav-section-Operations navigasyon çözümü doğrulandı.
+
+## Iter 625 (2026-09-06) — Şube seçici + Ödeme sonrası upsell + Kampanya takvimi + Çeviri QC
+- DashboardViews `Fragment key=views-{activePropertyId}` + SiteBuilderPanel key → şube değişimi tüm panelleri anında yeniler (doğrulandı: /site/default ↔ /site/aldgate-flats).
+- ConfirmationStep `PostUpsells`: GET /api/upsells/{pid} (public) + POST /api/booking/{ref}/add-upsell (be_conversion.py) → total_price/balance_due artar, post_upsells push. Layout düzeltildi (üstte tam genişlik kart, alta dikey aksiyonlar).
+- Site Builder posts: starts_at/ends_at → promo_codes.is_active + valid_from/valid_until; kayıtta ve `workers.campaign_window_loop` (saatlik) ile otomatik aç/kapat.
+- TranslationsEditor: TR kaynak | EN/DE çeviri yan yana grid, satır bazlı ✓ onay, SSS diff.
+- Test: iteration_625.json backend 9/9, frontend 4/4 (upsell UI ayrıca ekran görüntüsüyle doğrulandı).

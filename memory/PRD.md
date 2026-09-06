@@ -35,6 +35,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Admin: `admin@hotelbox.com` / `HotelAdmin2026!` (login cevabında token alanı: `token`)
 - Preview: frontend/.env REACT_APP_BACKEND_URL değerini kullan
 
+## Son Durum (Iter 625, 2026-09-06) — 4 özellik tamamlandı
+- Şube seçici tüm panellere anında yansıyor (DashboardViews key), ödeme sonrası upsell kartı
+  (ConfirmationStep + /booking/{ref}/add-upsell), kampanya başlangıç/bitiş → promo otomatik aç/kapat
+  (site_builder.py + workers.campaign_window_loop), TR/EN yan yana çeviri onayı (TranslationsEditor).
+- Backlog: TR e-Fatura/e-Arşiv (P2), offline housekeeping mobil (P2). Detay: CHANGELOG.md iter 625.
+
 ## Son Durum (Iter 377, 2026-07-08) — Kod Denetimi & Konsolidasyon
 - Tüm route'lar tarandı: 7 path çakışması bulundu, 0'a indirildi.
 - Silinen ölü kod: `integrations_pkg/marketplace.py`, `IntegrationsMarketplace.js`,

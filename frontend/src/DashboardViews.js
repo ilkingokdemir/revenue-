@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 // Dashboard view router — extracted from App.js (iter 507 refactor).
 // Renders the activeView-conditional panel blocks. Complex state-bound views
 // (dashboard home, reviews, analytics/templates/approvals/integrations) stay in App.js.
@@ -321,7 +322,7 @@ import { ChatText } from "@phosphor-icons/react";
 
 export default function DashboardViews({ activeView, activePropertyId, setActivePropertyId, properties, branding, setBranding, user, permissions, navigate, setActiveView, commandItems, fetchDeptShortcuts }) {
   return (
-    <>
+    <Fragment key={`views-${activePropertyId}`}>
         {/* TR Compliance — KBS + e-Fatura */}
         {activeView === "tr-compliance" && (
           <TRCompliancePanel
@@ -847,7 +848,7 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
           <IcalSyncPanel activePropertyId={activePropertyId} properties={properties} />
         )}
         {activeView === "site-builder" && (
-          <SiteBuilderPanel activePropertyId={activePropertyId} properties={properties} />
+          <SiteBuilderPanel key={`sb-${activePropertyId}`} activePropertyId={activePropertyId} properties={properties} />
         )}
         {activeView === "payment-terminal" && (
           <TerminalPanel activePropertyId={activePropertyId} properties={properties} />
@@ -1877,6 +1878,6 @@ export default function DashboardViews({ activeView, activePropertyId, setActive
         {activeView === "room-type-forecast" && (
           <RoomTypeForecastPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
         )}
-    </>
+    </Fragment>
   );
 }

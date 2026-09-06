@@ -1,5 +1,36 @@
 import { CheckCircle } from "@phosphor-icons/react";
+import { useState, useEffect } from "react";
+import axios from "axios";
 import { useLanguage } from "../i18n/LanguageContext";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+function PostUpsells({ t, confirmation, fmt }) {
+  const { t: tr } = useLanguage();
+  const [items, setItems] = useState([]);
+  const [added, setAdded] = useState({});
+  useEffect(() => { axios.get(`${API}/upsells/${confirmation.property_id}`).then(({ data }) => setItems((Array.isArray(data) ? data : data.items || []).slice(0, 4))).catch(() => {}); }, [confirmation.property_id]);
+  if (!items.length) return null;
+  const add = async (u) => {
+    try { const { data } = await axios.post(`${API}/booking/${confirmation.booking_ref}/add-upsell`, { upsell_id: u.id, guest_email: confirmation.guest_email }); setAdded((a) => ({ ...a, [u.id]: data.added?.price ?? u.price })); }
+    catch { /* ignore */ }
+  };
+  return (
+    <div className="mt-6 text-left w-full" data-testid="post-upsells">
+      <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">{tr("post.title")}</div>
+      <div className="grid sm:grid-cols-2 gap-2">
+        {items.map((u) => (
+          <div key={u.id} className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg px-3 py-2.5" style={{ borderRadius: t.borderRadius }} data-testid={`post-upsell-${u.id}`}>
+            <div className="min-w-0"><div className="text-sm font-semibold text-slate-800 truncate">{u.name}</div><div className="text-[11px] text-slate-500">{fmt(u.price)}{u.price_type === "per_night" ? ` / ${tr("room.night")}` : ""}</div></div>
+            {added[u.id] != null ? <span className="text-xs font-bold" style={{ color: t.colors.success }} data-testid={`post-upsell-added-${u.id}`}>✓ {tr("plan.added")}</span>
+              : <button onClick={() => add(u)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-white" style={{ background: t.colors.accent, borderRadius: t.borderRadius }} data-testid={`post-upsell-add-${u.id}`}>+ {tr("post.add")}</button>}
+          </div>
+        ))}
+      </div>
+      {Object.keys(added).length > 0 && <p className="text-[11px] text-slate-500 mt-2" data-testid="post-upsell-note">{tr("post.note")}</p>}
+    </div>
+  );
+}
 
 export function ConfirmationStep({ t, confirmation, onBookAnother, fmt = (v) => `£${Math.round(v)}` }) {
   const { t: tr } = useLanguage();
@@ -38,8 +69,11 @@ export function ConfirmationStep({ t, confirmation, onBookAnother, fmt = (v) => 
               ))}
             </div>
           )}
-          <div className="mt-6 pt-6 border-t border-gray-100 flex justify-center">
-            {(confirmation.manage_url || confirmation.booking_ref) && (
+          <div className="pt-2 border-t border-gray-100">
+            <PostUpsells t={t} confirmation={confirmation} fmt={fmt} />
+          </div>
+          <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col items-center">
+          {(confirmation.manage_url || confirmation.booking_ref) && (
             <a href={confirmation.manage_url || `/guest-portal-v2?ref=${confirmation.booking_ref}&email=${encodeURIComponent(confirmation.guest_email || "")}`} className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-lg font-semibold text-sm border-2 mb-3" style={{ borderColor: t.colors.accent, color: t.colors.accent, borderRadius: t.borderRadius }} data-testid="manage-booking-link">{tr("confirm.manage")} →</a>
           )}
           <button onClick={onBookAnother}

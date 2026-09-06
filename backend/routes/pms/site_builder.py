@@ -176,13 +176,16 @@ def create_site_builder_router(db, require_roles):
             posts.append({"id": po.get("id") or str(uuid.uuid4()), "slug": slug, "title": str(po["title"])[:160], "excerpt": str(po.get("excerpt") or "")[:300],
                           "body": str(po.get("body") or "")[:8000], "image_url": str(po.get("image_url") or "")[:500], "type": po.get("type") if po.get("type") in ("blog", "campaign") else "blog",
                           "date": str(po.get("date") or datetime.now(timezone.utc).date().isoformat())[:10], "published": bool(po.get("published", True)),
-                          "cta_url": str(po.get("cta_url") or "")[:300], "promo_code": re.sub(r"[^A-Z0-9_-]", "", str(po.get("promo_code") or "").upper())[:20],
+                          "cta_url": str(po.get("cta_url") or "")[:300], "starts_at": str(po.get("starts_at") or "")[:10], "ends_at": str(po.get("ends_at") or "")[:10], "promo_code": re.sub(r"[^A-Z0-9_-]", "", str(po.get("promo_code") or "").upper())[:20],
                           "discount_pct": max(0, min(90, int(po.get("discount_pct") or 0)))})
         content["posts"] = posts
+        today_iso = datetime.now(timezone.utc).date().isoformat()
         for po in posts:
             if po.get("promo_code") and po.get("discount_pct"):
+                in_window = (not po.get("starts_at") or po["starts_at"] <= today_iso) and (not po.get("ends_at") or po["ends_at"] >= today_iso)
                 await db.promo_codes.update_one({"code": po["promo_code"]}, {"$set": {"code": po["promo_code"], "property_id": pid, "discount_type": "percentage", "discount_value": po["discount_pct"],
-                                                                                  "description": f"Kampanya: {po['title']}", "is_active": bool(po.get("published", True)), "source": "campaign_post"},
+                                                                                  "description": f"Kampanya: {po['title']}", "is_active": bool(po.get("published", True)) and in_window, "source": "campaign_post",
+                                                                                  "valid_from": po.get("starts_at") or None, "valid_until": po.get("ends_at") or None},
                                                                          "$setOnInsert": {"id": str(uuid.uuid4()), "used_count": 0, "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
         an = content.get("analytics") or {}
         content["analytics"] = {k: re.sub(r"[^A-Za-z0-9_-]", "", str(an.get(k) or ""))[:40] for k in ("ga4_id", "gtm_id", "pixel_id")}
@@ -206,6 +209,8 @@ def create_site_builder_router(db, require_roles):
             content["blocks"] = DEFAULT_BLOCKS
         if not content.get("pages_enabled"):
             content["pages_enabled"] = SITE_PAGES
+        _t = datetime.now(timezone.utc).date().isoformat()
+        content["posts"] = [p for p in (content.get("posts") or []) if (not p.get("starts_at") or p["starts_at"] <= _t) and (not p.get("ends_at") or p["ends_at"] >= _t)]
         cfg["content"] = content
         prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1, "city": 1, "country": 1, "address": 1, "currency": 1}) or {}
         rts = await db.room_types.find({"property_id": pid, "is_active": {"$ne": False}},

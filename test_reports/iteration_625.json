@@ -1,0 +1,35 @@
+{
+  "summary": "Iter 625 (Paket 28) — Branch selector propagation to Site Builder, post-payment upsell add, campaign date auto-activation window, TR/EN translation QC diff. Wrote pytest test_iter625_paket28.py — 9/9 backend tests PASS. Frontend Playwright verified all four features via admin dashboard: (a) Branch switch: site-view-link href toggles /site/default ↔ /site/aldgate-flats when branch-selector-btn → branch-aldgate-flats → branch-default is clicked; site-translations-card re-renders for the selected property. (b) Site translations card TR/EN side-by-side diff shows TR source ('Şehrin kalbinde butik konfor', about, SEO title & description), EN translation inputs populated, ✓ approve button toggles green and footer updates to '1/4 satır onaylı'; DE tab (site-tr-lang-de) present. (c) Posts editor exposes both campaign posts with correct date/promo inputs: post 0 QAWIN20 (20%, 2030-01-01→2030-02-01), post 1 QANOW10 (10%, 2026-01-01→2027-01-01). (d) Backend validated campaign→promo_code auto-activation window: QANOW10 valid (10% off £200 = £20 discount), QAWIN20 rejected as 'not yet active' (400). POST /site-builder/default with QANOW10.ends_at='2026-01-15' (past) causes /promo-codes/validate to return 400 (inactive/expired); restoring ends_at='2027-01-01' re-enables it. (e) POST /booking/AB-316679AF/add-upsell — already-added upsell 6e4f2fce returns {ok:true, already:true}; new upsell returns {ok:true, added:{price}, new_total, balance_due}; wrong guest_email → 404; unknown upsell_id → 404. GET /api/upsells/default returns 10 upsell items publicly (no auth). Site content preserved: headline 'Şehrin kalbinde butik konfor' + both campaign posts intact after tests. Booking widget /book/default post-upsell UI flow NOT re-verified end-to-end (previous iter624 covered similar flow; backend endpoint confirmed with 5 tests here).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter625_paket28.py",
+    "/app/test_reports/pytest/iter625.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "site_builder.save_site: promo_codes upsert derives is_active from post.published AND (starts_at≤today≤ends_at). Correct behaviour — verified round-trip.",
+    "bookings.validate_promo_code: compares now.isoformat() (full timestamp) against valid_from/valid_until (date strings YYYY-MM-DD). Works because '2026-…' < '2030-01-01' lexicographically for future dates and inactive rows are pre-filtered by is_active=True guard. However mixing timestamp vs date strings is fragile — consider normalising both to date (YYYY-MM-DD) for clarity.",
+    "be_conversion.add_upsell: idempotent (already-added returns {ok:true, already:true}); price calc respects price_type per_night vs per_stay; updates cart_total only when present. Solid.",
+    "SiteBuilderExtras.TranslationsEditor: 'approved' state is local to component and reset on any keystroke — good UX, but not persisted server-side (approvals do not survive reload). Consider persisting per-row approval flags if audit trail is needed.",
+    "PostsEditor: no confirm on trash icon; a mis-click could delete a live campaign post. Minor UX polish.",
+    "Branch selector state (activePropertyId in App.js:254-258) now correctly propagates to SiteBuilderPanel — the prior iter624 gap is resolved."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter625_paket28.py"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (all 4 targeted UI features PASS)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None persisted. Backend test transiently changed QANOW10 ends_at to 2026-01-15 then restored to 2027-01-01. Frontend test typed 'QA English headline' into EN translation field but did NOT click save — no persistence. Site content for 'default' preserved intact: headline 'Şehrin kalbinde butik konfor', QAWIN20 (2030 window) + QANOW10 (2026-2027 window) posts remain.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Server date ≈ 2026-09-06. Public URL https://review-hub-108.preview.emergentagent.com had intermittent timeouts from inside container; test file falls back to http://localhost:8001 automatically if public unreachable. Site 'default' content has 2 campaign posts: QAWIN20 (starts 2030-01-01, not yet active — validate=400) and QANOW10 (2026→2027 window, valid — 10% off). Booking AB-316679AF (property default, guest ava.yıldız@example.com, paid £285) has upsell 6e4f2fce Early Check-in already added. 10 upsell items exist on default. Branch switcher (data-testid branch-selector-btn / branch-{id}) now propagates activePropertyId to SiteBuilderPanel correctly.",
+  "rca_of_the_issue": "N/A — no defects found in the 4 targeted features."
+}

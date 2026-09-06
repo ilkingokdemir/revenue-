@@ -1490,3 +1490,20 @@ async def journal_alert_loop(db, interval_seconds: int = 21600):
         except Exception as e:
             logger.warning(f"journal alert tick error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+async def campaign_window_loop(db, interval_seconds: int = 3600):
+    """Kampanya tarih penceresine göre promo kodlarını otomatik aç/kapat."""
+    await asyncio.sleep(90)
+    while True:
+        try:
+            today = datetime.now(timezone.utc).date().isoformat()
+            async for site in db.hotel_sites.find({"content.posts.promo_code": {"$exists": True}}, {"_id": 0, "property_id": 1, "content.posts": 1}):
+                for po in (site.get("content") or {}).get("posts") or []:
+                    if not po.get("promo_code"):
+                        continue
+                    active = bool(po.get("published", True)) and (not po.get("starts_at") or po["starts_at"] <= today) and (not po.get("ends_at") or po["ends_at"] >= today)
+                    await db.promo_codes.update_one({"code": po["promo_code"], "source": "campaign_post"}, {"$set": {"is_active": active}})
+        except Exception as e:
+            logger.warning(f"campaign window tick error: {e}")
+        await asyncio.sleep(interval_seconds)

@@ -108,6 +108,7 @@ export function InquiriesCard({ pid }) {
 export function TranslationsEditor({ translations, onChange, source, pid }) {
   const [lg, setLg] = useState("en");
   const [busy, setBusy] = useState(false);
+  const [approved, setApproved] = useState({});
   const tr = translations || {};
   const cur = tr[lg] || {};
   const hasSource = !!(source && (source.headline || source.about || source.seo_title || source.seo_description || source.faqs?.length));
@@ -128,12 +129,29 @@ export function TranslationsEditor({ translations, onChange, source, pid }) {
         <div className="flex gap-1 items-center">{["en", "de"].map((x) => <button key={x} onClick={() => setLg(x)} className={`text-[10px] font-bold px-2 py-0.5 rounded ${lg === x ? "bg-stone-900 text-white" : "bg-stone-100"}`} data-testid={`site-tr-lang-${x}`}>{x.toUpperCase()}{tr[x]?.headline || tr[x]?.about ? " ✓" : ""}</button>)}
           {pid && <button onClick={autoTranslate} disabled={busy || !hasSource} title={hasSource ? "TR içeriği AI ile çevir" : "Önce TR başlık/hakkımızda girin"} className="ml-1 text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-600 text-white disabled:opacity-50" data-testid="site-tr-ai-btn">{busy ? "Çevriliyor…" : hasSource ? "✨ AI ile çevir" : "İçerik yok"}</button>}</div>
       </div>
-      <div className="space-y-1.5">
-        <input className={inp} placeholder={`Başlık (${lg.toUpperCase()})`} value={cur.headline || ""} onChange={(e) => set("headline", e.target.value)} data-testid="site-tr-headline" />
-        <textarea className={inp} rows={3} placeholder={`Hakkımızda (${lg.toUpperCase()})`} value={cur.about || ""} onChange={(e) => set("about", e.target.value)} data-testid="site-tr-about" />
-        <input className={inp} placeholder={`SEO başlık (${lg.toUpperCase()})`} value={cur.seo_title || ""} onChange={(e) => set("seo_title", e.target.value)} />
-        <input className={inp} placeholder={`SEO açıklama (${lg.toUpperCase()})`} value={cur.seo_description || ""} onChange={(e) => set("seo_description", e.target.value)} />
+      <div className="grid grid-cols-[1fr_1fr_auto] gap-x-2 gap-y-1.5 items-start" data-testid="site-tr-diff">
+        <div className="text-[9px] font-bold uppercase text-stone-400">TR (kaynak)</div><div className="text-[9px] font-bold uppercase text-stone-400">{lg.toUpperCase()} (çeviri)</div><div />
+        {[["headline", "Başlık", false], ["about", "Hakkımızda", true], ["seo_title", "SEO başlık", false], ["seo_description", "SEO açıklama", false]].map(([k, label, multi]) => {
+          const ok = approved[k]; const Tag = multi ? "textarea" : "input";
+          return [
+            <div key={`${k}-src`} className="text-xs text-stone-600 bg-stone-50 rounded-lg px-2.5 py-1.5 whitespace-pre-wrap min-h-[30px]">{source?.[k] || <span className="text-stone-300">{label} —</span>}</div>,
+            <Tag key={`${k}-dst`} className={`${inp} ${ok ? "border-emerald-300 bg-emerald-50/40" : ""}`} rows={multi ? 3 : undefined} placeholder={`${label} (${lg.toUpperCase()})`} value={cur[k] || ""} onChange={(e) => { set(k, e.target.value); setApproved((a) => ({ ...a, [k]: false })); }} data-testid={`site-tr-${k}`} />,
+            <button key={`${k}-ok`} type="button" onClick={() => setApproved((a) => ({ ...a, [k]: !a[k] }))} disabled={!cur[k]} title="Satırı onayla" className={`h-7 w-7 rounded-lg border text-xs font-bold disabled:opacity-30 ${ok ? "bg-emerald-600 text-white border-emerald-600" : "border-stone-200 text-stone-400"}`} data-testid={`site-tr-approve-${k}`}>✓</button>,
+          ];
+        })}
       </div>
+      {source?.faqs?.length > 0 && cur.faqs?.length > 0 && (
+        <div className="mt-2 space-y-1" data-testid="site-tr-faq-diff">
+          <div className="text-[9px] font-bold uppercase text-stone-400">SSS ({cur.faqs.length}/{source.faqs.length})</div>
+          {cur.faqs.map((f, i) => (
+            <div key={i} className="grid grid-cols-2 gap-x-2 text-[11px]">
+              <div className="bg-stone-50 rounded px-2 py-1 text-stone-600"><b>{source.faqs[i]?.q}</b><div>{source.faqs[i]?.a}</div></div>
+              <div className="space-y-1"><input className={inp} value={f.q} onChange={(e) => set("faqs", cur.faqs.map((x, j) => (j === i ? { ...x, q: e.target.value } : x)))} /><input className={inp} value={f.a} onChange={(e) => set("faqs", cur.faqs.map((x, j) => (j === i ? { ...x, a: e.target.value } : x)))} /></div>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-stone-400 mt-1">Onaylanan satırlar yeşil görünür; "Yayınla / Kaydet" ile siteye yansır. {Object.values(approved).filter(Boolean).length}/4 satır onaylı.</p>
     </div>
   );
 }
@@ -161,6 +179,8 @@ export function PostsEditor({ posts, onChange }) {
             <textarea className={inp} rows={3} placeholder="İçerik" value={p.body} onChange={(e) => set(i, "body", e.target.value)} />
             <div className="flex gap-1.5">
               <input className={inp} placeholder="Görsel URL" value={p.image_url} onChange={(e) => set(i, "image_url", e.target.value)} />
+              <input type="date" className="rounded-lg border border-stone-200 px-2 py-1.5 text-xs" title="Başlangıç" value={p.starts_at || ""} onChange={(e) => set(i, "starts_at", e.target.value)} data-testid={`site-post-start-${i}`} />
+              <input type="date" className="rounded-lg border border-stone-200 px-2 py-1.5 text-xs" title="Bitiş" value={p.ends_at || ""} onChange={(e) => set(i, "ends_at", e.target.value)} data-testid={`site-post-end-${i}`} />
               <input className={inp} placeholder="Kupon kodu (örn. YAZ20)" value={p.promo_code || ""} onChange={(e) => set(i, "promo_code", e.target.value.toUpperCase())} data-testid={`site-post-promo-${i}`} />
               <input className={inp} type="number" placeholder="İndirim %" value={p.discount_pct || ""} onChange={(e) => set(i, "discount_pct", e.target.value)} data-testid={`site-post-pct-${i}`} />
               <label className="text-[10px] flex items-center gap-1 whitespace-nowrap"><input type="checkbox" checked={p.published !== false} onChange={(e) => set(i, "published", e.target.checked)} /> Yayında</label>

@@ -18,6 +18,7 @@ export default function SiteBuilderPanel({ activePropertyId, properties }) {
   const [domainStatus, setDomainStatus] = useState(null);
   const [stats, setStats] = useState(null);
   const [campStats, setCampStats] = useState(null);
+  useEffect(() => { window.__activePropertyId = pid; }, [pid]);
   const [mode, setMode] = useState("simple");
   const [engineTpl, setEngineTpl] = useState("booking-classic");
   const [busy, setBusy] = useState(false);

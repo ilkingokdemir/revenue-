@@ -1697,6 +1697,8 @@ from routes.pms.be_distribution import create_be_distribution_router
 api_router.include_router(create_be_distribution_router(db, require_roles))
 from routes.pms.be_payments import create_be_payments_router
 api_router.include_router(create_be_payments_router(db, require_roles))
+from routes.pms.guest_pass import create_guest_pass_router
+api_router.include_router(create_guest_pass_router(db, require_roles))
 from routes.security.permission_matrix import create_permission_matrix_router
 api_router.include_router(create_permission_matrix_router(db, require_roles))
 api_router.include_router(create_terminal_router(db, require_roles))

@@ -195,6 +195,7 @@ def create_site_builder_router(db, require_roles):
                           "body": str(po.get("body") or "")[:8000], "image_url": str(po.get("image_url") or "")[:500], "type": po.get("type") if po.get("type") in ("blog", "campaign") else "blog",
                           "date": str(po.get("date") or datetime.now(timezone.utc).date().isoformat())[:10], "published": bool(po.get("published", True)),
                           "cta_url": str(po.get("cta_url") or "")[:300], "starts_at": str(po.get("starts_at") or "")[:10], "ends_at": str(po.get("ends_at") or "")[:10], "promo_code": re.sub(r"[^A-Z0-9_-]", "", str(po.get("promo_code") or "").upper())[:20],
+                          "title_b": str(po.get("title_b") or "")[:160],
                           "discount_pct": max(0, min(90, int(po.get("discount_pct") or 0)))})
         content["posts"] = posts
         today_iso = datetime.now(timezone.utc).date().isoformat()
@@ -390,15 +391,40 @@ def create_site_builder_router(db, require_roles):
         if not site or not po:
             raise HTTPException(404, "Kampanya bulunamadı")
         channel = ch if ch in CHANNELS else "other"
-        await db.campaign_clicks.insert_one({"id": str(uuid.uuid4()), "code": po["promo_code"], "property_id": site["property_id"], "channel": channel,
+        import random
+        variant = request.cookies.get(f"abv_{po['promo_code']}") if po.get("title_b") else ""
+        if po.get("title_b") and variant not in ("A", "B"):
+            variant = random.choice(["A", "B"])
+        await db.campaign_clicks.insert_one({"id": str(uuid.uuid4()), "code": po["promo_code"], "property_id": site["property_id"], "channel": channel, "variant": variant or "",
                                              "referrer": (request.headers.get("referer") or "")[:200], "ua": (request.headers.get("user-agent") or "")[:160],
                                              "created_at": datetime.now(timezone.utc).isoformat()})
         pid = site["property_id"]
+        vq = f"&v={variant}" if variant else ""
         if site.get("published") and po.get("slug"):
-            target = f"/site/{pid}/blog/{po['slug']}?utm_source={channel}&utm_campaign={po['promo_code']}"
+            target = f"/site/{pid}/blog/{po['slug']}?utm_source={channel}&utm_campaign={po['promo_code']}{vq}"
         else:
-            target = f"/book?property={pid}&promo={po['promo_code']}&utm_source={channel}"
-        return RedirectResponse(url=target, status_code=302)
+            target = f"/book?property={pid}&promo={po['promo_code']}&utm_source={channel}{vq}"
+        resp = RedirectResponse(url=target, status_code=302)
+        if variant:
+            resp.set_cookie(f"abv_{po['promo_code']}", variant, max_age=30 * 86400, samesite="lax")
+        return resp
+
+    @router.post("/{pid}/campaign-ab/{code}/apply-winner")
+    async def campaign_apply_winner(pid: str, code: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        """Kazanan varyantı uygula: B kazandıysa title=title_b; her durumda test kapanır."""
+        winner = data.get("winner") if data.get("winner") in ("A", "B") else "A"
+        cfg = await db.hotel_sites.find_one({"property_id": pid}, {"_id": 0, "content.posts": 1})
+        posts = (cfg or {}).get("content", {}).get("posts") or []
+        hit = False
+        for po in posts:
+            if po.get("promo_code") == code.upper():
+                if winner == "B" and po.get("title_b"):
+                    po["title"] = po["title_b"]
+                po["title_b"] = ""; po["ab_winner"] = winner; po["ab_closed_at"] = datetime.now(timezone.utc).isoformat(); hit = True
+        if not hit:
+            raise HTTPException(404, "Kampanya bulunamadı")
+        await db.hotel_sites.update_one({"property_id": pid}, {"$set": {"content.posts": posts}})
+        return {"ok": True, "winner": winner}
 
     @router.get("/public/c/{code}/qr.png")
     async def campaign_qr(code: str, request: Request, ch: str = "qr"):
@@ -433,7 +459,7 @@ def create_site_builder_router(db, require_roles):
         await db.site_visits.insert_one({
             "id": str(uuid.uuid4()), "property_id": pid, "event": event,
             "visitor_id": (data.get("visitor_id") or "")[:64], "source": source,
-            "referrer": ref[:200], "page": str(data.get("page") or "")[:120],
+            "referrer": ref[:200], "page": str(data.get("page") or "")[:120], "variant": data.get("variant") if data.get("variant") in ("A", "B") else "",
             "date": now.date().isoformat(), "created_at": now.isoformat()})
         return {"ok": True}
 
@@ -457,6 +483,17 @@ def create_site_builder_router(db, require_roles):
             if code:
                 async for c in db.campaign_clicks.find({"code": code}, {"_id": 0, "channel": 1}):
                     clicks_by[c.get("channel") or "other"] = clicks_by.get(c.get("channel") or "other", 0) + 1
+            ab = None
+            if po.get("title_b") or po.get("ab_winner"):
+                ab = {}
+                for v in ("A", "B"):
+                    vc = await db.campaign_clicks.count_documents({"code": code, "variant": v}) if code else 0
+                    vv = await db.site_visits.count_documents({"property_id": pid, "event": "view", "page": f"blog/{po.get('slug', '')}", "variant": v}) if po.get("slug") else 0
+                    vcta = await db.site_visits.count_documents({"property_id": pid, "event": "cta_click", "variant": v, "page": f"blog/{po.get('slug', '')}"}) if po.get("slug") else 0
+                    ab[v] = {"title": po.get("title") if v == "A" else po.get("title_b"), "clicks": vc, "views": vv, "cta": vcta, "cta_rate_pct": round(vcta / vv * 100, 1) if vv else 0.0}
+                ab["leader"] = "B" if ab["B"]["cta_rate_pct"] > ab["A"]["cta_rate_pct"] else "A"
+                ab["winner"] = po.get("ab_winner") or ""
+                ab["active"] = bool(po.get("title_b"))
             in_window = (not po.get("starts_at") or po["starts_at"] <= today) and (not po.get("ends_at") or po["ends_at"] >= today)
             out.append({"id": po.get("id"), "title": po.get("title"), "slug": po.get("slug"), "promo_code": code, "discount_pct": pct,
                         "starts_at": po.get("starts_at") or "", "ends_at": po.get("ends_at") or "",
@@ -465,7 +502,7 @@ def create_site_builder_router(db, require_roles):
                         "discount_given": round(rev * pct / (100 - pct), 2) if pct and pct < 100 else 0.0,
                         "page_views": views, "conversion_pct": round(min(n / views * 100, 100), 1) if views else 0.0,
                         "clicks": sum(clicks_by.values()), "clicks_by_channel": clicks_by,
-                        "short_path": f"/c/{code}" if code else ""})
+                        "short_path": f"/c/{code}" if code else "", "ab": ab})
         return {"campaigns": out, "totals": {"campaigns": len(out), "active": sum(1 for c in out if c["status"] == "active"),
                                              "coupon_uses": sum(c["coupon_uses"] for c in out), "bookings": sum(c["bookings"] for c in out),
                                              "revenue": round(sum(c["revenue"] for c in out), 2), "page_views": sum(c["page_views"] for c in out),

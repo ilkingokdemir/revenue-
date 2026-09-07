@@ -485,6 +485,9 @@ function EFaturaBlock({ propertyId }) {
           <button onClick={bulk} disabled={bulkBusy} className="px-4 py-2 bg-stone-900 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2" data-testid="tr-efatura-bulk">
             <ArrowsClockwise size={14} className={bulkBusy ? "animate-spin" : ""} />{bulkBusy ? "Üretiliyor…" : "Aylık toplu fatura"}
           </button>
+          <button onClick={async () => { try { const r = await axios.get(`${API}/api/tr-compliance/efatura/${propertyId}/archive.zip?month=${bulkMonth}`, { responseType: "blob" }); const u = URL.createObjectURL(r.data); const a = document.createElement("a"); a.href = u; a.download = `efatura_${propertyId}_${bulkMonth}.zip`; a.click(); URL.revokeObjectURL(u); toast.success("Arşiv indirildi (XML + PDF + CSV)"); } catch (e) { toast.error(e?.response?.status === 404 ? "Bu ay için fatura yok" : "Arşiv alınamadı"); } }} className="px-4 py-2 bg-white border border-stone-300 text-stone-800 rounded-lg text-sm font-medium flex items-center gap-2" data-testid="tr-efatura-archive">
+            <Download size={14} /> Aylık arşiv ZIP
+          </button>
           {bulkResult && <span className="text-xs text-stone-600" data-testid="tr-efatura-bulk-result">{bulkResult.month}: <b>{bulkResult.created}</b> oluşturuldu{bulkResult.failed ? `, ${bulkResult.failed} başarısız` : ""}</span>}
         </div>
 

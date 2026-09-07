@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel
+import os
 import uuid
 import logging
 
@@ -625,6 +626,69 @@ th{{text-align:left;font-size:10px;text-transform:uppercase;color:#78716c;border
 {('<p class=cancel>İptal nedeni: '+rec.get('cancel_reason','')+'</p>') if rec.get('status')=='cancelled' else ''}
 <p style="margin-top:28px;color:#78716c;font-size:11px">{rec.get('notes','')}</p><button onclick="window.print()" style="margin-top:12px;padding:8px 14px;border-radius:8px;border:1px solid #d6d3d1;background:#fff;cursor:pointer">Yazdır / PDF</button></body></html>"""
         return html
+
+    @router.get("/tr-compliance/efatura/{property_id}/archive.zip")
+    async def efatura_archive(property_id: str, month: str, _u: dict = Depends(require_roles("admin", "manager"))):
+        """Aylık arşiv: her fatura için UBL XML + PDF + özet CSV tek ZIP."""
+        import csv
+        import io
+        import zipfile
+        if len(month) != 7:
+            raise HTTPException(422, "month YYYY-MM")
+        rows = await db.tr_invoices.find({"property_id": property_id, "issue_date": {"$gte": f"{month}-01", "$lte": f"{month}-31"}}, {"_id": 0}).sort("issue_date", 1).to_list(2000)
+        if not rows:
+            raise HTTPException(404, "Bu ay için fatura yok")
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            csv_io = io.StringIO(); w = csv.writer(csv_io)
+            w.writerow(["invoice_no", "issue_date", "type", "status", "ettn", "recipient", "recipient_vkn", "subtotal", "tax_rate", "tax_total", "total", "currency", "booking_ref"])
+            for r in rows:
+                w.writerow([r.get("invoice_no"), r.get("issue_date"), r.get("type"), r.get("status"), r.get("ettn", ""), r.get("recipient_name"), r.get("recipient_vkn"),
+                            r.get("subtotal"), r.get("tax_rate"), r.get("tax_total"), r.get("total"), r.get("currency"), r.get("booking_ref", "")])
+                if r.get("xml"):
+                    z.writestr(f"xml/{r['invoice_no']}.xml", r["xml"])
+                z.writestr(f"pdf/{r['invoice_no']}.pdf", _render_pdf(r))
+            z.writestr(f"ozet_{month}.csv", "\ufeff" + csv_io.getvalue())
+        return Response(buf.getvalue(), media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="efatura_{property_id}_{month}.zip"'})
+
+    def _render_pdf(rec: dict) -> bytes:
+        import io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        font = "Helvetica"
+        for path in ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf"):
+            if os.path.exists(path):
+                try:
+                    pdfmetrics.registerFont(TTFont("DejaVu", path)); font = "DejaVu"
+                except Exception:
+                    pass
+                break
+        out = io.BytesIO(); c = canvas.Canvas(out, pagesize=A4); W, H = A4; y = H - 50
+        c.setFont(font, 16); c.drawString(40, y, "e-Arşiv Fatura" if rec.get("type") == "earsiv" else "e-Fatura"); c.setFont(font, 10)
+        c.drawRightString(W - 40, y, f"{rec.get('invoice_no', '')}  ·  {rec.get('issue_date', '')}"); y -= 18
+        c.drawRightString(W - 40, y, f"Durum: {rec.get('status', '')}" + (f"  ·  ETTN {rec.get('ettn')}" if rec.get("ettn") else "")); y -= 28
+        c.drawString(40, y, f"Satıcı: {rec.get('sender_name', '')}  VKN {rec.get('sender_vkn', '')}"); y -= 14
+        c.drawString(40, y, f"{rec.get('sender_address', '')}"); y -= 20
+        c.drawString(40, y, f"Alıcı: {rec.get('recipient_name', '')}  VKN/TCKN {rec.get('recipient_vkn', '')}  ·  Rez. {rec.get('booking_ref', '')} {rec.get('check_in', '')} → {rec.get('check_out', '')}"); y -= 26
+        cur = rec.get("currency", "TRY")
+        c.line(40, y, W - 40, y); y -= 14
+        c.drawString(40, y, "#"); c.drawString(60, y, "Açıklama"); c.drawRightString(W - 220, y, "Birim"); c.drawRightString(W - 150, y, rec.get("tax_label", "KDV")); c.drawRightString(W - 90, y, "Vergi"); c.drawRightString(W - 40, y, "Toplam"); y -= 6
+        c.line(40, y, W - 40, y); y -= 14
+        for ln in rec.get("lines") or []:
+            c.drawString(40, y, str(ln["id"])); c.drawString(60, y, str(ln["name"])[:70]); c.drawRightString(W - 220, y, f"{ln['price']:.2f}"); c.drawRightString(W - 150, y, f"%{ln['tax_rate']:.0f}")
+            c.drawRightString(W - 90, y, f"{ln['tax_amount']:.2f}"); c.drawRightString(W - 40, y, f"{ln['gross']:.2f}"); y -= 14
+            if y < 120:
+                c.showPage(); c.setFont(font, 10); y = H - 50
+        y -= 10; c.line(W - 260, y, W - 40, y); y -= 16
+        c.drawRightString(W - 120, y, "Ara toplam"); c.drawRightString(W - 40, y, f"{rec.get('subtotal', 0):.2f} {cur}"); y -= 14
+        c.drawRightString(W - 120, y, f"{rec.get('tax_label', 'KDV')} %{rec.get('tax_rate', 0):.0f}"); c.drawRightString(W - 40, y, f"{rec.get('tax_total', 0):.2f} {cur}"); y -= 16
+        c.setFont(font, 12); c.drawRightString(W - 120, y, "Genel toplam"); c.drawRightString(W - 40, y, f"{rec.get('total', 0):.2f} {cur}")
+        if rec.get("status") == "cancelled":
+            c.setFont(font, 14); c.drawString(40, 60, f"İPTAL — {rec.get('cancel_reason', '')}")
+        c.showPage(); c.save()
+        return out.getvalue()
 
     @router.get("/tr-compliance/efatura/{property_id}/auto-log")
     async def efatura_auto_log(property_id: str, _u: dict = Depends(require_roles("admin", "manager"))):

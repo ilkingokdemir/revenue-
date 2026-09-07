@@ -103,6 +103,9 @@ export function ConfirmationStep({ t, confirmation, onBookAnother, fmt = (v) => 
           {(confirmation.manage_url || confirmation.booking_ref) && (
             <a href={confirmation.manage_url || `/guest-portal-v2?ref=${confirmation.booking_ref}&email=${encodeURIComponent(confirmation.guest_email || "")}`} className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-lg font-semibold text-sm border-2 mb-3" style={{ borderColor: t.colors.accent, color: t.colors.accent, borderRadius: t.borderRadius }} data-testid="manage-booking-link">{tr("confirm.manage")} →</a>
           )}
+          {confirmation.booking_ref && (
+            <a href={`/pass/${confirmation.booking_ref}?email=${encodeURIComponent(confirmation.guest_email || "")}`} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-lg font-semibold text-sm text-white mb-3" style={{ background: "#111", borderRadius: t.borderRadius }} data-testid="wallet-pass-link">📲 {tr("confirm.wallet")}</a>
+          )}
           <button onClick={onBookAnother}
               className="text-white px-6 py-3 rounded-lg font-semibold transition-colors" style={{ background: t.colors.accent, borderRadius: t.borderRadius }} data-testid="book-another-btn">
               {tr("confirm.bookAnother")}

@@ -207,6 +207,7 @@ export function PostsEditor({ posts, onChange, stats }) {
                 <span className="px-1.5 py-0.5 rounded bg-stone-100">Tıklama: <b>{c.clicks || 0}</b></span>
               </div>); })()}
             {p.promo_code && <CampaignLinkRow code={p.promo_code} stats={statFor(p)} idx={i} />}
+            {p.promo_code && <AbRow post={p} idx={i} ab={statFor(p)?.ab} onTitleB={(v) => set(i, "title_b", v)} onApplied={(winner) => { const next = list.map((x, j) => (j === i ? { ...x, title: winner === "B" && x.title_b ? x.title_b : x.title, title_b: "", ab_winner: winner } : x)); onChange(next); }} />}
           </div>
         ))}
         {list.length === 0 && <p className="text-[10px] text-stone-400">Kampanya veya blog yazısı ekleyin — sitede "Blog & Kampanyalar" sayfası otomatik açılır.</p>}
@@ -311,6 +312,37 @@ export function CampaignLinkRow({ code, stats, idx }) {
           </a>
         </div>
       )}
+    </div>
+  );
+}
+
+export function AbRow({ post, idx, ab, onTitleB, onApplied }) {
+  const [busy, setBusy] = useState(false);
+  const pid = window.__activePropertyId || "";
+  const apply = async (winner) => {
+    setBusy(true);
+    try { await axios.post(`${API}/site-builder/${pid}/campaign-ab/${post.promo_code}/apply-winner`, { winner }); onApplied(winner); toast.success(`Kazanan uygulandı: ${winner}`); }
+    catch (e) { toast.error(e.response?.data?.detail || "Uygulanamadı"); } finally { setBusy(false); }
+  };
+  return (
+    <div className="rounded-lg bg-violet-50/60 border border-violet-100 px-2 py-1.5 text-[10px]" data-testid={`site-post-ab-${idx}`}>
+      <div className="flex items-center gap-2">
+        <span className="font-bold text-violet-900 whitespace-nowrap">A/B başlık</span>
+        <input className="flex-1 rounded border border-violet-200 px-2 py-1 text-[11px]" placeholder="B başlığı (boş = test kapalı)" value={post.title_b || ""} onChange={(e) => onTitleB(e.target.value)} data-testid={`site-post-title-b-${idx}`} />
+        {post.ab_winner && !post.title_b && <span className="px-1.5 py-0.5 rounded bg-violet-600 text-white font-bold" data-testid={`site-post-ab-winner-${idx}`}>Kazanan {post.ab_winner}</span>}
+      </div>
+      {ab && ab.active && (
+        <div className="mt-1 grid grid-cols-2 gap-1.5">
+          {["A", "B"].map((v) => (
+            <div key={v} className={`rounded px-2 py-1 bg-white border ${ab.leader === v ? "border-violet-500" : "border-stone-200"}`} data-testid={`site-post-ab-${idx}-${v}`}>
+              <div className="font-bold text-violet-900 truncate">{v}: {ab[v].title || "—"} {ab.leader === v && "🏆"}</div>
+              <div className="text-stone-600">Tık {ab[v].clicks} · Görüntülenme {ab[v].views} · CTA {ab[v].cta} · <b>%{ab[v].cta_rate_pct}</b></div>
+              <button type="button" disabled={busy} onClick={() => apply(v)} className="mt-1 px-1.5 py-0.5 rounded bg-violet-600 text-white font-bold disabled:opacity-50" data-testid={`site-post-ab-apply-${idx}-${v}`}>Kazanan olarak uygula</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {post.title_b && !ab?.active && <p className="text-stone-400 mt-1">Yayınla/Kaydet sonrası kısa link ziyaretçileri A/B'ye bölünür (çerezle sabit).</p>}
     </div>
   );
 }

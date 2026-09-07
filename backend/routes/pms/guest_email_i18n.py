@@ -37,6 +37,15 @@ def _fmt_date(iso: str, lang: str) -> str:
         return iso or ""
 
 
+def _wallet_cta(booking: dict, lang: str) -> str:
+    import os
+    from urllib.parse import quote
+    base = (os.environ.get("PUBLIC_BASE_URL") or "").rstrip("/")
+    ref = booking.get("booking_ref", ""); em = quote(booking.get("guest_email", "") or "")
+    label = {"tr": "📲 Cüzdana ekle / Takvime ekle", "de": "📲 Zur Wallet / Kalender hinzufügen"}.get(lang, "📲 Add to Wallet / Calendar")
+    return (f"<div style='text-align:center;margin-top:18px'><a href='{base}/pass/{ref}?email={em}' style='display:inline-block;background:#111;color:#fff;text-decoration:none;padding:10px 18px;border-radius:999px;font-size:13px;font-weight:700'>{label}</a></div>")
+
+
 def build_confirmation(booking: dict, hotel_name: str, lang: str) -> tuple:
     lang = lang if lang in T else "en"
     t = T[lang]
@@ -70,6 +79,7 @@ def build_confirmation(booking: dict, hotel_name: str, lang: str) -> tuple:
           <td style="padding:12px 0;font-weight:700;font-size:20px;text-align:right">{sym}{total:,.2f}<div style="font-size:11px;font-weight:400;color:#666">{t['paid'] if paid else t['pay_at']}</div></td></tr>
         </table>
         {f"<div style='background:#F0FFF4;border:1px solid #C6F6D5;border-radius:8px;padding:12px;margin-top:16px;font-size:13px;color:#2F855A'>{t['requests']}: {booking.get('special_requests')}</div>" if booking.get('special_requests') else ''}
+        {_wallet_cta(booking, lang)}
         <p style="margin-top:20px;font-size:13px;color:#444">{t['cancel']}</p>
         <div style="margin-top:24px;padding:16px;background:#F5F7FA;border-radius:8px;text-align:center;font-size:12px;color:#666">
           <p style="margin:0"><strong>{hotel_name}</strong> — {t['footer']}</p>

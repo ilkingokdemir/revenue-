@@ -35,6 +35,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Admin: `admin@hotelbox.com` / `HotelAdmin2026!` (login cevabında token alanı: `token`)
 - Preview: frontend/.env REACT_APP_BACKEND_URL değerini kullan
 
+## Son Durum (Iter 628, 2026-09-07) — Misafir cüzdanı (web pass + .ics), HK offline arıza, kampanya A/B, fatura ZIP arşivi
+- Apple/Google Wallet gerçek entegrasyon için sertifika/servis hesabı bekleniyor (wallet_settings). Detay: CHANGELOG.md iter 628.
+
 ## Son Durum (Iter 627, 2026-09-07) — Otomatik e-Fatura, kampanya kısa link/QR, arrival reminder+WA, HK offline
 - Check-out'ta otomatik e-Arşiv (simüle GİB + misafir e-posta MOCK), `/c/KOD?ch=` kısa link + QR + kanal tıklama, T-2 hatırlatma
   kişiselleştirme + WhatsApp mock + dönüşüm istatistiği, /hk-mobile offline kuyruk/senkron/çakışma. Detay: CHANGELOG.md iter 627.

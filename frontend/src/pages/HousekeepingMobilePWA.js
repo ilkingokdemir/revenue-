@@ -54,6 +54,7 @@ export default function HousekeepingMobilePWA() {
   const QKEY = `hk-queue-${propertyId}`; const CKEY = `hk-cache-${propertyId}`;
   const [queue, setQueue] = useState(() => { try { return JSON.parse(localStorage.getItem(QKEY) || "[]"); } catch { return []; } });
   const [syncing, setSyncing] = useState(false);
+  const [issueQueueN, setIssueQueueN] = useState(() => readIssueQueue(propertyId).length);
   const [cachedAt, setCachedAt] = useState(null);
   const saveQueue = (q) => { setQueue(q); localStorage.setItem(QKEY, JSON.stringify(q)); };
 
@@ -121,6 +122,21 @@ export default function HousekeepingMobilePWA() {
   }, [QKEY, syncing, load]);
 
   useEffect(() => { if (online && authToken) sync(); }, [online, authToken, sync]);
+
+  const syncIssues = useCallback(async () => {
+    if (!navigator.onLine) return;
+    let q = readIssueQueue(propertyId);
+    if (!q.length) return;
+    let ok = 0;
+    for (const it of q) {
+      try {
+        await axios.post(`${API}/maintenance/issues`, { ...it.payload, offline_reported_at: it.at }, { timeout: 15000 }); ok++;
+      } catch (e) { if (!e.response) break; }
+      q = q.slice(1); localStorage.setItem(`hk-issues-${propertyId}`, JSON.stringify(q)); setIssueQueueN(q.length);
+    }
+    if (ok) toast.success(`${ok} arıza bildirimi gönderildi`);
+  }, [propertyId]);
+  useEffect(() => { if (online && authToken) syncIssues(); }, [online, authToken, syncIssues]);
 
   const login = async () => {
     setBusy(true); setLoginErr(null);
@@ -223,6 +239,12 @@ export default function HousekeepingMobilePWA() {
         </div>
       </header>
 
+      {issueQueueN > 0 && (
+        <div className="px-3 py-1.5 text-[11px] font-bold bg-rose-100 text-rose-900 flex items-center justify-between" data-testid="hk-issue-queue-bar">
+          <span>🔧 {issueQueueN} arıza bildirimi gönderilmeyi bekliyor</span>
+          {online && <button onClick={syncIssues} className="px-2 py-0.5 rounded bg-rose-700 text-white" data-testid="hk-issue-sync-now">Gönder</button>}
+        </div>
+      )}
       {(!online || queue.length > 0 || cachedAt) && (
         <div className={`px-3 py-2 text-xs font-bold flex items-center justify-between gap-2 ${!online ? "bg-amber-400 text-amber-950" : "bg-sky-100 text-sky-900"}`} data-testid="hk-offline-bar">
           <span data-testid="hk-offline-text">
@@ -365,6 +387,8 @@ export default function HousekeepingMobilePWA() {
                 </button>
               )}
 
+              <OfflineIssueReporter propertyId={propertyId} room={selected} online={online} onQueued={() => setIssueQueueN(readIssueQueue(propertyId).length)} />
+
               {/* Voice damage / maintenance report */}
               <VoiceReporter
                 propertyId={propertyId}
@@ -499,6 +523,61 @@ function VoiceReporter({ propertyId, roomNumber, onSubmitted }) {
           <button onClick={reset} className="mt-2 text-[11px] px-2 py-1 rounded bg-white border border-emerald-300 text-emerald-700 font-bold">
             Yeni Kayıt
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function readIssueQueue(pid) { try { return JSON.parse(localStorage.getItem(`hk-issues-${pid}`) || "[]"); } catch { return []; } }
+
+const ISSUE_CATS = [["plumbing", "Tesisat"], ["electrical", "Elektrik"], ["hvac", "Klima/Isıtma"], ["furniture", "Mobilya"], ["cleaning", "Temizlik"], ["general", "Diğer"]];
+function shrinkImage(file) {
+  return new Promise((resolve) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const max = 900; const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); resolve(c.toDataURL("image/jpeg", 0.7));
+    };
+    img.onerror = () => resolve(""); img.src = url;
+  });
+}
+export function OfflineIssueReporter({ propertyId, room, online, onQueued }) {
+  const [open, setOpen] = useState(false);
+  const [cat, setCat] = useState("general");
+  const [note, setNote] = useState("");
+  const [photo, setPhoto] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!note.trim()) { toast.error("Kısa bir açıklama yazın"); return; }
+    const payload = { property_id: propertyId, title: `Oda ${room.room_number} — ${ISSUE_CATS.find(([k]) => k === cat)?.[1] || cat}`, description: note.trim(), category: cat,
+      priority: "medium", location: `Oda ${room.room_number}`, room_number: room.room_number, room_id: room.id, photos_before: photo ? [photo] : [], source: "hk_mobile" };
+    setBusy(true);
+    const enqueue = () => {
+      const q = readIssueQueue(propertyId); q.push({ id: `${Date.now()}`, at: new Date().toISOString(), payload });
+      localStorage.setItem(`hk-issues-${propertyId}`, JSON.stringify(q)); onQueued?.();
+      toast(`Arıza cihazda saklandı — bağlantı gelince gönderilir`, { icon: "📴" });
+    };
+    try {
+      if (!navigator.onLine) enqueue();
+      else { await axios.post(`${API}/maintenance/issues`, payload, { timeout: 15000 }); toast.success("Arıza bildirimi gönderildi"); }
+      setOpen(false); setNote(""); setPhoto("");
+    } catch (e) { if (!e.response) { enqueue(); setOpen(false); setNote(""); setPhoto(""); } else toast.error("Gönderilemedi"); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="mt-2" data-testid="hk-issue-reporter">
+      <button onClick={() => setOpen((v) => !v)} className="w-full py-3 rounded-2xl bg-rose-50 border-2 border-rose-200 text-sm font-bold text-rose-800 active:scale-[0.97]" data-testid="hk-issue-open">🔧 Arıza bildir {online ? "" : "(çevrimdışı)"}</button>
+      {open && (
+        <div className="mt-2 p-3 rounded-2xl border border-rose-200 bg-white space-y-2">
+          <div className="flex flex-wrap gap-1">{ISSUE_CATS.map(([k, l]) => <button key={k} onClick={() => setCat(k)} className={`px-2 py-1 rounded-lg text-xs font-bold border ${cat === k ? "bg-rose-600 text-white border-rose-600" : "border-stone-200 text-stone-600"}`} data-testid={`hk-issue-cat-${k}`}>{l}</button>)}</div>
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Ne bozuk? (örn. duş başlığı akıtıyor)" className="w-full rounded-xl border border-stone-300 px-3 py-2 text-sm" data-testid="hk-issue-note" />
+          <div className="flex items-center gap-2">
+            <label className="px-3 py-2 rounded-xl bg-stone-100 text-xs font-bold text-stone-700 cursor-pointer">📷 Fotoğraf<input type="file" accept="image/*" capture="environment" className="hidden" data-testid="hk-issue-photo" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setPhoto(await shrinkImage(f)); }} /></label>
+            {photo && <img src={photo} alt="arıza" className="w-12 h-12 rounded-lg object-cover border" data-testid="hk-issue-photo-preview" />}
+            <button onClick={submit} disabled={busy} className="ml-auto px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-bold disabled:opacity-50" data-testid="hk-issue-submit">{busy ? "…" : online ? "Gönder" : "Cihazda sakla"}</button>
+          </div>
         </div>
       )}
     </div>

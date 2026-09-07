@@ -204,10 +204,10 @@ export function PostsBlock({ th, posts, ui, onOpen, single, propertyId }) {
         <button onClick={() => onOpen(null)} className="text-sm font-bold mb-4" style={{ color: th.accent }} data-testid="site-post-back">{ui.back}</button>
         {p.image_url && <img src={p.image_url} alt={p.title} className="w-full h-72 object-cover mb-6" style={{ borderRadius: th.radius }} />}
         <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: th.accent }}>{p.type === "campaign" ? ui.offer : "Blog"} · {p.date}</div>
-        <h2 className="text-3xl font-black mb-4" style={{ fontFamily: th.heading }} data-testid="site-post-title">{p.title}</h2>
+        <h2 className="text-3xl font-black mb-4" style={{ fontFamily: th.heading }} data-testid="site-post-title">{new URLSearchParams(window.location.search).get("v") === "B" && p.title_b ? p.title_b : p.title}</h2>
         <div className="text-base leading-relaxed whitespace-pre-line max-w-3xl">{p.body || p.excerpt}</div>
         {p.promo_code && <div className="mt-5 inline-flex items-center gap-2 text-sm"><span style={{ color: th.muted }}>{ui.offer}:</span><code className="px-3 py-1 rounded font-bold border-2 border-dashed" style={{ borderColor: th.accent, color: th.accent }} data-testid="site-post-promo">{p.promo_code}</code>{p.discount_pct ? <b>−{p.discount_pct}%</b> : null}</div>}
-        {(p.cta_url || p.promo_code) && <a href={p.cta_url || `/book?property=${propertyId}${p.promo_code ? `&promo=${p.promo_code}` : ""}`} className="inline-block mt-6 ml-0 px-6 py-3 text-sm font-black" style={{ background: th.accent, color: th.accentText, borderRadius: th.radius }} data-testid="site-post-cta">{ui.book}</a>}
+        {(p.cta_url || p.promo_code) && <a href={p.cta_url || `/book?property=${propertyId}${p.promo_code ? `&promo=${p.promo_code}` : ""}`} onClick={() => { try { const v = new URLSearchParams(window.location.search).get("v") || ""; navigator.sendBeacon?.(`${process.env.REACT_APP_BACKEND_URL}/api/site-builder/public/track`, new Blob([JSON.stringify({ property_id: propertyId, event: "cta_click", page: `blog/${p.slug}`, variant: v })], { type: "application/json" })); } catch { /* ignore */ } }} className="inline-block mt-6 ml-0 px-6 py-3 text-sm font-black" style={{ background: th.accent, color: th.accentText, borderRadius: th.radius }} data-testid="site-post-cta">{ui.book}</a>}
       </Section>
     );
   }

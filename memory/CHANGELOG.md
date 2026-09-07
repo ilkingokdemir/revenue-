@@ -4171,3 +4171,11 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - Housekeeping mobil offline-first: localStorage önbellek + kuyruk (`hk-queue-{pid}`), online olunca otomatik senkron, "bekliyor" rozeti, çevrimdışı çubuğu,
   backend `base_updated_at` ile 409 çakışma. Not: SW cache nedeniyle load sonrası kuyruk sunucu verisinin üzerine uygulanır.
 - Test: iteration_627.json backend 21/21, frontend 4/4; offline kuyruk+senkron ayrıca Playwright ile doğrulandı.
+
+## Iter 628 (2026-09-07) — Misafir cüzdanı + HK offline arıza + Kampanya A/B + Fatura arşivi
+- Guest pass (`routes/pms/guest_pass.py`, `/pass/{ref}?email=`): web geçiş kartı (QR, giriş/çıkış, oda, ekstralar, otel), `.ics`, Apple/Google Wallet
+  anahtar gelince (wallet_settings) aktif — şimdilik 503/501. Onay ekranı `wallet-pass-link`, onay e-postasında "Cüzdana ekle" CTA.
+- HK mobil `OfflineIssueReporter`: kategori/not/fotoğraf (canvas ile küçültülmüş dataURL) → çevrimdışı `hk-issues-{pid}` kuyruğu → online'da POST /maintenance/issues.
+- Kampanya A/B: post.title_b; /c/KOD 302'de varyant çerezi (abv_KOD, &v=), site_visits.variant (view/cta_click), campaign-stats.ab, `campaign-ab/{code}/apply-winner`.
+- e-Fatura arşiv: `/tr-compliance/efatura/{pid}/archive.zip?month=` (UBL XML + reportlab PDF + özet CSV). Panelde "Aylık arşiv ZIP".
+- Test: iteration_628.json backend 16/16, frontend 4/4.

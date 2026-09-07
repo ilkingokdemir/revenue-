@@ -46,7 +46,7 @@ export default function HotelSitePage({ propertyId, initialPage = "home", initia
 
   useEffect(() => {
     if (!data) return;
-    axios.post(`${API}/site-builder/public/track`, { property_id: propertyId, event: "view", page: page === "blog" && sub ? `blog/${sub}` : page, visitor_id: getVisitor(), referrer: document.referrer || "" }).catch(() => {});
+    axios.post(`${API}/site-builder/public/track`, { property_id: propertyId, event: "view", page: page === "blog" && sub ? `blog/${sub}` : page, variant: new URLSearchParams(window.location.search).get("v") || "", visitor_id: getVisitor(), referrer: document.referrer || "" }).catch(() => {});
     if (data.site.mode === "pro" && data.site.engine_template) window.location.replace(`/book?property=${propertyId}&template=${data.site.engine_template}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data ? 1 : 0]);
@@ -55,7 +55,7 @@ export default function HotelSitePage({ propertyId, initialPage = "home", initia
 
   const go = (p, subId = "") => {
     setPage(p); setSub(subId); setMenu(false);
-    if (p === "blog" && subId) axios.post(`${API}/site-builder/public/track`, { property_id: propertyId, event: "view", page: `blog/${subId}`, visitor_id: getVisitor(), referrer: document.referrer || "" }).catch(() => {});
+    if (p === "blog" && subId) axios.post(`${API}/site-builder/public/track`, { property_id: propertyId, event: "view", page: `blog/${subId}`, variant: new URLSearchParams(window.location.search).get("v") || "", visitor_id: getVisitor(), referrer: document.referrer || "" }).catch(() => {});
     const q = lang !== "tr" ? `?lang=${lang}` : "";
     window.history.pushState({}, "", (p === "home" ? (base || "/") : `${base}/${p}${subId ? `/${subId}` : ""}`) + q);
     window.scrollTo({ top: 0, behavior: "smooth" });

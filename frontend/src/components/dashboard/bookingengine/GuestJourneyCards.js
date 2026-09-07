@@ -58,7 +58,11 @@ export const ArrivalReminderCard = ({ propertyId }) => {
   const [log, setLog] = useState([]);
   const [running, setRunning] = useState(false);
   const [preview, setPreview] = useState(null);
-  const load = useCallback(() => axios.get(`${API}/arrival-reminder/log/${propertyId}`, cfg).then((r) => setLog(r.data)).catch(() => {}), [propertyId]);
+  const [stats, setStats] = useState(null);
+  const load = useCallback(() => {
+    axios.get(`${API}/arrival-reminder/log/${propertyId}`, cfg).then((r) => setLog(r.data)).catch(() => {});
+    axios.get(`${API}/arrival-reminder/stats/${propertyId}`, cfg).then((r) => setStats(r.data)).catch(() => {});
+  }, [propertyId]);
   useEffect(() => { load(); }, [load]);
 
   const run = async () => {
@@ -84,7 +88,15 @@ export const ArrivalReminderCard = ({ propertyId }) => {
           <button onClick={run} disabled={running} className="text-xs px-3 py-1.5 rounded-lg bg-sky-700 text-white hover:bg-sky-800 disabled:opacity-50 inline-flex items-center gap-1" data-testid="arrival-run-now"><Play size={12} /> Şimdi çalıştır</button>
         </div>
       </div>
-      <p className="text-xs text-stone-500">Robot her gün 10:00'da girişe 2 gün kalan misafirlere kendi dilinde check-in saati, adres + Google Maps yol tarifi ve ek hizmet tekliflerini gönderir (Otomasyon › Ön Varış E-postası). Resend anahtarı yokken MOCK.</p>
+      <p className="text-xs text-stone-500">Robot her gün 10:00'da girişe 2 gün kalan misafirlere kendi dilinde check-in saati, adres + yol tarifi ve <b>kişiselleştirilmiş</b> ek hizmet tekliflerini (tek tık ekle) e-posta + WhatsApp ile gönderir. Zaten eklenen/kahvaltı dahil ekstralar gizlenir, geçmiş favoriler ⭐ öne çıkar. Resend/Twilio anahtarı yokken MOCK.</p>
+      {stats && (
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-1.5" data-testid="arrival-stats">
+          {[["Hatırlatma", stats.reminders, "arrival-stat-reminders"], ["WhatsApp", stats.whatsapp, "arrival-stat-wa"], ["Teklif", stats.offers, "arrival-stat-offers"], ["Tek tık eklenen", stats.claimed, "arrival-stat-claimed"], ["Dönüşüm", `%${stats.conversion_pct}`, "arrival-stat-conv"], ["Ekstra gelir", stats.revenue, "arrival-stat-rev"]].map(([l, v, tid]) => (
+            <div key={l} className="bg-white border border-stone-100 rounded-lg px-2 py-1.5"><div className="text-[9px] uppercase font-bold text-stone-400">{l}</div><div className="text-sm font-bold text-stone-900" data-testid={tid}>{v}</div></div>
+          ))}
+          {stats.by_label?.length > 0 && <div className="col-span-3 md:col-span-6 text-[10px] text-stone-500">{stats.by_label.map((b) => `${b.label}: ${b.claimed}/${b.offered}`).join(" · ")}</div>}
+        </div>
+      )}
       {preview && (
         <div className="bg-white border border-stone-200 rounded-lg p-3" data-testid="arrival-preview-panel">
           <div className="text-xs font-semibold text-stone-700 mb-2">Konu: {preview.subject}</div>
@@ -94,7 +106,7 @@ export const ArrivalReminderCard = ({ propertyId }) => {
       <div className="space-y-1 max-h-48 overflow-y-auto">
         {log.map((l) => (
           <div key={l.id} className="flex flex-wrap justify-between gap-2 text-xs bg-white border border-stone-100 rounded-lg px-3 py-1.5" data-testid={`arrival-log-${l.id}`}>
-            <span><b>{l.guest_name}</b> · {l.to} · giriş {l.check_in} · <span className="uppercase">{l.lang}</span></span>
+            <span><b>{l.guest_name}</b> · {l.to} · giriş {l.check_in} · <span className="uppercase">{l.lang}</span>{l.channels?.includes("whatsapp") && <span className="ml-1 px-1 rounded bg-emerald-100 text-emerald-700 font-bold">WA</span>}{l.favorites > 0 && <span className="ml-1">⭐{l.favorites}</span>}</span>
             <span className={l.status === "sent" ? "text-emerald-600" : "text-amber-600"}>{l.status === "sent" ? "gönderildi" : l.status === "mocked" ? "MOCK" : l.status}</span>
           </div>
         ))}

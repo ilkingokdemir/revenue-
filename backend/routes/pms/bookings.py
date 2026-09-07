@@ -1964,6 +1964,11 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         elif status == "confirmed":
             asyncio.create_task(fire_webhooks(db, "booking.confirmed", wh_data))
         elif status == "checked_out":
+            try:
+                from routes.security.tr_compliance import auto_issue_on_checkout
+                asyncio.create_task(auto_issue_on_checkout(updated))
+            except Exception as _e:  # noqa: BLE001
+                logger.warning(f"auto e-invoice hook failed: {_e}")
             # Housekeeping auto-dispatch: block the room with a "Deep Clean" OOS so
             # nobody double-books a dirty room. Housekeeping removes it when the
             # room is back to "clean".

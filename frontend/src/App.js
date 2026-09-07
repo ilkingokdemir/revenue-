@@ -1487,6 +1487,12 @@ function App() {
       return <CustomDomainSite fallback={<LandingPage />} />;
     }
   }
+  if (window.location.pathname.startsWith("/c/")) {
+    const code = window.location.pathname.split("/c/")[1].split("/")[0];
+    const ch = new URLSearchParams(window.location.search).get("ch") || "other";
+    window.location.replace(`${process.env.REACT_APP_BACKEND_URL}/api/site-builder/public/c/${encodeURIComponent(code)}?ch=${encodeURIComponent(ch)}`);
+    return null;
+  }
   if (window.location.pathname.startsWith("/book/")) {
     const propertyId = window.location.pathname.split("/book/")[1];
     return <BookingWidgetPage propertyId={propertyId} />;

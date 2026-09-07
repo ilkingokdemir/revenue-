@@ -40,6 +40,14 @@ def create_housekeeping_router(db, require_roles):
                                   current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
         updates.pop("_id", None)
         updates.pop("id", None)
+        base = updates.pop("base_updated_at", None)
+        queued_at = updates.pop("offline_queued_at", None)
+        if base is not None:
+            cur = await db.room_statuses.find_one({"id": room_id}, {"_id": 0, "status": 1, "updated_at": 1})
+            if cur and cur.get("updated_at") and base and cur["updated_at"] > base and cur.get("status") != updates.get("status"):
+                raise HTTPException(409, {"message": "Oda durumu başka biri tarafından değiştirildi", "current": cur})
+        if queued_at:
+            updates["offline_queued_at"] = queued_at
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
         if updates.get("status") == "clean":
             updates["last_cleaned_at"] = datetime.now(timezone.utc).isoformat()

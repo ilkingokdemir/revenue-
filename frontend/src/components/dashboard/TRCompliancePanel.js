@@ -385,7 +385,7 @@ function EFaturaBlock({ propertyId }) {
         </div>
         {settings && !showSettings && (
           <p className="text-xs text-stone-500 mt-1">
-            {integrators.find((i) => i.id === settings.integrator)?.label} · {settings.mode === "live" ? "Canlı" : "Test"} modu · {settings.api_key_masked ? `Anahtar ${settings.api_key_masked}` : "API anahtarı yok → gönderimler simüle edilir"} · {presets.find((p) => p.id === settings.vat_preset)?.label || `Özel %${settings.vat_rate}`}
+            {settings.auto_issue_on_checkout ? <b className="text-emerald-700" data-testid="tr-efatura-auto-on">⚡ Check-out'ta otomatik fatura açık{settings.email_guest_copy !== false ? " + misafire e-posta" : ""}</b> : <span data-testid="tr-efatura-auto-off">Otomatik fatura kapalı</span>} · {integrators.find((i) => i.id === settings.integrator)?.label} · {settings.mode === "live" ? "Canlı" : "Test"} modu · {settings.api_key_masked ? `Anahtar ${settings.api_key_masked}` : "API anahtarı yok → gönderimler simüle edilir"} · {presets.find((p) => p.id === settings.vat_preset)?.label || `Özel %${settings.vat_rate}`}
           </p>
         )}
         {settings && showSettings && (
@@ -438,6 +438,14 @@ function EFaturaBlock({ propertyId }) {
             <div>
               <label className="text-xs text-stone-500">Satıcı adresi</label>
               <input value={settings.sender_address || ""} onChange={(e) => setSettings({ ...settings, sender_address: e.target.value })} className={inp} data-testid="tr-efatura-sender-address" />
+            </div>
+            <div className="md:col-span-3 rounded-lg bg-stone-50 border border-stone-200 p-3 grid grid-cols-1 md:grid-cols-4 gap-2 items-center" data-testid="tr-efatura-auto-box">
+              <label className="text-xs font-semibold text-stone-800 flex items-center gap-2"><input type="checkbox" checked={!!settings.auto_issue_on_checkout} onChange={(e) => setSettings({ ...settings, auto_issue_on_checkout: e.target.checked })} data-testid="tr-efatura-auto-toggle" /> Check-out'ta otomatik fatura</label>
+              <label className={`text-xs flex items-center gap-2 ${settings.auto_issue_on_checkout ? "text-stone-700" : "text-stone-400"}`}><input type="checkbox" disabled={!settings.auto_issue_on_checkout} checked={settings.auto_submit !== false} onChange={(e) => setSettings({ ...settings, auto_submit: e.target.checked })} data-testid="tr-efatura-auto-submit" /> GİB'e otomatik gönder</label>
+              <label className={`text-xs flex items-center gap-2 ${settings.auto_issue_on_checkout ? "text-stone-700" : "text-stone-400"}`}><input type="checkbox" disabled={!settings.auto_issue_on_checkout} checked={settings.email_guest_copy !== false} onChange={(e) => setSettings({ ...settings, email_guest_copy: e.target.checked })} data-testid="tr-efatura-auto-email" /> Misafire e-posta kopyası</label>
+              <select value={settings.auto_invoice_type || "earsiv"} disabled={!settings.auto_issue_on_checkout} onChange={(e) => setSettings({ ...settings, auto_invoice_type: e.target.value })} className="px-2 py-1.5 rounded-lg border border-stone-300 text-xs bg-white disabled:bg-stone-100" data-testid="tr-efatura-auto-type">
+                <option value="earsiv">e-Arşiv (B2C)</option><option value="efatura">e-Fatura (B2B)</option>
+              </select>
             </div>
             <div className="md:col-span-3 flex items-center justify-between">
               <span className="text-[11px] text-stone-500">API anahtarı olmadan gönderimler <b>simüle</b> edilir (ETTN üretilir, outbox'a yazılır). Anahtar eklendiğinde entegratöre iletilir.</span>
@@ -502,7 +510,7 @@ function EFaturaBlock({ propertyId }) {
           {list.map((inv) => (
             <div key={inv.id} className="flex items-center gap-3 py-2.5 text-sm" data-testid={`tr-efatura-row-${inv.id}`}>
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-stone-900 font-mono text-xs">{inv.invoice_no}{inv.ettn && <span className="ml-2 text-[10px] text-stone-400 font-normal">ETTN {inv.ettn.slice(0, 8)}…{inv.simulated ? " · sim" : ""}</span>}</div>
+                <div className="font-medium text-stone-900 font-mono text-xs">{inv.invoice_no}{inv.auto_issued && <span className="ml-1.5 text-[9px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold" data-testid={`tr-efatura-auto-badge-${inv.id}`}>OTO</span>}{inv.ettn && <span className="ml-2 text-[10px] text-stone-400 font-normal">ETTN {inv.ettn.slice(0, 8)}…{inv.simulated ? " · sim" : ""}</span>}</div>
                 <div className="text-xs text-stone-500 mt-0.5">{inv.recipient_name} · {inv.type} · {inv.total} {inv.currency || "TRY"} · %{inv.tax_rate ?? "-"} {inv.tax_label || "KDV"} · {inv.issue_date}</div>
               </div>
               <span className={`text-[10px] px-2 py-0.5 rounded-full ${statusCls[inv.status] || "bg-stone-100 text-stone-700"}`} data-testid={`tr-efatura-status-${inv.id}`}>{statusTr[inv.status] || inv.status}</span>

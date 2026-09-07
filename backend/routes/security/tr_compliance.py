@@ -22,6 +22,7 @@ import uuid
 import logging
 
 logger = logging.getLogger(__name__)
+_ROUTER_REF: dict = {}
 
 
 VAT_PRESETS = [
@@ -483,7 +484,7 @@ def create_tr_compliance_router(db, require_roles):
         doc = await db.tr_einvoice_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
         return {"property_id": property_id, "integrator": "none", "mode": "test", "api_key": "", "tax_region": "tr",
                 "vat_preset": "tr_accommodation", "vat_rate": 10.0, "tax_label": "KDV", "sender_vkn": "", "sender_name": "",
-                "sender_address": "", "auto_issue_on_checkout": False, **doc}
+                "sender_address": "", "auto_issue_on_checkout": False, "auto_submit": True, "email_guest_copy": True, "auto_invoice_type": "earsiv", **doc}
 
     def _mask(k: str) -> str:
         return f"••••{k[-4:]}" if k and len(k) > 4 else ("••••" if k else "")
@@ -519,6 +520,9 @@ def create_tr_compliance_router(db, require_roles):
                "sender_vkn": vkn, "sender_name": str(data.get("sender_name", cur.get("sender_name")) or "")[:160],
                "sender_address": str(data.get("sender_address", cur.get("sender_address")) or "")[:400],
                "auto_issue_on_checkout": bool(data.get("auto_issue_on_checkout", cur.get("auto_issue_on_checkout"))),
+               "auto_submit": bool(data.get("auto_submit", cur.get("auto_submit", True))),
+               "email_guest_copy": bool(data.get("email_guest_copy", cur.get("email_guest_copy", True))),
+               "auto_invoice_type": data.get("auto_invoice_type") if data.get("auto_invoice_type") in ("earsiv", "efatura") else cur.get("auto_invoice_type", "earsiv"),
                "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": current_user.get("email")}
         if data.get("api_key") and "•" not in str(data["api_key"]):
             upd["api_key"] = str(data["api_key"])[:200]
@@ -534,6 +538,9 @@ def create_tr_compliance_router(db, require_roles):
     @router.post("/tr-compliance/efatura/{invoice_id}/submit")
     async def efatura_submit(invoice_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
         """Entegratör üzerinden GİB'e gönder. Gerçek API anahtarı yoksa SİMÜLE edilir (outbox)."""
+        return await _submit_one(invoice_id, current_user)
+
+    async def _submit_one(invoice_id: str, current_user: dict):
         rec = await db.tr_invoices.find_one({"id": invoice_id}, {"_id": 0, "xml": 0})
         if not rec:
             raise HTTPException(404, "Invoice not found")
@@ -596,6 +603,9 @@ def create_tr_compliance_router(db, require_roles):
         rec = await db.tr_invoices.find_one({"id": invoice_id}, {"_id": 0, "xml": 0})
         if not rec:
             raise HTTPException(404, "Invoice not found")
+        return Response(_render_html(rec), media_type="text/html; charset=utf-8")
+
+    def _render_html(rec: dict) -> str:
         cur = rec.get("currency", "TRY")
         rows = "".join(f"<tr><td>{ln['id']}</td><td>{ln['name']}</td><td class=r>{ln['qty']}</td><td class=r>{ln['price']:.2f}</td><td class=r>%{ln['tax_rate']:.0f}</td><td class=r>{ln['tax_amount']:.2f}</td><td class=r>{ln['gross']:.2f}</td></tr>" for ln in rec.get("lines") or [])
         status_tr = {"built": "Oluşturuldu", "sent": "GİB'e gönderildi", "submitted": "Gönderildi", "accepted": "Kabul", "rejected": "Red", "cancelled": "İPTAL"}.get(rec.get("status"), rec.get("status"))
@@ -614,6 +624,54 @@ th{{text-align:left;font-size:10px;text-transform:uppercase;color:#78716c;border
 <div class=tot><div><span>Ara toplam</span><span>{rec.get('subtotal',0):.2f} {cur}</span></div><div><span>{rec.get('tax_label','KDV')} (%{rec.get('tax_rate',0):.0f})</span><span>{rec.get('tax_total',0):.2f} {cur}</span></div><div class=g><span>Genel toplam</span><span>{rec.get('total',0):.2f} {cur}</span></div></div>
 {('<p class=cancel>İptal nedeni: '+rec.get('cancel_reason','')+'</p>') if rec.get('status')=='cancelled' else ''}
 <p style="margin-top:28px;color:#78716c;font-size:11px">{rec.get('notes','')}</p><button onclick="window.print()" style="margin-top:12px;padding:8px 14px;border-radius:8px;border:1px solid #d6d3d1;background:#fff;cursor:pointer">Yazdır / PDF</button></body></html>"""
-        return Response(html, media_type="text/html; charset=utf-8")
+        return html
 
+    @router.get("/tr-compliance/efatura/{property_id}/auto-log")
+    async def efatura_auto_log(property_id: str, _u: dict = Depends(require_roles("admin", "manager"))):
+        rows = await db.tr_einvoice_auto_log.find({"property_id": property_id}, {"_id": 0}).sort("created_at", -1).limit(30).to_list(30)
+        return {"log": rows}
+
+    router.build_invoice = _build_one
+    router.submit_invoice = _submit_one
+    router.get_settings = _get_settings
+    router.render_html = _render_html
+    _ROUTER_REF["router"] = router
+    _ROUTER_REF["db"] = db
     return router
+
+
+async def auto_issue_on_checkout(booking: dict) -> dict:
+    """Check-out anında otomatik e-Arşiv: üret → (simüle) gönder → misafire HTML kopya e-postası."""
+    r = _ROUTER_REF.get("router"); db = _ROUTER_REF.get("db")
+    if not r or not booking or not booking.get("id"):
+        return {"skipped": "no_router"}
+    pid = booking.get("property_id") or ""
+    st = await r.get_settings(pid)
+    if not st.get("auto_issue_on_checkout"):
+        return {"skipped": "disabled"}
+    if booking.get("tr_invoice_uuid") and await db.tr_invoices.find_one({"id": booking["tr_invoice_uuid"], "status": {"$ne": "cancelled"}}, {"_id": 0, "id": 1}):
+        return {"skipped": "exists"}
+    now = datetime.now(timezone.utc).isoformat()
+    log = {"id": str(uuid.uuid4()), "property_id": pid, "booking_id": booking["id"], "booking_ref": booking.get("booking_ref", ""),
+           "guest_email": booking.get("guest_email", ""), "created_at": now}
+    try:
+        res = await r.build_invoice(EArsivBuildRequest(booking_id=booking["id"], invoice_type=st.get("auto_invoice_type") or "earsiv"), {"email": "auto@checkout"})
+        await db.tr_invoices.update_one({"id": res["uuid"]}, {"$set": {"auto_issued": True}})
+        log.update({"invoice_id": res["uuid"], "invoice_no": res["invoice_no"], "total": res["total"], "currency": res["currency"]})
+        if st.get("auto_submit", True):
+            sub = await r.submit_invoice(res["uuid"], {"email": "auto@checkout"})
+            log.update({"ettn": sub.get("ettn"), "submitted": True, "simulated": sub.get("simulated", True)})
+        email_status = "skipped"
+        if st.get("email_guest_copy", True) and booking.get("guest_email"):
+            from routes.platform_ext.mailer import send_email
+            rec = await db.tr_invoices.find_one({"id": res["uuid"]}, {"_id": 0, "xml": 0})
+            html = r.render_html(rec)
+            email_status = await send_email(db, booking["guest_email"], f"Faturanız / Your invoice — {res['invoice_no']}", html,
+                                            kind="e_invoice", meta={"booking_id": booking["id"], "invoice_id": res["uuid"], "property_id": pid})
+        log.update({"email_status": email_status, "status": "ok"})
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"auto e-invoice failed for {booking.get('booking_ref')}: {e}")
+        log.update({"status": "failed", "error": str(e)[:300]})
+    await db.tr_einvoice_auto_log.insert_one(dict(log))
+    log.pop("_id", None)
+    return log

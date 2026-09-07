@@ -204,7 +204,9 @@ export function PostsEditor({ posts, onChange, stats }) {
                 <span className="px-1.5 py-0.5 rounded bg-stone-100">Rez: <b>{c.bookings}</b></span>
                 <span className="px-1.5 py-0.5 rounded bg-stone-100">Gelir: <b>{c.revenue.toLocaleString()}</b></span>
                 <span className="px-1.5 py-0.5 rounded bg-stone-100">Görüntülenme: <b>{c.page_views}</b> · Dönüşüm %{c.conversion_pct}</span>
+                <span className="px-1.5 py-0.5 rounded bg-stone-100">Tıklama: <b>{c.clicks || 0}</b></span>
               </div>); })()}
+            {p.promo_code && <CampaignLinkRow code={p.promo_code} stats={statFor(p)} idx={i} />}
           </div>
         ))}
         {list.length === 0 && <p className="text-[10px] text-stone-400">Kampanya veya blog yazısı ekleyin — sitede "Blog & Kampanyalar" sayfası otomatik açılır.</p>}
@@ -253,10 +255,11 @@ export function CampaignPerfCard({ stats }) {
       </div>
       {!t.campaigns ? <p className="text-[11px] text-stone-400">Kupon kodlu kampanya eklediğinizde kullanım, gelir ve dönüşüm burada görünür.</p> : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
             {cell("Kupon kullanımı", t.coupon_uses || 0, "camp-total-uses")}
             {cell("Rezervasyon", t.bookings || 0, "camp-total-bookings")}
             {cell("Kupon geliri", (t.revenue || 0).toLocaleString(), "camp-total-revenue")}
+            {cell("Link tıklama", t.clicks || 0, "camp-total-clicks")}
             {cell("Dönüşüm", `%${t.page_views ? Math.min(100, Math.round(((t.bookings || 0) / t.page_views) * 1000) / 10) : 0}`, "camp-total-conv")}
           </div>
           <div className="mt-3 divide-y divide-stone-100">
@@ -265,6 +268,7 @@ export function CampaignPerfCard({ stats }) {
                 <span className={`w-1.5 h-1.5 rounded-full ${c.status === "active" ? "bg-emerald-500" : c.status === "scheduled" ? "bg-sky-500" : "bg-stone-300"}`} />
                 <span className="font-semibold text-stone-800 truncate flex-1">{c.title}</span>
                 {c.promo_code && <span className="font-mono text-[10px] bg-stone-100 px-1.5 rounded">{c.promo_code} −%{c.discount_pct}</span>}
+                <span className="text-stone-400 w-16 text-right">{c.clicks || 0} tık</span>
                 <span className="text-stone-500 w-16 text-right">{c.coupon_uses} kupon</span>
                 <span className="text-stone-500 w-14 text-right">{c.bookings} rez</span>
                 <span className="text-stone-800 font-semibold w-20 text-right">{c.revenue.toLocaleString()}</span>
@@ -273,6 +277,39 @@ export function CampaignPerfCard({ stats }) {
             ))}
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+const CHANNELS = [["email", "E-posta"], ["whatsapp", "WhatsApp"], ["instagram", "Instagram"], ["facebook", "Facebook"], ["sms", "SMS"], ["qr", "QR"]];
+export function CampaignLinkRow({ code, stats, idx }) {
+  const [open, setOpen] = useState(false);
+  const base = window.location.origin;
+  const link = (ch) => `${base}/c/${code}?ch=${ch}`;
+  const qr = `${API}/site-builder/public/c/${code}/qr.png?ch=qr`;
+  const copy = async (ch) => { try { await navigator.clipboard.writeText(link(ch)); toast.success(`${ch} linki kopyalandı`); } catch { toast(link(ch)); } };
+  const by = stats?.clicks_by_channel || {};
+  return (
+    <div className="rounded-lg bg-indigo-50/60 border border-indigo-100 px-2 py-1.5 text-[10px]" data-testid={`site-post-link-${idx}`}>
+      <div className="flex items-center gap-2">
+        <span className="font-bold text-indigo-900">Kısa link</span>
+        <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-indigo-100 truncate" data-testid={`site-post-short-${idx}`}>{base}/c/{code}</code>
+        <button type="button" onClick={() => copy("other")} className="px-1.5 py-0.5 rounded bg-indigo-600 text-white font-bold" data-testid={`site-post-copy-${idx}`}>Kopyala</button>
+        <button type="button" onClick={() => setOpen((v) => !v)} className="px-1.5 py-0.5 rounded bg-white border border-indigo-200 text-indigo-700 font-bold" data-testid={`site-post-channels-${idx}`}>{open ? "Kanalları gizle" : "Kanallar & QR"}</button>
+      </div>
+      {open && (
+        <div className="mt-1.5 flex gap-3 items-start">
+          <div className="flex flex-wrap gap-1 flex-1">
+            {CHANNELS.map(([ch, label]) => (
+              <button key={ch} type="button" onClick={() => copy(ch)} className="px-1.5 py-0.5 rounded bg-white border border-stone-200 hover:border-indigo-400" title={link(ch)} data-testid={`site-post-ch-${idx}-${ch}`}>{label} <b className="text-indigo-700">{by[ch] || 0}</b></button>
+            ))}
+          </div>
+          <a href={qr} download={`kampanya-${code}.png`} target="_blank" rel="noreferrer" className="flex flex-col items-center gap-0.5" title="QR indir" data-testid={`site-post-qr-${idx}`}>
+            <img src={qr} alt={`QR ${code}`} className="w-16 h-16 rounded border border-stone-200 bg-white" />
+            <span className="text-[9px] text-indigo-700 font-bold">PNG indir</span>
+          </a>
+        </div>
       )}
     </div>
   );

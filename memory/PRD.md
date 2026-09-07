@@ -35,6 +35,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Admin: `admin@hotelbox.com` / `HotelAdmin2026!` (login cevabında token alanı: `token`)
 - Preview: frontend/.env REACT_APP_BACKEND_URL değerini kullan
 
+## Son Durum (Iter 627, 2026-09-07) — Otomatik e-Fatura, kampanya kısa link/QR, arrival reminder+WA, HK offline
+- Check-out'ta otomatik e-Arşiv (simüle GİB + misafir e-posta MOCK), `/c/KOD?ch=` kısa link + QR + kanal tıklama, T-2 hatırlatma
+  kişiselleştirme + WhatsApp mock + dönüşüm istatistiği, /hk-mobile offline kuyruk/senkron/çakışma. Detay: CHANGELOG.md iter 627.
+- Backlog: gerçek GİB entegratör SDK (anahtar), Twilio WhatsApp gerçek gönderim (anahtar).
+
 ## Son Durum (Iter 626, 2026-09-06) — e-Fatura entegratör/KDV preset + çeviri kilidi + kampanya perf + upsell kart ödemesi
 - Finans → "e-Fatura / e-Arşiv": entegratör ayarları (simüle gönderim, ETTN), KDV preset'leri TR/UK/EU/US/özel, toplu fatura, iptal, HTML önizleme.
 - Çeviri onay kilidi canlı sitede aktif; kampanya performans kartı; onay ekranında ekstra için Stripe kart ödemesi.

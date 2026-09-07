@@ -369,6 +369,50 @@ def create_site_builder_router(db, require_roles):
             raise HTTPException(404, "Alan adı eşleşmedi")
         return {"property_id": cfg["property_id"]}
 
+    # ---------------- KAMPANYA KISA LİNK + QR ----------------
+    CHANNELS = ("email", "whatsapp", "instagram", "facebook", "qr", "sms", "other")
+
+    async def _campaign_by_code(code: str):
+        code = re.sub(r"[^A-Z0-9_-]", "", (code or "").upper())[:20]
+        if not code:
+            return None, None
+        site = await db.hotel_sites.find_one({"content.posts.promo_code": code}, {"_id": 0, "property_id": 1, "published": 1, "content.posts": 1})
+        if not site:
+            return None, None
+        po = next((p for p in (site.get("content") or {}).get("posts") or [] if p.get("promo_code") == code), None)
+        return site, po
+
+    @router.get("/public/c/{code}")
+    async def campaign_short_link(code: str, request: Request, ch: str = "other"):
+        """Kısa link: tıklamayı kanal bazında say → kampanya sayfasına (veya booking engine'e) yönlendir."""
+        from fastapi.responses import RedirectResponse
+        site, po = await _campaign_by_code(code)
+        if not site or not po:
+            raise HTTPException(404, "Kampanya bulunamadı")
+        channel = ch if ch in CHANNELS else "other"
+        await db.campaign_clicks.insert_one({"id": str(uuid.uuid4()), "code": po["promo_code"], "property_id": site["property_id"], "channel": channel,
+                                             "referrer": (request.headers.get("referer") or "")[:200], "ua": (request.headers.get("user-agent") or "")[:160],
+                                             "created_at": datetime.now(timezone.utc).isoformat()})
+        pid = site["property_id"]
+        if site.get("published") and po.get("slug"):
+            target = f"/site/{pid}/blog/{po['slug']}?utm_source={channel}&utm_campaign={po['promo_code']}"
+        else:
+            target = f"/book?property={pid}&promo={po['promo_code']}&utm_source={channel}"
+        return RedirectResponse(url=target, status_code=302)
+
+    @router.get("/public/c/{code}/qr.png")
+    async def campaign_qr(code: str, request: Request, ch: str = "qr"):
+        import io
+        import qrcode
+        site, po = await _campaign_by_code(code)
+        if not site or not po:
+            raise HTTPException(404, "Kampanya bulunamadı")
+        base = (os.environ.get("PUBLIC_BASE_URL") or str(request.base_url)).rstrip("/")
+        url = f"{base}/c/{po['promo_code']}?ch={ch if ch in CHANNELS else 'qr'}"
+        img = qrcode.make(url, box_size=8, border=2)
+        buf = io.BytesIO(); img.save(buf, format="PNG")
+        return Response(buf.getvalue(), media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+
     # ---------------- ZİYARET İSTATİSTİĞİ ----------------
     @router.post("/public/track")
     async def track(data: dict):
@@ -409,16 +453,23 @@ def create_site_builder_router(db, require_roles):
             rev = round(float(agg[0]["rev"]), 2) if agg else 0.0
             pct = float(po.get("discount_pct") or 0)
             views = await db.site_visits.count_documents({"property_id": pid, "event": "view", "page": f"blog/{po.get('slug', '')}"}) if po.get("slug") else 0
+            clicks_by = {}
+            if code:
+                async for c in db.campaign_clicks.find({"code": code}, {"_id": 0, "channel": 1}):
+                    clicks_by[c.get("channel") or "other"] = clicks_by.get(c.get("channel") or "other", 0) + 1
             in_window = (not po.get("starts_at") or po["starts_at"] <= today) and (not po.get("ends_at") or po["ends_at"] >= today)
             out.append({"id": po.get("id"), "title": po.get("title"), "slug": po.get("slug"), "promo_code": code, "discount_pct": pct,
                         "starts_at": po.get("starts_at") or "", "ends_at": po.get("ends_at") or "",
                         "status": "active" if (po.get("published", True) and in_window and (promo or {}).get("is_active", True)) else ("scheduled" if po.get("starts_at") and po["starts_at"] > today else "ended"),
                         "coupon_uses": int((promo or {}).get("used_count") or 0), "bookings": n, "revenue": rev,
                         "discount_given": round(rev * pct / (100 - pct), 2) if pct and pct < 100 else 0.0,
-                        "page_views": views, "conversion_pct": round(min(n / views * 100, 100), 1) if views else 0.0})
+                        "page_views": views, "conversion_pct": round(min(n / views * 100, 100), 1) if views else 0.0,
+                        "clicks": sum(clicks_by.values()), "clicks_by_channel": clicks_by,
+                        "short_path": f"/c/{code}" if code else ""})
         return {"campaigns": out, "totals": {"campaigns": len(out), "active": sum(1 for c in out if c["status"] == "active"),
                                              "coupon_uses": sum(c["coupon_uses"] for c in out), "bookings": sum(c["bookings"] for c in out),
-                                             "revenue": round(sum(c["revenue"] for c in out), 2), "page_views": sum(c["page_views"] for c in out)}}
+                                             "revenue": round(sum(c["revenue"] for c in out), 2), "page_views": sum(c["page_views"] for c in out),
+                                             "clicks": sum(c["clicks"] for c in out)}}
 
     @router.get("/{pid}/stats")
     async def site_stats(pid: str, days: int = 30, _u: dict = Depends(require_roles(*ROLES))):

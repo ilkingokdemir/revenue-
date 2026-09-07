@@ -50,6 +50,12 @@ export default function HousekeepingMobilePWA() {
   const [busy, setBusy] = useState(false);
   const [loginErr, setLoginErr] = useState(null);
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [online, setOnline] = useState(navigator.onLine);
+  const QKEY = `hk-queue-${propertyId}`; const CKEY = `hk-cache-${propertyId}`;
+  const [queue, setQueue] = useState(() => { try { return JSON.parse(localStorage.getItem(QKEY) || "[]"); } catch { return []; } });
+  const [syncing, setSyncing] = useState(false);
+  const [cachedAt, setCachedAt] = useState(null);
+  const saveQueue = (q) => { setQueue(q); localStorage.setItem(QKEY, JSON.stringify(q)); };
 
   useEffect(() => {
     if (authToken) {
@@ -57,23 +63,64 @@ export default function HousekeepingMobilePWA() {
     }
   }, [authToken]);
 
+  useEffect(() => {
+    const on = () => setOnline(true); const off = () => setOnline(false);
+    window.addEventListener("online", on); window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+
+  const computeStats = (list) => ({ total: list.length, dirty: list.filter(r => r.status === "dirty").length, in_progress: list.filter(r => r.status === "in_progress").length,
+    clean: list.filter(r => r.status === "clean").length, inspected: list.filter(r => r.status === "inspected").length });
+
   const load = useCallback(async () => {
     if (!propertyId || !authToken) return;
     setLoading(true);
     try {
       const [rs, st] = await Promise.all([
-        axios.get(`${API}/housekeeping/rooms/${propertyId}`),
-        axios.get(`${API}/housekeeping/rooms/${propertyId}/stats`),
+        axios.get(`${API}/housekeeping/rooms/${propertyId}`, { timeout: 8000 }),
+        axios.get(`${API}/housekeeping/rooms/${propertyId}/stats`, { timeout: 8000 }),
       ]);
-      setRooms(rs.data || []); setStats(st.data);
+      let q = []; try { q = JSON.parse(localStorage.getItem(QKEY) || "[]"); } catch { q = []; }
+      const merged = (rs.data || []).map(r => { const p = q.find(i => i.room_id === r.id); return p ? { ...r, status: p.to, _pending: true } : r; });
+      setRooms(merged); setStats(q.length ? computeStats(merged) : st.data); setCachedAt(null);
+      localStorage.setItem(CKEY, JSON.stringify({ rooms: merged, stats: q.length ? computeStats(merged) : st.data, at: new Date().toISOString() }));
     } catch (e) {
       if (e.response?.status === 401) {
         setAuthToken(""); localStorage.removeItem("access_token");
-      } else toast.error("Yüklenemedi");
+      } else {
+        try {
+          const c = JSON.parse(localStorage.getItem(CKEY) || "null");
+          if (c) { setRooms(c.rooms); setStats(c.stats); setCachedAt(c.at); toast("Çevrimdışı — önbellekten gösteriliyor", { icon: "📴" }); }
+          else toast.error("Yüklenemedi");
+        } catch { toast.error("Yüklenemedi"); }
+      }
     } finally { setLoading(false); }
-  }, [propertyId, authToken]);
+  }, [propertyId, authToken, CKEY, QKEY]);
 
   useEffect(() => { load(); }, [load]);
+
+  const sync = useCallback(async () => {
+    if (!navigator.onLine || syncing) return;
+    let q = []; try { q = JSON.parse(localStorage.getItem(QKEY) || "[]"); } catch { q = []; }
+    if (!q.length) return;
+    setSyncing(true);
+    let ok = 0, conflicts = 0;
+    for (const item of q) {
+      try {
+        await axios.put(`${API}/housekeeping/rooms/${item.room_id}/status`, { status: item.to, base_updated_at: item.base_updated_at, offline_queued_at: item.at }, { timeout: 8000 });
+        ok++;
+      } catch (e) {
+        if (e.response?.status === 409) { conflicts++; toast(`Oda ${item.room_number}: başka biri değiştirdi (${STATUS_META[e.response.data?.current?.status]?.label || "?"})`, { icon: "⚠️" }); }
+        else if (!e.response) { setSyncing(false); return; }
+      }
+      q = q.slice(1); localStorage.setItem(QKEY, JSON.stringify(q)); setQueue(q);
+    }
+    setSyncing(false);
+    if (ok) toast.success(`${ok} değişiklik senkronize edildi${conflicts ? `, ${conflicts} çakışma` : ""}`);
+    load();
+  }, [QKEY, syncing, load]);
+
+  useEffect(() => { if (online && authToken) sync(); }, [online, authToken, sync]);
 
   const login = async () => {
     setBusy(true); setLoginErr(null);
@@ -86,13 +133,29 @@ export default function HousekeepingMobilePWA() {
     } finally { setBusy(false); }
   };
 
+  const applyLocal = (room, to) => {
+    const next = rooms.map(r => (r.id === room.id ? { ...r, status: to, _pending: true } : r));
+    setRooms(next); setStats(computeStats(next));
+    localStorage.setItem(CKEY, JSON.stringify({ rooms: next, stats: computeStats(next), at: new Date().toISOString() }));
+  };
+  const enqueue = (room, to) => {
+    const q = queue.filter(i => i.room_id !== room.id).concat([{ room_id: room.id, room_number: room.room_number, to, base_updated_at: room.updated_at || "", at: new Date().toISOString() }]);
+    saveQueue(q); applyLocal(room, to);
+    toast(`Oda ${room.room_number} → ${STATUS_META[to]?.label || to} (kuyrukta, bağlantı gelince gönderilir)`, { icon: "📴" });
+  };
+
   const transition = async (room, to) => {
     setBusy(true);
     try {
-      await axios.put(`${API}/housekeeping/rooms/${room.id}/status`, { status: to });
+      if (!navigator.onLine) { enqueue(room, to); setSelected(null); return; }
+      await axios.put(`${API}/housekeeping/rooms/${room.id}/status`, { status: to, base_updated_at: room.updated_at || "" }, { timeout: 8000 });
       toast.success(`Oda ${room.room_number} → ${STATUS_META[to]?.label || to}`);
       setSelected(null); await load();
-    } catch { toast.error("Değiştirilemedi"); } finally { setBusy(false); }
+    } catch (e) {
+      if (e.response?.status === 409) { toast(`Oda ${room.room_number} başka biri tarafından değiştirildi — liste yenilendi`, { icon: "⚠️" }); setSelected(null); await load(); }
+      else if (!e.response) { enqueue(room, to); setSelected(null); }
+      else toast.error("Değiştirilemedi");
+    } finally { setBusy(false); }
   };
 
   // ── Login screen ────────────────────────────────────────────────────
@@ -160,6 +223,15 @@ export default function HousekeepingMobilePWA() {
         </div>
       </header>
 
+      {(!online || queue.length > 0 || cachedAt) && (
+        <div className={`px-3 py-2 text-xs font-bold flex items-center justify-between gap-2 ${!online ? "bg-amber-400 text-amber-950" : "bg-sky-100 text-sky-900"}`} data-testid="hk-offline-bar">
+          <span data-testid="hk-offline-text">
+            {!online ? `📴 Çevrimdışı — değişiklikler cihazda saklanıyor (${queue.length} bekleyen)` : syncing ? "🔄 Senkronize ediliyor…" : queue.length ? `🟢 Bağlantı var — ${queue.length} bekleyen değişiklik` : `Önbellek: ${new Date(cachedAt).toLocaleTimeString("tr-TR")}`}
+          </span>
+          {online && queue.length > 0 && !syncing && <button onClick={sync} className="px-2.5 py-1 rounded-lg bg-sky-700 text-white" data-testid="hk-sync-now">Şimdi senkronize et</button>}
+        </div>
+      )}
+
       {/* Stats grid */}
       {stats && (
         <div className="grid grid-cols-4 gap-1.5 px-3 pt-3" data-testid="hk-stats">
@@ -224,6 +296,7 @@ export default function HousekeepingMobilePWA() {
                 <div className="flex items-center gap-2">
                   <p className="text-lg font-black text-stone-900">Oda {room.room_number}</p>
                   {room.floor && <span className="text-[9px] text-stone-500 uppercase font-bold">Kat {room.floor}</span>}
+                  {room._pending && <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold" data-testid={`hk-pending-${room.room_number}`}>bekliyor</span>}
                 </div>
                 <p className={`text-xs font-bold ${meta.text}`}>{meta.label}</p>
                 {room.notes && <p className="text-[10px] text-stone-500 line-clamp-1 mt-0.5">{room.notes}</p>}

@@ -51,7 +51,7 @@ def build_arrival_email(booking: dict, hotel: dict, upsells: list, lang: str) ->
     addr = ", ".join(x for x in [hotel.get("address"), hotel.get("city"), hotel.get("country")] if x) or hotel.get("name", "")
     maps = f"https://www.google.com/maps/search/?api=1&query={quote_plus(hotel.get('name', '') + ' ' + addr)}"
     rows = "".join(
-        f"<tr><td style='padding:6px 0;font-size:14px'>{u['label']}</td><td style='padding:6px 0;font-size:14px;text-align:right;font-weight:600'>{sym}{u['price']:.0f} <span style='font-size:11px;color:#888;font-weight:400'>{t['per_night'] if u['price_type'] == 'per_night' else t['per_stay']}</span>"
+        f"<tr><td style='padding:6px 0;font-size:14px'>{'⭐ ' if u.get('favorite') else ''}{u['label']}</td><td style='padding:6px 0;font-size:14px;text-align:right;font-weight:600'>{sym}{u['price']:.0f} <span style='font-size:11px;color:#888;font-weight:400'>{t['per_night'] if u['price_type'] == 'per_night' else t['per_stay']}</span>"
         + (f"<br><a href='{u['claim_url']}' style='display:inline-block;margin-top:4px;background:#2F855A;color:#fff;text-decoration:none;padding:5px 10px;border-radius:6px;font-size:11px'>+ {t['add']}</a>" if u.get('claim_url') else "")
         + "</td></tr>"
         for u in upsells)
@@ -86,11 +86,26 @@ def create_arrival_reminder_router(db, require_roles):
                 "check_in_time": ts.get("check_in_time") or prop.get("check_in_time") or "15:00",
                 "check_out_time": ts.get("check_out_time") or prop.get("check_out_time") or "11:00"}
 
-    async def _upsells(pid: str, lang: str) -> list:
-        items = await db.upsell_items.find({"property_id": pid, "is_active": {"$ne": False}}, {"_id": 0, "name": 1, "price": 1, "price_type": 1}).sort("price", 1).to_list(3)
+    async def _upsells(pid: str, lang: str, b: dict = None) -> list:
+        """Kişiselleştirme: zaten eklenenleri çıkar, kahvaltı dahil planda kahvaltıyı gizle, geçmiş favorileri öne al."""
+        b = b or {}
+        items = await db.upsell_items.find({"property_id": pid, "is_active": {"$ne": False}}, {"_id": 0, "name": 1, "price": 1, "price_type": 1}).sort("price", 1).to_list(8)
         if items:
-            return [{"label": i.get("name", ""), "price": float(i.get("price") or 0), "price_type": i.get("price_type", "per_stay")} for i in items]
-        return [{"label": u["name"].get(lang, u["name"]["en"]), "price": u["price"], "price_type": u["price_type"]} for u in DEFAULT_UPSELLS]
+            ups = [{"label": i.get("name", ""), "price": float(i.get("price") or 0), "price_type": i.get("price_type", "per_stay")} for i in items]
+        else:
+            ups = [{"label": u["name"].get(lang, u["name"]["en"]), "price": u["price"], "price_type": u["price_type"]} for u in DEFAULT_UPSELLS]
+        have = {str(u.get("name") or "").lower() for u in (b.get("post_upsells") or [])}
+        if "breakfast" in str(b.get("rate_plan_code") or "").lower():
+            have |= {u["label"].lower() for u in ups if any(k in u["label"].lower() for k in ("breakfast", "kahvaltı", "frühstück"))}
+        ups = [u for u in ups if u["label"].lower() not in have]
+        favs: set = set()
+        if b.get("guest_email"):
+            async for prev in db.bookings.find({"guest_email": b["guest_email"], "id": {"$ne": b.get("id")}, "post_upsells.0": {"$exists": True}}, {"_id": 0, "post_upsells.name": 1}).limit(10):
+                favs |= {str(u.get("name") or "").lower() for u in prev.get("post_upsells") or []}
+        for u in ups:
+            u["favorite"] = u["label"].lower() in favs
+        ups.sort(key=lambda u: (not u["favorite"], u["price"]))
+        return ups[:3]
 
     async def _with_claim_links(b: dict, ups: list, lang: str) -> list:
         """One-click 'add to my booking' tokens → /api/revenue/upsell/claim/{token} (pay at property)."""
@@ -124,16 +139,28 @@ def create_arrival_reminder_router(db, require_roles):
             if pid not in hotels:
                 hotels[pid] = await _hotel(pid)
             lang = (b.get("guest_lang") or "en")[:2].lower()
-            ups = await _upsells(pid, lang)
+            ups = await _upsells(pid, lang, b)
             ups = await _with_claim_links(b, ups, lang)
             subject, html = build_arrival_email(b, hotels[pid], ups, lang)
             status = await send_email(db, b["guest_email"], subject, html, kind="arrival_reminder",
                                       meta={"booking_id": b.get("id"), "booking_ref": b.get("booking_ref"), "lang": lang})
             now = datetime.now(timezone.utc).isoformat()
+            channels = ["email"]
+            wa_status = ""
+            if b.get("guest_phone"):
+                t = T.get(lang, T["en"])
+                sym = _sym(b.get("currency", "GBP"))
+                lines = [f"{'⭐ ' if u.get('favorite') else ''}{u['label']} — {sym}{u['price']:.0f}: {u.get('claim_url', '')}" for u in ups]
+                body = f"{t['title']} · {hotels[pid]['name']}\n{t['hi'].format(name=b.get('guest_name', ''), days=DAYS_BEFORE)}\n\n✨ {t['upsell']}:\n" + "\n".join(lines)
+                await db.whatsapp_outbox.insert_one({"id": str(uuid.uuid4()), "to": b["guest_phone"], "body": body, "kind": "arrival_reminder",
+                                                     "booking_id": b.get("id"), "booking_ref": b.get("booking_ref"), "property_id": pid,
+                                                     "status": "mocked", "created_at": now})
+                channels.append("whatsapp"); wa_status = "mocked"
             await db.bookings.update_one({"id": b["id"]}, {"$set": {"arrival_reminder_sent_at": now, "arrival_reminder_status": status}})
             await db.arrival_reminder_log.insert_one({"id": str(uuid.uuid4()), "booking_id": b.get("id"), "booking_ref": b.get("booking_ref"),
                                                       "property_id": pid, "to": b["guest_email"], "guest_name": b.get("guest_name"),
                                                       "check_in": b.get("check_in"), "lang": lang, "subject": subject, "status": status,
+                                                      "channels": channels, "whatsapp_status": wa_status, "favorites": sum(1 for u in ups if u.get("favorite")),
                                                       "upsells": len(ups), "sent_at": now})
             sent += status == "sent"
             mocked += status == "mocked"
@@ -150,6 +177,26 @@ def create_arrival_reminder_router(db, require_roles):
     async def log(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
         q = {} if property_id == "all" else {"property_id": property_id}
         return await db.arrival_reminder_log.find(q, {"_id": 0}).sort("sent_at", -1).to_list(50)
+
+    @router.get("/stats/{property_id}")
+    async def stats(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Hatırlatma → tıklama → dönüşüm raporu."""
+        q = {} if property_id == "all" else {"property_id": property_id}
+        logs = await db.arrival_reminder_log.find(q, {"_id": 0, "booking_id": 1, "channels": 1, "status": 1}).to_list(2000)
+        bids = [l.get("booking_id") for l in logs if l.get("booking_id")]
+        tokens = await db.upsell_claim_tokens.find({"booking_id": {"$in": bids}}, {"_id": 0, "used_at": 1, "amount": 1, "label": 1}).to_list(5000) if bids else []
+        used = [t for t in tokens if t.get("used_at")]
+        by_label: dict = {}
+        for t in tokens:
+            d = by_label.setdefault(t.get("label", ""), {"offered": 0, "claimed": 0, "revenue": 0.0})
+            d["offered"] += 1
+            if t.get("used_at"):
+                d["claimed"] += 1; d["revenue"] = round(d["revenue"] + float(t.get("amount") or 0), 2)
+        return {"reminders": len(logs), "email_sent": sum(1 for l in logs if l.get("status") == "sent"), "email_mocked": sum(1 for l in logs if l.get("status") == "mocked"),
+                "whatsapp": sum(1 for l in logs if "whatsapp" in (l.get("channels") or [])),
+                "offers": len(tokens), "claimed": len(used), "conversion_pct": round(len(used) / len(tokens) * 100, 1) if tokens else 0.0,
+                "revenue": round(sum(float(t.get("amount") or 0) for t in used), 2),
+                "by_label": sorted([{"label": k, **v} for k, v in by_label.items()], key=lambda x: -x["claimed"])[:6]}
 
     @router.get("/preview/{property_id}")
     async def preview(property_id: str, lang: str = "en", current_user: dict = Depends(require_roles("admin", "manager"))):

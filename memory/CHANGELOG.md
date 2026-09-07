@@ -4160,3 +4160,14 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
   `createIntent/confirmIntent/compact/title/payLabel` prop'ları; onay ekranında "Kartla hemen öde" / "Tesiste öde". Stripe 4242 ile e2e doğrulandı.
 - Düzeltme: SpaceBookingSection API hata cevabında `spaces.map` çökmesi (Array guard).
 - Test: iteration_626.json backend 31/31, frontend 4/4; kart ödemesi ayrıca Playwright ile doğrulandı.
+
+## Iter 627 (2026-09-07) — Otomatik e-Fatura + Kampanya kısa link/QR + Arrival reminder güçlendirme + HK offline
+- Otomatik fatura: `tr_compliance.auto_issue_on_checkout()` (bookings status→checked_out hook, asyncio task): üret → simüle GİB gönder (ETTN) →
+  misafire HTML fatura e-postası (MOCK outbox). Ayarlar: auto_issue_on_checkout/auto_submit/email_guest_copy/auto_invoice_type; `/efatura/{pid}/auto-log`; listede OTO rozeti.
+- Kampanya kısa link: `/c/{PROMO}?ch=email|whatsapp|instagram|facebook|sms|qr|other` (App.js → `/api/site-builder/public/c/{code}` 302 → blog sayfası,
+  `campaign_clicks` kanal bazlı), `/public/c/{code}/qr.png` (qrcode). campaign-stats: clicks, clicks_by_channel, short_path. UI: CampaignLinkRow (kopyala, kanallar, QR indir).
+- Arrival reminder (mevcut robot güçlendirildi): kişiselleştirme (eklenenler/kahvaltı dahil gizlenir, geçmiş favoriler ⭐), WhatsApp mock outbox,
+  `/arrival-reminder/stats/{pid}` (teklif→tek tık ekleme dönüşümü, gelir, etiket bazlı). UI: ArrivalReminderCard istatistik şeridi + WA rozeti.
+- Housekeeping mobil offline-first: localStorage önbellek + kuyruk (`hk-queue-{pid}`), online olunca otomatik senkron, "bekliyor" rozeti, çevrimdışı çubuğu,
+  backend `base_updated_at` ile 409 çakışma. Not: SW cache nedeniyle load sonrası kuyruk sunucu verisinin üzerine uygulanır.
+- Test: iteration_627.json backend 21/21, frontend 4/4; offline kuyruk+senkron ayrıca Playwright ile doğrulandı.

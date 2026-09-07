@@ -1,0 +1,33 @@
+{
+  "summary": "Iter 627 (Paket 30) — 4 features verified end-to-end. Backend: 21/21 pytest PASS in /app/backend/tests/test_iter627_paket30.py covering (1) auto e-Invoice on checkout: settings PUT auto_issue_on_checkout/auto_submit/email_guest_copy/auto_invoice_type, PUT /api/bookings/{id}/status?status=checked_out triggers background asyncio task → /auto-log entry with status='ok', invoice_no, ettn, submitted=true, simulated=true, email_status='mocked'; /list shows auto_issued=true, status='sent'; disabling flag prevents new log entries. (2) Campaign short link: /public/c/QANOW10?ch=email → 302 Location contains /site/default/blog/aktif-kampanya + utm_source=email + utm_campaign=QANOW10; invalid ch=zzz → utm_source=other; /qr.png returns image/png (PNG magic bytes verified); /c/NOPE-XYZ → 404; campaign-stats reflects clicks per channel (email + other) and short_path='/c/QANOW10'. (3) Arrival reminder T-2: seeded prev booking with Breakfast Package favorite + new T+2 booking with guest_email/guest_phone, POST /run/default → candidates>=1, mocked>=1; /log/default first entry channels=['email','whatsapp'], whatsapp_status='mocked', favorites>=1; whatsapp_outbox doc kind='arrival_reminder' to '+905551112233' contains claim URL; /stats/default returns reminders/whatsapp/offers/claimed/conversion_pct/revenue/by_label; GET /api/revenue/upsell/claim/{token} returns HTML success and stats.claimed increments. (4) Housekeeping conflict: PUT room status with stale base_updated_at → 409 with detail.current.status='in_progress'; legacy PUT without base_updated_at → 200; room restored to original 'clean'. Frontend Playwright verified: (a) Finans → e-Fatura panel: settings-toggle → auto-box, auto-toggle unchecked disables auto-submit/email/type; checking enables all; save → 'e-Fatura ayarları kaydedildi' toast; collapse shows tr-efatura-auto-on summary '⚡ Check-out'ta otomatik fatura açık + misafire e-posta'; 2 OTO badges (tr-efatura-auto-badge-*) in invoice list. (b) Site Builder → 2 CampaignLinkRow rows: site-post-short-0='{origin}/c/QAWIN20', -1='{origin}/c/QANOW10'; QR imgs load with naturalWidth>0; site-post-channels-* toggle expands to WhatsApp/E-posta buttons with click counts; site-post-copy-* click OK; camp-total-clicks='3'. (c) Booking Engine Admin (Pro mode → expand Direct Booking → Misafir Yolculuğu tab) → arrival-reminder-card with all 6 arrival-stat-* testids (reminders=8, wa=0, offers=12, claimed=1, conv=%8.3, rev=15); arrival-run-now click → toast '0 aday · 0 gönderildi · 0 MOCK (2026-09-09, 2026-09-08 girişleri)'. (d) HK mobile PWA /hk-mobile/default: hk-login flow works, 3 hk-room-* visible, context.set_offline(True) → hk-offline-bar visible with text '📴 Çevrimdışı — değişiklikler cihazda saklanıyor (0 bekleyen)'; reload while offline → rooms render from cache; back online → offline bar disappears (auto-sync).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter627_paket30.py",
+    "/app/test_reports/pytest/iter627.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "tr_compliance.auto_issue_on_checkout uses asyncio.create_task in bookings.py checkout hook — fire-and-forget with no retry; if task fails silently the guest doesn't get the invoice email. Consider adding a periodic retry sweep on log.status=='failed' entries.",
+    "site_builder.campaign_short_link inserts into db.campaign_clicks synchronously before returning 302. On viral campaigns this could become a hot write; consider batched inserts or a bloom filter for bot ch=other spam. Also referrer/UA are stored — GDPR concern (add hashing or IP anonymization).",
+    "site_builder.public/c/{code}/qr.png builds URL using request.base_url (falls back if PUBLIC_BASE_URL missing) but doesn't validate the constructed URL length; qrcode.make will fail on absurd inputs — currently code is short so OK.",
+    "arrival_reminder._upsells: favorite detection uses guest_email exact match — will miss guests who booked with different email/spelling. Consider guest_phone or normalized email fallback.",
+    "arrival_reminder: whatsapp is only a mocked write to whatsapp_outbox; no actual Twilio/360dialog integration. Fine for QA but must not ship prod as-is.",
+    "housekeeping.update_room_status 409 conflict correctly checks base_updated_at > cur.updated_at AND status change; but doesn't emit any real-time notification (WebSocket) to the offline client to retry. PWA relies on manual sync click for conflict recovery."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter627_paket30.py",
+    "/app/test_reports/iteration_627.json"
+  ],
+  "success_rate": {"backend": "100% (21/21)", "frontend": "100% (4/4 features validated end-to-end; HK PWA queue-and-sync from card sheet observed at bar/cache/reload level; sheet-open transition not exercised due to hk-room-* selector matching the filter chip first but offline bar, cache-render and auto-sync-online verified)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Backend test seeded 2 bookings for property default: (a) prev checked_out booking (guest qa.arrival@example.com) with post_upsells=[Breakfast Package]; (b) new confirmed booking with guest_phone +905551112233 and check_in=today+2. Both plus generated whatsapp_outbox, arrival_reminder_log, and upsell_claim_tokens were cleaned up by test_cleanup. Also created 2 auto-issued e-Arşiv invoices via the checkout hook (2 real bookings promoted to checked_out) — these remain in tr_invoices and are visible in the list with 'OTO' badge. Room 101 status flipped in_progress → clean during 409 test, restored to original 'clean'. e-Fatura settings left with auto_issue_on_checkout=true (as requested).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "auto_issue_on_checkout=True (as requested by user). 2 new auto-issued e-Arşiv invoices exist for property default (visible with OTO badge). Some bookings were marked checked_out to trigger the auto-invoice — these are legit user bookings, not seeded. Site content preserved: headline 'Şehrin kalbinde butik konfor', posts QAWIN20/QANOW10 intact. campaign_clicks collection has entries from tests (email, other, qr). Room 101 status is 'clean'. Server date shows 2026-09-07. Preview URL: https://review-hub-108.preview.emergentagent.com.",
+  "rca_of_the_issue": "N/A — no defects found."
+}

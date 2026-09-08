@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 631 / Paket34 (chain-search + wishlist + day-use + BE settings admin). Backend: 9/9 pytest cases pass (/app/backend/tests/test_iter631_paket34.py). GET /api/booking/chain-search returns 10 properties, sorted (available first, then price ascending), each with best{room_name,price,rooms_left}, total_from, book_url; adults=99 → all available:false / best:null; bad date → 422. POST /api/booking/wishlist → {code, share_path:'/wishlist/{code}'}; GET /api/booking/wishlist/{code} returns rooms[0].book_url containing property=default&room=<id>; views increments on each GET; unknown code → 404; empty items → 422. PUT /api/booking/be-settings/default with day_use_enabled/pct/start/end is echoed back exactly. POST /api/booking/reserve-multi with day_use:true stores booking with day_use:true, check_out==check_in, day_use_hours='09:00-18:00', cart_total ≈ 50% of room subtotal (verified via pymongo). Frontend: day-use-toggle visible with correct Turkish/English label including 'Day-use only (10:00–17:00, −50%)'; ticking day-use-checkbox with check-in 150d ahead sets check-out to check_in+1 (per spec). /book-all shows chain-search-page with chain-checkin/checkout/adults inputs, chain-search-btn produces 10 chain-prop-*/chain-price-* rows and chain-book-default href='/book?property=default&check_in=2027-06-01&check_out=2027-06-03&adults=2'. Heart button [data-testid^=wish-] on RoomCard is clickable and persists via localStorage (fill remains after page reload). Wishlist page /wishlist/{code} renders wishlist-page and wishlist-room-<id>. Admin flow /login → Pro mode → Direct Booking > Booking engine setup (booking-engine-admin-btn) → Journey tab (journey-tab) shows be-settings-card with ALL required inputs (be-cfg-base_occupancy, extra_adult, flex_pct, hold_hours, day_use_pct, los-0, day_use_enabled, save); saving hold_hours=36 persists (verified via GET /api/booking/be-settings/default), toast 'Booking engine ayarları kaydedildi' appears, restore to 24 confirmed via API.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "HeroSection (standard/booking.com/expedia/hotels.com layouts)", "issue": "hero-wishlist-btn and hero-wishlist-count are ONLY rendered inside the airbnb layout branch (HeroSection.js lines 25-62). For every other template layout (the default), lines 69-139 render the section without any wishlist button/count. On /book?property=default the active template is a standard hero, so after clicking a heart on a room card no hero counter appears and no share-toast can be triggered. This blocks the entire wishlist share flow in the UI for non-airbnb templates.", "selector": "[data-testid=\"hero-wishlist-btn\"], [data-testid=\"hero-wishlist-count\"]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "RoomSelectionStep header", "issues": ["'Flexible cancellation (+{pct}%)' — {pct} placeholder is not interpolated (i18n bug in FlexCancelStrip)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter631_paket34.py", "/app/test_reports/pytest/iter631.xml"],
+  "action_items": [
+    "Render hero-wishlist-btn (and hero-wishlist-count badge) in the STANDARD HeroSection branch (lines 69-139), not just the airbnb layout. Wire onShareWish/wishCount props there too so that guests using default templates can share their wishlist."
+  ],
+  "critical_code_review_comments": [
+    "be_gaps.chain_search sorts by (not available, total_from or 1e12) which pushes properties whose best price is 0.0 to the end of the available list — likely a data-quality edge case, but the '0.0 → 1e12' fallback is subtle; consider filtering out zero-priced rooms in the best-per-property loop or logging when this happens.",
+    "HeroSection duplicates the airbnb branch for standard layouts and forgets to include the wishlist controls — factor the header actions (share/wishlist) into a small subcomponent so both layouts share the same controls.",
+    "be_gaps.PUT be-settings still doesn't enforce day_use_start < day_use_end nor validate HH:MM format on the two time strings (any string ≤10 chars is accepted). Add a simple regex or datetime.time.fromisoformat check."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter631_paket34.py"],
+  "success_rate": {"backend": "100%", "frontend": "85%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Wishlist codes 6165F4CE and 877204EC were created during test and then cleaned up; test bookings for dayuseqa@example.com were also cleaned (db.bookings.deleteMany({guest_email:/dayuse.*@example.com/})). be_wishlists collection was cleared at end.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend fully green. Only frontend gap: hero-wishlist-btn / hero-wishlist-count are missing on non-airbnb hero layouts. The wishlist state is fully wired in BookingEngine.js (wish/shareWish, ln 508 passes wishCount and onShareWish), and localStorage persistence works, but HeroSection standard branch has no <button data-testid=\"hero-wishlist-btn\"> markup. Once that is added, entire wishlist share flow will pass end-to-end.",
+  "rca of the issue": "hero-wishlist-btn/count only exist inside the `if (t.layout === 'airbnb')` branch of HeroSection.js (lines 25-62). For any other layout (the default template served on /book?property=default is a booking.com-style hero, lines 69-139), the wishlist controls are simply not rendered, so the click-heart → hero-count → share-toast → /wishlist/{code} flow cannot be exercised from the UI on this property. Fix: add the same <button data-testid=\"hero-wishlist-btn\"> …<span data-testid=\"hero-wishlist-count\">…</span></button> markup inside the standard hero branch (e.g. absolutely positioned in the top-right of the overlay) with the same wishCount / onShareWish props already passed from BookingEngine.js."
+}

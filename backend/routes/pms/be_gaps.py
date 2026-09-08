@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException
 
 DEFAULTS = {"base_occupancy": 2, "extra_adult_per_night": 0.0, "los_tiers": [{"min_nights": 7, "pct": 10}, {"min_nights": 28, "pct": 25}],
             "flex_cancel_pct": 8.0, "flex_cancel_enabled": True, "hold_hours": 24, "hold_enabled": True, "scarcity_threshold": 3,
-            "waitlist_enabled": True, "agent_code_enabled": True, "long_stay_enabled": True}
+            "waitlist_enabled": True, "agent_code_enabled": True, "long_stay_enabled": True,
+            "day_use_enabled": False, "day_use_pct": 50.0, "day_use_start": "10:00", "day_use_end": "17:00", "wishlist_enabled": True}
 
 
 async def get_be_settings(db, pid: str) -> dict:
@@ -52,6 +53,8 @@ def create_be_gaps_router(db, require_roles):
                         raise HTTPException(422, f"{k} sayı olmalı")
                     if val < 0 or (k.endswith("_pct") and val > 100):
                         raise HTTPException(422, f"{k} aralık dışı")
+                elif isinstance(v, str):
+                    val = str(val or "")[:10]
                 elif k == "los_tiers":
                     val = [{"min_nights": int(t.get("min_nights") or 0), "pct": float(t.get("pct") or 0)} for t in (val or []) if isinstance(t, dict)][:6]
                 upd[k] = val
@@ -116,6 +119,62 @@ def create_be_gaps_router(db, require_roles):
             if v and float(v) > 0:
                 out[code] = round(1 / float(v), 6)
         return {"base": base, "rates": out, "count": len(out), "source": "currency_fx" if out else "static"}
+
+    # ---- zincir arama ----
+    @router.get("/booking/chain-search")
+    async def chain_search(check_in: str, check_out: str, adults: int = 2):
+        try:
+            ci = _date.fromisoformat(check_in); co = _date.fromisoformat(check_out)
+        except ValueError:
+            raise HTTPException(422, "Tarih hatalı")
+        nights = max(1, (co - ci).days)
+        props = await db.properties.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "city": 1, "country": 1, "image_url": 1, "hero_image": 1, "star_rating": 1, "currency": 1}).to_list(50)
+        out = []
+        for pr in props:
+            rooms = await db.room_types.find({"property_id": pr["id"], "is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "base_price": 1, "max_occupancy": 1, "total_rooms": 1, "image_url": 1}).to_list(50)
+            best = None; avail_total = 0
+            for r in rooms:
+                if int(r.get("max_occupancy") or 2) < adults:
+                    continue
+                booked = await db.bookings.count_documents({"room_type_id": r["id"], "status": {"$nin": ["cancelled", "no_show"]}, "check_in": {"$lt": check_out}, "check_out": {"$gt": check_in}})
+                left = int(r.get("total_rooms") or 1) - booked
+                if left <= 0:
+                    continue
+                avail_total += left
+                price = float(r.get("base_price") or 0)
+                if best is None or price < best["price"]:
+                    best = {"room_type_id": r["id"], "room_name": r.get("name"), "price": price, "rooms_left": left, "image_url": r.get("image_url")}
+            out.append({"property_id": pr["id"], "name": pr.get("name"), "city": pr.get("city"), "country": pr.get("country"), "image_url": pr.get("hero_image") or pr.get("image_url"),
+                        "star_rating": pr.get("star_rating"), "currency": pr.get("currency") or "GBP", "available": avail_total > 0, "rooms_available": avail_total, "best": best,
+                        "nights": nights, "total_from": round(best["price"] * nights, 2) if best else None, "book_url": f"/book?property={pr['id']}&check_in={check_in}&check_out={check_out}&adults={adults}"})
+        out.sort(key=lambda x: (not x["available"], x["total_from"] or 1e12))
+        return {"check_in": check_in, "check_out": check_out, "adults": adults, "nights": nights, "properties": out}
+
+    # ---- wishlist ----
+    @router.post("/booking/wishlist")
+    async def wishlist_create(data: Dict):
+        items = [i for i in (data.get("items") or []) if isinstance(i, dict) and i.get("property_id") and i.get("room_type_id")][:20]
+        if not items:
+            raise HTTPException(422, "Liste boş")
+        code = uuid.uuid4().hex[:8].upper()
+        await db.be_wishlists.insert_one({"id": str(uuid.uuid4()), "code": code, "items": items, "check_in": str(data.get("check_in") or ""), "check_out": str(data.get("check_out") or ""),
+                                          "adults": int(data.get("adults") or 2), "owner_name": str(data.get("owner_name") or "")[:80], "views": 0, "created_at": datetime.now(timezone.utc).isoformat()})
+        return {"code": code, "share_path": f"/wishlist/{code}"}
+
+    @router.get("/booking/wishlist/{code}")
+    async def wishlist_get(code: str):
+        w = await db.be_wishlists.find_one({"code": code.upper()}, {"_id": 0})
+        if not w:
+            raise HTTPException(404, "Liste bulunamadı")
+        await db.be_wishlists.update_one({"code": code.upper()}, {"$inc": {"views": 1}})
+        rooms = []
+        for it in w["items"]:
+            r = await db.room_types.find_one({"id": it["room_type_id"]}, {"_id": 0, "id": 1, "name": 1, "base_price": 1, "image_url": 1, "property_id": 1, "max_occupancy": 1})
+            pr = await db.properties.find_one({"id": it["property_id"]}, {"_id": 0, "name": 1, "city": 1, "currency": 1})
+            if r:
+                rooms.append({**r, "property_name": (pr or {}).get("name"), "city": (pr or {}).get("city"), "currency": (pr or {}).get("currency") or "GBP",
+                              "book_url": f"/book?property={it['property_id']}&check_in={w.get('check_in', '')}&check_out={w.get('check_out', '')}&adults={w.get('adults', 2)}&room={r['id']}"})
+        return {**w, "rooms": rooms}
 
     # ---- hold ----
     @router.get("/booking/holds/{pid}")

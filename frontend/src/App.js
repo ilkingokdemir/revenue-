@@ -19,6 +19,8 @@ import SelfCheckInPage from "./SelfCheckInPage";
 import KioskPWA from "./pages/KioskPWA";
 import HousekeepingMobilePWA from "./pages/HousekeepingMobilePWA";
 import GuestPassPage from "./pages/GuestPassPage";
+import WishlistPage from "./pages/WishlistPage";
+import ChainSearchPage from "./pages/ChainSearchPage";
 import SelfCheckoutPage from "./SelfCheckoutPage";
 import DashboardSharePage from "./DashboardSharePage";
 import RoomKeyPage from "./RoomKeyPage";
@@ -1487,6 +1489,12 @@ function App() {
     if (appHost && h !== appHost && !h.includes("localhost") && !h.endsWith(".emergentagent.com")) {
       return <CustomDomainSite fallback={<LandingPage />} />;
     }
+  }
+  if (window.location.pathname.startsWith("/wishlist/")) {
+    return <WishlistPage />;
+  }
+  if (window.location.pathname === "/book-all" || window.location.pathname === "/search-all") {
+    return <ChainSearchPage />;
   }
   if (window.location.pathname.startsWith("/pass/")) {
     return <GuestPassPage />;

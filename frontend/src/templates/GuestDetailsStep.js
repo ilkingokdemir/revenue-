@@ -141,7 +141,7 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
           {beCfg?.flex_cancel_enabled && flexFee >= 0 && (
             <label className="bg-white rounded-lg border border-gray-200 p-6 flex items-start gap-3 cursor-pointer" style={{ borderRadius: t.borderRadius }} data-testid="flex-cancel-section">
               <input type="checkbox" checked={flexCancel} onChange={(e) => setFlexCancel(e.target.checked)} className="mt-1" data-testid="flex-cancel-checkbox" />
-              <div className="text-sm"><div className="font-semibold text-slate-800">{tr("flex.title", { pct: beCfg.flex_cancel_pct })}</div><div className="text-slate-500 text-xs">{tr("flex.sub")}</div></div>
+              <div className="text-sm"><div className="font-semibold text-slate-800">{tr("flexcancel.title", { pct: beCfg.flex_cancel_pct })}</div><div className="text-slate-500 text-xs">{tr("flexcancel.sub")}</div></div>
             </label>
           )}
           {/* Damage Waiver opt-in */}
@@ -278,7 +278,7 @@ function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, 
         {extraAdultTotal > 0 && <div className="flex justify-between" data-testid="summary-extra-adult"><span className="text-slate-500">{tr("summary.extraAdult")}</span><span>{fmt(extraAdultTotal)}</span></div>}
         {losDiscount > 0 && <div className="flex justify-between" data-testid="summary-los"><span className="text-emerald-700">{tr("summary.los", { pct: losPct })}</span><span className="text-emerald-700">−{fmt(losDiscount)}</span></div>}
         {agentDiscount > 0 && <div className="flex justify-between" data-testid="summary-agent"><span className="text-emerald-700">{tr("summary.agent")}</span><span className="text-emerald-700">−{fmt(agentDiscount)}</span></div>}
-        {flexFee > 0 && flexCancel && <div className="flex justify-between" data-testid="summary-flex"><span className="text-slate-500">{tr("flex.short")}</span><span>{fmt(flexFee)}</span></div>}
+        {flexFee > 0 && flexCancel && <div className="flex justify-between" data-testid="summary-flex"><span className="text-slate-500">{tr("flexcancel.short")}</span><span>{fmt(flexFee)}</span></div>}
         {cityTax > 0 && <div className="flex justify-between" data-testid="summary-city-tax"><span className="text-slate-500">{tr("tax.city")}</span><span>{fmt(cityTax)}</span></div>}
         {selectedAddOns?.length > 0 && selectedAddOns.map(ao => (
           <div key={ao.id} className="flex justify-between text-xs"><span className="text-slate-500">{ao.name}</span><span>{fmt(ao.price)}</span></div>

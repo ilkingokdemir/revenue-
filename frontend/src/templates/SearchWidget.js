@@ -5,7 +5,7 @@ import {
 import { useLanguage } from "../i18n/LanguageContext";
 import { PriceCalendar } from "./PriceCalendar";
 
-export function SearchWidget({ t, checkIn, setCheckIn, checkOut, setCheckOut, adults, setAdults, children, setChildren, roomCount, setRoomCount, showGuestPicker, setShowGuestPicker, searchRooms, propertyId, childAges = [], setChildAges }) {
+export function SearchWidget({ t, checkIn, setCheckIn, checkOut, setCheckOut, adults, setAdults, children, setChildren, roomCount, setRoomCount, showGuestPicker, setShowGuestPicker, searchRooms, propertyId, childAges = [], setChildAges, dayUse = false, setDayUse = null, dayUseCfg = null }) {
   const { t: tr } = useLanguage();
   const [showCal, setShowCal] = useState(false);
   const isAirbnb = t.layout === "airbnb";
@@ -73,6 +73,11 @@ export function SearchWidget({ t, checkIn, setCheckIn, checkOut, setCheckOut, ad
             )}
           </div>
         </div>
+        {dayUseCfg?.day_use_enabled && setDayUse && (
+          <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 self-end pb-2 whitespace-nowrap" data-testid="day-use-toggle">
+            <input type="checkbox" checked={dayUse} onChange={(e) => setDayUse(e.target.checked)} data-testid="day-use-checkbox" /> {tr("dayuse.label", { start: dayUseCfg.day_use_start, end: dayUseCfg.day_use_end, pct: 100 - dayUseCfg.day_use_pct })}
+          </label>
+        )}
         <div className="flex items-end">
           <button onClick={searchRooms} className="w-full text-white py-3 rounded-lg font-semibold text-base transition-colors flex items-center justify-center gap-2 shadow-lg"
             style={{ background: t.colors.accent, borderRadius: t.borderRadius }} data-testid="search-rooms-btn">

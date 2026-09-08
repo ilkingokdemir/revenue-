@@ -48,6 +48,7 @@ class MultiReserve(BaseModel):
     agent_code: str = ""
     flex_cancel: bool = False
     payment_method: str = ""
+    day_use: bool = False
     items: List[CartItem] = Field(default_factory=list)
 
 
@@ -374,6 +375,10 @@ def create_be_conversion_router(db, require_roles):
                 agent_discount = round(subtotal * float(ag.get("negotiated_discount_pct") or 0) / 100, 2)
                 agent_info = {"agent_id": ag.get("id"), "agent_name": ag.get("name"), "agent_code": data.agent_code.strip().upper()}
         flex_fee = round(subtotal * float(be_cfg.get("flex_cancel_pct") or 0) / 100, 2) if (data.flex_cancel and be_cfg.get("flex_cancel_enabled", True)) else 0.0
+        day_use_discount = 0.0
+        if data.day_use and be_cfg.get("day_use_enabled"):
+            day_use_discount = round(subtotal * (100 - float(be_cfg.get("day_use_pct") or 50)) / 100, 2)
+            subtotal = round(subtotal - day_use_discount, 2)
         subtotal = round(subtotal + extra_adult_total - los_discount - agent_discount + flex_fee, 2)
         vat_rate = float(prop.get("vat_rate") or 0)
         city_tax = round(float(prop.get("city_tax_per_night") or 0) * nights * sum(l["qty"] for l in lines), 2)
@@ -411,6 +416,8 @@ def create_be_conversion_router(db, require_roles):
             if data.payment_method == "hold" and be_cfg.get("hold_enabled", True):
                 from datetime import timedelta as _td
                 doc.update({"status": "hold", "hold_expires_at": (datetime.now(timezone.utc) + _td(hours=int(be_cfg.get("hold_hours") or 24))).isoformat(), "payment_method": "hold"})
+            if data.day_use and be_cfg.get("day_use_enabled"):
+                doc.update({"day_use": True, "day_use_hours": f"{be_cfg.get('day_use_start')}-{be_cfg.get('day_use_end')}", "day_use_discount": day_use_discount, "check_out": doc["check_in"], "nights": 0})
             if i == 0:
                 doc.update({"extra_adults": extra_adults, "extra_adult_total": extra_adult_total, "los_discount_pct": los_pct, "los_discount": los_discount,
                             "agent_discount": agent_discount, "flex_cancel": bool(flex_fee), "flex_cancel_fee": flex_fee, **(agent_info or {})})

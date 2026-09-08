@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  Users, Bed, CheckCircle, Lightning, Check,
+  Heart, Users, Bed, CheckCircle, Lightning, Check,
   WifiHigh, Snowflake, Television, Coffee, Bathtub,
 } from "@phosphor-icons/react";
 import { PhotoCarousel } from "./PhotoCarousel";
@@ -69,7 +69,7 @@ export function RoomPreviewCards({ t, rooms, searchRooms }) {
   );
 }
 
-export function RoomSelectionStep({ t, rooms, loading, nights, adults, children, roomCount, checkIn, checkOut, onSelectRoom, onChangeSearch, ratePlans, cart, flexData, onApplyDates, fmt, memberPct, onMemberCheck, onWaitlist }) {
+export function RoomSelectionStep({ t, rooms, loading, nights, adults, children, roomCount, checkIn, checkOut, onSelectRoom, onChangeSearch, ratePlans, cart, flexData, onApplyDates, fmt, memberPct, onMemberCheck, onWaitlist, wish = [], toggleWish = null }) {
   const { t: tr } = useLanguage();
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" data-testid="room-selection">
@@ -109,7 +109,7 @@ export function RoomSelectionStep({ t, rooms, loading, nights, adults, children,
       ) : (
         <div className="space-y-4">
           {rooms.map((room) => (
-            <RoomCard key={room.id} room={room} t={t} nights={nights} adults={adults} roomCount={roomCount} onSelect={onSelectRoom} ratePlans={ratePlans} cart={cart} fmt={fmt} memberPct={memberPct} />
+            <RoomCard key={room.id} room={room} t={t} nights={nights} adults={adults} roomCount={roomCount} onSelect={onSelectRoom} ratePlans={ratePlans} cart={cart} fmt={fmt} memberPct={memberPct} wish={wish} toggleWish={toggleWish} />
           ))}
         </div>
       )}
@@ -162,7 +162,7 @@ function FlexDatesStrip({ t, flexData, onApplyDates, fmt = (v) => `£${Math.roun
   );
 }
 
-function RoomCard({ room, t, nights, adults, onSelect, ratePlans, cart, fmt = (v) => `£${Math.round(v)}`, memberPct = 0 }) {
+function RoomCard({ room, t, nights, adults, onSelect, ratePlans, cart, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, wish = [], toggleWish = null }) {
   const { t: tr } = useLanguage();
   const [detail, setDetail] = useState(false);
   return (
@@ -175,7 +175,8 @@ function RoomCard({ room, t, nights, adults, onSelect, ratePlans, cart, fmt = (v
         <div className="flex-1 p-5">
           <div className="flex items-start justify-between mb-3">
             <div>
-              <h3 className="text-xl font-semibold" style={{ color: t.colors.accent, fontFamily: t.fonts.heading }}>{room.name}</h3>
+              <div className="flex items-start gap-2"><h3 className="text-xl font-semibold flex-1" style={{ color: t.colors.accent, fontFamily: t.fonts.heading }}>{room.name}</h3>
+                {toggleWish && <button type="button" onClick={(e) => { e.stopPropagation(); toggleWish(room.id); }} aria-label="wishlist" className="p-1.5 rounded-full border border-gray-200 hover:bg-rose-50" data-testid={`wish-${room.id}`}><Heart size={16} weight={wish.includes(room.id) ? "fill" : "regular"} color={wish.includes(room.id) ? "#e11d48" : "#64748b"} /></button>}</div>
               <div className="flex items-center gap-3 text-sm text-slate-500 mt-1">
                 <span className="flex items-center gap-1"><Users size={14} /> {room.max_guests} {tr("room.guests")}</span>
                 <span className="flex items-center gap-1"><Bed size={14} /> {room.bed_type}</span>

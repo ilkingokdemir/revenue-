@@ -4194,3 +4194,11 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - UI: GuestDetailsStep şirket/acente kodu kutusu, esnek iptal onay kutusu, "Fiyatı 24s tut" ödeme seçeneği, özet satırları (ek yetişkin/LOS/acente/flex); RoomCards oda yokken WaitlistForm; CurrencySelector canlı kur; ConfirmationStep hold notu.
 - Kalan gap'ler (sırayla tamamlanacak): day-use, zincir çoklu tesis arama, wishlist, BRG talep formu, BE ayarları için admin UI (şu an API).
 - Test: iteration_630.json backend 15/15; frontend eksik özet satırları düzeltildi ve ekran görüntüsüyle doğrulandı.
+
+## Iter 631 (2026-09-08) — Day-use, BE Ayarları paneli, Zincir arama, Wishlist
+- be_gaps.py: day_use_* ayarları; `GET /booking/chain-search` (tüm tesisler, en uygun oda/fiyat, kalan oda); `POST/GET /booking/wishlist[/{code}]`.
+- reserve-multi `day_use:true` → fiyat day_use_pct, check_out=check_in, day_use_hours.
+- UI: SearchWidget day-use onay kutusu (check_out otomatik +1), BookingEngineAdmin › Journey `BeSettingsCard` (tüm BE ayarları),
+  `/book-all` ChainSearchPage, RoomCard kalp (localStorage) + sabit "Wishlist'i paylaş" pili + paylaşım kutusu, `/wishlist/{code}` sayfası.
+- i18n çakışması düzeltildi: esnek iptal anahtarları `flexcancel.*` (flex.* esnek tarihler için).
+- Test: iteration_631.json backend 9/9; frontend hero-only wishlist ve i18n hataları düzeltildi, paylaşım akışı ekran görüntüsüyle doğrulandı.

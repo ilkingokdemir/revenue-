@@ -35,6 +35,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Admin: `admin@hotelbox.com` / `HotelAdmin2026!` (login cevabında token alanı: `token`)
 - Preview: frontend/.env REACT_APP_BACKEND_URL değerini kullan
 
+## Son Durum (Iter 631, 2026-09-08) — Day-use, BE ayarları admin kartı, /book-all zincir arama, wishlist paylaşımı
+- Booking engine rakip gap listesi tamamlandı (BRG talep formu hariç). Detay: CHANGELOG.md iter 631.
+
 ## Son Durum (Iter 630, 2026-09-08) — Booking engine gap-MVP: doluluk fiyatı, LOS kademeleri, acente kodu, esnek iptal, hold, bekleme listesi, canlı FX
 - Detay: CHANGELOG.md iter 630. Sıradaki: BE ayarları admin UI, day-use, çoklu tesis arama, wishlist, BRG talep formu.
 

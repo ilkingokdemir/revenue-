@@ -73,6 +73,17 @@ function BookingEngineInner() {
   const [agentCode, setAgentCode] = useState("");
   const [agentInfo, setAgentInfo] = useState(null);
   const [flexCancel, setFlexCancel] = useState(false);
+  const [dayUse, setDayUseState] = useState(false);
+  const setDayUse = (v) => { setDayUseState(v); if (v && checkIn) { const d = new Date(checkIn); d.setDate(d.getDate() + 1); setCheckOut(d.toISOString().slice(0, 10)); } };
+  const [wish, setWish] = useState(() => { try { return JSON.parse(localStorage.getItem(`wish-${propertyId}`) || "[]"); } catch { return []; } });
+  const toggleWish = (roomId) => { const n = wish.includes(roomId) ? wish.filter((x) => x !== roomId) : [...wish, roomId]; setWish(n); localStorage.setItem(`wish-${propertyId}`, JSON.stringify(n)); };
+  const [shareUrl, setShareUrl] = useState("");
+  const shareWish = async () => {
+    if (!wish.length) { toast(t("wish.empty")); return; }
+    try { const { data } = await axios.post(`${API}/booking/wishlist`, { items: wish.map((r) => ({ property_id: propertyId, room_type_id: r })), check_in: checkIn, check_out: checkOut, adults });
+      const url = `${window.location.origin}${data.share_path}`; setShareUrl(url); try { await navigator.clipboard.writeText(url); } catch { /* ignore */ } toast.success(`${t("wish.copied")} ${url}`); }
+    catch { toast.error("Paylaşılamadı"); }
+  };
   useEffect(() => { if (propertyId) axios.get(`${API}/booking/be-settings/${propertyId}`).then(({ data }) => setBeCfg(data)).catch(() => {}); }, [propertyId]);
   const applyAgentCode = async () => {
     try { const { data } = await axios.post(`${API}/booking/agent-code/validate`, { property_id: propertyId, code: agentCode }); setAgentInfo(data); toast.success(`${data.agent_name}: −${data.discount_pct}%`); }
@@ -283,7 +294,8 @@ function BookingEngineInner() {
   const losDiscount = Math.round(subtotal * losPct) / 100;
   const agentDiscount = agentInfo ? Math.round(subtotal * agentInfo.discount_pct) / 100 : 0;
   const flexFee = beCfg?.flex_cancel_enabled ? Math.round(subtotal * (Number(beCfg.flex_cancel_pct) || 0)) / 100 : 0;
-  const totalBeforeGift = Math.max(0, subtotal + extraAdultTotal - losDiscount - agentDiscount + (flexCancel ? flexFee : 0) + addOnsTotal + upsellsTotal + waiverTotal + cityTax + childExtra - discountAmount);
+  const dayUseDiscount = dayUse && beCfg?.day_use_enabled ? Math.round(subtotal * (100 - (Number(beCfg.day_use_pct) || 50))) / 100 : 0;
+  const totalBeforeGift = Math.max(0, subtotal - dayUseDiscount + extraAdultTotal - losDiscount - agentDiscount + (flexCancel ? flexFee : 0) + addOnsTotal + upsellsTotal + waiverTotal + cityTax + childExtra - discountAmount);
   const giftApplied = giftCard ? Math.min(giftCard.balance, totalBeforeGift) : 0;
   const totalPrice = Math.max(0, totalBeforeGift - giftApplied);
   const depositDue = cart.length ? Math.round(cart.reduce((s, c) => s + planNightPrice(roomNightBase(c.room), c.plan) * (1 - memberPct / 100) * nights * c.qty * ((c.plan?.deposit_pct || 0) / 100), 0) * 100) / 100 : 0;
@@ -352,6 +364,7 @@ function BookingEngineInner() {
         agent_code: agentInfo ? agentCode : "",
         flex_cancel: flexCancel && flexFee > 0,
         payment_method: paymentMethod,
+        day_use: dayUse && !!beCfg?.day_use_enabled,
         promo_code: promoDiscount?.code || "",
         gift_card_code: giftCard?.code || "",
         source: utmSource,
@@ -405,7 +418,7 @@ function BookingEngineInner() {
 
   const searchProps = {
     checkIn, setCheckIn, checkOut, setCheckOut,
-    adults, setAdults, children, setChildren,
+    adults, setAdults, children, setChildren, dayUse, setDayUse, dayUseCfg: beCfg,
     roomCount, setRoomCount, showGuestPicker, setShowGuestPicker,
     searchRooms: () => searchRooms(), propertyId, childAges, setChildAges,
   };
@@ -430,6 +443,18 @@ function BookingEngineInner() {
       <SEOMetaTags property={property} templateSettings={customSettings} rooms={rooms.length > 0 ? rooms : property?.room_types} />
 
       {/* Social Proof Floating Notifications */}
+      {wish.length > 0 && (
+        <button onClick={shareWish} className="fixed top-20 right-4 z-40 flex items-center gap-2 px-3 py-2 rounded-full shadow-lg text-xs font-bold text-white" style={{ background: "#e11d48" }} data-testid="wishlist-share-btn">
+          ♥ <span data-testid="wishlist-count">{wish.length}</span> · {t("wish.share")}
+        </button>
+      )}
+      {shareUrl && (
+        <div className="fixed top-32 right-4 z-40 bg-white border border-rose-200 shadow-xl rounded-xl p-3 text-xs max-w-xs" data-testid="wishlist-share-box">
+          <div className="font-bold text-rose-700 mb-1">{t("wish.copied")}</div>
+          <a href={shareUrl} target="_blank" rel="noreferrer" className="block font-mono text-[11px] text-slate-700 break-all underline" data-testid="wishlist-share-url">{shareUrl}</a>
+          <button onClick={() => setShareUrl("")} className="mt-1 text-slate-400">×</button>
+        </div>
+      )}
       <SocialProofNotifications
         settings={property?.social_proof?.settings}
         recentBookings={property?.social_proof?.recent_bookings_24h || 0}
@@ -493,7 +518,7 @@ function BookingEngineInner() {
       {/* Step 0: Landing / Search */}
       {step === STEPS.SEARCH && (
         <>
-          <HeroSection t={tmpl} property={property} ratingScore={ratingScore} getRatingLabel={getRatingLabel} searchProps={searchProps} />
+          <HeroSection t={tmpl} property={property} ratingScore={ratingScore} getRatingLabel={getRatingLabel} searchProps={searchProps} wishCount={wish.length} onShareWish={shareWish} />
           <RoomPreviewCards t={tmpl} rooms={property?.room_types} searchRooms={() => searchRooms()} />
           {/* Facilities */}
           {property?.facilities?.length > 0 && (
@@ -575,7 +600,7 @@ function BookingEngineInner() {
         <>
           <RoomSelectionStep t={tmpl} rooms={rooms} loading={loading} nights={nights} adults={adults} children={children} roomCount={roomCount}
             checkIn={checkIn} checkOut={checkOut} onSelectRoom={addToCart} onChangeSearch={() => setStep(STEPS.SEARCH)}
-            ratePlans={ratePlans} cart={cart} flexData={flexData} onApplyDates={applyFlexDates} fmt={formatPrice} memberPct={memberPct} onMemberCheck={checkMember} onWaitlist={submitWaitlist} />
+            ratePlans={ratePlans} cart={cart} flexData={flexData} onApplyDates={applyFlexDates} fmt={formatPrice} memberPct={memberPct} onMemberCheck={checkMember} onWaitlist={submitWaitlist} wish={wish} toggleWish={toggleWish} />
           <CartBar t={tmpl} cart={cart} nights={nights} onRemove={removeFromCart} onContinue={continueToDetails} fmt={formatPrice} memberPct={memberPct} />
           {cart.length > 0 && <div className="h-28" />}
         </>

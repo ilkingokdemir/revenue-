@@ -115,3 +115,42 @@ export const ArrivalReminderCard = ({ propertyId }) => {
     </div>
   );
 };
+
+export const BeSettingsCard = ({ propertyId }) => {
+  const [cfg, setCfg] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const cfgAuth = { headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` } };
+  useEffect(() => { axios.get(`${API}/booking/be-settings/${propertyId}`).then((r) => setCfg(r.data)).catch(() => {}); }, [propertyId]);
+  if (!cfg) return null;
+  const num = (k, v) => setCfg({ ...cfg, [k]: v === "" ? "" : Number(v) });
+  const save = async () => {
+    setSaving(true);
+    try { const { data } = await axios.put(`${API}/booking/be-settings/${propertyId}`, cfg, cfgAuth); setCfg(data); toast.success("Booking engine ayarları kaydedildi"); }
+    catch (e) { toast.error(e.response?.data?.detail || "Kaydedilemedi"); } finally { setSaving(false); }
+  };
+  const inp = "w-full rounded-lg border border-stone-300 px-2.5 py-1.5 text-sm";
+  const Tog = ({ k, label }) => <label className="flex items-center gap-2 text-sm text-stone-700"><input type="checkbox" checked={!!cfg[k]} onChange={(e) => setCfg({ ...cfg, [k]: e.target.checked })} data-testid={`be-cfg-${k}`} /> {label}</label>;
+  return (
+    <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm space-y-4" data-testid="be-settings-card">
+      <div className="flex items-center justify-between"><h3 className="text-sm font-bold text-stone-900">Booking Engine Fiyat & Dönüşüm Ayarları</h3>
+        <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg bg-stone-900 text-white text-sm font-medium disabled:opacity-50" data-testid="be-cfg-save">{saving ? "…" : "Kaydet"}</button></div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div><label className="text-xs text-stone-500">Baz doluluk (kişi)</label><input type="number" min="1" value={cfg.base_occupancy} onChange={(e) => num("base_occupancy", e.target.value)} className={inp} data-testid="be-cfg-base_occupancy" /></div>
+        <div><label className="text-xs text-stone-500">Ek yetişkin / gece</label><input type="number" min="0" step="1" value={cfg.extra_adult_per_night} onChange={(e) => num("extra_adult_per_night", e.target.value)} className={inp} data-testid="be-cfg-extra_adult" /></div>
+        <div><label className="text-xs text-stone-500">Esnek iptal %</label><input type="number" min="0" max="100" step="0.5" value={cfg.flex_cancel_pct} onChange={(e) => num("flex_cancel_pct", e.target.value)} className={inp} data-testid="be-cfg-flex_pct" /></div>
+        <div><label className="text-xs text-stone-500">Hold süresi (saat)</label><input type="number" min="1" value={cfg.hold_hours} onChange={(e) => num("hold_hours", e.target.value)} className={inp} data-testid="be-cfg-hold_hours" /></div>
+        <div><label className="text-xs text-stone-500">Day-use fiyat % (gece fiyatının)</label><input type="number" min="10" max="100" value={cfg.day_use_pct} onChange={(e) => num("day_use_pct", e.target.value)} className={inp} data-testid="be-cfg-day_use_pct" /></div>
+        <div><label className="text-xs text-stone-500">Day-use saatleri</label><div className="flex gap-1"><input value={cfg.day_use_start || ""} onChange={(e) => setCfg({ ...cfg, day_use_start: e.target.value })} className={inp} placeholder="10:00" data-testid="be-cfg-day_use_start" /><input value={cfg.day_use_end || ""} onChange={(e) => setCfg({ ...cfg, day_use_end: e.target.value })} className={inp} placeholder="17:00" /></div></div>
+        <div className="col-span-2"><label className="text-xs text-stone-500">Uzun konaklama kademeleri (gece → indirim %)</label>
+          <div className="flex flex-wrap gap-1.5">{(cfg.los_tiers || []).map((t, i) => (
+            <span key={i} className="flex items-center gap-1 text-xs bg-stone-50 border border-stone-200 rounded-lg px-1.5 py-1" data-testid={`be-cfg-los-${i}`}><input type="number" min="1" value={t.min_nights} onChange={(e) => setCfg({ ...cfg, los_tiers: cfg.los_tiers.map((x, j) => (j === i ? { ...x, min_nights: Number(e.target.value) } : x)) })} className="w-12 border rounded px-1" /> gece →
+              <input type="number" min="0" max="100" value={t.pct} onChange={(e) => setCfg({ ...cfg, los_tiers: cfg.los_tiers.map((x, j) => (j === i ? { ...x, pct: Number(e.target.value) } : x)) })} className="w-12 border rounded px-1" />%
+              <button onClick={() => setCfg({ ...cfg, los_tiers: cfg.los_tiers.filter((_, j) => j !== i) })} className="text-stone-400">×</button></span>))}
+            <button onClick={() => setCfg({ ...cfg, los_tiers: [...(cfg.los_tiers || []), { min_nights: 14, pct: 15 }] })} className="text-xs px-2 py-1 rounded-lg border border-dashed border-stone-300" data-testid="be-cfg-los-add">+ kademe</button></div></div>
+      </div>
+      <div className="flex flex-wrap gap-4">
+        <Tog k="long_stay_enabled" label="Uzun konaklama indirimi" /><Tog k="flex_cancel_enabled" label="Esnek iptal add-on" /><Tog k="hold_enabled" label="Fiyatı tut (hold)" /><Tog k="waitlist_enabled" label="Bekleme listesi" /><Tog k="agent_code_enabled" label="Şirket/acente kodu" /><Tog k="day_use_enabled" label="Day-use (gündüz kullanımı)" /><Tog k="wishlist_enabled" label="Wishlist" />
+      </div>
+    </div>
+  );
+};

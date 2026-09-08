@@ -9,7 +9,7 @@ const platformIcons = {
   "Booking.com": Buildings, "Airbnb": Heart, "Expedia": Sparkle, "Hotels.com": Medal,
 };
 
-export function HeroSection({ t, property, ratingScore, getRatingLabel, searchProps }) {
+export function HeroSection({ t, property, ratingScore, getRatingLabel, searchProps, wishCount = 0, onShareWish = null }) {
   const { t: tr } = useLanguage();
 
   if (t.layout === "airbnb") {
@@ -51,7 +51,7 @@ export function HeroSection({ t, property, ratingScore, getRatingLabel, searchPr
               </div>
             </div>
             <div className="flex gap-2">
-              <button className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50" data-testid="hero-wishlist-btn"><Heart size={20} /></button>
+              <button onClick={onShareWish || undefined} title="Wishlist paylaş" className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 relative" data-testid="hero-wishlist-btn"><Heart size={20} weight={wishCount ? "fill" : "regular"} color={wishCount ? "#e11d48" : undefined} />{wishCount > 0 && <span className="absolute -top-1.5 -right-1.5 text-[9px] font-black bg-rose-600 text-white rounded-full w-4 h-4 flex items-center justify-center" data-testid="hero-wishlist-count">{wishCount}</span>}</button>
             </div>
           </div>
         </section>

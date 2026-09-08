@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-import { EventPackagesCard, ArrivalReminderCard } from "./bookingengine/GuestJourneyCards";
+import { EventPackagesCard, ArrivalReminderCard, BeSettingsCard } from "./bookingengine/GuestJourneyCards";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -481,7 +481,7 @@ export const BookingEngineAdmin = ({ properties, activePropertyId }) => {
           )}
           {tab === "reviews" && <ReviewsManager propertyId={pid} />}
           {tab === "theme" && <ThemeConfig propertyId={pid} />}
-          {tab === "journey" && <div className="space-y-4" data-testid="journey-tab"><ArrivalReminderCard propertyId={pid} /><EventPackagesCard propertyId={pid} /></div>}
+          {tab === "journey" && <div className="space-y-4" data-testid="journey-tab"><BeSettingsCard propertyId={pid} /><ArrivalReminderCard propertyId={pid} /><EventPackagesCard propertyId={pid} /></div>}
           {tab === "embed" && <EmbedCodePanel propertyId={pid} />}
         </motion.div>
       </AnimatePresence>

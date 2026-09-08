@@ -45,6 +45,9 @@ class MultiReserve(BaseModel):
     gift_card_code: str = ""
     source: str = ""
     loyalty_email: str = ""
+    agent_code: str = ""
+    flex_cancel: bool = False
+    payment_method: str = ""
     items: List[CartItem] = Field(default_factory=list)
 
 
@@ -358,6 +361,20 @@ def create_be_conversion_router(db, require_roles):
             lines.append({"room": room, "plan": plan, "qty": max(1, it.qty), "total": line_total, "extra_beds": it.extra_beds, "children_ages": it.children_ages, "extra_bed_total": extra_bed_total, "child_total": child_total})
 
         subtotal = round(sum(l["total"] for l in lines), 2)
+        from routes.pms.be_gaps import get_be_settings, los_discount_pct
+        be_cfg = await get_be_settings(db, data.property_id)
+        extra_adults = max(0, int(data.adults or 0) - int(be_cfg.get("base_occupancy") or 2) * sum(l["qty"] for l in lines))
+        extra_adult_total = round(extra_adults * float(be_cfg.get("extra_adult_per_night") or 0) * nights, 2)
+        los_pct = los_discount_pct(be_cfg, nights)
+        los_discount = round(subtotal * los_pct / 100, 2)
+        agent_discount = 0.0; agent_info = None
+        if data.agent_code and be_cfg.get("agent_code_enabled", True):
+            ag = await db.travel_agents.find_one({"property_id": data.property_id, "$or": [{"code": data.agent_code.strip().upper()}, {"agent_code": data.agent_code.strip().upper()}], "is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "negotiated_discount_pct": 1})
+            if ag:
+                agent_discount = round(subtotal * float(ag.get("negotiated_discount_pct") or 0) / 100, 2)
+                agent_info = {"agent_id": ag.get("id"), "agent_name": ag.get("name"), "agent_code": data.agent_code.strip().upper()}
+        flex_fee = round(subtotal * float(be_cfg.get("flex_cancel_pct") or 0) / 100, 2) if (data.flex_cancel and be_cfg.get("flex_cancel_enabled", True)) else 0.0
+        subtotal = round(subtotal + extra_adult_total - los_discount - agent_discount + flex_fee, 2)
         vat_rate = float(prop.get("vat_rate") or 0)
         city_tax = round(float(prop.get("city_tax_per_night") or 0) * nights * sum(l["qty"] for l in lines), 2)
         vat_included = round(subtotal - subtotal / (1 + vat_rate / 100.0), 2) if vat_rate else 0.0
@@ -391,6 +408,14 @@ def create_be_conversion_router(db, require_roles):
                         total_price=round(l["total"] - share, 2), currency=currency,
                         special_requests=data.special_requests, status="confirmed", payment_status="pending")
             doc = b.model_dump()
+            if data.payment_method == "hold" and be_cfg.get("hold_enabled", True):
+                from datetime import timedelta as _td
+                doc.update({"status": "hold", "hold_expires_at": (datetime.now(timezone.utc) + _td(hours=int(be_cfg.get("hold_hours") or 24))).isoformat(), "payment_method": "hold"})
+            if i == 0:
+                doc.update({"extra_adults": extra_adults, "extra_adult_total": extra_adult_total, "los_discount_pct": los_pct, "los_discount": los_discount,
+                            "agent_discount": agent_discount, "flex_cancel": bool(flex_fee), "flex_cancel_fee": flex_fee, **(agent_info or {})})
+                if flex_fee:
+                    doc["cancellation_type"] = "free"; doc["cancellation_policy"] = "flex_cancel_addon"
             doc.update({"cart_ref": cart_ref, "cart_index": i, "source": source, "nights": nights,
                         "rate_plan_id": (l["plan"] or {}).get("id", ""), "rate_plan_code": (l["plan"] or {}).get("code", ""),
                         "rate_plan_name": (l["plan"] or {}).get("name", ""),

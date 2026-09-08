@@ -7,7 +7,7 @@ import { SmartUpsellEngine } from "./SmartUpsellEngine";
 import { PriceComparisonWidget } from "./PriceComparisonWidget";
 import { planNightPrice, planName, roomNightBase } from "./RatePlanRows";
 
-export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, upsells, selectedUpsells, toggleUpsell, nights, adults, children, roomCount, checkIn, checkOut, socialProofSettings, dwConfig, damageWaiver, setDamageWaiver, waiverTotal, cart, onBackToRooms, giftCode, setGiftCode, giftCard, applyGift, clearGift, giftApplied, depositDue, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, cityTax = 0, vatRate = 0, childExtra = 0 }) {
+export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, upsells, selectedUpsells, toggleUpsell, nights, adults, children, roomCount, checkIn, checkOut, socialProofSettings, dwConfig, damageWaiver, setDamageWaiver, waiverTotal, cart, onBackToRooms, giftCode, setGiftCode, giftCard, applyGift, clearGift, giftApplied, depositDue, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, cityTax = 0, vatRate = 0, childExtra = 0, beCfg = null, agentCode = "", setAgentCode = () => {}, agentInfo = null, applyAgentCode = () => {}, clearAgentCode = () => {}, flexCancel = false, setFlexCancel = () => {}, flexFee = 0, extraAdultTotal = 0, losDiscount = 0, losPct = 0, agentDiscount = 0 }) {
   const { t: tr } = useLanguage();
   const showDeposit = depositDue > 0 && depositDue < totalPrice - 0.5;
   return (
@@ -127,6 +127,23 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
             </div>
           )}
 
+          {beCfg?.agent_code_enabled && (
+            <div className="bg-white rounded-lg border border-gray-200 p-6" style={{ borderRadius: t.borderRadius }} data-testid="agent-code-section">
+              <h3 className="font-semibold text-slate-800 mb-1 text-sm">{tr("agent.title")}</h3>
+              {agentInfo ? (
+                <div className="flex items-center justify-between text-sm" data-testid="agent-code-applied"><span className="text-emerald-700 font-semibold">✓ {agentInfo.agent_name} — −{agentInfo.discount_pct}%</span><button type="button" onClick={clearAgentCode} className="text-xs text-slate-500 underline" data-testid="agent-code-remove">×</button></div>
+              ) : (
+                <div className="flex gap-2"><input value={agentCode} onChange={(e) => setAgentCode(e.target.value.toUpperCase())} placeholder={tr("agent.placeholder")} className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm uppercase" data-testid="agent-code-input" />
+                  <button type="button" onClick={applyAgentCode} disabled={!agentCode} className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40" style={{ background: t.colors.primary, borderRadius: t.borderRadius }} data-testid="agent-code-apply">{tr("promo.apply")}</button></div>
+              )}
+            </div>
+          )}
+          {beCfg?.flex_cancel_enabled && flexFee >= 0 && (
+            <label className="bg-white rounded-lg border border-gray-200 p-6 flex items-start gap-3 cursor-pointer" style={{ borderRadius: t.borderRadius }} data-testid="flex-cancel-section">
+              <input type="checkbox" checked={flexCancel} onChange={(e) => setFlexCancel(e.target.checked)} className="mt-1" data-testid="flex-cancel-checkbox" />
+              <div className="text-sm"><div className="font-semibold text-slate-800">{tr("flex.title", { pct: beCfg.flex_cancel_pct })}</div><div className="text-slate-500 text-xs">{tr("flex.sub")}</div></div>
+            </label>
+          )}
           {/* Damage Waiver opt-in */}
           {dwConfig && (
             <div className="bg-white rounded-lg border border-gray-200 p-6" style={{ borderRadius: t.borderRadius }} data-testid="damage-waiver-section">
@@ -162,6 +179,7 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
                 { value: "iyzico", icon: CreditCard, label: "iyzico ile Ode", sub: "Turkey — All Turkish banks, taksit (installments)", showSecure: true, flag: "🇹🇷" },
                 { value: "paytr", icon: CreditCard, label: "PayTR ile Ode", sub: "Turkey — Sanal POS, SMS payment, taksitli odeme", showSecure: true, flag: "🇹🇷" },
                 { value: "hotel", icon: Buildings, label: tr("payment.payHotel"), sub: tr("payment.payHotelSub") },
+                ...(beCfg?.hold_enabled ? [{ value: "hold", icon: ShieldCheck, label: tr("payment.hold", { hours: beCfg.hold_hours || 24 }), sub: tr("payment.holdSub") }] : []),
               ].map(({ value, icon: Icon, label, sub, showSecure, wallets }) => (
                 <label key={value} className="flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors"
                   style={{ borderColor: paymentMethod === value ? t.colors.accent : "#e5e7eb", background: paymentMethod === value ? `${t.colors.accent}08` : "transparent", borderRadius: t.borderRadius }}
@@ -189,7 +207,7 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
             className="w-full text-white py-4 rounded-lg font-bold text-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-xl"
             style={{ background: t.colors.accent, borderRadius: t.borderRadius }} data-testid="complete-booking-btn">
             {bookingLoading ? <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
-              : paymentMethod === "card" ? <><CreditCard size={20} weight="fill" /> {tr("payment.payAndComplete", { amount: totalPrice.toFixed(0) })}</>
+              : paymentMethod === "hold" ? <><ShieldCheck size={20} weight="fill" /> {tr("payment.holdBtn")}</> : paymentMethod === "card" ? <><CreditCard size={20} weight="fill" /> {tr("payment.payAndComplete", { amount: totalPrice.toFixed(0) })}</>
               : paymentMethod === "deposit" ? <><ShieldCheck size={20} weight="fill" /> {tr("payment.payAndComplete", { amount: depositDue.toFixed(0) })}</>
               : paymentMethod === "iyzico" ? <><CreditCard size={20} weight="fill" /> iyzico ile {totalPrice.toFixed(0)} {selectedRoom?.currency || "TRY"} Ode</>
               : paymentMethod === "paytr" ? <><CreditCard size={20} weight="fill" /> PayTR ile {totalPrice.toFixed(0)} {selectedRoom?.currency || "TRY"} Ode</>
@@ -204,14 +222,14 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
         <div className="lg:col-span-1 space-y-4">
           {/* Price Comparison Widget */}
           <PriceComparisonWidget t={t} roomPrice={selectedRoom.base_price * nights} settings={socialProofSettings} />
-          <BookingSummary t={t} room={selectedRoom} property={property} totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount} promoDiscount={promoDiscount} selectedAddOns={selectedAddOns} selectedUpsells={selectedUpsells} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} waiverTotal={waiverTotal} cart={cart} giftApplied={giftApplied} fmt={fmt} memberPct={memberPct} cityTax={cityTax} vatRate={vatRate} childExtra={childExtra} />
+          <BookingSummary t={t} room={selectedRoom} property={property} totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount} promoDiscount={promoDiscount} selectedAddOns={selectedAddOns} selectedUpsells={selectedUpsells} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} waiverTotal={waiverTotal} cart={cart} giftApplied={giftApplied} fmt={fmt} memberPct={memberPct} cityTax={cityTax} vatRate={vatRate} childExtra={childExtra} flexCancel={flexCancel} flexFee={flexFee} extraAdultTotal={extraAdultTotal} losDiscount={losDiscount} losPct={losPct} agentDiscount={agentDiscount} />
         </div>
       </div>
     </div>
   );
 }
 
-function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, discountAmount, promoDiscount, selectedAddOns, selectedUpsells, nights, adults, children, roomCount, checkIn, checkOut, waiverTotal, cart, giftApplied = 0, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, cityTax = 0, vatRate = 0, childExtra = 0 }) {
+function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, discountAmount, promoDiscount, selectedAddOns, selectedUpsells, nights, adults, children, roomCount, checkIn, checkOut, waiverTotal, cart, giftApplied = 0, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, cityTax = 0, vatRate = 0, childExtra = 0, beCfg = null, agentCode = "", setAgentCode = () => {}, agentInfo = null, applyAgentCode = () => {}, clearAgentCode = () => {}, flexCancel = false, setFlexCancel = () => {}, flexFee = 0, extraAdultTotal = 0, losDiscount = 0, losPct = 0, agentDiscount = 0 }) {
   const { t: tr, lang } = useLanguage();
   const multi = cart?.length > 0;
   return (
@@ -257,6 +275,10 @@ function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, 
         <div className="flex justify-between"><span className="text-slate-500">{multi ? tr("summary.roomsSubtotal") : <>{fmt(roomNightBase(room))} x {nights} {nights !== 1 ? tr("room.nights") : tr("room.night")}</>}</span><span data-testid="summary-subtotal">{fmt(subtotal ?? roomNightBase(room) * nights * roomCount)}</span></div>
         {memberPct > 0 && <div className="flex justify-between" style={{ color: t.colors.success }} data-testid="summary-member"><span>★ {tr("member.line", { pct: memberPct })}</span><span>{tr("summary.included")}</span></div>}
         {childExtra > 0 && <div className="flex justify-between" data-testid="summary-child"><span className="text-slate-500">{tr("summary.children")}</span><span>{fmt(childExtra)}</span></div>}
+        {extraAdultTotal > 0 && <div className="flex justify-between" data-testid="summary-extra-adult"><span className="text-slate-500">{tr("summary.extraAdult")}</span><span>{fmt(extraAdultTotal)}</span></div>}
+        {losDiscount > 0 && <div className="flex justify-between" data-testid="summary-los"><span className="text-emerald-700">{tr("summary.los", { pct: losPct })}</span><span className="text-emerald-700">−{fmt(losDiscount)}</span></div>}
+        {agentDiscount > 0 && <div className="flex justify-between" data-testid="summary-agent"><span className="text-emerald-700">{tr("summary.agent")}</span><span className="text-emerald-700">−{fmt(agentDiscount)}</span></div>}
+        {flexFee > 0 && flexCancel && <div className="flex justify-between" data-testid="summary-flex"><span className="text-slate-500">{tr("flex.short")}</span><span>{fmt(flexFee)}</span></div>}
         {cityTax > 0 && <div className="flex justify-between" data-testid="summary-city-tax"><span className="text-slate-500">{tr("tax.city")}</span><span>{fmt(cityTax)}</span></div>}
         {selectedAddOns?.length > 0 && selectedAddOns.map(ao => (
           <div key={ao.id} className="flex justify-between text-xs"><span className="text-slate-500">{ao.name}</span><span>{fmt(ao.price)}</span></div>

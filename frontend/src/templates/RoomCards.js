@@ -1,3 +1,4 @@
+import React from "react";
 import {
   Users, Bed, CheckCircle, Lightning, Check,
   WifiHigh, Snowflake, Television, Coffee, Bathtub,
@@ -68,7 +69,7 @@ export function RoomPreviewCards({ t, rooms, searchRooms }) {
   );
 }
 
-export function RoomSelectionStep({ t, rooms, loading, nights, adults, children, roomCount, checkIn, checkOut, onSelectRoom, onChangeSearch, ratePlans, cart, flexData, onApplyDates, fmt, memberPct, onMemberCheck }) {
+export function RoomSelectionStep({ t, rooms, loading, nights, adults, children, roomCount, checkIn, checkOut, onSelectRoom, onChangeSearch, ratePlans, cart, flexData, onApplyDates, fmt, memberPct, onMemberCheck, onWaitlist }) {
   const { t: tr } = useLanguage();
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" data-testid="room-selection">
@@ -103,6 +104,7 @@ export function RoomSelectionStep({ t, rooms, loading, nights, adults, children,
           <Bed size={48} className="mx-auto text-slate-300 mb-4" />
           <h3 className="text-lg font-semibold text-slate-700">{tr("room.noRooms")}</h3>
           <p className="text-slate-500 mt-1">{tr("room.tryDifferentDates")}</p>
+          {onWaitlist && <WaitlistForm t={t} onSubmit={onWaitlist} />}
         </div>
       ) : (
         <div className="space-y-4">
@@ -197,6 +199,25 @@ function RoomCard({ room, t, nights, adults, onSelect, ratePlans, cart, fmt = (v
         </div>
       </div>
       <RatePlanRows t={t} room={room} plans={ratePlans} nights={nights} adults={adults} cart={cart} onAdd={onSelect} fmt={fmt} memberPct={memberPct} />
+    </div>
+  );
+}
+
+function WaitlistForm({ t, onSubmit }) {
+  const { t: tr } = useLanguage();
+  const [email, setEmail] = React.useState("");
+  const [name, setName] = React.useState("");
+  const [done, setDone] = React.useState(false);
+  if (done) return <p className="mt-4 text-sm font-semibold text-emerald-700" data-testid="waitlist-done">✓ {tr("waitlist.done")}</p>;
+  return (
+    <div className="mt-5 max-w-md mx-auto text-left" data-testid="waitlist-form">
+      <div className="text-sm font-semibold text-slate-800">{tr("waitlist.title")}</div>
+      <div className="text-xs text-slate-500 mb-2">{tr("waitlist.sub")}</div>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tr("guest.name")} className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1" data-testid="waitlist-name" />
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1" data-testid="waitlist-email" />
+        <button type="button" disabled={!email.includes("@")} onClick={async () => { const ok = await onSubmit({ email, name }); if (ok) setDone(true); }} className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40" style={{ background: t.colors.primary, borderRadius: t.borderRadius }} data-testid="waitlist-submit">{tr("waitlist.btn")}</button>
+      </div>
     </div>
   );
 }

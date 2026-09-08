@@ -4185,3 +4185,12 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - workers `_ab_auto_close` (campaign_window_loop içinde saatlik): post.ab_auto_n (varsayılan 200) toplam görüntülenmede CTA oranına göre kazanan uygulanır (ab_winner, ab_auto_closed, ab_result). UI: eşik girişi + ilerleme çubuğu.
 - tr_compliance: settings.accountant_email/name; `/efatura/{pid}/archive/send`, `/archive/history`, public `archive-download/{token}`; workers `accountant_archive_loop` (ayın 1'i, önceki ay, mükerrer koruması). E-posta MOCK.
 - Test: iteration_629.json backend 10/10, frontend pass.
+
+## Iter 630 (2026-09-08) — Booking engine gap-MVP (rakip analizi sonrası)
+- `routes/pms/be_gaps.py`: `GET/PUT /booking/be-settings/{pid}` (base_occupancy, extra_adult_per_night, los_tiers, flex_cancel_pct, hold_hours, waitlist/agent-code anahtarları),
+  `POST /booking/agent-code/validate` (travel_agents.code → anlaşmalı indirim), `POST /booking/waitlist` + admin liste, `GET /booking/fx-rates` (currency_fx canlı kurlar), `GET /booking/holds/{pid}`.
+- reserve-multi: agent_code / flex_cancel / payment_method=hold; ek yetişkin ücreti, LOS kademe indirimi, acente indirimi, esnek iptal ücreti (ilk satırda saklanır, cart_total'a yansır); hold → status "hold" + hold_expires_at.
+- workers: `_expire_holds` (süresi dolan hold → cancelled/hold_expired), `_notify_waitlist` (yer açılınca MOCK e-posta + öncelikli link) — saatlik döngüde.
+- UI: GuestDetailsStep şirket/acente kodu kutusu, esnek iptal onay kutusu, "Fiyatı 24s tut" ödeme seçeneği, özet satırları (ek yetişkin/LOS/acente/flex); RoomCards oda yokken WaitlistForm; CurrencySelector canlı kur; ConfirmationStep hold notu.
+- Kalan gap'ler (sırayla tamamlanacak): day-use, zincir çoklu tesis arama, wishlist, BRG talep formu, BE ayarları için admin UI (şu an API).
+- Test: iteration_630.json backend 15/15; frontend eksik özet satırları düzeltildi ve ekran görüntüsüyle doğrulandı.

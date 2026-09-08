@@ -30,7 +30,20 @@ const RATES = {
   THB: 44.2, MYR: 5.65, TRY: 41.5,
 };
 
+let LIVE_LOADED = false;
+async function loadLiveRates() {
+  if (LIVE_LOADED) return;
+  LIVE_LOADED = true;
+  try {
+    const r = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/booking/fx-rates?base=GBP`);
+    const d = await r.json();
+    Object.entries(d.rates || {}).forEach(([k, v]) => { if (v > 0) RATES[k] = v; });
+    window.__fxSource = d.source;
+  } catch { /* static fallback */ }
+}
+
 export function useCurrency() {
+  useEffect(() => { loadLiveRates(); }, []);
   const [currency, setCurrencyState] = useState(() => {
     const stored = localStorage.getItem("booking_currency");
     return stored && RATES[stored] ? stored : "GBP";

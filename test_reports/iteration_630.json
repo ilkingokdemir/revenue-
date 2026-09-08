@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 630 / Paket33 BE-gap MVP end-to-end test. Backend fully passes (15/15 pytest cases): BE settings public/put + validation, agent-code case-insensitive validate + 404/422, waitlist add/dup/dates/email + admin list + _notify_waitlist worker (status→notified, email_outbox kind=waitlist with /book?property=default&check_in=2027-04-01 link), reserve-multi with agent_code+flex_cancel+payment_method=hold produces status=hold with hold_expires_at, extra_adults=1, extra_adult_total=140, los_discount_pct=10, agent_discount>0, flex_cancel_fee>0, cancellation_type=free; _expire_holds moves booking to cancelled with cancel_reason=hold_expired; second reserve without addons stays confirmed with zero addon fields; fx-rates count>=30, EUR≈1.13, TRY>30, source=currency_fx. Frontend booking flow works end-to-end: dates search → room select → cart continue → guest step; agent-code-input/apply shows 'ACME Travel — −15%', flex-cancel-checkbox raises total by 8% (£470→£520), payment-hold-option renders 'Hold price for 24h (no payment)', complete-booking-btn label becomes 'Hold this price', submission creates a confirmed booking-ref (MHB-090D14D3) which in Mongo is correctly stored with status='hold', payment_method='hold', hold_expires_at set. Currency selector switches to EUR with window.__fxSource==='currency_fx'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "GuestDetailsStep summary", "issue": "data-testid='summary-los' is not rendered on a 7-night stay even though backend applies 10% LOS discount (£62.6). Line 'Long-stay discount −10%' is missing from the cart summary.", "selector": "[data-testid=\"summary-los\"]", "priority": "HIGH"},
+      {"component": "GuestDetailsStep summary", "issue": "data-testid='summary-agent' is not rendered after successfully applying ACME2026 (agent-code-applied does show 'ACME Travel — −15%' correctly, but the summary line for the agent discount amount does not appear).", "selector": "[data-testid=\"summary-agent\"]", "priority": "HIGH"},
+      {"component": "GuestDetailsStep summary", "issue": "data-testid='summary-flex' is not rendered after ticking flex-cancel-checkbox, although the total does update (+8%).", "selector": "[data-testid=\"summary-flex\"]", "priority": "HIGH"},
+      {"component": "Confirmation step", "issue": "For a payment_method='hold' booking the confirmation page shows 'Booking Confirmed! Your reservation is confirmed'. Backend correctly stores status='hold' with hold_expires_at, so the UI copy should reflect a HOLD state (e.g. 'Price on hold — expires in 24h') and include the expiry countdown, otherwise guests will think they've paid.", "selector": "[data-testid=\"confirmation-step\"]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter630_paket33.py", "/app/test_reports/pytest/iter630.xml"],
+  "action_items": [
+    "Render <div data-testid='summary-los'> when nights>=7 (or whenever beCfg los_tiers matches) with '−{pct}%' text and amount.",
+    "Render <div data-testid='summary-agent'> line when agent_code is applied, showing '−{agent.discount_pct}%' and the calculated amount.",
+    "Render <div data-testid='summary-flex'> line when flex_cancel is enabled with '+{flex_cancel_pct}%' and calculated fee.",
+    "Update the confirmation step so that hold bookings display 'Price on hold' copy with expiry timer instead of 'Booking Confirmed!'."
+  ],
+  "critical_code_review_comments": [
+    "workers.py is >1500 lines and mixes many unrelated cron loops (social, revenue, distribution, killswitch, BE holds/waitlist etc.) — the BE-gap helpers (_expire_holds, _notify_waitlist) should be moved to a dedicated module for maintainability.",
+    "be_gaps.PUT allows setting los_tiers to []; explicit min_nights/pct bounds are not enforced beyond aralık dışı check for scalar pcts — consider validating each tier's pct 0-100 and min_nights>=1.",
+    "In reserve-multi the stored 'total_price' equals the pre-discount subtotal (626 for the hold booking) while the UI cart_total is 520; naming/semantics divergence is confusing for downstream reports."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter630_paket33.py"],
+  "success_rate": {"backend": "100%", "frontend": "60%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test bookings for gapqa@example.com (hold→cancelled by worker) and simpleqa@example.com (confirmed) and one manual UI hold for holdqa@example.com (MHB-090D14D3). Waitlist entry wl2@example.com for 2027-04-01→03 (notified by worker).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend fully green in tests/test_iter630_paket33.py. Frontend gaps are localized to GuestDetailsStep.js (missing summary-los, summary-agent, summary-flex lines) and the confirmation copy for hold bookings. Amount math is correct on backend and the running total updates properly in the UI — only the itemized summary lines and hold confirmation copy are missing."
+}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { toast } from "sonner";
 import "@fontsource/outfit/400.css";
 import "@fontsource/outfit/600.css";
 import "@fontsource/outfit/700.css";
@@ -37,7 +38,7 @@ const API = `${BACKEND_URL}/api`;
 const STEPS = { SEARCH: 0, ROOMS: 1, DETAILS: 2, PAYMENT: 3, CONFIRM: 4 };
 
 function BookingEngineInner() {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, lang } = useLanguage();
   const { currency, setCurrency, format: formatPrice, currencies, symbol: currSymbol } = useCurrency();
   const params = new URLSearchParams(window.location.search);
   const propertyId = params.get("property") || "aldgate-flats";
@@ -68,6 +69,20 @@ function BookingEngineInner() {
   const [promoCode, setPromoCode] = useState("");
   const [dwConfig, setDwConfig] = useState(null);
   const [damageWaiver, setDamageWaiver] = useState(false);
+  const [beCfg, setBeCfg] = useState(null);
+  const [agentCode, setAgentCode] = useState("");
+  const [agentInfo, setAgentInfo] = useState(null);
+  const [flexCancel, setFlexCancel] = useState(false);
+  useEffect(() => { if (propertyId) axios.get(`${API}/booking/be-settings/${propertyId}`).then(({ data }) => setBeCfg(data)).catch(() => {}); }, [propertyId]);
+  const applyAgentCode = async () => {
+    try { const { data } = await axios.post(`${API}/booking/agent-code/validate`, { property_id: propertyId, code: agentCode }); setAgentInfo(data); toast.success(`${data.agent_name}: −${data.discount_pct}%`); }
+    catch (e) { toast.error(e.response?.data?.detail || "Kod geçersiz"); }
+  };
+  const clearAgentCode = () => { setAgentInfo(null); setAgentCode(""); };
+  const submitWaitlist = async ({ email, name }) => {
+    try { await axios.post(`${API}/booking/waitlist`, { property_id: propertyId, email, name, check_in: checkIn, check_out: checkOut, adults, lang }); return true; }
+    catch (e) { toast.error(e.response?.data?.detail || "Kaydedilemedi"); return false; }
+  };
   const [promoDiscount, setPromoDiscount] = useState(null);
   const [selectedAddOns, setSelectedAddOns] = useState([]);
   const [selectedUpsells, setSelectedUpsells] = useState([]);
@@ -262,7 +277,13 @@ function BookingEngineInner() {
   const childExtra = (() => { const cp = taxRoom.child_policy || {}; return childAges.slice(0, children).reduce((sum, a) => sum + (a < (cp.free_under_age || 0) ? 0 : (Number(cp.child_price_per_night) || 0) * nights), 0); })();
   const discountAmount = promoDiscount ? promoDiscount.discount_amount : 0;
   const waiverTotal = damageWaiver && dwConfig ? dwConfig.fee_per_night * nights * cartRooms : 0;
-  const totalBeforeGift = Math.max(0, subtotal + addOnsTotal + upsellsTotal + waiverTotal + cityTax + childExtra - discountAmount);
+  const cartQty = cart.reduce((s, c) => s + c.qty, 0) || roomCount;
+  const extraAdultTotal = beCfg ? Math.max(0, adults - (beCfg.base_occupancy || 2) * cartQty) * (Number(beCfg.extra_adult_per_night) || 0) * nights : 0;
+  const losPct = beCfg?.long_stay_enabled ? (beCfg.los_tiers || []).reduce((b, t) => (nights >= t.min_nights && t.pct > b ? t.pct : b), 0) : 0;
+  const losDiscount = Math.round(subtotal * losPct) / 100;
+  const agentDiscount = agentInfo ? Math.round(subtotal * agentInfo.discount_pct) / 100 : 0;
+  const flexFee = beCfg?.flex_cancel_enabled ? Math.round(subtotal * (Number(beCfg.flex_cancel_pct) || 0)) / 100 : 0;
+  const totalBeforeGift = Math.max(0, subtotal + extraAdultTotal - losDiscount - agentDiscount + (flexCancel ? flexFee : 0) + addOnsTotal + upsellsTotal + waiverTotal + cityTax + childExtra - discountAmount);
   const giftApplied = giftCard ? Math.min(giftCard.balance, totalBeforeGift) : 0;
   const totalPrice = Math.max(0, totalBeforeGift - giftApplied);
   const depositDue = cart.length ? Math.round(cart.reduce((s, c) => s + planNightPrice(roomNightBase(c.room), c.plan) * (1 - memberPct / 100) * nights * c.qty * ((c.plan?.deposit_pct || 0) / 100), 0) * 100) / 100 : 0;
@@ -328,6 +349,9 @@ function BookingEngineInner() {
         guest_phone: guestForm.guest_phone, check_in: checkIn, check_out: checkOut,
         adults, children, special_requests: guestForm.special_requests,
         damage_waiver: damageWaiver && !!dwConfig,
+        agent_code: agentInfo ? agentCode : "",
+        flex_cancel: flexCancel && flexFee > 0,
+        payment_method: paymentMethod,
         promo_code: promoDiscount?.code || "",
         gift_card_code: giftCard?.code || "",
         source: utmSource,
@@ -551,7 +575,7 @@ function BookingEngineInner() {
         <>
           <RoomSelectionStep t={tmpl} rooms={rooms} loading={loading} nights={nights} adults={adults} children={children} roomCount={roomCount}
             checkIn={checkIn} checkOut={checkOut} onSelectRoom={addToCart} onChangeSearch={() => setStep(STEPS.SEARCH)}
-            ratePlans={ratePlans} cart={cart} flexData={flexData} onApplyDates={applyFlexDates} fmt={formatPrice} memberPct={memberPct} onMemberCheck={checkMember} />
+            ratePlans={ratePlans} cart={cart} flexData={flexData} onApplyDates={applyFlexDates} fmt={formatPrice} memberPct={memberPct} onMemberCheck={checkMember} onWaitlist={submitWaitlist} />
           <CartBar t={tmpl} cart={cart} nights={nights} onRemove={removeFromCart} onContinue={continueToDetails} fmt={formatPrice} memberPct={memberPct} />
           {cart.length > 0 && <div className="h-28" />}
         </>
@@ -569,7 +593,9 @@ function BookingEngineInner() {
           dwConfig={dwConfig} damageWaiver={damageWaiver} setDamageWaiver={setDamageWaiver} waiverTotal={waiverTotal}
           socialProofSettings={property?.social_proof?.settings} cart={cart} onBackToRooms={() => setStep(STEPS.ROOMS)}
           giftCode={giftCode} setGiftCode={setGiftCode} giftCard={giftCard} applyGift={applyGift} clearGift={() => { setGiftCard(null); setGiftCode(""); }} giftApplied={giftApplied}
-          depositDue={depositDue} fmt={formatPrice} memberPct={memberPct} cityTax={cityTax} vatRate={vatRate} childExtra={childExtra} />
+          depositDue={depositDue} fmt={formatPrice} memberPct={memberPct} cityTax={cityTax} vatRate={vatRate} childExtra={childExtra}
+          beCfg={beCfg} agentCode={agentCode} setAgentCode={setAgentCode} agentInfo={agentInfo} applyAgentCode={applyAgentCode} clearAgentCode={clearAgentCode}
+          flexCancel={flexCancel} setFlexCancel={setFlexCancel} flexFee={flexFee} extraAdultTotal={extraAdultTotal} losDiscount={losDiscount} losPct={losPct} agentDiscount={agentDiscount} />
       )}
 
       {/* Step 3: Payment Processing */}

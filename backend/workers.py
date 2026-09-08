@@ -1505,9 +1505,41 @@ async def campaign_window_loop(db, interval_seconds: int = 3600):
                     active = bool(po.get("published", True)) and (not po.get("starts_at") or po["starts_at"] <= today) and (not po.get("ends_at") or po["ends_at"] >= today)
                     await db.promo_codes.update_one({"code": po["promo_code"], "source": "campaign_post"}, {"$set": {"is_active": active}})
             await _ab_auto_close(db)
+            await _expire_holds(db)
+            await _notify_waitlist(db)
         except Exception as e:
             logger.warning(f"campaign window tick error: {e}")
         await asyncio.sleep(interval_seconds)
+
+
+async def _expire_holds(db):
+    now = datetime.now(timezone.utc).isoformat()
+    res = await db.bookings.update_many({"status": "hold", "hold_expires_at": {"$lt": now}},
+                                        {"$set": {"status": "cancelled", "cancel_reason": "hold_expired", "cancelled_at": now}})
+    if res.modified_count:
+        logger.info(f"expired {res.modified_count} price holds")
+
+
+async def _notify_waitlist(db):
+    """Bekleme listesi: tarih aralığında oda açıldıysa misafire haber ver (MOCK e-posta)."""
+    from routes.platform_ext.mailer import send_email
+    async for w in db.be_waitlist.find({"status": "waiting"}, {"_id": 0}).limit(200):
+        q = {"property_id": w["property_id"], "is_active": {"$ne": False}}
+        if w.get("room_type_id"):
+            q["id"] = w["room_type_id"]
+        rooms = await db.room_types.find(q, {"_id": 0, "id": 1, "total_rooms": 1, "name": 1}).to_list(50)
+        open_room = None
+        for r in rooms:
+            cnt = await db.bookings.count_documents({"room_type_id": r["id"], "status": {"$nin": ["cancelled", "no_show"]}, "check_in": {"$lt": w["check_out"]}, "check_out": {"$gt": w["check_in"]}})
+            if int(r.get("total_rooms") or 1) - cnt > 0:
+                open_room = r; break
+        if not open_room:
+            continue
+        base = (os.environ.get("PUBLIC_BASE_URL") or "").rstrip("/")
+        link = f"{base}/book?property={w['property_id']}&check_in={w['check_in']}&check_out={w['check_out']}&adults={w.get('adults', 2)}&src=waitlist"
+        html = f"<div style='font-family:system-ui;max-width:520px;margin:auto'><h2>Yer açıldı! / A room just opened</h2><p>{w['check_in']} → {w['check_out']} için <b>{open_room.get('name', '')}</b> müsait. Öncelikli rezervasyon bağlantınız 24 saat geçerlidir.</p><p><a href='{link}' style='background:#111;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:700'>Hemen rezerve et</a></p></div>"
+        status = await send_email(db, w["email"], "Yer açıldı — öncelikli rezervasyon / A room opened up", html, kind="waitlist", meta={"waitlist_id": w["id"], "property_id": w["property_id"]})
+        await db.be_waitlist.update_one({"id": w["id"]}, {"$set": {"status": "notified", "notified_at": datetime.now(timezone.utc).isoformat(), "email_status": status, "room_type": open_room.get("name")}})
 
 
 async def _ab_auto_close(db):

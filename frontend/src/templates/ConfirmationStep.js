@@ -96,6 +96,7 @@ export function ConfirmationStep({ t, confirmation, onBookAnother, fmt = (v) => 
               ))}
             </div>
           )}
+          {confirmation.status === "hold" && confirmation.hold_expires_at && <p className="text-xs font-semibold rounded-lg px-3 py-2 mb-3" style={{ background: "#fef3c7", color: "#92400e" }} data-testid="confirm-hold-note">⏳ {tr("confirm.holdNote", { until: new Date(confirmation.hold_expires_at).toLocaleString() })}</p>}
           <div className="pt-2 border-t border-gray-100">
             <PostUpsells t={t} confirmation={confirmation} fmt={fmt} />
           </div>

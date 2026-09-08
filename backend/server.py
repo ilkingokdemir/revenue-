@@ -1947,6 +1947,8 @@ api_router.include_router(create_provisioning_router(db, require_roles))
 # ===== P0 Paketi: Stripe, Public API, Süper Admin, Migration =====
 from routes.platform_ext.p0_pack import create_p0_router
 api_router.include_router(create_p0_router(db, require_roles))
+from routes.distribution.public_api_v1 import create_public_api_v1_router
+api_router.include_router(create_public_api_v1_router(db, require_roles))
 from routes.platform_ext.menu_manager import create_menu_manager_router
 api_router.include_router(create_menu_manager_router(db, require_roles))
 from routes.revenue_ext.rebase_impact import create_rebase_impact_router, rebase_experiment_loop
@@ -2141,8 +2143,9 @@ async def rate_limit_mw(request, call_next):
         for k in [k for k, v in list(_RL_BUCKETS.items()) if not v or now - v[-1] > 120][:5000]:
             _RL_BUCKETS.pop(k, None)
     resp = await call_next(request)
-    resp.headers["X-RateLimit-Limit"] = str(limit)
-    resp.headers["X-RateLimit-Remaining"] = str(max(0, limit - len(dq)))
+    if "X-RateLimit-Limit" not in resp.headers:
+        resp.headers["X-RateLimit-Limit"] = str(limit)
+        resp.headers["X-RateLimit-Remaining"] = str(max(0, limit - len(dq)))
     return resp
 
 

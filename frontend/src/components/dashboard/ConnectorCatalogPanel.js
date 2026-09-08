@@ -98,7 +98,7 @@ export default function ConnectorCatalogPanel({ activePropertyId, properties = [
               <div className="flex items-center justify-between mt-auto pt-1">
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${apiCls}`}>{apiLabel}</span>
                 {c.panel && c.status !== "coming_soon" ? (
-                  <button onClick={() => onNavigate && onNavigate(c.panel)} data-testid={`connector-open-${c.key}`}
+                  <button onClick={() => { if (c.panel === "pms-connect") localStorage.setItem("mhb_pms_connect_provider", c.key); onNavigate && onNavigate(c.panel); }} data-testid={`connector-open-${c.key}`}
                     className="px-3 py-1.5 rounded-lg bg-stone-900 text-white text-[11px] font-bold hover:bg-stone-700">
                     {c.status === "connected" ? "Paneli Aç" : "Bağlan"}
                   </button>

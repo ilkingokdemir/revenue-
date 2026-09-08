@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 import httpx
 import stripe
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
 WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
@@ -155,65 +155,64 @@ def create_p0_router(db, require_roles):
         return {"status": "ok"}
 
     # ================= 2) PUBLIC API v1 (dış sistemler bize bağlanır) =================
-    async def api_key_auth(request: Request) -> dict:
-        key = request.headers.get("X-API-Key", "")
-        doc = await db.public_api_keys.find_one({"key": key, "active": {"$ne": False}}, {"_id": 0})
-        if not doc:
-            raise HTTPException(401, "Geçersiz API anahtarı — X-API-Key header gerekli")
-        await db.public_api_keys.update_one({"key": key}, {"$inc": {"calls": 1},
-                                                           "$set": {"last_used": now_iso()}})
-        return doc
+    from routes.distribution.public_api_v1 import api_key_auth as _v1_auth, create_booking_from_api, DEFAULT_SCOPES, SCOPES
+
+    async def api_key_auth(request: Request, response: Response = None, scope: str = "") -> dict:
+        return await _v1_auth(db, request, response, scope)
 
     @router.post("/public-keys/{pid}")
     async def create_api_key(pid: str, data: dict = None, _u: dict = Depends(require_roles("admin"))):
+        data = data or {}
         doc = {"id": str(uuid.uuid4()), "key": f"hbx_{secrets.token_urlsafe(24)}",
-               "property_id": pid, "name": (data or {}).get("name", "default"),
+               "property_id": pid, "name": str(data.get("name") or "default")[:60],
+               "scopes": [x for x in (data.get("scopes") or []) if x in SCOPES] or DEFAULT_SCOPES,
+               "rate_per_min": max(10, min(5000, int(data.get("rate_per_min") or 120))),
                "active": True, "calls": 0, "created_at": now_iso()}
         await db.public_api_keys.insert_one({**doc})
         return doc
 
     @router.get("/public-keys/{pid}")
     async def list_api_keys(pid: str, _u: dict = Depends(require_roles("admin"))):
-        rows = await db.public_api_keys.find({"property_id": pid}, {"_id": 0}).to_list(20)
+        rows = await db.public_api_keys.find({"property_id": pid}, {"_id": 0}).sort("created_at", -1).to_list(50)
         for r in rows:
             r["key"] = r["key"][:12] + "•••"
+            r.setdefault("scopes", DEFAULT_SCOPES); r.setdefault("rate_per_min", 120); r.setdefault("active", True)
         return {"keys": rows}
 
     @router.get("/public/v1/bookings")
-    async def pub_bookings(request: Request, limit: int = 50):
-        k = await api_key_auth(request)
-        rows = await db.bookings.find({"property_id": k["property_id"]}, {"_id": 0}).sort(
-            "created_at", -1).to_list(min(limit, 200))
-        return {"bookings": rows}
+    async def pub_bookings(request: Request, response: Response, limit: int = 50, status: str = "", check_in_from: str = ""):
+        k = await api_key_auth(request, response, "read:bookings")
+        q = {"property_id": k["property_id"]}
+        if status:
+            q["status"] = status
+        if check_in_from:
+            q["check_in"] = {"$gte": check_in_from}
+        rows = await db.bookings.find(q, {"_id": 0}).sort("created_at", -1).to_list(min(limit, 200))
+        from routes.distribution.public_api_v1 import _public_booking
+        return {"bookings": [_public_booking(b) for b in rows], "count": len(rows)}
 
     @router.get("/public/v1/rates")
-    async def pub_rates(request: Request, days: int = 14):
-        k = await api_key_auth(request)
+    async def pub_rates(request: Request, response: Response, days: int = 14):
+        k = await api_key_auth(request, response, "read:availability")
         from routes.distribution.cloudbeds_adapter import _build_rate_blocks
         cfg = await db.cloudbeds_config.find_one({"property_id": k["property_id"]}, {"_id": 0}) or {}
         blocks = await _build_rate_blocks(db, k["property_id"], min(days, 30), cfg)
         return {"rates": blocks}
 
     @router.get("/public/v1/guests")
-    async def pub_guests(request: Request, limit: int = 50):
-        k = await api_key_auth(request)
+    async def pub_guests(request: Request, response: Response, limit: int = 50):
+        k = await api_key_auth(request, response, "read:guests")
         rows = await db.guests.find({"property_id": k["property_id"]},
                                     {"_id": 0}).to_list(min(limit, 200))
         return {"guests": rows}
 
     @router.post("/public/v1/bookings")
-    async def pub_create_booking(request: Request, data: dict):
-        k = await api_key_auth(request)
-        doc = {"id": str(uuid.uuid4()), "property_id": k["property_id"],
-               "guest_name": str(data.get("guest_name", ""))[:100],
-               "check_in": data.get("check_in"), "check_out": data.get("check_out"),
-               "room_type_id": data.get("room_type_id", ""), "status": "confirmed",
-               "total_price": float(data.get("total_price") or 0),
-               "source": "public_api", "created_at": now_iso()}
-        if not (doc["guest_name"] and doc["check_in"] and doc["check_out"]):
-            raise HTTPException(422, "guest_name, check_in, check_out zorunlu")
-        await db.bookings.insert_one({**doc})
-        await emit_webhook(db, k["property_id"], "booking.created", doc)
+    async def pub_create_booking(request: Request, response: Response, data: dict):
+        k = await api_key_auth(request, response, "write:bookings")
+        doc, created = await create_booking_from_api(db, k, data, request.headers.get("Idempotency-Key", ""))
+        if created:
+            response.status_code = 201
+            await emit_webhook(db, k["property_id"], "booking.created", doc)
         return doc
 
     # -------- Giden webhook abonelikleri --------

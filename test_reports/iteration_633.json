@@ -1,0 +1,27 @@
+{
+  "summary": "Iter633 Paket36 — Public API v1 (keys, scopes, rate limits, idempotency, bookings CRUD, cancel, docs, key update/usage) + Opera Cloud connector + /book-all chain filters + PlatformAdminPanel Public API Keys card & Docs + Connector Catalog 'Bağlan → PMS Connect Hub'. Backend: 23/23 pytest passed. Frontend: all critical UI flows verified via Playwright.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter633_paket36.py",
+    "/app/test_reports/pytest/iter633.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "public_api_v1.py _throttle counter increments before capacity check — even 429 responses count against the bucket; acceptable but note that a burst client stays throttled full minute (documented via Retry-After).",
+    "public_api_v1._BUCKETS is process-local (in-memory dict); does not survive workers/restarts and is not shared across replicas. For prod scale-out, move to Redis.",
+    "PublicApiKeysCard scope chip data-testid uses `pa-key-scope-{scope.replace(':','-')}` (e.g. pa-key-scope-read-availability) — task spec said `pa-key-scope-*` toggles which matches the pattern but not colon form; keep hyphen form documented.",
+    "Connector-catalog uses `key` field for connector id (not `id`) — consistent internally, but partners scripting against the JSON may expect `id`."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter633_paket36.py"],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "100% (all critical flows OK)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Created TEST_read_key, TEST_write_key, TEST_rl_key, TEST_ui_key public API keys under property aldgate-flats; one booking (source=public_api) created then cancelled.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend Public API v1 endpoints fully green. Idempotency uses public_api_idempotency collection; keys stored in public_api_keys. Rate limit buckets are in-memory. Opera Cloud is MOCK — test-connection with missing creds returns 400 (verified). Frontend menu id for Platform Admin is 'super-admin' (not 'platform-admin' as review-request stated). Sidebar label: 'Platform Yönetimi'. Chain filter reset button only renders when at least one filter is dirty (intended)."
+}

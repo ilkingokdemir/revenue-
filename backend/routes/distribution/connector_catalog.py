@@ -12,7 +12,7 @@ CATALOG = [
     {"key": "eviivo", "name": "eviivo Suite", "category": "PMS", "api_type": "partner", "panel": "pms-connect"},
     {"key": "elektraweb", "name": "Elektraweb", "category": "PMS", "api_type": "partner", "panel": "pms-connect"},
     {"key": "booking-factory", "name": "The Booking Factory", "category": "PMS", "api_type": "open", "panel": None},
-    {"key": "opera-cloud", "name": "Oracle Opera Cloud", "category": "PMS", "api_type": "partner", "panel": None},
+    {"key": "opera-cloud", "name": "Oracle OPERA Cloud (OHIP)", "category": "PMS", "api_type": "partner", "panel": "pms-connect"},
     {"key": "protel", "name": "protel (Planet)", "category": "PMS", "api_type": "partner", "panel": None},
     {"key": "guestline", "name": "Guestline Rezlynx", "category": "PMS", "api_type": "partner", "panel": None},
     {"key": "little-hotelier", "name": "Little Hotelier", "category": "PMS", "api_type": "closed", "panel": None},
@@ -50,13 +50,18 @@ def create_connector_catalog_router(db, require_roles):
         pms_conns = await db.pms_connections.find({"property_id": pid}, {"_id": 0, "vendor": 1, "status": 1}).to_list(20)
         conn_vendors = {c.get("vendor", "").lower() for c in pms_conns if c.get("status") in ("connected", "live")}
         reqs = {r["key"] async for r in db.connector_requests.find({"property_id": pid}, {"_id": 0, "key": 1})}
+        from routes.distribution.pms_connect import PROVIDERS, _has_creds
+        pc_cfgs = {c["provider"]: c async for c in db.pms_connect_config.find({"property_id": pid}, {"_id": 0})}
+        pc_connected = {k for k, c in pc_cfgs.items() if k in PROVIDERS and _has_creds(k, c)}
+        pc_tested = {k: (c.get("last_test") or {}).get("ok") for k, c in pc_cfgs.items()}
         out = []
         for c in CATALOG:
             item = dict(c)
             if c["key"] == "cloudbeds":
                 item["status"] = "connected" if (cb or {}).get("api_key") else "ready"
-            elif c["key"] == "mews":
-                item["status"] = "connected" if "mews" in conn_vendors else "ready"
+            elif c["key"] in PROVIDERS:
+                item["status"] = "connected" if (c["key"] in pc_connected or (c["key"] == "mews" and "mews" in conn_vendors)) else "ready"
+                item["last_test_ok"] = pc_tested.get(c["key"])
             elif c.get("coming_soon"):
                 item["status"] = "coming_soon"
             elif c.get("panel"):

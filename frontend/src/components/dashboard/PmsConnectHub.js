@@ -56,6 +56,8 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
     try {
       const r = await axios.get(`${API}/api/pms-connect/providers/${pid}`, { withCredentials: true });
       setData(r.data);
+      const pre = localStorage.getItem("mhb_pms_connect_provider");
+      if (pre) { localStorage.removeItem("mhb_pms_connect_provider"); const p = r.data.providers.find((x) => x.id === pre); if (p) { setSel(p); return; } }
       if (sel) setSel(r.data.providers.find((p) => p.id === sel.id) || null);
     } catch { toast.error("PMS bağlantı merkezi yüklenemedi"); }
     // eslint-disable-next-line react-hooks/exhaustive-deps

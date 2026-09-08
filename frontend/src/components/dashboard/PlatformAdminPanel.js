@@ -2,14 +2,17 @@ import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import TrialConversionPanel from "./TrialConversionPanel";
+import PublicApiKeysCard from "./PublicApiKeysCard";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const cfg = { withCredentials: true };
 const PLANS = ["basic", "rms", "cm", "pro", "full"];
 const API_DOCS = [
   ["POST /api/public-keys/{pid}", "API anahtarı üret (admin)"],
+  ["GET /api/public/v1/availability", "Müsaitlik & fiyat — Header: X-API-Key (?check_in&check_out&adults)"],
   ["GET /api/public/v1/bookings", "Rezervasyonları listele — Header: X-API-Key"],
-  ["POST /api/public/v1/bookings", "Rezervasyon oluştur {guest_name, check_in, check_out, total_price}"],
+  ["POST /api/public/v1/bookings", "Rezervasyon push {room_type_id, guest_name, guest_email, check_in, check_out} + Idempotency-Key"],
+  ["POST /api/public/v1/bookings/{ref}/cancel", "Rezervasyon iptali"],
   ["GET /api/public/v1/rates?days=N", "Oda tipi bazlı fiyatlar"],
   ["GET /api/public/v1/guests", "Misafir listesi"],
   ["POST /api/webhook-subs/{pid}", "Webhook aboneliği {url, events:[booking.created, payment.completed]}"],
@@ -61,8 +64,6 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
       setHistoryItems(r.data.items || []); setHistoryFor(pid);
     } catch { toast.error("Geçmiş yüklenemedi"); }
   };
-  const [keys, setKeys] = useState([]);
-  const [newKey, setNewKey] = useState(null);
   const [txs, setTxs] = useState([]);
   const [payAmount, setPayAmount] = useState("100");
   const [payBooking, setPayBooking] = useState("");
@@ -72,14 +73,13 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
 
   const load = useCallback(async () => {
     try {
-      const [h, k, t] = await Promise.all([
+      const [h, t] = await Promise.all([
         axios.get(`${API}/api/super-admin/health-scores`, cfg),
-        axios.get(`${API}/api/public-keys/${pid}`, cfg),
         axios.get(`${API}/api/payments/tx-log/${pid}`, cfg),
       ]);
       setTenants(h.data.tenants); setPlans(h.data.plans); setMrr(h.data.mrr || 0);
       setMrrTrend(h.data.mrr_trend || []); setMrrTarget(h.data.mrr_target ?? null);
-      setKeys(k.data.keys); setTxs(t.data.transactions.slice(0, 8));
+      setTxs(t.data.transactions.slice(0, 8));
     } catch { toast.error("Platform verileri yüklenemedi"); }
   }, [pid]);
   useEffect(() => { load(); }, [load]);
@@ -95,12 +95,6 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
       await axios.post(`${API}/api/super-admin/tenants/${tid}/suspend`, { suspended: s }, cfg);
       toast.success(s ? "Hesap askıya alındı" : "Hesap aktifleştirildi"); load();
     } catch { toast.error("İşlem başarısız"); }
-  };
-  const createKey = async () => {
-    try {
-      const r = await axios.post(`${API}/api/public-keys/${pid}`, { name: "panel" }, cfg);
-      setNewKey(r.data.key); toast.success("API anahtarı üretildi — bir kez gösterilir, kopyalayın!"); load();
-    } catch { toast.error("Anahtar üretilemedi"); }
   };
   const createPayLink = async () => {
     try {
@@ -288,17 +282,7 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
           </div>
         </Card>
 
-        <Card title="🔑 Public API Anahtarları" tid="pa-keys">
-          <button onClick={createKey} data-testid="pa-key-create" className="px-3 py-1.5 rounded-lg bg-stone-900 text-white text-xs font-bold mb-2">+ Anahtar Üret</button>
-          {newKey && <div className="text-[11px] bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2 break-all font-mono" data-testid="pa-key-new">{newKey}</div>}
-          <div className="space-y-1">
-            {keys.map((k, i) => (
-              <div key={k.id || k.key || i} className="flex justify-between text-[11px] bg-stone-50 rounded-lg px-2 py-1">
-                <span className="font-mono">{k.key}</span><span className="text-stone-400">{k.calls || 0} çağrı</span>
-              </div>
-            ))}
-          </div>
-        </Card>
+        <PublicApiKeysCard pid={pid} />
 
         <Card title="📦 Veri Göçü (CSV Import)" tid="pa-migration">
           <div className="flex gap-2 items-center mb-2">

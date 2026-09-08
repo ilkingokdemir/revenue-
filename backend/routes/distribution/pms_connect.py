@@ -44,6 +44,19 @@ PROVIDERS = {
             {"key": "property_code", "label": "Property Code", "secret": False},
             {"key": "endpoint_url", "label": "Endpoint URL", "secret": False}],
         "note": "Kapalı/kontrollü API — resmi partnerlik + NDA sonrası dokümanlar paylaşılır. Fiyatlar toplu paket (bulk update) halinde iletilir. Kimlik gelene kadar MOCK iskelet hazır."},
+    "opera-cloud": {
+        "name": "Oracle OPERA Cloud (OHIP)", "region": "Global (zincir & üst segment lideri)", "api_type": "partner",
+        "format": "json", "base_url": "",
+        "auth_fields": [
+            {"key": "client_id", "label": "OHIP Client ID", "secret": False},
+            {"key": "client_secret", "label": "OHIP Client Secret", "secret": True},
+            {"key": "app_key", "label": "x-app-key (Application Key)", "secret": True},
+            {"key": "username", "label": "Entegrasyon Kullanıcısı", "secret": False},
+            {"key": "password", "label": "Şifre", "secret": True},
+            {"key": "hotel_id", "label": "Hotel ID (OPERA)", "secret": False},
+            {"key": "rate_plan_code", "label": "Rate Plan Code", "secret": False},
+            {"key": "endpoint_url", "label": "Gateway URL (örn. https://xxx.hospitality-api.us-region.ocs.oraclecloud.com)", "secret": False}],
+        "note": "Oracle Hospitality Integration Platform — partner onayı + OHIP geliştirici hesabı şart. OAuth2 (password grant) ile token alınır; fiyatlar par/v1 pricingSchedules ile, müsaitlik inv/v1 ile yazılır. Kimlik gelene kadar MOCK iskelet hazır."},
     "elektraweb": {
         "name": "Elektraweb", "region": "Türkiye (pazar lideri) · Orta Doğu", "api_type": "semi",
         "format": "json", "base_url": "",
@@ -60,6 +73,7 @@ _REQUIRED = {
     "siteminder": ("username", "password", "hotel_code", "endpoint_url"),
     "eviivo": ("api_key", "property_code", "endpoint_url"),
     "elektraweb": ("api_key", "hotel_id", "endpoint_url"),
+    "opera-cloud": ("client_id", "client_secret", "app_key", "username", "password", "hotel_id", "rate_plan_code", "endpoint_url"),
 }
 
 
@@ -109,6 +123,11 @@ def _translate(provider: str, cfg: dict, rows: list, currency: str = "EUR") -> d
                 "body": {"propertyCode": cfg.get("property_code", ""),
                          "updates": [{"date": r["date"], "amount": r["rate"],
                                       "availability": r.get("availability")} for r in rows]}}
+    if provider == "opera-cloud":
+        return {"method": "PUT", "path": f"/par/v1/hotels/{cfg.get('hotel_id', '')}/rates/{cfg.get('rate_plan_code', '')}/pricingSchedules",
+                "headers": {"x-hotelid": cfg.get("hotel_id", ""), "x-app-key": "***", "Authorization": "Bearer ***"},
+                "body": {"pricingSchedules": [{"start": r["date"], "end": r["date"], "rateCode": cfg.get("rate_plan_code", ""),
+                                               "amounts": [{"amount": r["rate"], "currencyCode": currency, "guests": 2}]} for r in rows]}}
     return {"method": "POST", "path": "/api/rateupdate",
             "body": {"hotel_id": cfg.get("hotel_id", ""),
                      "prices": [{"date": r["date"], "price": r["rate"],
@@ -567,6 +586,11 @@ def create_pms_connect_router(db, require_roles):
                                                 "client_secret": cfg["client_secret"]})
                 elif provider == "siteminder":
                     r = await client.get(base, auth=(cfg["username"], cfg["password"]))
+                elif provider == "opera-cloud":
+                    r = await client.post(f"{base}/oauth/v1/tokens",
+                                          data={"grant_type": "password", "username": cfg["username"], "password": cfg["password"]},
+                                          auth=(cfg["client_id"], cfg["client_secret"]),
+                                          headers={"x-app-key": cfg["app_key"]})
                 else:
                     r = await client.get(base, headers={"x-api-key": cfg["api_key"]})
             ok = r.status_code < 400

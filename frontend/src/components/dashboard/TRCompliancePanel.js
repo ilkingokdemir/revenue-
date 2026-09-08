@@ -447,6 +447,13 @@ function EFaturaBlock({ propertyId }) {
                 <option value="earsiv">e-Arşiv (B2C)</option><option value="efatura">e-Fatura (B2B)</option>
               </select>
             </div>
+            <div className="md:col-span-3 rounded-lg bg-sky-50 border border-sky-200 p-3 grid grid-cols-1 md:grid-cols-3 gap-2 items-end" data-testid="tr-efatura-accountant-box">
+              <div><label className="text-xs text-sky-900 font-semibold">Muhasebeci e-postası (her ayın 1'inde önceki ayın ZIP arşivi otomatik gider)</label>
+                <input type="email" value={settings.accountant_email || ""} onChange={(e) => setSettings({ ...settings, accountant_email: e.target.value })} placeholder="muhasebe@firma.com" className={inp} data-testid="tr-efatura-accountant-email" /></div>
+              <div><label className="text-xs text-sky-900">Muhasebeci adı</label>
+                <input value={settings.accountant_name || ""} onChange={(e) => setSettings({ ...settings, accountant_name: e.target.value })} className={inp} data-testid="tr-efatura-accountant-name" /></div>
+              <div className="text-[11px] text-sky-800">{settings.accountant_email ? "✓ Otomatik aylık gönderim aktif (Resend anahtarı yokken MOCK outbox)" : "E-posta girilmezse otomatik gönderim yapılmaz"}</div>
+            </div>
             <div className="md:col-span-3 flex items-center justify-between">
               <span className="text-[11px] text-stone-500">API anahtarı olmadan gönderimler <b>simüle</b> edilir (ETTN üretilir, outbox'a yazılır). Anahtar eklendiğinde entegratöre iletilir.</span>
               <button onClick={saveSettings} disabled={savingSt} className="px-4 py-2 bg-stone-900 text-white rounded-lg text-sm font-medium disabled:opacity-50" data-testid="tr-efatura-settings-save">{savingSt ? "Kaydediliyor…" : "Ayarları kaydet"}</button>
@@ -487,6 +494,9 @@ function EFaturaBlock({ propertyId }) {
           </button>
           <button onClick={async () => { try { const r = await axios.get(`${API}/api/tr-compliance/efatura/${propertyId}/archive.zip?month=${bulkMonth}`, { responseType: "blob" }); const u = URL.createObjectURL(r.data); const a = document.createElement("a"); a.href = u; a.download = `efatura_${propertyId}_${bulkMonth}.zip`; a.click(); URL.revokeObjectURL(u); toast.success("Arşiv indirildi (XML + PDF + CSV)"); } catch (e) { toast.error(e?.response?.status === 404 ? "Bu ay için fatura yok" : "Arşiv alınamadı"); } }} className="px-4 py-2 bg-white border border-stone-300 text-stone-800 rounded-lg text-sm font-medium flex items-center gap-2" data-testid="tr-efatura-archive">
             <Download size={14} /> Aylık arşiv ZIP
+          </button>
+          <button onClick={async () => { try { const { data } = await axios.post(`${API}/api/tr-compliance/efatura/${propertyId}/archive/send`, { month: bulkMonth }); toast.success(`Arşiv muhasebeciye gönderildi (${data.count} fatura, ${data.email_status})`); } catch (e) { toast.error(e?.response?.data?.detail || "Gönderilemedi"); } }} className="px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-medium flex items-center gap-2" data-testid="tr-efatura-archive-send">
+            <PaperPlaneTilt size={14} /> Muhasebeciye gönder
           </button>
           {bulkResult && <span className="text-xs text-stone-600" data-testid="tr-efatura-bulk-result">{bulkResult.month}: <b>{bulkResult.created}</b> oluşturuldu{bulkResult.failed ? `, ${bulkResult.failed} başarısız` : ""}</span>}
         </div>

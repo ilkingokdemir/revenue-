@@ -35,6 +35,9 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Admin: `admin@hotelbox.com` / `HotelAdmin2026!` (login cevabında token alanı: `token`)
 - Preview: frontend/.env REACT_APP_BACKEND_URL değerini kullan
 
+## Son Durum (Iter 629, 2026-09-08) — Arıza fotoğraf galerisi, A/B otomatik kazanan (200 ziyaretçi), muhasebeciye aylık ZIP e-postası
+- Detay: CHANGELOG.md iter 629. Backlog: Apple/Google Wallet sertifikası, gerçek GİB/Resend/Twilio anahtarları.
+
 ## Son Durum (Iter 628, 2026-09-07) — Misafir cüzdanı (web pass + .ics), HK offline arıza, kampanya A/B, fatura ZIP arşivi
 - Apple/Google Wallet gerçek entegrasyon için sertifika/servis hesabı bekleniyor (wallet_settings). Detay: CHANGELOG.md iter 628.
 

@@ -1504,6 +1504,55 @@ async def campaign_window_loop(db, interval_seconds: int = 3600):
                         continue
                     active = bool(po.get("published", True)) and (not po.get("starts_at") or po["starts_at"] <= today) and (not po.get("ends_at") or po["ends_at"] >= today)
                     await db.promo_codes.update_one({"code": po["promo_code"], "source": "campaign_post"}, {"$set": {"is_active": active}})
+            await _ab_auto_close(db)
         except Exception as e:
             logger.warning(f"campaign window tick error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
+async def _ab_auto_close(db):
+    """A/B testi: toplam ziyaretçi eşiğe (varsayılan 200) ulaşınca kazananı otomatik uygula."""
+    async for site in db.hotel_sites.find({"content.posts": {"$elemMatch": {"title_b": {"$nin": ["", None]}}}}, {"_id": 0, "property_id": 1, "content.posts": 1}):
+        posts = (site.get("content") or {}).get("posts") or []
+        changed = False
+        for po in posts:
+            if not po.get("title_b") or not po.get("slug"):
+                continue
+            n_target = int(po.get("ab_auto_n") or 200)
+            page = f"blog/{po['slug']}"
+            stats = {}
+            for v in ("A", "B"):
+                views = await db.site_visits.count_documents({"property_id": site["property_id"], "event": "view", "page": page, "variant": v})
+                cta = await db.site_visits.count_documents({"property_id": site["property_id"], "event": "cta_click", "page": page, "variant": v})
+                stats[v] = (views, cta)
+            total = stats["A"][0] + stats["B"][0]
+            if total < n_target:
+                continue
+            rate = {v: (c / n if n else 0.0) for v, (n, c) in stats.items()}
+            winner = "B" if rate["B"] > rate["A"] else "A"
+            if winner == "B":
+                po["title"] = po["title_b"]
+            po["title_b"] = ""; po["ab_winner"] = winner; po["ab_closed_at"] = datetime.now(timezone.utc).isoformat(); po["ab_auto_closed"] = True
+            po["ab_result"] = {"A": {"views": stats["A"][0], "cta": stats["A"][1]}, "B": {"views": stats["B"][0], "cta": stats["B"][1]}}
+            changed = True
+            logger.info(f"A/B auto-closed {po.get('promo_code')} → {winner} ({total} visitors)")
+        if changed:
+            await db.hotel_sites.update_one({"property_id": site["property_id"]}, {"$set": {"content.posts": posts}})
+
+
+async def accountant_archive_loop(db, interval_seconds: int = 3600):
+    """Her ayın 1'inde önceki ayın e-fatura ZIP arşivini muhasebeciye e-posta ile gönder."""
+    await asyncio.sleep(120)
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            if now.day == 1 or os.environ.get("ACCOUNTANT_ARCHIVE_FORCE") == "1":
+                prev = (now.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+                from routes.security.tr_compliance import send_archive_to_accountant
+                async for st in db.tr_einvoice_settings.find({"accountant_email": {"$nin": ["", None]}}, {"_id": 0, "property_id": 1}):
+                    if await db.tr_einvoice_archives.find_one({"property_id": st["property_id"], "month": prev, "auto": True}, {"_id": 0, "id": 1}):
+                        continue
+                    await send_archive_to_accountant(st["property_id"], prev, auto=True)
+        except Exception as e:
+            logger.warning(f"accountant archive tick error: {e}")
         await asyncio.sleep(interval_seconds)

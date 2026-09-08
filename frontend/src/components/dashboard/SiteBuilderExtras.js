@@ -207,7 +207,7 @@ export function PostsEditor({ posts, onChange, stats }) {
                 <span className="px-1.5 py-0.5 rounded bg-stone-100">Tıklama: <b>{c.clicks || 0}</b></span>
               </div>); })()}
             {p.promo_code && <CampaignLinkRow code={p.promo_code} stats={statFor(p)} idx={i} />}
-            {p.promo_code && <AbRow post={p} idx={i} ab={statFor(p)?.ab} onTitleB={(v) => set(i, "title_b", v)} onApplied={(winner) => { const next = list.map((x, j) => (j === i ? { ...x, title: winner === "B" && x.title_b ? x.title_b : x.title, title_b: "", ab_winner: winner } : x)); onChange(next); }} />}
+            {p.promo_code && <AbRow post={p} idx={i} ab={statFor(p)?.ab} onTitleB={(v) => set(i, "title_b", v)} onAutoN={(v) => set(i, "ab_auto_n", v)} onApplied={(winner) => { const next = list.map((x, j) => (j === i ? { ...x, title: winner === "B" && x.title_b ? x.title_b : x.title, title_b: "", ab_winner: winner } : x)); onChange(next); }} />}
           </div>
         ))}
         {list.length === 0 && <p className="text-[10px] text-stone-400">Kampanya veya blog yazısı ekleyin — sitede "Blog & Kampanyalar" sayfası otomatik açılır.</p>}
@@ -316,7 +316,7 @@ export function CampaignLinkRow({ code, stats, idx }) {
   );
 }
 
-export function AbRow({ post, idx, ab, onTitleB, onApplied }) {
+export function AbRow({ post, idx, ab, onTitleB, onApplied, onAutoN }) {
   const [busy, setBusy] = useState(false);
   const pid = window.__activePropertyId || "";
   const apply = async (winner) => {
@@ -329,8 +329,11 @@ export function AbRow({ post, idx, ab, onTitleB, onApplied }) {
       <div className="flex items-center gap-2">
         <span className="font-bold text-violet-900 whitespace-nowrap">A/B başlık</span>
         <input className="flex-1 rounded border border-violet-200 px-2 py-1 text-[11px]" placeholder="B başlığı (boş = test kapalı)" value={post.title_b || ""} onChange={(e) => onTitleB(e.target.value)} data-testid={`site-post-title-b-${idx}`} />
-        {post.ab_winner && !post.title_b && <span className="px-1.5 py-0.5 rounded bg-violet-600 text-white font-bold" data-testid={`site-post-ab-winner-${idx}`}>Kazanan {post.ab_winner}</span>}
+        {post.title_b && <label className="flex items-center gap-1 whitespace-nowrap text-violet-900">Oto. kapan: <input type="number" min="20" step="10" value={post.ab_auto_n || 200} onChange={(e) => onAutoN?.(Number(e.target.value) || 200)} className="w-14 rounded border border-violet-200 px-1 py-0.5 text-[10px]" data-testid={`site-post-ab-auto-n-${idx}`} /> ziyaretçi</label>}
+        {post.ab_winner && !post.title_b && <span className="px-1.5 py-0.5 rounded bg-violet-600 text-white font-bold" data-testid={`site-post-ab-winner-${idx}`}>Kazanan {post.ab_winner}{post.ab_auto_closed ? " (otomatik)" : ""}</span>}
       </div>
+      {ab && ab.active && <div className="mt-1 h-1.5 rounded bg-violet-100 overflow-hidden" title="Otomatik kapanma ilerlemesi"><div className="h-full bg-violet-500" style={{ width: `${Math.min(100, ((ab.A.views + ab.B.views) / (post.ab_auto_n || 200)) * 100)}%` }} data-testid={`site-post-ab-progress-${idx}`} /></div>}
+      {ab && ab.active && <div className="text-[9px] text-violet-700 mt-0.5">{ab.A.views + ab.B.views}/{post.ab_auto_n || 200} ziyaretçi — eşikte kazanan otomatik uygulanır (CTA oranına göre)</div>}
       {ab && ab.active && (
         <div className="mt-1 grid grid-cols-2 gap-1.5">
           {["A", "B"].map((v) => (

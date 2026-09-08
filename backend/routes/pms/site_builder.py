@@ -195,7 +195,8 @@ def create_site_builder_router(db, require_roles):
                           "body": str(po.get("body") or "")[:8000], "image_url": str(po.get("image_url") or "")[:500], "type": po.get("type") if po.get("type") in ("blog", "campaign") else "blog",
                           "date": str(po.get("date") or datetime.now(timezone.utc).date().isoformat())[:10], "published": bool(po.get("published", True)),
                           "cta_url": str(po.get("cta_url") or "")[:300], "starts_at": str(po.get("starts_at") or "")[:10], "ends_at": str(po.get("ends_at") or "")[:10], "promo_code": re.sub(r"[^A-Z0-9_-]", "", str(po.get("promo_code") or "").upper())[:20],
-                          "title_b": str(po.get("title_b") or "")[:160],
+                          "title_b": str(po.get("title_b") or "")[:160], "ab_auto_n": max(20, min(100000, int(po.get("ab_auto_n") or 200))),
+                          "ab_winner": po.get("ab_winner") if po.get("ab_winner") in ("A", "B") else "", "ab_auto_closed": bool(po.get("ab_auto_closed")), "ab_closed_at": str(po.get("ab_closed_at") or "")[:40],
                           "discount_pct": max(0, min(90, int(po.get("discount_pct") or 0)))})
         content["posts"] = posts
         today_iso = datetime.now(timezone.utc).date().isoformat()

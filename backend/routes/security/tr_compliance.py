@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel
 import os
+import re
 import uuid
 import logging
 
@@ -485,7 +486,7 @@ def create_tr_compliance_router(db, require_roles):
         doc = await db.tr_einvoice_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
         return {"property_id": property_id, "integrator": "none", "mode": "test", "api_key": "", "tax_region": "tr",
                 "vat_preset": "tr_accommodation", "vat_rate": 10.0, "tax_label": "KDV", "sender_vkn": "", "sender_name": "",
-                "sender_address": "", "auto_issue_on_checkout": False, "auto_submit": True, "email_guest_copy": True, "auto_invoice_type": "earsiv", **doc}
+                "sender_address": "", "auto_issue_on_checkout": False, "auto_submit": True, "email_guest_copy": True, "auto_invoice_type": "earsiv", "accountant_email": "", "accountant_name": "", **doc}
 
     def _mask(k: str) -> str:
         return f"••••{k[-4:]}" if k and len(k) > 4 else ("••••" if k else "")
@@ -524,6 +525,8 @@ def create_tr_compliance_router(db, require_roles):
                "auto_submit": bool(data.get("auto_submit", cur.get("auto_submit", True))),
                "email_guest_copy": bool(data.get("email_guest_copy", cur.get("email_guest_copy", True))),
                "auto_invoice_type": data.get("auto_invoice_type") if data.get("auto_invoice_type") in ("earsiv", "efatura") else cur.get("auto_invoice_type", "earsiv"),
+               "accountant_email": str(data.get("accountant_email", cur.get("accountant_email")) or "").strip()[:120],
+               "accountant_name": str(data.get("accountant_name", cur.get("accountant_name")) or "").strip()[:120],
                "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": current_user.get("email")}
         if data.get("api_key") and "•" not in str(data["api_key"]):
             upd["api_key"] = str(data["api_key"])[:200]
@@ -635,6 +638,13 @@ th{{text-align:left;font-size:10px;text-transform:uppercase;color:#78716c;border
         import zipfile
         if len(month) != 7:
             raise HTTPException(422, "month YYYY-MM")
+        data, rows = await _build_archive(property_id, month)
+        return Response(data, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="efatura_{property_id}_{month}.zip"'})
+
+    async def _build_archive(property_id: str, month: str):
+        import csv
+        import io
+        import zipfile
         rows = await db.tr_invoices.find({"property_id": property_id, "issue_date": {"$gte": f"{month}-01", "$lte": f"{month}-31"}}, {"_id": 0}).sort("issue_date", 1).to_list(2000)
         if not rows:
             raise HTTPException(404, "Bu ay için fatura yok")
@@ -649,7 +659,63 @@ th{{text-align:left;font-size:10px;text-transform:uppercase;color:#78716c;border
                     z.writestr(f"xml/{r['invoice_no']}.xml", r["xml"])
                 z.writestr(f"pdf/{r['invoice_no']}.pdf", _render_pdf(r))
             z.writestr(f"ozet_{month}.csv", "\ufeff" + csv_io.getvalue())
-        return Response(buf.getvalue(), media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="efatura_{property_id}_{month}.zip"'})
+        return buf.getvalue(), rows
+
+    async def _send_archive(property_id: str, month: str, auto: bool = False, by: str = "system") -> dict:
+        st = await _get_settings(property_id)
+        to = st.get("accountant_email")
+        if not to:
+            raise HTTPException(422, "Muhasebeci e-postası tanımlı değil")
+        data, rows = await _build_archive(property_id, month)
+        token = uuid.uuid4().hex
+        from object_storage import save_upload
+        await save_upload(f"efatura_archives/{token}.zip", data)
+        base = (os.environ.get("PUBLIC_BASE_URL") or "").rstrip("/")
+        link = f"{base}/api/tr-compliance/efatura/archive-download/{token}"
+        total = round(sum(float(r.get("total") or 0) for r in rows), 2)
+        cur = rows[0].get("currency", "TRY") if rows else "TRY"
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "name": 1}) or {}
+        html = f"""<div style="font-family:system-ui,Arial;max-width:560px;margin:auto;color:#1c1917"><h2 style="margin:0 0 6px">{prop.get('name', property_id)} — {month} e-Fatura arşivi</h2>
+<p style="color:#57534e;font-size:14px">Sayın {st.get('accountant_name') or 'Muhasebeci'}, {month} dönemine ait <b>{len(rows)}</b> fatura (toplam <b>{total:,.2f} {cur}</b>) UBL XML + PDF + özet CSV olarak ekte/bağlantıda.</p>
+<p><a href="{link}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:10px 18px;border-radius:999px;font-weight:700">ZIP arşivini indir</a></p>
+<p style="font-size:11px;color:#a8a29e">Bağlantı 90 gün geçerlidir. {'Otomatik aylık gönderim.' if auto else 'Manuel gönderim.'}</p></div>"""
+        from routes.platform_ext.mailer import send_email
+        status = await send_email(db, to, f"{prop.get('name', property_id)} · {month} e-Fatura arşivi ({len(rows)} fatura)", html, kind="efatura_archive", meta={"property_id": property_id, "month": month})
+        rec = {"id": str(uuid.uuid4()), "token": token, "property_id": property_id, "month": month, "to": to, "count": len(rows), "total": total, "currency": cur,
+               "auto": auto, "email_status": status, "sent_by": by, "size": len(data), "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.tr_einvoice_archives.insert_one(dict(rec))
+        rec.pop("_id", None)
+        return rec
+
+    @router.post("/tr-compliance/efatura/{property_id}/archive/send")
+    async def efatura_archive_send(property_id: str, data: dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        month = str(data.get("month") or "")
+        if len(month) != 7:
+            raise HTTPException(422, "month YYYY-MM")
+        return await _send_archive(property_id, month, auto=False, by=current_user.get("email", ""))
+
+    @router.get("/tr-compliance/efatura/{property_id}/archive/history")
+    async def efatura_archive_history(property_id: str, _u: dict = Depends(require_roles("admin", "manager"))):
+        rows = await db.tr_einvoice_archives.find({"property_id": property_id}, {"_id": 0, "token": 0}).sort("created_at", -1).limit(24).to_list(24)
+        return {"history": rows}
+
+    @router.get("/tr-compliance/efatura/archive-download/{token}")
+    async def efatura_archive_download(token: str):
+        rec = await db.tr_einvoice_archives.find_one({"token": re.sub(r"[^a-f0-9]", "", token)}, {"_id": 0})
+        if not rec:
+            raise HTTPException(404, "Arşiv bulunamadı")
+        from object_storage import fetch_upload
+        got = await fetch_upload(f"efatura_archives/{rec['token']}.zip")
+        data = got[0] if isinstance(got, tuple) else got
+        if not data:
+            local = f"/app/backend/uploads/efatura_archives/{rec['token']}.zip"
+            if os.path.exists(local):
+                data = open(local, "rb").read()
+        if not data:
+            raise HTTPException(404, "Dosya bulunamadı")
+        return Response(data, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="efatura_{rec["property_id"]}_{rec["month"]}.zip"'})
+
+    router.send_archive = _send_archive
 
     def _render_pdf(rec: dict) -> bytes:
         import io
@@ -702,6 +768,13 @@ th{{text-align:left;font-size:10px;text-transform:uppercase;color:#78716c;border
     _ROUTER_REF["router"] = router
     _ROUTER_REF["db"] = db
     return router
+
+
+async def send_archive_to_accountant(property_id: str, month: str, auto: bool = True) -> dict:
+    r = _ROUTER_REF.get("router")
+    if not r:
+        return {"skipped": "no_router"}
+    return await r.send_archive(property_id, month, auto=auto)
 
 
 async def auto_issue_on_checkout(booking: dict) -> dict:

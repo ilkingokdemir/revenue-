@@ -74,6 +74,27 @@ def create_maintenance_router(db, require_roles):
                     d["duration_hours"] = None
         return docs
 
+    async def _normalize_photos(items, issue_id: str, by: str) -> list:
+        """HK mobil çevrimdışı raporlar data-URL gönderir → dosyaya yaz, {url,...} nesnesine çevir."""
+        import base64
+        out = []
+        for it in items or []:
+            if isinstance(it, dict):
+                out.append(it); continue
+            if isinstance(it, str) and it.startswith("data:image/"):
+                try:
+                    head, b64 = it.split(",", 1)
+                    ext = "png" if "png" in head else "jpg"
+                    filename = f"{issue_id}_{uuid.uuid4().hex[:8]}.{ext}"
+                    from object_storage import save_upload
+                    await save_upload(f"maintenance/{filename}", base64.b64decode(b64))
+                    out.append({"url": f"/api/uploads/maintenance/{filename}", "filename": filename, "uploaded_by": by, "uploaded_at": datetime.now(timezone.utc).isoformat(), "type": "before", "source": "hk_mobile"})
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(f"photo normalize failed: {e}")
+            elif isinstance(it, str) and it.startswith("/"):
+                out.append({"url": it, "uploaded_by": by, "uploaded_at": datetime.now(timezone.utc).isoformat(), "type": "before"})
+        return out
+
     @router.post("/maintenance/issues")
     async def create_issue(data: Dict, current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper"))):
         now = datetime.now(timezone.utc).isoformat()
@@ -88,8 +109,9 @@ def create_maintenance_router(db, require_roles):
         sla_deadline = (datetime.now(timezone.utc) + timedelta(hours=sla_hours)).isoformat()
 
         reporter_dept = current_user.get("department", "") or ""
+        issue_id = str(uuid.uuid4())
         issue = {
-            "id": str(uuid.uuid4()),
+            "id": issue_id,
             "property_id": data.get("property_id", ""),
             "title": data.get("title", ""),
             "description": data.get("description", ""),
@@ -107,7 +129,7 @@ def create_maintenance_router(db, require_roles):
             "reported_by": current_user.get("name", current_user.get("email", "Staff")),
             "reported_by_email": current_user.get("email", ""),
             "reported_by_department": reporter_dept,
-            "photos_before": data.get("photos_before", []),
+            "photos_before": await _normalize_photos(data.get("photos_before", []), issue_id, current_user.get("name", "Staff")),
             "photos_after": [],
             "estimated_cost": 0,
             "actual_cost": 0,

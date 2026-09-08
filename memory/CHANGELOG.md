@@ -4179,3 +4179,9 @@ d) ODA TİPİ FORECAST: room_type_forecast.py — max(OTB, aynı-DOW 8 hafta Ø)
 - Kampanya A/B: post.title_b; /c/KOD 302'de varyant çerezi (abv_KOD, &v=), site_visits.variant (view/cta_click), campaign-stats.ab, `campaign-ab/{code}/apply-winner`.
 - e-Fatura arşiv: `/tr-compliance/efatura/{pid}/archive.zip?month=` (UBL XML + reportlab PDF + özet CSV). Panelde "Aylık arşiv ZIP".
 - Test: iteration_628.json backend 16/16, frontend 4/4.
+
+## Iter 629 (2026-09-08) — Arıza fotoğraf galerisi + A/B otomatik kazanan + Muhasebeci arşiv e-postası
+- maintenance.py `_normalize_photos`: HK mobil data-URL fotoğrafları dosyaya yazılır ({url, source:'hk_mobile'}). MaintenancePanel `PhotoLightbox` (kaydırma, ok tuşları, önce/sonra etiketi, thumbnails, Esc).
+- workers `_ab_auto_close` (campaign_window_loop içinde saatlik): post.ab_auto_n (varsayılan 200) toplam görüntülenmede CTA oranına göre kazanan uygulanır (ab_winner, ab_auto_closed, ab_result). UI: eşik girişi + ilerleme çubuğu.
+- tr_compliance: settings.accountant_email/name; `/efatura/{pid}/archive/send`, `/archive/history`, public `archive-download/{token}`; workers `accountant_archive_loop` (ayın 1'i, önceki ay, mükerrer koruması). E-posta MOCK.
+- Test: iteration_629.json backend 10/10, frontend pass.

@@ -668,7 +668,8 @@ function IssueDetailDrawer({ issue, onClose, assignees = [], L, onUpdate }) {
   const [showCost, setShowCost] = useState(false);
   const beforeRef = useRef(null);
   const afterRef = useRef(null);
-  const [detailTab, setDetailTab] = useState("info"); // info, timeline, photos
+  const [detailTab, setDetailTab] = useState("info");
+  const [lightbox, setLightbox] = useState(null); // info, timeline, photos
 
   useEffect(() => {
     if (issue) setCostForm({ estimated_cost: issue.estimated_cost || 0, actual_cost: issue.actual_cost || 0, cost_notes: issue.cost_notes || "" });
@@ -886,6 +887,10 @@ function IssueDetailDrawer({ issue, onClose, assignees = [], L, onUpdate }) {
               {/* PHOTOS TAB - Before & After */}
               {detailTab === "photos" && (
                 <div className="space-y-5" data-testid="issue-photos">
+                  {((issue.photos_before || []).length + (issue.photos_after || []).length) > 0 && (
+                    <button onClick={() => setLightbox(0)} className="w-full py-2 rounded-lg bg-stone-900 text-white text-xs font-bold" data-testid="issue-gallery-open">🖼 Galeriyi aç (kaydırarak gez · {(issue.photos_before || []).length} önce / {(issue.photos_after || []).length} sonra)</button>
+                  )}
+                  {lightbox !== null && <PhotoLightbox photos={[...(issue.photos_before || []).map((p) => ({ ...p, kind: "before" })), ...(issue.photos_after || []).map((p) => ({ ...p, kind: "after" }))]} index={lightbox} onIndex={setLightbox} onClose={() => setLightbox(null)} />}
                   {/* Before Photos */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -898,7 +903,7 @@ function IssueDetailDrawer({ issue, onClose, assignees = [], L, onUpdate }) {
                     {(issue.photos_before || []).length > 0 ? (
                       <div className="grid grid-cols-3 gap-2">
                         {(issue.photos_before || []).map((p, i) => (
-                          <div key={i} className="rounded-lg overflow-hidden border-2 border-red-200 relative group">
+                          <div key={i} className="rounded-lg overflow-hidden border-2 border-red-200 relative group cursor-zoom-in" onClick={() => setLightbox(i)} data-testid={`issue-photo-before-${i}`}>
                             <img src={`${process.env.REACT_APP_BACKEND_URL}${p.url}`} alt="" className="w-full h-24 object-cover" />
                             <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5">
                               <p className="text-[8px] text-white truncate">{p.uploaded_by}</p>
@@ -930,7 +935,7 @@ function IssueDetailDrawer({ issue, onClose, assignees = [], L, onUpdate }) {
                     {(issue.photos_after || []).length > 0 ? (
                       <div className="grid grid-cols-3 gap-2">
                         {(issue.photos_after || []).map((p, i) => (
-                          <div key={i} className="rounded-lg overflow-hidden border-2 border-emerald-200 relative group">
+                          <div key={i} className="rounded-lg overflow-hidden border-2 border-emerald-200 relative group cursor-zoom-in" onClick={() => setLightbox((issue.photos_before || []).length + i)} data-testid={`issue-photo-after-${i}`}>
                             <img src={`${process.env.REACT_APP_BACKEND_URL}${p.url}`} alt="" className="w-full h-24 object-cover" />
                             <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5">
                               <p className="text-[8px] text-white truncate">{p.uploaded_by}</p>
@@ -1624,3 +1629,36 @@ function AssetsTab({ assets = [], issues = [], propertyId, onRefresh, onSelectIs
   );
 }
 
+
+
+export function PhotoLightbox({ photos, index, onIndex, onClose }) {
+  const touch = useRef(null);
+  const n = photos.length;
+  const go = useCallback((d) => onIndex((index + d + n) % n), [index, n, onIndex]);
+  useEffect(() => {
+    const k = (e) => { if (e.key === "ArrowRight") go(1); else if (e.key === "ArrowLeft") go(-1); else if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
+  }, [go, onClose]);
+  if (!n) return null;
+  const p = photos[index] || photos[0];
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col select-none" data-testid="photo-lightbox"
+      onTouchStart={(e) => { touch.current = e.touches[0].clientX; }}
+      onTouchEnd={(e) => { if (touch.current === null) return; const dx = e.changedTouches[0].clientX - touch.current; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); touch.current = null; }}>
+      <div className="flex items-center justify-between px-4 py-3 text-white">
+        <span className={`text-[10px] font-black px-2 py-0.5 rounded ${p.kind === "after" ? "bg-emerald-600" : "bg-red-600"}`} data-testid="lightbox-kind">{p.kind === "after" ? "SONRA / AFTER" : "ÖNCE / BEFORE"}</span>
+        <span className="text-xs text-white/70" data-testid="lightbox-counter">{index + 1} / {n}</span>
+        <button onClick={onClose} className="text-white text-xl leading-none px-2" data-testid="lightbox-close">×</button>
+      </div>
+      <div className="flex-1 flex items-center justify-center relative px-2">
+        <button onClick={() => go(-1)} className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 text-white text-2xl" data-testid="lightbox-prev">‹</button>
+        <img src={`${process.env.REACT_APP_BACKEND_URL}${p.url}`} alt="" className="max-h-[70vh] max-w-full object-contain rounded-lg" data-testid="lightbox-img" />
+        <button onClick={() => go(1)} className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 text-white text-2xl" data-testid="lightbox-next">›</button>
+      </div>
+      <div className="px-4 pb-2 text-center text-[11px] text-white/70">{p.uploaded_by}{p.uploaded_at ? ` · ${new Date(p.uploaded_at).toLocaleString()}` : ""}{p.source === "hk_mobile" ? " · HK mobil" : ""}</div>
+      <div className="flex gap-1.5 overflow-x-auto px-4 pb-4">
+        {photos.map((x, i) => <img key={i} src={`${process.env.REACT_APP_BACKEND_URL}${x.url}`} alt="" onClick={() => onIndex(i)} className={`w-14 h-14 object-cover rounded-md border-2 shrink-0 cursor-pointer ${i === index ? "border-white" : x.kind === "after" ? "border-emerald-500/60" : "border-red-500/60"}`} data-testid={`lightbox-thumb-${i}`} />)}
+      </div>
+    </div>
+  );
+}

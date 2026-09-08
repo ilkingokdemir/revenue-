@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Package, TrendUp, ShoppingCartSimple, Plus, X, Tag, Broadcast } from "@phosphor-icons/react";
+import { Package, TrendUp, ShoppingCartSimple, Plus, X, Tag, Broadcast, Medal } from "@phosphor-icons/react";
 import RatePlansCard from "./RatePlansCard";
 import DistributionCard from "./DistributionCard";
+import BrgClaimsCard from "./BrgClaimsCard";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/booking-engine`;
 
@@ -13,6 +14,7 @@ const TABS = [
   { id: "abandoned", label: "Bırakılan Sepetler", icon: ShoppingCartSimple },
   { id: "rateplans", label: "Fiyat Planları", icon: Tag },
   { id: "distribution", label: "Dağıtım (Google / Gömme / Kupon)", icon: Broadcast },
+  { id: "brg", label: "Fiyat Garantisi", icon: Medal },
 ];
 
 export default function BookingEngineV2Panel({ propertyId = "all" }) {
@@ -29,7 +31,7 @@ export default function BookingEngineV2Panel({ propertyId = "all" }) {
       if (tab === "packages") url = `${API}/packages?property_id=${propertyId}`;
       if (tab === "upsells") url = `${API}/upsells?property_id=${propertyId}`;
       if (tab === "abandoned") url = `${API}/cart/abandoned?days=14`;
-      if (tab === "rateplans" || tab === "distribution") { setItems([]); setLoading(false); return; }
+      if (["rateplans", "distribution", "brg"].includes(tab)) { setItems([]); setLoading(false); return; }
       const r = await axios.get(url, { withCredentials: true });
       setItems(r.data.packages || r.data.upsells || r.data.carts || []);
     } catch (e) { toast.error("Yüklenemedi"); }
@@ -89,7 +91,7 @@ export default function BookingEngineV2Panel({ propertyId = "all" }) {
             <t.icon size={13} /> {t.label}
           </button>
         ))}
-        {!["abandoned", "rateplans", "distribution"].includes(tab) && (
+        {!["abandoned", "rateplans", "distribution", "brg"].includes(tab) && (
           <button onClick={() => setShowCreate(true)} data-testid="be-create-btn"
                   className="ml-auto px-3 py-1.5 text-xs text-white bg-stone-900 rounded-lg inline-flex items-center gap-1.5 mb-1">
             <Plus size={13} /> Ekle
@@ -99,10 +101,11 @@ export default function BookingEngineV2Panel({ propertyId = "all" }) {
 
       {tab === "rateplans" && <RatePlansCard propertyId={propertyId} />}
       {tab === "distribution" && <DistributionCard propertyId={propertyId} />}
+      {tab === "brg" && <BrgClaimsCard propertyId={propertyId} />}
 
       {loading && <div className="text-center py-12 text-stone-400 text-sm">Yükleniyor…</div>}
 
-      {!loading && !["rateplans", "distribution"].includes(tab) && items.length === 0 && (
+      {!loading && !["rateplans", "distribution", "brg"].includes(tab) && items.length === 0 && (
         <div className="text-center py-12 text-stone-400 text-sm" data-testid="be-empty">
           Henüz kayıt yok.
         </div>

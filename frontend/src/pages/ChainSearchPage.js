@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const iso = (d) => d.toISOString().slice(0, 10);
 export default function ChainSearchPage() {
@@ -21,6 +23,7 @@ export default function ChainSearchPage() {
           <label className="text-xs text-stone-500">Kişi<input type="number" min="1" value={adults} onChange={(e) => setAdults(Number(e.target.value))} className="block border rounded-lg px-2 py-1.5 text-sm w-20" data-testid="chain-adults" /></label>
           <button onClick={search} disabled={busy} className="px-5 py-2 rounded-lg bg-stone-900 text-white text-sm font-bold disabled:opacity-50" data-testid="chain-search-btn">{busy ? "…" : "Ara"}</button>
         </div>
+        <ChainMap items={data?.properties || []} />
         <div className="mt-4 space-y-3">
           {data?.properties?.map((p) => (
             <div key={p.property_id} className={`bg-white rounded-2xl border p-4 flex gap-4 items-center ${p.available ? "border-stone-200" : "border-stone-100 opacity-60"}`} data-testid={`chain-prop-${p.property_id}`}>
@@ -37,4 +40,32 @@ export default function ChainSearchPage() {
       </div>
     </div>
   );
+}
+
+function ChainMap({ items }) {
+  const ref = React.useRef(null); const mapRef = React.useRef(null);
+  const pts = items.filter((p) => p.geo?.lat);
+  useEffect(() => {
+    if (!pts.length || !ref.current) return;
+    {
+      if (!mapRef.current) { mapRef.current = L.map(ref.current, { scrollWheelZoom: false }); L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(mapRef.current); }
+      const m = mapRef.current; m.eachLayer((l) => { if (l instanceof L.Marker) m.removeLayer(l); });
+      const b = [];
+      const groups = {};
+      pts.forEach((p) => { const k = `${p.geo.lat.toFixed(4)},${p.geo.lng.toFixed(4)}`; (groups[k] = groups[k] || []).push(p); });
+      const lbl = (p) => (p.total_from != null ? `${p.currency} ${Math.round(p.total_from)}` : "Dolu");
+      Object.values(groups).forEach((g) => {
+        const avail = g.filter((x) => x.available && x.total_from != null).sort((a, c) => a.total_from - c.total_from);
+        const p = avail[0] || g[0];
+        const label = g.length > 1 ? `${g.length} tesis · ${avail.length ? lbl(avail[0]) + "'dan" : "Dolu"}` : lbl(p);
+        const icon = L.divIcon({ className: "", html: `<div data-testid="map-pin-${p.property_id}" style="background:${avail.length ? "#0f766e" : "#9ca3af"};color:#fff;font:700 11px system-ui;padding:4px 8px;border-radius:999px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.3)">${label}</div>`, iconSize: null, iconAnchor: [30, 14] });
+        const popup = g.map((x) => `<div style="margin:4px 0"><b>${x.name}</b> · ${x.best ? x.best.room_name + " · " + lbl(x) : "Müsait değil"}${x.available ? ` <a href="${x.book_url}">Rezerve et →</a>` : ""}</div>`).join("");
+        L.marker([p.geo.lat, p.geo.lng], { icon }).addTo(m).bindPopup(`<div style="font-size:12px">${p.city ? `<div style="color:#666">${p.city}</div>` : ""}${popup}</div>`, { maxWidth: 320 });
+        b.push([p.geo.lat, p.geo.lng]);
+      });
+      m.fitBounds(b, { padding: [30, 30], maxZoom: 12 });
+    }
+  }, [pts]);
+  if (!pts.length) return null;
+  return <div ref={ref} className="mt-4 h-72 rounded-2xl border border-stone-200 overflow-hidden" data-testid="chain-map" />;
 }

@@ -80,7 +80,8 @@ function BookingEngineInner() {
   const [shareUrl, setShareUrl] = useState("");
   const shareWish = async () => {
     if (!wish.length) { toast(t("wish.empty")); return; }
-    try { const { data } = await axios.post(`${API}/booking/wishlist`, { items: wish.map((r) => ({ property_id: propertyId, room_type_id: r })), check_in: checkIn, check_out: checkOut, adults });
+    const ownerEmail = shareUrl ? "" : (window.prompt(t("wish.emailPrompt"), guestForm?.guest_email || "") || "");
+    try { const { data } = await axios.post(`${API}/booking/wishlist`, { items: wish.map((r) => ({ property_id: propertyId, room_type_id: r })), check_in: checkIn, check_out: checkOut, adults, owner_email: ownerEmail });
       const url = `${window.location.origin}${data.share_path}`; setShareUrl(url); try { await navigator.clipboard.writeText(url); } catch { /* ignore */ } toast.success(`${t("wish.copied")} ${url}`); }
     catch { toast.error("Paylaşılamadı"); }
   };

@@ -1071,6 +1071,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
                 bookings_count = await db.bookings.count_documents({
                     "room_type_id": room["id"],
                     "status": {"$nin": ["cancelled"]},
+                    "day_use": {"$ne": True},
                     "$or": [
                         {"check_in": {"$lt": check_out}, "check_out": {"$gt": check_in}}
                     ]

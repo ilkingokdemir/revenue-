@@ -97,6 +97,7 @@ export function ConfirmationStep({ t, confirmation, onBookAnother, fmt = (v) => 
             </div>
           )}
           {confirmation.status === "hold" && confirmation.hold_expires_at && <p className="text-xs font-semibold rounded-lg px-3 py-2 mb-3" style={{ background: "#fef3c7", color: "#92400e" }} data-testid="confirm-hold-note">⏳ {tr("confirm.holdNote", { until: new Date(confirmation.hold_expires_at).toLocaleString() })}</p>}
+          <BrgClaim t={t} confirmation={confirmation} />
           <div className="pt-2 border-t border-gray-100">
             <PostUpsells t={t} confirmation={confirmation} fmt={fmt} />
           </div>
@@ -114,6 +115,37 @@ export function ConfirmationStep({ t, confirmation, onBookAnother, fmt = (v) => 
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function BrgClaim({ t, confirmation }) {
+  const { t: tr } = useLanguage();
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState(""); const [price, setPrice] = useState(""); const [note, setNote] = useState("");
+  const [done, setDone] = useState(null); const [err, setErr] = useState("");
+  const submit = async () => {
+    setErr("");
+    try {
+      const { data } = await axios.post(`${API}/booking/brg-claim`, { property_id: confirmation.property_id, booking_ref: confirmation.booking_ref, email: confirmation.guest_email, competitor_url: url, competitor_price: price,
+        our_price: confirmation.cart_total || confirmation.total_price, currency: confirmation.currency, check_in: confirmation.check_in, check_out: confirmation.check_out, note });
+      setDone(data);
+    } catch (e) { setErr(e.response?.data?.detail || "Gönderilemedi"); }
+  };
+  return (
+    <div className="mt-4 text-left" data-testid="brg-section">
+      {!open && !done && <button type="button" onClick={() => setOpen(true)} className="text-xs underline text-slate-500" data-testid="brg-open">🏷 {tr("brg.link")}</button>}
+      {open && !done && (
+        <div className="rounded-lg border border-gray-200 p-3 space-y-2 text-xs" data-testid="brg-form">
+          <div className="font-semibold text-slate-800 text-sm">{tr("brg.title")}</div>
+          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" className="w-full border border-gray-300 rounded-lg px-3 py-2" data-testid="brg-url" />
+          <div className="flex gap-2"><input type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} placeholder={tr("brg.price")} className="flex-1 border border-gray-300 rounded-lg px-3 py-2" data-testid="brg-price" />
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={tr("brg.note")} className="flex-1 border border-gray-300 rounded-lg px-3 py-2" data-testid="brg-note" /></div>
+          {err && <div className="text-red-600" data-testid="brg-error">{err}</div>}
+          <button type="button" onClick={submit} disabled={!url || !price} className="px-4 py-2 rounded-lg font-semibold text-white disabled:opacity-40" style={{ background: t.colors.primary, borderRadius: t.borderRadius }} data-testid="brg-submit">{tr("brg.submit")}</button>
+        </div>
+      )}
+      {done && <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800" data-testid="brg-done">✓ {tr("brg.done", { hours: done.sla_hours })}</div>}
     </div>
   );
 }

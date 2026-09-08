@@ -120,6 +120,94 @@ def create_be_gaps_router(db, require_roles):
                 out[code] = round(1 / float(v), 6)
         return {"base": base, "rates": out, "count": len(out), "source": "currency_fx" if out else "static"}
 
+    async def _geocode(pr: dict):
+        """Şehir/adres → koordinat (Nominatim, sonuç properties.geo'ya önbelleklenir)."""
+        q = ", ".join(x for x in [pr.get("address"), pr.get("city"), pr.get("country")] if x)
+        if not q:
+            return None
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=6, headers={"User-Agent": "MyHotelBox/1.0"}) as c:
+                r = await c.get("https://nominatim.openstreetmap.org/search", params={"q": q, "format": "json", "limit": 1})
+                hit = (r.json() or [None])[0]
+            if hit:
+                geo = {"lat": float(hit["lat"]), "lng": float(hit["lon"])}
+                await db.properties.update_one({"id": pr["id"]}, {"$set": {"geo": geo}})
+                return geo
+        except Exception:
+            return None
+        return None
+
+    @router.put("/booking/property-geo/{pid}")
+    async def set_geo(pid: str, data: Dict, _u: dict = Depends(require_roles("admin", "manager"))):
+        try:
+            geo = {"lat": float(data["lat"]), "lng": float(data["lng"])}
+        except (KeyError, TypeError, ValueError):
+            raise HTTPException(422, "lat/lng gerekli")
+        await db.properties.update_one({"id": pid}, {"$set": {"geo": geo}})
+        return {"ok": True, "geo": geo}
+
+    # ---- en iyi fiyat garantisi ----
+    @router.post("/booking/brg-claim")
+    async def brg_claim(data: Dict):
+        email = str(data.get("email") or "").strip().lower()
+        try:
+            price = float(data.get("competitor_price"))
+        except (TypeError, ValueError):
+            raise HTTPException(422, "Rakip fiyat sayı olmalı")
+        if "@" not in email or not data.get("property_id") or not str(data.get("competitor_url") or "").startswith("http"):
+            raise HTTPException(422, "E-posta, tesis ve rakip bağlantısı gerekli")
+        doc = {"id": str(uuid.uuid4()), "property_id": data["property_id"], "booking_ref": str(data.get("booking_ref") or "")[:30], "email": email,
+               "competitor_url": str(data["competitor_url"])[:400], "competitor_price": price, "our_price": float(data.get("our_price") or 0), "currency": str(data.get("currency") or "GBP")[:3].upper(),
+               "check_in": str(data.get("check_in") or "")[:10], "check_out": str(data.get("check_out") or "")[:10], "note": str(data.get("note") or "")[:500],
+               "status": "pending", "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.brg_claims.insert_one(dict(doc))
+        doc.pop("_id", None)
+        return {"ok": True, "id": doc["id"], "status": "pending", "sla_hours": 24}
+
+    @router.get("/booking/brg-claims/{pid}")
+    async def brg_list(pid: str, _u: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        rows = await db.brg_claims.find({"property_id": pid}, {"_id": 0}).sort("created_at", -1).limit(200).to_list(200)
+        return {"items": rows, "pending": sum(1 for r in rows if r["status"] == "pending")}
+
+    @router.put("/booking/brg-claims/{claim_id}")
+    async def brg_decide(claim_id: str, data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        status = data.get("status") if data.get("status") in ("approved", "rejected") else None
+        if not status:
+            raise HTTPException(422, "status approved|rejected")
+        c = await db.brg_claims.find_one({"id": claim_id}, {"_id": 0})
+        if not c:
+            raise HTTPException(404, "Talep yok")
+        upd = {"status": status, "decided_at": datetime.now(timezone.utc).isoformat(), "decided_by": current_user.get("email"), "decision_note": str(data.get("note") or "")[:300]}
+        if status == "approved":
+            upd["matched_price"] = float(data.get("matched_price") or c["competitor_price"])
+            upd["bonus_pct"] = float(data.get("bonus_pct") or 0)
+            if c.get("booking_ref"):
+                await db.bookings.update_one({"booking_ref": c["booking_ref"]}, {"$set": {"brg_matched_price": upd["matched_price"], "brg_claim_id": claim_id}})
+        await db.brg_claims.update_one({"id": claim_id}, {"$set": upd})
+        from routes.platform_ext.mailer import send_email
+        msg = f"Fiyat eşleme talebiniz <b>{'onaylandı' if status == 'approved' else 'reddedildi'}</b>." + (f" Yeni fiyat: {upd['matched_price']} {c['currency']}." if status == "approved" else "") + (f"<br>{upd['decision_note']}" if upd["decision_note"] else "")
+        upd["email_status"] = await send_email(db, c["email"], "En İyi Fiyat Garantisi — talep sonucu / Best Rate Guarantee result", f"<div style='font-family:system-ui'>{msg}</div>", kind="brg", meta={"claim_id": claim_id})
+        return {"id": claim_id, **upd}
+
+    # ---- day-use müsaitliği (gece stoğundan ayrı) ----
+    @router.get("/booking/day-use-availability/{pid}")
+    async def day_use_availability(pid: str, date: str):
+        try:
+            _date.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(422, "date YYYY-MM-DD")
+        cfg = await get_be_settings(db, pid)
+        rooms = await db.room_types.find({"property_id": pid, "is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "total_rooms": 1, "base_price": 1}).to_list(50)
+        out = []
+        for r in rooms:
+            total = int(r.get("total_rooms") or 1)
+            du = await db.bookings.count_documents({"room_type_id": r["id"], "day_use": True, "check_in": date, "status": {"$nin": ["cancelled", "no_show"]}})
+            # gece misafiri sabah çıkar, akşam girer → gündüz slotu odayı bloke etmez; sadece day-use kotası sayılır
+            out.append({"room_type_id": r["id"], "name": r.get("name"), "total": total, "day_use_booked": du, "day_use_left": max(0, total - du),
+                        "price": round(float(r.get("base_price") or 0) * float(cfg.get("day_use_pct") or 50) / 100, 2), "hours": f"{cfg.get('day_use_start')}-{cfg.get('day_use_end')}"})
+        return {"date": date, "enabled": bool(cfg.get("day_use_enabled")), "rooms": out}
+
     # ---- zincir arama ----
     @router.get("/booking/chain-search")
     async def chain_search(check_in: str, check_out: str, adults: int = 2):
@@ -128,9 +216,11 @@ def create_be_gaps_router(db, require_roles):
         except ValueError:
             raise HTTPException(422, "Tarih hatalı")
         nights = max(1, (co - ci).days)
-        props = await db.properties.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "city": 1, "country": 1, "image_url": 1, "hero_image": 1, "star_rating": 1, "currency": 1}).to_list(50)
+        props = await db.properties.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "city": 1, "country": 1, "address": 1, "image_url": 1, "hero_image": 1, "star_rating": 1, "currency": 1, "geo": 1}).to_list(50)
         out = []
         for pr in props:
+            if not pr.get("geo"):
+                pr["geo"] = await _geocode(pr)
             rooms = await db.room_types.find({"property_id": pr["id"], "is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "base_price": 1, "max_occupancy": 1, "total_rooms": 1, "image_url": 1}).to_list(50)
             best = None; avail_total = 0
             for r in rooms:
@@ -142,9 +232,11 @@ def create_be_gaps_router(db, require_roles):
                     continue
                 avail_total += left
                 price = float(r.get("base_price") or 0)
+                if price <= 0:
+                    continue
                 if best is None or price < best["price"]:
                     best = {"room_type_id": r["id"], "room_name": r.get("name"), "price": price, "rooms_left": left, "image_url": r.get("image_url")}
-            out.append({"property_id": pr["id"], "name": pr.get("name"), "city": pr.get("city"), "country": pr.get("country"), "image_url": pr.get("hero_image") or pr.get("image_url"),
+            out.append({"property_id": pr["id"], "name": pr.get("name"), "city": pr.get("city"), "country": pr.get("country"), "image_url": pr.get("hero_image") or pr.get("image_url"), "geo": pr.get("geo"),
                         "star_rating": pr.get("star_rating"), "currency": pr.get("currency") or "GBP", "available": avail_total > 0, "rooms_available": avail_total, "best": best,
                         "nights": nights, "total_from": round(best["price"] * nights, 2) if best else None, "book_url": f"/book?property={pr['id']}&check_in={check_in}&check_out={check_out}&adults={adults}"})
         out.sort(key=lambda x: (not x["available"], x["total_from"] or 1e12))
@@ -157,7 +249,10 @@ def create_be_gaps_router(db, require_roles):
         if not items:
             raise HTTPException(422, "Liste boş")
         code = uuid.uuid4().hex[:8].upper()
-        await db.be_wishlists.insert_one({"id": str(uuid.uuid4()), "code": code, "items": items, "check_in": str(data.get("check_in") or ""), "check_out": str(data.get("check_out") or ""),
+        for it in items:
+            r = await db.room_types.find_one({"id": it["room_type_id"]}, {"_id": 0, "base_price": 1})
+            it["price_at_save"] = float((r or {}).get("base_price") or 0)
+        await db.be_wishlists.insert_one({"id": str(uuid.uuid4()), "code": code, "items": items, "owner_email": str(data.get("owner_email") or "").strip().lower()[:120], "alerts_sent": 0, "check_in": str(data.get("check_in") or ""), "check_out": str(data.get("check_out") or ""),
                                           "adults": int(data.get("adults") or 2), "owner_name": str(data.get("owner_name") or "")[:80], "views": 0, "created_at": datetime.now(timezone.utc).isoformat()})
         return {"code": code, "share_path": f"/wishlist/{code}"}
 

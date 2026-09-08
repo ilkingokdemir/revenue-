@@ -1,3 +1,4 @@
+import React from "react";
 import { useState } from "react";
 import {
   CalendarBlank, Users, CaretDown, MagnifyingGlass, Tag,
@@ -76,6 +77,7 @@ export function SearchWidget({ t, checkIn, setCheckIn, checkOut, setCheckOut, ad
         {dayUseCfg?.day_use_enabled && setDayUse && (
           <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 self-end pb-2 whitespace-nowrap" data-testid="day-use-toggle">
             <input type="checkbox" checked={dayUse} onChange={(e) => setDayUse(e.target.checked)} data-testid="day-use-checkbox" /> {tr("dayuse.label", { start: dayUseCfg.day_use_start, end: dayUseCfg.day_use_end, pct: 100 - dayUseCfg.day_use_pct })}
+            {dayUse && <DayUseSlots propertyId={dayUseCfg.property_id} date={checkIn} />}
           </label>
         )}
         <div className="flex items-end">
@@ -98,4 +100,12 @@ export function SearchWidget({ t, checkIn, setCheckIn, checkOut, setCheckOut, ad
       )}
     </div>
   );
+}
+
+function DayUseSlots({ propertyId, date }) {
+  const [d, setD] = React.useState(null);
+  React.useEffect(() => { if (!date) return; fetch(`${process.env.REACT_APP_BACKEND_URL}/api/booking/day-use-availability/${propertyId}?date=${date}`).then((r) => r.json()).then(setD).catch(() => {}); }, [propertyId, date]);
+  if (!d?.rooms) return null;
+  const left = d.rooms.reduce((s, r) => s + r.day_use_left, 0);
+  return <span className="ml-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold" data-testid="day-use-slots">{left} slot</span>;
 }

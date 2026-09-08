@@ -1507,6 +1507,7 @@ async def campaign_window_loop(db, interval_seconds: int = 3600):
             await _ab_auto_close(db)
             await _expire_holds(db)
             await _notify_waitlist(db)
+            await _wishlist_alerts(db)
         except Exception as e:
             logger.warning(f"campaign window tick error: {e}")
         await asyncio.sleep(interval_seconds)
@@ -1540,6 +1541,36 @@ async def _notify_waitlist(db):
         html = f"<div style='font-family:system-ui;max-width:520px;margin:auto'><h2>Yer açıldı! / A room just opened</h2><p>{w['check_in']} → {w['check_out']} için <b>{open_room.get('name', '')}</b> müsait. Öncelikli rezervasyon bağlantınız 24 saat geçerlidir.</p><p><a href='{link}' style='background:#111;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:700'>Hemen rezerve et</a></p></div>"
         status = await send_email(db, w["email"], "Yer açıldı — öncelikli rezervasyon / A room opened up", html, kind="waitlist", meta={"waitlist_id": w["id"], "property_id": w["property_id"]})
         await db.be_waitlist.update_one({"id": w["id"]}, {"$set": {"status": "notified", "notified_at": datetime.now(timezone.utc).isoformat(), "email_status": status, "room_type": open_room.get("name")}})
+
+
+async def _wishlist_alerts(db):
+    """Wishlist fiyat alarmı: kayıtlı oda ≥%5 ucuzladı veya ≤2 oda kaldı → sahibine MOCK e-posta (günde en fazla 1)."""
+    from routes.platform_ext.mailer import send_email
+    now = datetime.now(timezone.utc)
+    async for w in db.be_wishlists.find({"owner_email": {"$nin": ["", None]}}, {"_id": 0}).limit(500):
+        last = w.get("last_alert_at")
+        if last and (now - datetime.fromisoformat(last)).total_seconds() < 20 * 3600:
+            continue
+        hits = []
+        for it in w.get("items") or []:
+            r = await db.room_types.find_one({"id": it["room_type_id"]}, {"_id": 0, "name": 1, "base_price": 1, "total_rooms": 1})
+            if not r:
+                continue
+            price = float(r.get("base_price") or 0); saved = float(it.get("price_at_save") or 0)
+            left = None
+            if w.get("check_in") and w.get("check_out"):
+                booked = await db.bookings.count_documents({"room_type_id": it["room_type_id"], "status": {"$nin": ["cancelled", "no_show"]}, "day_use": {"$ne": True}, "check_in": {"$lt": w["check_out"]}, "check_out": {"$gt": w["check_in"]}})
+                left = int(r.get("total_rooms") or 1) - booked
+            if saved and price <= saved * 0.95:
+                hits.append(f"📉 {r.get('name')}: {saved:.0f} → <b>{price:.0f}</b> (−{(1 - price / saved) * 100:.0f}%)")
+            elif left is not None and 0 < left <= 2:
+                hits.append(f"🔥 {r.get('name')}: sadece <b>{left}</b> oda kaldı")
+        if not hits:
+            continue
+        base = (os.environ.get("PUBLIC_BASE_URL") or "").rstrip("/")
+        html = "<div style='font-family:system-ui;max-width:520px;margin:auto'><h2>Wishlist güncellemesi</h2><ul>" + "".join(f"<li>{h}</li>" for h in hits) + f"</ul><p><a href='{base}/wishlist/{w['code']}' style='background:#e11d48;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:700'>Wishlist'i aç</a></p></div>"
+        st = await send_email(db, w["owner_email"], "Wishlist: fiyat düştü / son odalar", html, kind="wishlist_alert", meta={"code": w["code"]})
+        await db.be_wishlists.update_one({"code": w["code"]}, {"$set": {"last_alert_at": now.isoformat(), "last_alert_status": st}, "$inc": {"alerts_sent": 1}})
 
 
 async def _ab_auto_close(db):

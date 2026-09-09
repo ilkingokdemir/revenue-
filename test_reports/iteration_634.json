@@ -1,0 +1,27 @@
+{
+  "summary": "Iter634 Paket37 — Webhook retry (backoff + manual retry + toggle/delete), Public API Key expiry (expires_in_days/expires_at, +90 gün extend, expired→401, expiry-check idempotent, invalid→422), PMS connector sync (push, resync/{pid}/{log_id}, sync-timeline health/totals/timeline/failed_entries, unknown provider/log 404), Chain search geo (centre_km + station cached in properties.geo_meta). Backend: 11/11 pytest passed. Frontend: /book-all shows chain-geo rows with '📍 Merkeze · 🚉 Station', Super Admin PA panel (menu id 'super-admin') exposes pa-key-expiry select, pa-key-extend-* +90 gün (badge went 29 gün → 119 gün), pa-webhooks add/test/retry/toggle/delete flow, and PMS Connect Hub via Connector Catalog → connector-open-opera-cloud shows pms-sync-timeline with pms-sync-health='Sağlıklı', pms-sync-bars, pms-resync-last (toast 'gün yeniden gönderildi (MOCK)' and ↻ marker on log row).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter634_paket37.py",
+    "/app/test_reports/pytest/iter634.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "partner_ops.py _record uses upsert with prev.id so retries update the same delivery doc — correct; but 'attempts' resets from prev.attempts+1, so first automatic retry_due path is not distinguished from manual retry_delivery_now (both increment attempts). Not a bug, just note.",
+    "public_api_v1.py update_key: if body carries BOTH extend_days and expires_at/expires_in_days, extend_days wins (silently overwrites _expiry result). Intentional but could surprise partners; consider 422 on conflict.",
+    "pms_connect.py sync-timeline: mode='live' branch counts a mocked row as 'mocked' before checking is_fail — a live push that failed goes to 'failed'; a mock push always to 'mocked'. Logic is fine but ordering (mode==mocked short-circuits) means we never mark a mocked entry as failed even if result.ok=false. Sample logs I saw contained mocked=true fail results — those are hidden from failed counts. If backend intent is to only show live failures, fine; otherwise revisit.",
+    "be_gaps.py chain_search: sequential await _geo_meta(pr) per property — first call triggers Nominatim per property (slow). Cached path (geo_meta.sig) works: I observed the 2nd call fast in tests. Consider asyncio.gather for cold cache to reduce p95."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter634_paket37.py", "/app/test_reports/iteration_634.json"],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (all critical flows OK)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Created TEST_exp (expires_in_days=3, then +90 extended), TEST_dead (already-expired 2020-01-01), TEST_UI_30d (via UI). Fired a webhook sub to https://httpstat.us/500 for retry verification and deleted after. Pushed 3-day + 14-day mocks under opera-cloud for aldgate-flats & default.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Active property in dashboard is 'default' (Franziskaner), so UI-level PMS Connect Hub reads /pms-connect/opera-cloud/sync-timeline/default. When testing UI, push at least one entry to the currently-active property first (POST /api/pms-connect/opera-cloud/push-from-rms/default), otherwise health shows 'Veri yok' and pms-resync-last is not rendered. Sidebar menu ID for Platform Admin is 'super-admin'; PMS Connect Hub sidebar id has data-testid='pms-connect-btn' but is nested under a collapsible section — direct sidebar click may miss; Connector Catalog → connector-open-opera-cloud reliably navigates. External egress to httpstat.us fails and is expected (deliveries stay 'retrying'). Nominatim OK. Emails MOCK."
+}

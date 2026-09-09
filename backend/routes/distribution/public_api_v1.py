@@ -3,7 +3,7 @@ import asyncio
 import secrets
 import time
 import uuid
-from datetime import date as _date, datetime, timezone
+from datetime import date as _date, datetime, timedelta, timezone
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
@@ -14,6 +14,24 @@ SCOPES = ("read:availability", "read:bookings", "write:bookings", "read:guests")
 DEFAULT_SCOPES = ["read:availability", "read:bookings", "write:bookings"]
 _BUCKETS: Dict[str, list] = {}
 now_iso = lambda: datetime.now(timezone.utc).isoformat()
+
+
+def _expiry(data: dict) -> Optional[str]:
+    if data.get("expires_at"):
+        try:
+            return datetime.fromisoformat(str(data["expires_at"]).replace("Z", "+00:00")).astimezone(timezone.utc).isoformat()
+        except ValueError:
+            raise HTTPException(422, "expires_at ISO tarih olmalı")
+    days = data.get("expires_in_days")
+    if days not in (None, "", 0, "0"):
+        return (datetime.now(timezone.utc) + timedelta(days=max(1, min(3650, int(days))))).isoformat()
+    return None
+
+
+def _days_left(expires_at: Optional[str]) -> Optional[int]:
+    if not expires_at:
+        return None
+    return (datetime.fromisoformat(expires_at) - datetime.now(timezone.utc)).days
 
 
 def _throttle(key_id: str, limit: int) -> tuple:
@@ -125,10 +143,65 @@ def create_public_api_v1_router(db, require_roles):
             upd["rate_per_min"] = max(10, min(5000, int(data["rate_per_min"] or 120)))
         if "name" in data:
             upd["name"] = str(data["name"])[:60]
+        if "expires_at" in data or "expires_in_days" in data:
+            upd["expires_at"] = _expiry(data)
+            upd["expiry_warned"] = False; upd["expired_notified"] = False
+        if data.get("extend_days"):
+            cur = await db.public_api_keys.find_one({"id": key_id, "property_id": pid}, {"_id": 0, "expires_at": 1})
+            if not cur:
+                raise HTTPException(404, "Anahtar yok")
+            base = max(datetime.now(timezone.utc), datetime.fromisoformat(cur["expires_at"])) if cur.get("expires_at") else datetime.now(timezone.utc)
+            upd["expires_at"] = (base + timedelta(days=max(1, min(3650, int(data["extend_days"]))))).isoformat()
+            upd["expiry_warned"] = False; upd["expired_notified"] = False
         r = await db.public_api_keys.update_one({"id": key_id, "property_id": pid}, {"$set": upd})
         if not r.matched_count:
             raise HTTPException(404, "Anahtar yok")
+        return {"ok": True, **upd, "days_left": _days_left(upd.get("expires_at")) if "expires_at" in upd else None}
+
+    @router.post("/public-keys/{pid}/expiry-check")
+    async def expiry_check(pid: str, _u: dict = Depends(require_roles("admin"))):
+        from routes.platform_ext.partner_ops import check_api_key_expiry
+        return await check_api_key_expiry(db)
+
+    @router.get("/webhook-subs/{pid}/deliveries")
+    async def deliveries(pid: str, status: str = "", limit: int = 50, _u: dict = Depends(require_roles("admin", "manager"))):
+        q = {"property_id": pid}
+        if status:
+            q["status"] = status
+        rows = await db.webhook_deliveries.find(q, {"_id": 0, "payload": 0}).sort("at", -1).to_list(min(limit, 200))
+        return {"deliveries": rows}
+
+    @router.post("/webhook-subs/{pid}/deliveries/{delivery_id}/retry")
+    async def retry_delivery(pid: str, delivery_id: str, _u: dict = Depends(require_roles("admin", "manager"))):
+        from routes.platform_ext.partner_ops import retry_delivery_now
+        d = await retry_delivery_now(db, delivery_id)
+        if not d:
+            raise HTTPException(404, "Teslimat yok veya payload saklanmamış")
+        d.pop("payload", None)
+        return d
+
+    @router.put("/webhook-subs/{pid}/{sub_id}")
+    async def update_sub(pid: str, sub_id: str, data: dict, _u: dict = Depends(require_roles("admin", "manager"))):
+        upd = {}
+        if "active" in data:
+            upd["active"] = bool(data["active"])
+        if "events" in data:
+            upd["events"] = data["events"] or ["*"]
+        r = await db.webhook_subscriptions.update_one({"id": sub_id, "property_id": pid}, {"$set": upd})
+        if not r.matched_count:
+            raise HTTPException(404, "Abonelik yok")
         return {"ok": True, **upd}
+
+    @router.delete("/webhook-subs/{pid}/{sub_id}")
+    async def delete_sub(pid: str, sub_id: str, _u: dict = Depends(require_roles("admin"))):
+        await db.webhook_subscriptions.delete_one({"id": sub_id, "property_id": pid})
+        return {"ok": True}
+
+    @router.post("/webhook-subs/{pid}/test")
+    async def test_webhook(pid: str, _u: dict = Depends(require_roles("admin", "manager"))):
+        from routes.platform_ext.partner_ops import emit_webhook
+        n = await emit_webhook(db, pid, "test.ping", {"message": "MyHotelBox webhook testi", "at": now_iso()})
+        return {"sent": n}
 
     @router.get("/public-keys/{pid}/usage")
     async def key_usage(pid: str, days: int = 7, _u: dict = Depends(require_roles("admin"))):
@@ -172,7 +245,7 @@ def create_public_api_v1_router(db, require_roles):
             return _public_booking(b)
         upd = {"status": "cancelled", "cancelled_at": now_iso(), "cancel_reason": str((data or {}).get("reason") or "")[:200], "cancelled_by": f"public_api:{k.get('name', '')}"}
         await db.bookings.update_one({"id": b["id"]}, {"$set": upd})
-        from routes.platform_ext.p0_pack import emit_webhook
+        from routes.platform_ext.partner_ops import emit_webhook
         asyncio.create_task(emit_webhook(db, k["property_id"], "booking.cancelled", _public_booking({**b, **upd})))
         return _public_booking({**b, **upd})
 

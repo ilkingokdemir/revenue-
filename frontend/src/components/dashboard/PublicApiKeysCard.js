@@ -12,7 +12,7 @@ export default function PublicApiKeysCard({ pid }) {
   const [docs, setDocs] = useState(null);
   const [showDocs, setShowDocs] = useState(false);
   const [newKey, setNewKey] = useState("");
-  const [form, setForm] = useState({ name: "", scopes: SCOPES.slice(0, 3), rate_per_min: 120 });
+  const [form, setForm] = useState({ name: "", scopes: SCOPES.slice(0, 3), rate_per_min: 120, expires_in_days: 365 });
 
   const load = useCallback(async () => {
     try {
@@ -33,6 +33,16 @@ export default function PublicApiKeysCard({ pid }) {
     try { await axios.put(`${API}/api/public-keys/${pid}/${k.id}`, { active: !k.active }, cfg); toast.success(k.active ? "Anahtar iptal edildi" : "Anahtar aktif"); load(); }
     catch { toast.error("Güncellenemedi"); }
   };
+  const extend = async (k) => {
+    try { await axios.put(`${API}/api/public-keys/${pid}/${k.id}`, { extend_days: 90 }, cfg); toast.success("Süre 90 gün uzatıldı"); load(); }
+    catch { toast.error("Uzatılamadı"); }
+  };
+  const expiryBadge = (k) => {
+    if (k.days_left == null) return <span className="text-[10px] text-stone-400" data-testid={`pa-key-expiry-${k.id}`}>süresiz</span>;
+    if (k.days_left < 0) return <span className="text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded-full" data-testid={`pa-key-expiry-${k.id}`}>Süresi doldu</span>;
+    if (k.days_left <= 7) return <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded-full" data-testid={`pa-key-expiry-${k.id}`}>⚠ {k.days_left} gün kaldı</span>;
+    return <span className="text-[10px] text-stone-500" data-testid={`pa-key-expiry-${k.id}`}>{k.days_left} gün</span>;
+  };
   const toggleScope = (s) => setForm((f) => ({ ...f, scopes: f.scopes.includes(s) ? f.scopes.filter((x) => x !== s) : [...f.scopes, s] }));
 
   return (
@@ -44,6 +54,7 @@ export default function PublicApiKeysCard({ pid }) {
       <div className="flex flex-wrap gap-2 items-end mb-2">
         <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Anahtar adı (örn. Channel Manager X)" className="border border-stone-300 rounded-lg px-2 py-1.5 text-xs w-52" data-testid="pa-key-name" />
         <label className="text-[10px] text-stone-500">İstek/dk<input type="number" min={10} max={5000} value={form.rate_per_min} onChange={(e) => setForm({ ...form, rate_per_min: Number(e.target.value) })} className="block border border-stone-300 rounded-lg px-2 py-1.5 text-xs w-20" data-testid="pa-key-rate" /></label>
+        <label className="text-[10px] text-stone-500">Geçerlilik (gün)<select value={form.expires_in_days} onChange={(e) => setForm({ ...form, expires_in_days: Number(e.target.value) })} className="block border border-stone-300 rounded-lg px-2 py-1.5 text-xs" data-testid="pa-key-expiry"><option value={0}>Süresiz</option><option value={30}>30</option><option value={90}>90</option><option value={365}>365</option></select></label>
         <div className="flex gap-1 flex-wrap">{SCOPES.map((s) => <button key={s} onClick={() => toggleScope(s)} className={`px-2 py-1 rounded-full text-[10px] font-bold border ${form.scopes.includes(s) ? "bg-stone-900 text-white border-stone-900" : "border-stone-300 text-stone-500"}`} data-testid={`pa-key-scope-${s.replace(":", "-")}`}>{s}</button>)}</div>
         <button onClick={createKey} data-testid="pa-key-create" className="px-3 py-1.5 rounded-lg bg-stone-900 text-white text-xs font-bold">+ Anahtar Üret</button>
       </div>
@@ -55,6 +66,8 @@ export default function PublicApiKeysCard({ pid }) {
             <span className="font-mono text-stone-500">{k.key}</span>
             <span className="text-stone-400">{k.scopes.join(" · ")}</span>
             <span className="text-stone-400">{k.rate_per_min}/dk</span>
+            {expiryBadge(k)}
+            {k.days_left != null && <button onClick={() => extend(k)} className="text-[10px] underline text-indigo-600" data-testid={`pa-key-extend-${k.id}`}>+90 gün</button>}
             <span className="ml-auto text-stone-500">{k.calls || 0} çağrı{usage?.by_key?.[k.id] ? ` · 7g: ${usage.by_key[k.id]}` : ""}</span>
             <button onClick={() => toggleActive(k)} className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${k.active ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`} data-testid={`pa-key-toggle-${k.id}`}>{k.active ? "İptal et" : "Aktifleştir"}</button>
           </div>

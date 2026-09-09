@@ -3,6 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import TrialConversionPanel from "./TrialConversionPanel";
 import PublicApiKeysCard from "./PublicApiKeysCard";
+import WebhookSubsCard from "./WebhookSubsCard";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const cfg = { withCredentials: true };
@@ -283,6 +284,7 @@ export default function PlatformAdminPanel({ activePropertyId, properties = [] }
         </Card>
 
         <PublicApiKeysCard pid={pid} />
+        <WebhookSubsCard pid={pid} />
 
         <Card title="📦 Veri Göçü (CSV Import)" tid="pa-migration">
           <div className="flex gap-2 items-center mb-2">

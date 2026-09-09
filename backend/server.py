@@ -2482,6 +2482,9 @@ async def startup_event():
     from workers import journal_alert_loop, campaign_window_loop, accountant_archive_loop
     _spawn(accountant_archive_loop(db))
     _spawn(journal_alert_loop(db))
+    from routes.platform_ext.partner_ops import webhook_retry_loop, api_key_expiry_loop
+    _spawn(webhook_retry_loop(db))
+    _spawn(api_key_expiry_loop(db))
     _spawn(campaign_window_loop(db))
     _spawn(reports_loop(db))
     _spawn(otb_snapshot_loop(db))

@@ -208,6 +208,62 @@ def create_be_gaps_router(db, require_roles):
                         "price": round(float(r.get("base_price") or 0) * float(cfg.get("day_use_pct") or 50) / 100, 2), "hours": f"{cfg.get('day_use_start')}-{cfg.get('day_use_end')}"})
         return {"date": date, "enabled": bool(cfg.get("day_use_enabled")), "rooms": out}
 
+    def _km(a_lat, a_lng, b_lat, b_lng) -> float:
+        from math import asin, cos, radians, sin, sqrt
+        dlat, dlng = radians(b_lat - a_lat), radians(b_lng - a_lng)
+        h = sin(dlat / 2) ** 2 + cos(radians(a_lat)) * cos(radians(b_lat)) * sin(dlng / 2) ** 2
+        return round(2 * 6371 * asin(sqrt(h)), 1)
+
+    async def _nominatim(params: dict):
+        import httpx
+        async with httpx.AsyncClient(timeout=6, headers={"User-Agent": "MyHotelBox/1.0"}) as c:
+            r = await c.get("https://nominatim.openstreetmap.org/search", params={"format": "json", **params})
+            return r.json() or []
+
+    async def _city_centre(city: str, country: str):
+        key = f"centre:{(city or '').lower()}|{(country or '').lower()}"
+        hit = await db.geo_cache.find_one({"key": key}, {"_id": 0})
+        if hit:
+            return hit.get("geo")
+        geo = None
+        try:
+            res = await _nominatim({"q": ", ".join(x for x in [city, country] if x), "limit": 1})
+            if res:
+                geo = {"lat": float(res[0]["lat"]), "lng": float(res[0]["lon"])}
+        except Exception:
+            return None
+        await db.geo_cache.update_one({"key": key}, {"$set": {"key": key, "geo": geo, "at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        return geo
+
+    async def _geo_meta(pr: dict):
+        """Şehir merkezine mesafe + en yakın istasyon (Nominatim, tesise önbelleklenir)."""
+        geo = pr.get("geo")
+        if not geo:
+            return None
+        sig = f"{geo['lat']:.4f},{geo['lng']:.4f}"
+        meta = pr.get("geo_meta")
+        if meta and meta.get("sig") == sig:
+            return meta
+        meta = {"sig": sig, "centre_km": None, "station": None}
+        centre = await _city_centre(pr.get("city"), pr.get("country"))
+        if centre:
+            meta["centre_km"] = _km(geo["lat"], geo["lng"], centre["lat"], centre["lng"])
+        try:
+            d = 0.02
+            res = await _nominatim({"q": "railway station", "limit": 10, "bounded": 1, "viewbox": f"{geo['lng'] - d},{geo['lat'] + d},{geo['lng'] + d},{geo['lat'] - d}"})
+            best = None
+            for h in res:
+                if h.get("type") not in ("station", "halt", "subway", "tram_stop", "stop"):
+                    continue
+                km = _km(geo["lat"], geo["lng"], float(h["lat"]), float(h["lon"]))
+                if best is None or km < best["km"]:
+                    best = {"name": h.get("name") or h.get("display_name", "").split(",")[0], "km": km}
+            meta["station"] = best
+        except Exception:
+            pass
+        await db.properties.update_one({"id": pr["id"]}, {"$set": {"geo_meta": meta}})
+        return meta
+
     # ---- zincir arama ----
     @router.get("/booking/chain-search")
     async def chain_search(check_in: str, check_out: str, adults: int = 2):
@@ -216,11 +272,12 @@ def create_be_gaps_router(db, require_roles):
         except ValueError:
             raise HTTPException(422, "Tarih hatalı")
         nights = max(1, (co - ci).days)
-        props = await db.properties.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "city": 1, "country": 1, "address": 1, "image_url": 1, "hero_image": 1, "star_rating": 1, "currency": 1, "geo": 1}).to_list(50)
+        props = await db.properties.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "city": 1, "country": 1, "address": 1, "image_url": 1, "hero_image": 1, "star_rating": 1, "currency": 1, "geo": 1, "geo_meta": 1}).to_list(50)
         out = []
         for pr in props:
             if not pr.get("geo"):
                 pr["geo"] = await _geocode(pr)
+            meta = await _geo_meta(pr)
             rooms = await db.room_types.find({"property_id": pr["id"], "is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "base_price": 1, "max_occupancy": 1, "total_rooms": 1, "image_url": 1}).to_list(50)
             best = None; avail_total = 0
             for r in rooms:
@@ -237,6 +294,7 @@ def create_be_gaps_router(db, require_roles):
                 if best is None or price < best["price"]:
                     best = {"room_type_id": r["id"], "room_name": r.get("name"), "price": price, "rooms_left": left, "image_url": r.get("image_url")}
             out.append({"property_id": pr["id"], "name": pr.get("name"), "city": pr.get("city"), "country": pr.get("country"), "image_url": pr.get("hero_image") or pr.get("image_url"), "geo": pr.get("geo"),
+                        "centre_km": (meta or {}).get("centre_km"), "station": (meta or {}).get("station"),
                         "star_rating": pr.get("star_rating"), "currency": pr.get("currency") or "GBP", "available": avail_total > 0, "rooms_available": avail_total, "best": best,
                         "nights": nights, "total_from": round(best["price"] * nights, 2) if best else None, "book_url": f"/book?property={pr['id']}&check_in={check_in}&check_out={check_out}&adults={adults}"})
         out.sort(key=lambda x: (not x["available"], x["total_from"] or 1e12))

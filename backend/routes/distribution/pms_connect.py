@@ -226,9 +226,16 @@ async def _push(db, pid: str, provider: str, rows: list, cert_test: bool = False
                    rate_code=cfg.get("rate_id") or cfg.get("rate_plan_id") or cfg.get("inv_code", ""))
         return {"pushed_days": len(rows), "sample": rows[:3],
                 "translated_preview": translated, **result}
-    result = await _live_send(provider, cfg, translated)
-    await _log(db, pid, provider, "rate_push", "live", rows, translated, result, cert_test,
-               rate_code=cfg.get("rate_id") or cfg.get("rate_plan_id") or cfg.get("inv_code", ""))
+    rc = cfg.get("rate_id") or cfg.get("rate_plan_id") or cfg.get("inv_code", "")
+    try:
+        result = await _live_send(provider, cfg, translated)
+    except HTTPException as e:
+        await _log(db, pid, provider, "rate_push", "live", rows, translated, {"ok": False, "error": str(e.detail)[:300]}, cert_test, rate_code=rc)
+        raise
+    except Exception as e:
+        await _log(db, pid, provider, "rate_push", "live", rows, translated, {"ok": False, "error": str(e)[:300]}, cert_test, rate_code=rc)
+        raise HTTPException(502, f"{PROVIDERS[provider]['name']} bağlantı hatası: {str(e)[:200]}")
+    await _log(db, pid, provider, "rate_push", "live", rows, translated, {"ok": True, **(result if isinstance(result, dict) else {"response": result})}, cert_test, rate_code=rc)
     return {"pushed_days": len(rows), "sample": rows[:3], "mocked": False, "result": result}
 
 
@@ -824,6 +831,54 @@ def create_pms_connect_router(db, require_roles):
             {"$set": {"certification": cert}}, upsert=True)
         return {"ok": True, **cert,
                 "note": "Sertifikasyon geçmeden canlı otomatik push açılmaz. Kimlik girilince CANLI modda tekrarlayın."}
+
+    @router.get("/{provider}/sync-timeline/{pid}")
+    async def sync_timeline(provider: str, pid: str, days: int = 30, _u: dict = Depends(require_roles(*ROLES))):
+        """Son N gün senkron zaman çizelgesi: gün bazlı başarılı/başarısız/mock sayıları, son başarı, son hata, yeniden denenebilir kayıtlar."""
+        if provider not in PROVIDERS:
+            raise HTTPException(404, "Bilinmeyen sağlayıcı")
+        days = max(1, min(90, int(days)))
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        rows = await db.pms_push_log.find({"property_id": pid, "provider": provider, "created_at": {"$gte": since}},
+                                          {"_id": 0, "translated_sample": 0}).sort("created_at", -1).to_list(2000)
+        by_day: dict = {}
+        last_ok = last_err = None
+        failed = []
+        for r in rows:
+            d = r["created_at"][:10]
+            b = by_day.setdefault(d, {"date": d, "ok": 0, "failed": 0, "mocked": 0})
+            res = r.get("result") or {}
+            is_fail = res.get("ok") is False
+            if r.get("mode") == "mocked":
+                b["mocked"] += 1
+            elif is_fail:
+                b["failed"] += 1
+                if not last_err:
+                    last_err = {"at": r["created_at"], "error": res.get("error"), "log_id": r["id"]}
+                if len(failed) < 20:
+                    failed.append({"id": r["id"], "at": r["created_at"], "kind": r.get("kind"), "error": res.get("error"), "rows": len(r.get("standard_rows") or [])})
+            else:
+                b["ok"] += 1
+                if not last_ok:
+                    last_ok = r["created_at"]
+        cfg = await _cfg(db, pid, provider)
+        total_fail = sum(b["failed"] for b in by_day.values())
+        health = "no_data" if not rows else ("degraded" if total_fail and (not last_ok or (last_err and last_err["at"] > last_ok)) else "healthy")
+        return {"provider": provider, "days": days, "mode": "live" if _has_creds(provider, cfg) else "mocked", "health": health,
+                "timeline": sorted(by_day.values(), key=lambda x: x["date"]), "totals": {"ok": sum(b["ok"] for b in by_day.values()), "failed": total_fail, "mocked": sum(b["mocked"] for b in by_day.values())},
+                "last_success_at": last_ok, "last_error": last_err, "last_test": cfg.get("last_test"), "failed_entries": failed}
+
+    @router.post("/{provider}/resync/{pid}/{log_id}")
+    async def resync(provider: str, pid: str, log_id: str, _u: dict = Depends(require_roles(*ROLES))):
+        """Başarısız/eski bir push kaydını aynı satırlarla yeniden gönderir (tek tık re-sync)."""
+        if provider not in PROVIDERS:
+            raise HTTPException(404, "Bilinmeyen sağlayıcı")
+        entry = await db.pms_push_log.find_one({"id": log_id, "property_id": pid, "provider": provider}, {"_id": 0})
+        if not entry or not entry.get("standard_rows"):
+            raise HTTPException(404, "Kayıt yok veya yeniden gönderilecek satır içermiyor")
+        res = await _push(db, pid, provider, entry["standard_rows"], cert_test=bool(entry.get("cert_test")))
+        await db.pms_push_log.update_one({"id": log_id}, {"$set": {"resynced_at": datetime.now(timezone.utc).isoformat(), "resynced_by": _u.get("email")}})
+        return {"ok": True, "resynced_from": log_id, **res}
 
     @router.get("/{provider}/log/{pid}")
     async def get_log(provider: str, pid: str, limit: int = 20,

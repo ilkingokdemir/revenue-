@@ -15,29 +15,7 @@ WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 now_iso = lambda: datetime.now(timezone.utc).isoformat()
 
 
-async def emit_webhook(db, pid: str, event: str, data: dict):
-    """Giden webhook: abone URL'lere event POST'lar (tek deneme, teslimat loglanır)."""
-    subs = await db.webhook_subscriptions.find(
-        {"property_id": {"$in": [pid, "*"]}, "active": {"$ne": False},
-         "$or": [{"events": event}, {"events": "*"}]}, {"_id": 0}).to_list(20)
-    if not subs:
-        return 0
-    payload = {"id": str(uuid.uuid4()), "event": event, "property_id": pid,
-               "created_at": now_iso(), "data": data}
-    sent = 0
-    async with httpx.AsyncClient(timeout=8) as client:
-        for s in subs:
-            try:
-                r = await client.post(s["url"], json=payload,
-                                      headers={"X-Webhook-Secret": s.get("secret", "")})
-                ok = r.status_code < 300
-            except Exception:
-                ok = False
-            sent += 1 if ok else 0
-            await db.webhook_deliveries.insert_one({
-                "id": str(uuid.uuid4()), "subscription_id": s.get("id"), "event": event,
-                "url": s["url"], "ok": ok, "property_id": pid, "at": now_iso()})
-    return sent
+from routes.platform_ext.partner_ops import emit_webhook  # noqa: F401 — geriye dönük import
 
 
 def create_p0_router(db, require_roles):
@@ -155,7 +133,7 @@ def create_p0_router(db, require_roles):
         return {"status": "ok"}
 
     # ================= 2) PUBLIC API v1 (dış sistemler bize bağlanır) =================
-    from routes.distribution.public_api_v1 import api_key_auth as _v1_auth, create_booking_from_api, DEFAULT_SCOPES, SCOPES
+    from routes.distribution.public_api_v1 import api_key_auth as _v1_auth, create_booking_from_api, DEFAULT_SCOPES, SCOPES, _expiry, _days_left
 
     async def api_key_auth(request: Request, response: Response = None, scope: str = "") -> dict:
         return await _v1_auth(db, request, response, scope)
@@ -167,7 +145,7 @@ def create_p0_router(db, require_roles):
                "property_id": pid, "name": str(data.get("name") or "default")[:60],
                "scopes": [x for x in (data.get("scopes") or []) if x in SCOPES] or DEFAULT_SCOPES,
                "rate_per_min": max(10, min(5000, int(data.get("rate_per_min") or 120))),
-               "active": True, "calls": 0, "created_at": now_iso()}
+               "expires_at": _expiry(data), "active": True, "calls": 0, "created_at": now_iso()}
         await db.public_api_keys.insert_one({**doc})
         return doc
 
@@ -177,6 +155,7 @@ def create_p0_router(db, require_roles):
         for r in rows:
             r["key"] = r["key"][:12] + "•••"
             r.setdefault("scopes", DEFAULT_SCOPES); r.setdefault("rate_per_min", 120); r.setdefault("active", True)
+            r["days_left"] = _days_left(r.get("expires_at")); r["expired"] = r["days_left"] is not None and r["days_left"] < 0
         return {"keys": rows}
 
     @router.get("/public/v1/bookings")
@@ -219,10 +198,12 @@ def create_p0_router(db, require_roles):
     @router.get("/webhook-subs/{pid}")
     async def list_subs(pid: str, _u: dict = Depends(require_roles(*ROLES))):
         rows = await db.webhook_subscriptions.find({"property_id": pid}, {"_id": 0}).to_list(20)
-        deliveries = await db.webhook_deliveries.find({"property_id": pid}, {"_id": 0}).sort(
-            "at", -1).to_list(10)
-        return {"subscriptions": rows, "recent_deliveries": deliveries,
-                "events": ["booking.created", "payment.completed", "rate.updated", "*"]}
+        deliveries = await db.webhook_deliveries.find({"property_id": pid}, {"_id": 0, "payload": 0}).sort("at", -1).to_list(30)
+        counts = {st: await db.webhook_deliveries.count_documents({"property_id": pid, "status": st}) for st in ("delivered", "retrying", "failed")}
+        for r in rows:
+            r["secret"] = r.get("secret", "")[:4] + "•••"
+        return {"subscriptions": rows, "recent_deliveries": deliveries, "counts": counts,
+                "events": ["booking.created", "booking.cancelled", "payment.completed", "rate.updated", "*"]}
 
     @router.post("/webhook-subs/{pid}")
     async def add_sub(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):

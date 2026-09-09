@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import PmsSyncTimeline from "./PmsSyncTimeline";
 import axios from "axios";
 import { toast } from "sonner";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis, Legend } from "recharts";
@@ -57,7 +58,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
       const r = await axios.get(`${API}/api/pms-connect/providers/${pid}`, { withCredentials: true });
       setData(r.data);
       const pre = localStorage.getItem("mhb_pms_connect_provider");
-      if (pre) { localStorage.removeItem("mhb_pms_connect_provider"); const p = r.data.providers.find((x) => x.id === pre); if (p) { setSel(p); return; } }
+      if (pre) { localStorage.removeItem("mhb_pms_connect_provider"); const p = r.data.providers.find((x) => x.id === pre); if (p) { pick(p); return; } }
       if (sel) setSel(r.data.providers.find((p) => p.id === sel.id) || null);
     } catch { toast.error("PMS bağlantı merkezi yüklenemedi"); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -881,6 +882,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
             )}
           </section>
 
+          <PmsSyncTimeline pid={pid} provider={sel.id} lastLogId={log[0]?.id} onResynced={() => loadLog(sel.id)} />
           <section data-testid="pms-log-section">
             <h2 className="text-base font-bold text-stone-800 mb-2">{sel.name} İşlem Geçmişi</h2>
             {log.length === 0 ? <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-500" data-testid="pms-log-empty">Henüz işlem yok.</div> : (
@@ -893,7 +895,7 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
                         <td className="p-2.5 text-[12px]">{String(l.created_at).slice(0, 16).replace("T", " ")}</td>
                         <td className="p-2.5">{l.kind === "rate_push" ? (l.cert_test ? "Sertifikasyon Push" : "Fiyat Push") : "Rezervasyon"}</td>
                         <td className="p-2.5"><span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${l.mode === "live" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{l.mode === "live" ? "CANLI" : "MOCK"}</span></td>
-                        <td className="p-2.5 text-[12px] text-stone-500 max-w-[300px] truncate">{JSON.stringify(l.result)}</td>
+                        <td className="p-2.5 text-[12px] max-w-[300px] truncate">{l.result?.ok === false ? <span className="text-rose-600 font-bold" data-testid={`pms-log-fail-${l.id}`}>✖ {l.result.error}</span> : <span className="text-stone-500">{l.resynced_at ? "↻ yeniden gönderildi · " : ""}{JSON.stringify(l.result)}</span>}</td>
                       </tr>
                     ))}
                   </tbody>

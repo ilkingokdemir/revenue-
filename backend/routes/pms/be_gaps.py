@@ -1,4 +1,5 @@
 """Booking engine gap-MVP: BE ayarları (doluluk/LOS/flex-cancel/hold), acente kodu, bekleme listesi, canlı FX."""
+import asyncio
 import uuid
 from datetime import datetime, timezone, date as _date
 from typing import Dict
@@ -214,54 +215,110 @@ def create_be_gaps_router(db, require_roles):
         h = sin(dlat / 2) ** 2 + cos(radians(a_lat)) * cos(radians(b_lat)) * sin(dlng / 2) ** 2
         return round(2 * 6371 * asin(sqrt(h)), 1)
 
+    _nomi_lock = asyncio.Lock()
+    _nomi_last = {"t": 0.0}
+
     async def _nominatim(params: dict):
+        """Nominatim kullanım politikası: en fazla 1 istek/sn → global kilit + aralık."""
         import httpx
-        async with httpx.AsyncClient(timeout=6, headers={"User-Agent": "MyHotelBox/1.0"}) as c:
-            r = await c.get("https://nominatim.openstreetmap.org/search", params={"format": "json", **params})
+        import time as _t
+        async with _nomi_lock:
+            wait = 1.1 - (_t.monotonic() - _nomi_last["t"])
+            if wait > 0:
+                await asyncio.sleep(wait)
+            _nomi_last["t"] = _t.monotonic()
+            async with httpx.AsyncClient(timeout=8, headers={"User-Agent": "MyHotelBox/1.0 (hotel chain search)"}) as c:
+                r = await c.get("https://nominatim.openstreetmap.org/search", params={"format": "json", **params})
+            if r.status_code != 200:
+                raise RuntimeError(f"nominatim {r.status_code}")
             return r.json() or []
+
+    async def _photon(path: str, params: dict):
+        """Photon (komoot) — anahtar gerektirmez, OSM etiketiyle en yakın POI; Nominatim 429 yedeği."""
+        import httpx
+        async with httpx.AsyncClient(timeout=8, headers={"User-Agent": "MyHotelBox/1.0"}) as c:
+            r = await c.get(f"https://photon.komoot.io/{path}", params=params)
+        if r.status_code != 200:
+            raise RuntimeError(f"photon {r.status_code}")
+        return (r.json() or {}).get("features") or []
 
     async def _city_centre(city: str, country: str):
         key = f"centre:{(city or '').lower()}|{(country or '').lower()}"
         hit = await db.geo_cache.find_one({"key": key}, {"_id": 0})
-        if hit:
+        if hit and hit.get("geo"):
             return hit.get("geo")
+        if not city:
+            return None
         geo = None
         try:
-            res = await _nominatim({"q": ", ".join(x for x in [city, country] if x), "limit": 1})
-            if res:
-                geo = {"lat": float(res[0]["lat"]), "lng": float(res[0]["lon"])}
+            feats = await _photon("api", {"q": ", ".join(x for x in [city, country] if x), "limit": 1, "osm_tag": ["place:city", "place:town"]})
+            if feats:
+                lng, lat = feats[0]["geometry"]["coordinates"]
+                geo = {"lat": float(lat), "lng": float(lng)}
         except Exception:
-            return None
-        await db.geo_cache.update_one({"key": key}, {"$set": {"key": key, "geo": geo, "at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+            try:
+                res = await _nominatim({"q": ", ".join(x for x in [city, country] if x), "limit": 1})
+                if res:
+                    geo = {"lat": float(res[0]["lat"]), "lng": float(res[0]["lon"])}
+            except Exception:
+                return None
+        if geo:
+            await db.geo_cache.update_one({"key": key}, {"$set": {"key": key, "geo": geo, "at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
         return geo
 
+    async def _nearest(geo: dict, osm_tag: str, radius_km: int, prefer=None):
+        feats = await _photon("reverse", {"lat": geo["lat"], "lon": geo["lng"], "limit": 12, "radius": radius_km, "osm_tag": osm_tag})
+        cands = []
+        for f in feats:
+            name = (f.get("properties") or {}).get("name")
+            if not name:
+                continue
+            lng, lat = f["geometry"]["coordinates"]
+            cands.append({"name": str(name)[:60], "km": _km(geo["lat"], geo["lng"], float(lat), float(lng))})
+        if prefer:
+            major = [c for c in cands if prefer(c["name"])]
+            cands = major or cands
+        return min(cands, key=lambda c: c["km"]) if cands else None
+
+    def _is_airport(name: str) -> bool:
+        n = name.lower()
+        return any(k in n for k in ("airport", "flughafen", "aéroport", "aeroporto", "aeropuerto", "havaliman")) and not any(x in n for x in ("raf ", "airfield", "gliding", "militär", "military", "militar"))
+
     async def _geo_meta(pr: dict):
-        """Şehir merkezine mesafe + en yakın istasyon (Nominatim, tesise önbelleklenir)."""
+        """Şehir merkezine mesafe/yürüme + en yakın istasyon + havalimanı (Photon reverse, tesise önbelleklenir)."""
         geo = pr.get("geo")
         if not geo:
             return None
-        sig = f"{geo['lat']:.4f},{geo['lng']:.4f}"
+        sig = f"v7:{geo['lat']:.4f},{geo['lng']:.4f}"
         meta = pr.get("geo_meta")
         if meta and meta.get("sig") == sig:
             return meta
-        meta = {"sig": sig, "centre_km": None, "station": None}
+        if meta and meta.get("retry_after") and meta["retry_after"] > datetime.now(timezone.utc).isoformat():
+            return meta
+        meta = {"sig": sig, "centre_km": None, "station": None, "airport": None}
+        complete = True
         centre = await _city_centre(pr.get("city"), pr.get("country"))
         if centre:
             meta["centre_km"] = _km(geo["lat"], geo["lng"], centre["lat"], centre["lng"])
+            meta["centre_walk_min"] = int(round(meta["centre_km"] / 5 * 60))
+        else:
+            complete = False
         try:
-            d = 0.02
-            res = await _nominatim({"q": "railway station", "limit": 10, "bounded": 1, "viewbox": f"{geo['lng'] - d},{geo['lat'] + d},{geo['lng'] + d},{geo['lat'] - d}"})
-            best = None
-            for h in res:
-                if h.get("type") not in ("station", "halt", "subway", "tram_stop", "stop"):
-                    continue
-                km = _km(geo["lat"], geo["lng"], float(h["lat"]), float(h["lon"]))
-                if best is None or km < best["km"]:
-                    best = {"name": h.get("name") or h.get("display_name", "").split(",")[0], "km": km}
-            meta["station"] = best
+            meta["station"] = await _nearest(geo, "railway:station", 3)
+            if meta["station"]:
+                meta["station"]["walk_min"] = int(round(meta["station"]["km"] / 5 * 60))
         except Exception:
-            pass
-        await db.properties.update_one({"id": pr["id"]}, {"$set": {"geo_meta": meta}})
+            complete = False
+        try:
+            meta["airport"] = await _nearest(geo, "aeroway:aerodrome", 80, prefer=_is_airport)
+        except Exception:
+            complete = False
+        # eksik arama (ör. sağlayıcı 429) → sig kaydedilmez; 1 saat sonra yeniden denenir
+        from datetime import timedelta as _td
+        save = {**meta, "sig": sig if complete else None}
+        if not complete:
+            save["retry_after"] = (datetime.now(timezone.utc) + _td(hours=1)).isoformat()
+        await db.properties.update_one({"id": pr["id"]}, {"$set": {"geo_meta": save}})
         return meta
 
     # ---- zincir arama ----
@@ -272,10 +329,12 @@ def create_be_gaps_router(db, require_roles):
         except ValueError:
             raise HTTPException(422, "Tarih hatalı")
         nights = max(1, (co - ci).days)
-        props = await db.properties.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "city": 1, "country": 1, "address": 1, "image_url": 1, "hero_image": 1, "star_rating": 1, "currency": 1, "geo": 1, "geo_meta": 1}).to_list(50)
+        props = await db.properties.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "city": 1, "country": 1, "address": 1, "image_url": 1, "hero_image": 1, "star_rating": 1, "currency": 1, "geo": 1, "geo_meta": 1, "latitude": 1, "longitude": 1}).to_list(50)
         out = []
         for pr in props:
-            if not pr.get("geo"):
+            if pr.get("latitude") and pr.get("longitude"):
+                pr["geo"] = {"lat": float(pr["latitude"]), "lng": float(pr["longitude"])}
+            elif not pr.get("geo"):
                 pr["geo"] = await _geocode(pr)
             meta = await _geo_meta(pr)
             rooms = await db.room_types.find({"property_id": pr["id"], "is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "base_price": 1, "max_occupancy": 1, "total_rooms": 1, "image_url": 1}).to_list(50)
@@ -294,7 +353,7 @@ def create_be_gaps_router(db, require_roles):
                 if best is None or price < best["price"]:
                     best = {"room_type_id": r["id"], "room_name": r.get("name"), "price": price, "rooms_left": left, "image_url": r.get("image_url")}
             out.append({"property_id": pr["id"], "name": pr.get("name"), "city": pr.get("city"), "country": pr.get("country"), "image_url": pr.get("hero_image") or pr.get("image_url"), "geo": pr.get("geo"),
-                        "centre_km": (meta or {}).get("centre_km"), "station": (meta or {}).get("station"),
+                        "centre_km": (meta or {}).get("centre_km"), "centre_walk_min": (meta or {}).get("centre_walk_min"), "station": (meta or {}).get("station"), "airport": (meta or {}).get("airport"),
                         "star_rating": pr.get("star_rating"), "currency": pr.get("currency") or "GBP", "available": avail_total > 0, "rooms_available": avail_total, "best": best,
                         "nights": nights, "total_from": round(best["price"] * nights, 2) if best else None, "book_url": f"/book?property={pr['id']}&check_in={check_in}&check_out={check_out}&adults={adults}"})
         out.sort(key=lambda x: (not x["available"], x["total_from"] or 1e12))

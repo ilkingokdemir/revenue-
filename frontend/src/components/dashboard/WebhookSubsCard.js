@@ -10,6 +10,7 @@ export default function WebhookSubsCard({ pid }) {
   const [data, setData] = useState({ subscriptions: [], recent_deliveries: [], counts: {}, events: [] });
   const [url, setUrl] = useState("");
   const [newSecret, setNewSecret] = useState("");
+  const [showSig, setShowSig] = useState(false);
   const load = useCallback(async () => {
     try { const r = await axios.get(`${API}/api/webhook-subs/${pid}`, cfg); setData(r.data); } catch { toast.error("Webhook'lar yüklenemedi"); }
   }, [pid]);
@@ -21,6 +22,11 @@ export default function WebhookSubsCard({ pid }) {
   };
   const toggle = async (s) => { try { await axios.put(`${API}/api/webhook-subs/${pid}/${s.id}`, { active: !s.active }, cfg); load(); } catch { toast.error("Güncellenemedi"); } };
   const remove = async (s) => { if (!window.confirm("Abonelik silinsin mi?")) return; try { await axios.delete(`${API}/api/webhook-subs/${pid}/${s.id}`, cfg); load(); } catch { toast.error("Silinemedi"); } };
+  const rotate = async (s) => {
+    if (!window.confirm("Secret yenilensin mi? Partnerin eski secret'ı geçersiz olur.")) return;
+    try { const r = await axios.post(`${API}/api/webhook-subs/${pid}/${s.id}/rotate-secret`, {}, cfg); setNewSecret(r.data.secret); toast.success("Secret yenilendi — bir kez gösterilir"); load(); }
+    catch { toast.error("Yenilenemedi"); }
+  };
   const test = async () => { try { const r = await axios.post(`${API}/api/webhook-subs/${pid}/test`, {}, cfg); toast.success(`Test gönderildi: ${r.data.sent} başarılı`); load(); } catch { toast.error("Test başarısız"); } };
   const retry = async (d) => { try { const r = await axios.post(`${API}/api/webhook-subs/${pid}/deliveries/${d.id}/retry`, {}, cfg); toast[r.data.ok ? "success" : "error"](r.data.ok ? "Teslim edildi" : `Yine başarısız: ${r.data.last_error}`); load(); } catch { toast.error("Yeniden denenemedi"); } };
 
@@ -35,7 +41,18 @@ export default function WebhookSubsCard({ pid }) {
           <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">{c.failed || 0} başarısız</span>
         </div>
       </div>
-      <p className="text-[11px] text-stone-500 mb-2">Başarısız teslimatlar otomatik yeniden denenir: 1 dk → 5 dk → 30 dk → 2 sa → 12 sa (6 deneme). Hiçbir rezervasyon olayı kaybolmaz.</p>
+      <p className="text-[11px] text-stone-500 mb-2">Başarısız teslimatlar otomatik yeniden denenir: 1 dk → 5 dk → 30 dk → 2 sa → 12 sa (6 deneme). Her istek <b>HMAC-SHA256</b> ile imzalanır (<code>X-Webhook-Signature</code>). <button onClick={() => setShowSig(!showSig)} className="underline text-indigo-600" data-testid="pa-webhook-sig-toggle">{showSig ? "Doğrulama örneğini gizle" : "Doğrulama örneği"}</button></p>
+      {showSig && (
+        <div className="text-[10px] bg-stone-900 text-emerald-200 rounded-lg p-2 mb-2 whitespace-pre-wrap font-mono" data-testid="pa-webhook-sig-doc">{`Başlıklar: X-Webhook-Timestamp (unix sn), X-Webhook-Signature: v1=<hex>, X-Webhook-Event, X-Webhook-Delivery
+İmzalanan metin: "<timestamp>.<ham gövde>"   (JSON'u yeniden serileştirmeyin; 5 dk'dan eski zaman damgasını reddedin)
+
+# Python
+expected = "v1=" + hmac.new(SECRET.encode(), f"{ts}.".encode() + raw_body, hashlib.sha256).hexdigest()
+ok = hmac.compare_digest(expected, request.headers["X-Webhook-Signature"])
+
+// Node
+const expected = "v1=" + crypto.createHmac("sha256", SECRET).update(\`\${ts}.\`).update(rawBody).digest("hex");`}</div>
+      )}
       <div className="flex gap-2 mb-2">
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://partner.example.com/webhooks" className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-xs" data-testid="pa-webhook-url" />
         <button onClick={add} disabled={!url.startsWith("http")} className="px-3 py-1.5 rounded-lg bg-stone-900 text-white text-xs font-bold disabled:opacity-40" data-testid="pa-webhook-add">+ Ekle</button>
@@ -47,6 +64,7 @@ export default function WebhookSubsCard({ pid }) {
           <div key={s.id} className={`flex items-center gap-2 text-[11px] rounded-lg px-2 py-1.5 ${s.active === false ? "bg-rose-50 opacity-70" : "bg-stone-50"}`} data-testid={`pa-webhook-sub-${s.id}`}>
             <span className="font-mono text-stone-700 truncate flex-1">{s.url}</span>
             <span className="text-stone-400">{(s.events || []).join(", ")}</span>
+            <button onClick={() => rotate(s)} className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 text-[10px] font-bold" data-testid={`pa-webhook-rotate-${s.id}`}>Secret yenile</button>
             <button onClick={() => toggle(s)} className="px-2 py-0.5 rounded-md bg-stone-200 text-[10px] font-bold" data-testid={`pa-webhook-toggle-${s.id}`}>{s.active === false ? "Aç" : "Duraklat"}</button>
             <button onClick={() => remove(s)} className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[10px] font-bold" data-testid={`pa-webhook-del-${s.id}`}>Sil</button>
           </div>

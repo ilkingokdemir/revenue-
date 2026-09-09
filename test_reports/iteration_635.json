@@ -1,0 +1,38 @@
+{
+  "summary": "Iter635 Paket38 — Webhook HMAC-SHA256 signature (sign/rotate/verify + docs), Public API v1 usage series + anomaly detection (25 calls today → factor>3 with 7g ort 0), Booking chain-search geo (centre_km + walk_min + station + airport ~9km via Photon, cached), PMS Sync Alerts (config CRUD, simulate triggers with mocked emails, already_open dedupe, mocked push does NOT resolve, disabled short-circuit, unknown provider 404, timeline health=degraded with failed_entries). Backend: 23/23 pytest PASSED. Frontend: /book-all shows chain-geo-{pid} rows with 📍 Merkez + 🚉 Aldgate + ✈ London City Airport 9.1 km (matches spec). Super Admin PA Keys: pa-key-chart toggles pa-key-usage-chart-{id}; pa-webhook-sig-toggle reveals pa-webhook-sig-doc containing HMAC-SHA256 python/node snippets. PMS Sync UI banner/config verified via backend API (open=1, degraded, failed_entries=12) — could not reach panel via automation because Aldgate branch switch + sidebar 'pms-connect-btn' is nested/collapsed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "PMS Sync banner visibility", "issue": "PmsConnectHub uses activePropertyId which falls back to properties[0].id when 'All Branches' is selected; users viewing hub without explicit branch selection see Franziskaner (default) timeline even though the aldgate-flats+mews alert is open. Consider surfacing all-branch alerts or auto-selecting the property with open alerts.", "affected_selectors": ["pms-sync-timeline", "pms-sync-alert-banner"]},
+      {"flow": "PA Keys anomaly badge", "issue": "pa-key-anomaly-{id} rendering scoped to active property's usage; when 'All Branches' active, badge for aldgate-flats key not shown (usage query hits properties[0]). Same pattern as above — panel should either aggregate across properties for super-admin or force selection.", "affected_selectors": ["pa-key-anomaly-*"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter635_paket38.py",
+    "/app/test_reports/pytest/iter635.xml"
+  ],
+  "action_items": [
+    "(nice-to-have) Super Admin panels (PA keys, PMS Connect Hub) should not silently fall back to properties[0] when active branch is 'all' — either aggregate or prompt user to pick a property. This will make anomaly badge and sync-alert banner discoverable to admins operating multi-property tenants.",
+    "(optional) partner_ops.py _send: consider computing sign_payload(secret, body, ts) once into a variable rather than inline in the dict — current code is correct (single call) but a local variable improves readability."
+  ],
+  "critical_code_review_comments": [
+    "partner_ops.sign_payload: HMAC-SHA256 over `f'{ts}.' + body`, serialize_payload uses sort_keys=True + separators=(',',':') — deterministic. _send serializes once and passes same body to httpx.post as `content=body`, so signature matches partner side. ✅",
+    "public_api_v1.verify_sig: body is decoded from `str(data.get('body') or '')` — partners must send raw string (not JSON re-serialized). Documented in webhook_signature.note. ✅",
+    "public_api_v1.key_usage anomaly window: uses dates[-8:-1] (7 days before today) as baseline — correct with days=30; but if days<8 baseline would be empty and factor uses max(avg,1)=1, so any key with today>=20 flags. Not a bug for spec (days=30) but worth documenting when days is small.",
+    "pms_connect._push: on live success clears open alerts (update_many resolved_at). MOCK push does NOT resolve — matches spec: 'başarılı push kapatır' where başarılı = live success. ✅ (Verified in test_7_mocked_push_does_not_resolve).",
+    "pms_connect.check_sync_alert: iterates recent (threshold N) live logs; breaks on first non-fail. Correct. Emails limited to 10 recipients (cfg emails first, else admin/manager fallback). Idempotency via existing open alert lookup. ✅",
+    "be_gaps._geo_meta: caches on properties.geo_meta with sig 'v7:lat,lng'; incomplete lookup sets retry_after=+1h and does not persist sig — good self-healing on 429. Sequential await per property still a p95 concern for cold cache (see iter634 note)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter635_paket38.py",
+    "/app/test_reports/iteration_635.json"
+  ],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "chain-search 100%, PA keys 90% (chart/docs OK, anomaly badge blocked by branch scoping), PMS sync UI not directly verified in browser (backend confirmed)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Created 2 test public-api-keys for aldgate-flats (TEST_iter635_usage, TEST_ui_anom635b) with ~25 GET /api/public/v1/rate-plans calls each; deactivated. Created 2 webhook-subs for aldgate-flats to https://example.com/... (one deleted, one kept). Wrote ≥6 simulated 'live-fail' rate_push logs under aldgate-flats+mews via /sync-alerts/simulate; 1 open pms_sync_alert doc persists (email_status=['mocked']).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sidebar 'pms-connect-btn' is inside a collapsible section — direct sidebar click often fails from automation. Use Connector Catalog → connector-open-mews (or set localStorage.mhb_pms_connect_provider before navigating). PmsConnectHub reads activePropertyId; when Branch = 'All Branches' it falls back to properties[0] which is Franziskaner ('default'). To see the aldgate-flats+mews alert banner, switch branch dropdown to 'Aldgate Flats' BEFORE opening hub. Same applies to PublicApiKeysCard anomaly badge. Emergent egress OK to example.com but responses may be 400/403 — deliveries stay 'retrying' (expected). Photon reverse geocoding works; Nominatim currently 429 in sandbox."
+}

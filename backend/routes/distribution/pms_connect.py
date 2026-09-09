@@ -207,6 +207,42 @@ async def _live_send(provider: str, cfg: dict, translated: dict) -> dict:
         return {"status_code": r.status_code, "body": r.text[:300]}
 
 
+SYNC_ALERT_THRESHOLD = 3
+
+
+async def check_sync_alert(db, pid: str, provider: str) -> dict:
+    """Ardışık N canlı push hatası → yöneticilere bildirim + e-posta (aynı seri için 1 kez)."""
+    cfg = await db.pms_sync_alert_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+    if cfg.get("enabled") is False:
+        return {"alerted": False, "reason": "disabled"}
+    threshold = int(cfg.get("threshold") or SYNC_ALERT_THRESHOLD)
+    recent = await db.pms_push_log.find({"property_id": pid, "provider": provider, "mode": "live"}, {"_id": 0, "id": 1, "result": 1, "created_at": 1}).sort("created_at", -1).to_list(threshold)
+    streak = 0
+    for r in recent:
+        if (r.get("result") or {}).get("ok") is False:
+            streak += 1
+        else:
+            break
+    if streak < threshold:
+        return {"alerted": False, "streak": streak}
+    if await db.pms_sync_alerts.find_one({"property_id": pid, "provider": provider, "resolved_at": None}, {"_id": 0, "id": 1}):
+        return {"alerted": False, "streak": streak, "reason": "already_open"}
+    from routes.platform_ext.mailer import send_email
+    name = PROVIDERS.get(provider, {}).get("name", provider)
+    last_err = (recent[0].get("result") or {}).get("error", "")
+    prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1})
+    title = f"🚨 {name} senkron kesintisi — {streak} ardışık başarısız push"
+    body = f"Tesis: {(prop or {}).get('name', pid)}. Son hata: {last_err}. PMS Bağlantı Merkezi → {name} → Senkron Zaman Çizelgesi'nden 'Yeniden senkronla' ile deneyin; kimlik/endpoint ayarlarını kontrol edin."
+    emails = cfg.get("emails") or [u["email"] for u in await db.users.find({"role": {"$in": ["admin", "manager"]}}, {"_id": 0, "email": 1}).to_list(20)]
+    statuses = [await send_email(db, e, title, f"<div style='font-family:system-ui'><h3>{title}</h3><p>{body}</p></div>", kind="pms_sync_alert", meta={"provider": provider, "property_id": pid}) for e in emails[:10]]
+    now = datetime.now(timezone.utc).isoformat()
+    await db.notifications.insert_one({"id": str(uuid.uuid4()), "property_id": pid, "type": "pms_sync_alert", "title": title, "body": body, "read": False, "created_at": now})
+    doc = {"id": str(uuid.uuid4()), "property_id": pid, "provider": provider, "streak": streak, "last_error": last_err, "emails": emails[:10], "email_status": statuses, "created_at": now, "resolved_at": None}
+    await db.pms_sync_alerts.insert_one(dict(doc))
+    doc.pop("_id", None)
+    return {"alerted": True, **doc}
+
+
 async def _push(db, pid: str, provider: str, rows: list, cert_test: bool = False,
                 cfg_override: dict = None) -> dict:
     cfg = await _cfg(db, pid, provider)
@@ -231,11 +267,14 @@ async def _push(db, pid: str, provider: str, rows: list, cert_test: bool = False
         result = await _live_send(provider, cfg, translated)
     except HTTPException as e:
         await _log(db, pid, provider, "rate_push", "live", rows, translated, {"ok": False, "error": str(e.detail)[:300]}, cert_test, rate_code=rc)
+        await check_sync_alert(db, pid, provider)
         raise
     except Exception as e:
         await _log(db, pid, provider, "rate_push", "live", rows, translated, {"ok": False, "error": str(e)[:300]}, cert_test, rate_code=rc)
+        await check_sync_alert(db, pid, provider)
         raise HTTPException(502, f"{PROVIDERS[provider]['name']} bağlantı hatası: {str(e)[:200]}")
     await _log(db, pid, provider, "rate_push", "live", rows, translated, {"ok": True, **(result if isinstance(result, dict) else {"response": result})}, cert_test, rate_code=rc)
+    await db.pms_sync_alerts.update_many({"property_id": pid, "provider": provider, "resolved_at": None}, {"$set": {"resolved_at": datetime.now(timezone.utc).isoformat()}})
     return {"pushed_days": len(rows), "sample": rows[:3], "mocked": False, "result": result}
 
 
@@ -879,6 +918,43 @@ def create_pms_connect_router(db, require_roles):
         res = await _push(db, pid, provider, entry["standard_rows"], cert_test=bool(entry.get("cert_test")))
         await db.pms_push_log.update_one({"id": log_id}, {"$set": {"resynced_at": datetime.now(timezone.utc).isoformat(), "resynced_by": _u.get("email")}})
         return {"ok": True, "resynced_from": log_id, **res}
+
+    @router.get("/sync-alerts-open/all")
+    async def sync_alerts_open_all(_u: dict = Depends(require_roles(*ROLES))):
+        """Tüm tesislerdeki açık senkron uyarıları (şube seçimi 'all' iken de görünür)."""
+        rows = await db.pms_sync_alerts.find({"resolved_at": None}, {"_id": 0, "emails": 0, "email_status": 0}).sort("created_at", -1).to_list(50)
+        names = {p["id"]: p.get("name") for p in await db.properties.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(200)}
+        for r in rows:
+            r["property_name"] = names.get(r["property_id"], r["property_id"]); r["provider_name"] = PROVIDERS.get(r["provider"], {}).get("name", r["provider"])
+        return {"open": rows}
+
+    @router.get("/sync-alerts/{pid}")
+    async def sync_alerts(pid: str, provider: str = "", _u: dict = Depends(require_roles(*ROLES))):
+        q = {"property_id": pid}
+        if provider:
+            q["provider"] = provider
+        rows = await db.pms_sync_alerts.find(q, {"_id": 0}).sort("created_at", -1).to_list(50)
+        cfg = await db.pms_sync_alert_config.find_one({"property_id": pid}, {"_id": 0}) or {"enabled": True, "threshold": SYNC_ALERT_THRESHOLD, "emails": []}
+        return {"alerts": rows, "open": [r for r in rows if not r.get("resolved_at")], "config": cfg}
+
+    @router.put("/sync-alerts/config/{pid}")
+    async def sync_alerts_config(pid: str, data: dict, _u: dict = Depends(require_roles(*ROLES))):
+        upd = {"property_id": pid, "enabled": bool(data.get("enabled", True)), "threshold": max(2, min(20, int(data.get("threshold") or SYNC_ALERT_THRESHOLD))),
+               "emails": [str(e).strip().lower() for e in (data.get("emails") or []) if "@" in str(e)][:10]}
+        await db.pms_sync_alert_config.update_one({"property_id": pid}, {"$set": upd}, upsert=True)
+        return upd
+
+    @router.post("/sync-alerts/{pid}/simulate")
+    async def sync_alerts_simulate(pid: str, provider: str = "opera-cloud", _u: dict = Depends(require_roles("admin"))):
+        """Test: threshold kadar başarısız canlı push logu yazar ve uyarı zincirini tetikler."""
+        if provider not in PROVIDERS:
+            raise HTTPException(404, "Bilinmeyen sağlayıcı")
+        cfg = await db.pms_sync_alert_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+        n = int(cfg.get("threshold") or SYNC_ALERT_THRESHOLD)
+        rows = [{"date": datetime.now(timezone.utc).date().isoformat(), "rate": 99.0, "availability": 1}]
+        for i in range(n):
+            await _log(db, pid, provider, "rate_push", "live", rows, {}, {"ok": False, "error": f"SIMULATED 502 Bad Gateway #{i + 1}"}, False, rate_code="SIM")
+        return await check_sync_alert(db, pid, provider)
 
     @router.get("/{provider}/log/{pid}")
     async def get_log(provider: str, pid: str, limit: int = 20,

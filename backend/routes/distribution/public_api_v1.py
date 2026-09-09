@@ -101,7 +101,13 @@ DOCS = {
     "rate_limit": "Anahtar başına varsayılan 120 istek/dk. Yanıt başlıkları: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset; aşımda 429 + Retry-After.",
     "scopes": list(SCOPES),
     "idempotency": "POST /public/v1/bookings için opsiyonel Idempotency-Key başlığı: aynı anahtarla tekrar gönderim aynı rezervasyonu döndürür (201 yerine 200).",
-    "webhooks": "booking.created / booking.cancelled olayları webhook aboneliklerine POST edilir (X-Webhook-Secret).",
+    "webhooks": "booking.created / booking.cancelled olayları webhook aboneliklerine POST edilir. Başlıklar: X-Webhook-Event, X-Webhook-Delivery, X-Webhook-Timestamp, X-Webhook-Signature (v1=HMAC-SHA256). Başarısız teslimat 1→5→30→120→720 dk sonra yeniden denenir.",
+    "webhook_signature": {
+        "algorithm": "HMAC-SHA256", "header": "X-Webhook-Signature: v1=<hex>", "signed_string": "<X-Webhook-Timestamp>.<raw request body>",
+        "tolerance_sec": 300, "note": "Ham gövdeyi (byte) kullanın; JSON'u yeniden serileştirmeyin. Zaman damgası 5 dk'dan eskiyse reddedin.",
+        "python": "import hmac, hashlib\nexpected = 'v1=' + hmac.new(SECRET.encode(), f\"{ts}.\".encode() + raw_body, hashlib.sha256).hexdigest()\nok = hmac.compare_digest(expected, request.headers['X-Webhook-Signature'])",
+        "node": "const expected = 'v1=' + crypto.createHmac('sha256', SECRET).update(`${ts}.`).update(rawBody).digest('hex');\nconst ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(req.headers['x-webhook-signature']));",
+    },
     "endpoints": [
         {"method": "GET", "path": "/api/public/v1/availability", "scope": "read:availability", "query": "check_in, check_out, adults=2", "desc": "Oda tipi bazlı kalan oda ve fiyat"},
         {"method": "GET", "path": "/api/public/v1/rate-plans", "scope": "read:availability", "desc": "Fiyat planları (esnek / iade edilmez / kahvaltılı)"},
@@ -197,6 +203,24 @@ def create_public_api_v1_router(db, require_roles):
         await db.webhook_subscriptions.delete_one({"id": sub_id, "property_id": pid})
         return {"ok": True}
 
+    @router.post("/webhook-subs/{pid}/{sub_id}/rotate-secret")
+    async def rotate_secret(pid: str, sub_id: str, _u: dict = Depends(require_roles("admin"))):
+        new = secrets.token_urlsafe(24)
+        r = await db.webhook_subscriptions.update_one({"id": sub_id, "property_id": pid}, {"$set": {"secret": new, "secret_rotated_at": now_iso()}})
+        if not r.matched_count:
+            raise HTTPException(404, "Abonelik yok")
+        return {"ok": True, "secret": new}
+
+    @router.post("/webhook-subs/{pid}/verify-signature")
+    async def verify_sig(pid: str, data: dict, _u: dict = Depends(require_roles("admin", "manager"))):
+        """Partner entegrasyon testi: {sub_id, timestamp, body(str), signature} → imza doğru mu?"""
+        from routes.platform_ext.partner_ops import verify_signature, sign_payload
+        sub = await db.webhook_subscriptions.find_one({"id": str(data.get("sub_id") or ""), "property_id": pid}, {"_id": 0, "secret": 1})
+        if not sub:
+            raise HTTPException(404, "Abonelik yok")
+        body = str(data.get("body") or "").encode("utf-8"); ts = str(data.get("timestamp") or "")
+        return {"valid": verify_signature(sub["secret"], body, ts, str(data.get("signature") or "")), "expected": sign_payload(sub["secret"], body, ts)}
+
     @router.post("/webhook-subs/{pid}/test")
     async def test_webhook(pid: str, _u: dict = Depends(require_roles("admin", "manager"))):
         from routes.platform_ext.partner_ops import emit_webhook
@@ -207,12 +231,24 @@ def create_public_api_v1_router(db, require_roles):
     async def key_usage(pid: str, days: int = 7, _u: dict = Depends(require_roles("admin"))):
         from datetime import timedelta
         since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-        rows = await db.public_api_calls.find({"property_id": pid, "at": {"$gte": since}}, {"_id": 0, "key_id": 1, "path": 1}).to_list(50000)
-        by_key: Dict[str, int] = {}; by_path: Dict[str, int] = {}
+        rows = await db.public_api_calls.find({"property_id": pid, "at": {"$gte": since}}, {"_id": 0, "key_id": 1, "path": 1, "at": 1}).to_list(100000)
+        by_key: Dict[str, int] = {}; by_path: Dict[str, int] = {}; daily: Dict[str, Dict[str, int]] = {}
         for r in rows:
             by_key[r["key_id"]] = by_key.get(r["key_id"], 0) + 1
             by_path[r["path"]] = by_path.get(r["path"], 0) + 1
-        return {"days": days, "calls": len(rows), "by_key": by_key, "by_path": by_path}
+            d = daily.setdefault(r["key_id"], {})
+            d[r["at"][:10]] = d.get(r["at"][:10], 0) + 1
+        today = datetime.now(timezone.utc).date()
+        dates = [(today - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
+        series: Dict[str, list] = {}; anomalies: Dict[str, dict] = {}
+        for kid, d in daily.items():
+            series[kid] = [{"date": ds, "calls": d.get(ds, 0)} for ds in dates]
+            prev = [d.get(ds, 0) for ds in dates[-8:-1]]
+            avg = sum(prev) / len(prev) if prev else 0
+            today_calls = d.get(dates[-1], 0)
+            if today_calls >= 20 and today_calls > 3 * max(avg, 1):
+                anomalies[kid] = {"today": today_calls, "avg_7d": round(avg, 1), "factor": round(today_calls / max(avg, 1), 1)}
+        return {"days": days, "calls": len(rows), "by_key": by_key, "by_path": by_path, "dates": dates, "series": series, "anomalies": anomalies}
 
     @router.get("/public/v1/availability")
     async def pub_availability(request: Request, response: Response, check_in: str, check_out: str, adults: int = 2):

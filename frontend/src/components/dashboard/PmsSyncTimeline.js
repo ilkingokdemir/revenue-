@@ -8,10 +8,16 @@ const fmt = (s) => (s ? String(s).slice(0, 16).replace("T", " ") : "—");
 
 export default function PmsSyncTimeline({ pid, provider, lastLogId, onResynced }) {
   const [tl, setTl] = useState(null);
+  const [alerts, setAlerts] = useState(null);
   const [busy, setBusy] = useState("");
   const load = useCallback(async () => {
     try { const r = await axios.get(`${API}/api/pms-connect/${provider}/sync-timeline/${pid}?days=30`, { withCredentials: true }); setTl(r.data); } catch { setTl(null); }
+    try { const a = await axios.get(`${API}/api/pms-connect/sync-alerts/${pid}?provider=${provider}`, { withCredentials: true }); setAlerts(a.data); } catch { setAlerts(null); }
   }, [pid, provider]);
+  const saveCfg = async (patch) => {
+    try { const r = await axios.put(`${API}/api/pms-connect/sync-alerts/config/${pid}`, { ...(alerts?.config || {}), ...patch }, { withCredentials: true }); setAlerts((a) => ({ ...a, config: r.data })); toast.success("Uyarı ayarı kaydedildi"); }
+    catch { toast.error("Kaydedilemedi"); }
+  };
   useEffect(() => { load(); }, [load, lastLogId]);
 
   const resync = async (logId) => {
@@ -44,6 +50,19 @@ export default function PmsSyncTimeline({ pid, provider, lastLogId, onResynced }
               <div className="w-full bg-rose-500 rounded-b-sm" style={{ height: `${(d.failed / max) * 100}%`, minHeight: d.failed ? 3 : 0 }} />
               <span className="sr-only">{tot}</span>
             </div>); })}
+        </div>
+      )}
+      {alerts?.open?.length > 0 && (
+        <div className="text-[11px] text-rose-800 bg-rose-100 border border-rose-200 rounded-lg px-2 py-1.5 mb-2 font-bold" data-testid="pms-sync-alert-banner">
+          🚨 {alerts.open[0].streak} ardışık başarısız push — yöneticilere e-posta gönderildi ({fmt(alerts.open[0].created_at)}). Başarılı bir push uyarıyı kapatır.
+        </div>
+      )}
+      {alerts?.config && (
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-600 mb-2" data-testid="pms-sync-alert-config">
+          <label className="flex items-center gap-1"><input type="checkbox" checked={alerts.config.enabled !== false} onChange={(e) => saveCfg({ enabled: e.target.checked })} data-testid="pms-sync-alert-enabled" />Kesinti e-postası</label>
+          <label className="flex items-center gap-1">eşik<input type="number" min={2} max={20} defaultValue={alerts.config.threshold || 3} onBlur={(e) => saveCfg({ threshold: Number(e.target.value) })} className="w-12 border border-stone-300 rounded px-1 py-0.5" data-testid="pms-sync-alert-threshold" /> ardışık hata</label>
+          <span className="text-stone-400">{alerts.config.emails?.length ? alerts.config.emails.join(", ") : "alıcı: tüm admin/manager"}</span>
+          {alerts.alerts?.length ? <span className="ml-auto text-stone-400" data-testid="pms-sync-alert-count">{alerts.alerts.length} uyarı geçmişi</span> : null}
         </div>
       )}
       {tl.last_error && <div className="text-[11px] text-rose-700 bg-rose-50 border border-rose-100 rounded-lg px-2 py-1.5 mb-2" data-testid="pms-sync-last-error">Son hata ({fmt(tl.last_error.at)}): {tl.last_error.error}</div>}

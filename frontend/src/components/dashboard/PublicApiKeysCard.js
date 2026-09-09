@@ -6,17 +6,33 @@ const API = process.env.REACT_APP_BACKEND_URL;
 const cfg = { withCredentials: true };
 const SCOPES = ["read:availability", "read:bookings", "write:bookings", "read:guests"];
 
+function UsageChart({ series, dates, keyId }) {
+  const pts = series || dates.map((d) => ({ date: d, calls: 0 }));
+  const max = Math.max(1, ...pts.map((p) => p.calls));
+  const total = pts.reduce((a, p) => a + p.calls, 0);
+  return (
+    <div className="mx-2 mb-2 p-2 rounded-lg border border-stone-100 bg-white" data-testid={`pa-key-usage-chart-${keyId}`}>
+      <div className="flex justify-between text-[10px] text-stone-500 mb-1"><span>Son 30 gün · {total} çağrı</span><span>maks {max}/gün</span></div>
+      <div className="flex items-end gap-[2px] h-12">
+        {pts.map((p) => <div key={p.date} title={`${p.date}: ${p.calls}`} className={`flex-1 rounded-t-sm ${p.calls ? "bg-indigo-500" : "bg-stone-100"}`} style={{ height: `${Math.max(p.calls ? 6 : 2, (p.calls / max) * 100)}%` }} />)}
+      </div>
+      <div className="flex justify-between text-[9px] text-stone-400 mt-0.5"><span>{pts[0]?.date.slice(5)}</span><span>{pts[pts.length - 1]?.date.slice(5)}</span></div>
+    </div>
+  );
+}
+
 export default function PublicApiKeysCard({ pid }) {
   const [keys, setKeys] = useState([]);
   const [usage, setUsage] = useState(null);
   const [docs, setDocs] = useState(null);
   const [showDocs, setShowDocs] = useState(false);
   const [newKey, setNewKey] = useState("");
+  const [chartFor, setChartFor] = useState("");
   const [form, setForm] = useState({ name: "", scopes: SCOPES.slice(0, 3), rate_per_min: 120, expires_in_days: 365 });
 
   const load = useCallback(async () => {
     try {
-      const [k, u] = await Promise.all([axios.get(`${API}/api/public-keys/${pid}`, cfg), axios.get(`${API}/api/public-keys/${pid}/usage`, cfg)]);
+      const [k, u] = await Promise.all([axios.get(`${API}/api/public-keys/${pid}`, cfg), axios.get(`${API}/api/public-keys/${pid}/usage?days=30`, cfg)]);
       setKeys(k.data.keys); setUsage(u.data);
     } catch { toast.error("API anahtarları yüklenemedi"); }
   }, [pid]);
@@ -61,16 +77,21 @@ export default function PublicApiKeysCard({ pid }) {
       {newKey && <div className="text-[11px] bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2 break-all font-mono" data-testid="pa-key-new">{newKey}</div>}
       <div className="space-y-1">
         {keys.map((k) => (
-          <div key={k.id} className={`flex flex-wrap items-center gap-2 text-[11px] rounded-lg px-2 py-1.5 ${k.active ? "bg-stone-50" : "bg-rose-50 opacity-70"}`} data-testid={`pa-key-row-${k.id}`}>
+          <React.Fragment key={k.id}>
+          <div className={`flex flex-wrap items-center gap-2 text-[11px] rounded-lg px-2 py-1.5 ${k.active ? "bg-stone-50" : "bg-rose-50 opacity-70"}`} data-testid={`pa-key-row-${k.id}`}>
             <span className="font-bold text-stone-800">{k.name}</span>
             <span className="font-mono text-stone-500">{k.key}</span>
             <span className="text-stone-400">{k.scopes.join(" · ")}</span>
             <span className="text-stone-400">{k.rate_per_min}/dk</span>
             {expiryBadge(k)}
             {k.days_left != null && <button onClick={() => extend(k)} className="text-[10px] underline text-indigo-600" data-testid={`pa-key-extend-${k.id}`}>+90 gün</button>}
-            <span className="ml-auto text-stone-500">{k.calls || 0} çağrı{usage?.by_key?.[k.id] ? ` · 7g: ${usage.by_key[k.id]}` : ""}</span>
+            <span className="ml-auto text-stone-500">{k.calls || 0} çağrı{usage?.by_key?.[k.id] ? ` · 30g: ${usage.by_key[k.id]}` : ""}</span>
+            {usage?.anomalies?.[k.id] && <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold" title={`Bugün ${usage.anomalies[k.id].today} · 7g ort ${usage.anomalies[k.id].avg_7d}`} data-testid={`pa-key-anomaly-${k.id}`}>⚠ olağandışı trafik ×{usage.anomalies[k.id].factor}</span>}
+            <button onClick={() => setChartFor(chartFor === k.id ? "" : k.id)} className="text-[10px] underline text-stone-600" data-testid={`pa-key-chart-${k.id}`}>{chartFor === k.id ? "Grafiği gizle" : "30g grafik"}</button>
             <button onClick={() => toggleActive(k)} className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${k.active ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`} data-testid={`pa-key-toggle-${k.id}`}>{k.active ? "İptal et" : "Aktifleştir"}</button>
           </div>
+          {chartFor === k.id && <UsageChart series={usage?.series?.[k.id]} dates={usage?.dates || []} keyId={k.id} />}
+          </React.Fragment>
         ))}
         {!keys.length && <div className="text-[11px] text-stone-400" data-testid="pa-keys-empty">Henüz anahtar yok.</div>}
       </div>

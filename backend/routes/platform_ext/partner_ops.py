@@ -1,6 +1,10 @@
 """Partner operasyonları: webhook teslimatı + üstel geri çekilmeli yeniden deneme, API anahtarı süre uyarısı."""
 import asyncio
+import hashlib
+import hmac
+import json
 import logging
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -12,10 +16,32 @@ BACKOFF_MIN = (1, 5, 30, 120, 720)  # dakika: 5 deneme → ~14 saat
 MAX_ATTEMPTS = len(BACKOFF_MIN) + 1
 
 
+def sign_payload(secret: str, body: bytes, ts: str) -> str:
+    """HMAC-SHA256 imza: v1=hex(hmac(secret, f"{ts}.{body}")). Partner aynı hesabı yapıp karşılaştırır."""
+    return "v1=" + hmac.new(secret.encode("utf-8"), f"{ts}.".encode("utf-8") + body, hashlib.sha256).hexdigest()
+
+
+def serialize_payload(payload: dict) -> bytes:
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True, ensure_ascii=False).encode("utf-8")
+
+
+def verify_signature(secret: str, body: bytes, ts: str, signature: str, tolerance_sec: int = 300) -> bool:
+    try:
+        if abs(time.time() - int(ts)) > tolerance_sec:
+            return False
+    except (TypeError, ValueError):
+        return False
+    return hmac.compare_digest(sign_payload(secret, body, ts), signature or "")
+
+
 async def _send(url: str, payload: dict, secret: str) -> tuple:
     try:
+        body = serialize_payload(payload)
+        ts = str(int(time.time()))
+        headers = {"Content-Type": "application/json", "X-Webhook-Secret": secret, "X-Webhook-Event": payload["event"], "X-Webhook-Delivery": payload["id"],
+                   "X-Webhook-Timestamp": ts, "X-Webhook-Signature": sign_payload(secret, body, ts)}
         async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.post(url, json=payload, headers={"X-Webhook-Secret": secret, "X-Webhook-Event": payload["event"], "X-Webhook-Delivery": payload["id"]})
+            r = await client.post(url, content=body, headers=headers)
         return r.status_code < 300, r.status_code, r.text[:200]
     except Exception as e:
         return False, 0, str(e)[:200]

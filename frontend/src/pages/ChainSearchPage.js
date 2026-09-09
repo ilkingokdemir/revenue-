@@ -4,6 +4,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const iso = (d) => d.toISOString().slice(0, 10);
+const walk = (km, min) => (km != null && km <= 3 && min != null ? `~${Math.max(1, min)} dk yürüme` : `${km} km`);
 export default function ChainSearchPage() {
   const q = new URLSearchParams(window.location.search);
   const [ci, setCi] = useState(q.get("check_in") || iso(new Date(Date.now() + 7 * 864e5)));
@@ -35,7 +36,7 @@ export default function ChainSearchPage() {
               {p.image_url ? <img src={p.image_url} alt="" className="w-24 h-20 object-cover rounded-xl" /> : <div className="w-24 h-20 rounded-xl bg-stone-100" />}
               <div className="flex-1 min-w-0"><div className="font-bold text-stone-900">{p.name} {p.star_rating ? <span className="text-amber-500 text-xs">{"★".repeat(p.star_rating)}</span> : null}</div>
                 <div className="text-xs text-stone-500">{[p.city, p.country].filter(Boolean).join(", ")}</div>
-                {(p.centre_km != null || p.station) && <div className="text-[11px] text-teal-700 mt-0.5" data-testid={`chain-geo-${p.property_id}`}>{p.centre_km != null && <span>📍 Merkeze {p.centre_km} km</span>}{p.station && <span>{p.centre_km != null ? " · " : ""}🚉 {p.station.name} {p.station.km} km</span>}</div>}
+                {(p.centre_km != null || p.station || p.airport) && <div className="text-[11px] text-teal-700 mt-0.5" data-testid={`chain-geo-${p.property_id}`}>{p.centre_km != null && <span>📍 Merkez {walk(p.centre_km, p.centre_walk_min)}</span>}{p.station && <span> · 🚉 {p.station.name} {walk(p.station.km, p.station.walk_min)}</span>}{p.airport && <span> · ✈ {p.airport.name} {p.airport.km} km</span>}</div>}
                 {p.best ? <div className="text-xs text-stone-600 mt-1">{p.best.room_name} · {p.best.rooms_left} oda kaldı</div> : <div className="text-xs text-rose-600 mt-1">Bu tarihlerde müsait oda yok</div>}</div>
               <div className="text-right">{p.total_from != null && <div className="text-lg font-black text-stone-900" data-testid={`chain-price-${p.property_id}`}>{p.currency} {p.total_from.toFixed(0)}<div className="text-[10px] text-stone-400 font-normal">{p.nights} gece toplam</div></div>}
                 <a href={p.available ? p.book_url : undefined} className={`inline-block mt-1 px-3 py-1.5 rounded-lg text-xs font-bold ${p.available ? "bg-emerald-600 text-white" : "bg-stone-100 text-stone-400 pointer-events-none"}`} data-testid={`chain-book-${p.property_id}`}>Rezerve et</a></div>
@@ -84,7 +85,7 @@ function ChainMap({ items }) {
         const p = avail[0] || g[0];
         const label = g.length > 1 ? `${g.length} tesis · ${avail.length ? lbl(avail[0]) + "'dan" : "Dolu"}` : lbl(p);
         const icon = L.divIcon({ className: "", html: `<div data-testid="map-pin-${p.property_id}" style="background:${avail.length ? "#0f766e" : "#9ca3af"};color:#fff;font:700 11px system-ui;padding:4px 8px;border-radius:999px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.3)">${label}</div>`, iconSize: null, iconAnchor: [30, 14] });
-        const geoLine = (x) => { const parts = []; if (x.centre_km != null) parts.push(`merkeze ${x.centre_km} km`); if (x.station) parts.push(`${x.station.name} ${x.station.km} km`); return parts.length ? `<div style="color:#0f766e;font-size:11px">${parts.join(" · ")}</div>` : ""; };
+        const geoLine = (x) => { const parts = []; if (x.centre_km != null) parts.push(`merkez ${walk(x.centre_km, x.centre_walk_min)}`); if (x.station) parts.push(`🚉 ${x.station.name} ${walk(x.station.km, x.station.walk_min)}`); if (x.airport) parts.push(`✈ ${x.airport.name} ${x.airport.km} km`); return parts.length ? `<div style="color:#0f766e;font-size:11px">${parts.join(" · ")}</div>` : ""; };
         const popup = g.map((x) => `<div style="margin:4px 0"><b>${x.name}</b> · ${x.best ? x.best.room_name + " · " + lbl(x) : "Müsait değil"}${x.available ? ` <a href="${x.book_url}">Rezerve et →</a>` : ""}${geoLine(x)}</div>`).join("");
         L.marker([p.geo.lat, p.geo.lng], { icon }).addTo(m).bindPopup(`<div style="font-size:12px">${p.city ? `<div style="color:#666">${p.city}</div>` : ""}${popup}</div>`, { maxWidth: 320 });
         b.push([p.geo.lat, p.geo.lng]);

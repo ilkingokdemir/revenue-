@@ -18,6 +18,8 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
   const pid = activePropertyId && activePropertyId !== "all" ? activePropertyId : properties[0]?.id || "default";
   const [data, setData] = useState(null);
   const [health, setHealth] = useState(null);
+  const [openAlerts, setOpenAlerts] = useState([]);
+  useEffect(() => { axios.get(`${API}/api/pms-connect/sync-alerts-open/all`, { withCredentials: true }).then((r) => setOpenAlerts(r.data.open || [])).catch(() => {}); }, [pid]);
   const [sel, setSel] = useState(null);
   const [creds, setCreds] = useState({});
   const [days, setDays] = useState(14);
@@ -355,6 +357,17 @@ export default function PmsConnectHub({ activePropertyId, properties = [] }) {
         <h1 className="text-2xl font-semibold text-stone-900">PMS & Kanal Bağlantı Merkezi</h1>
         <p className="text-sm text-stone-500 mt-1">RMS fiyatları standart formatta üretilir; her adaptör kendi diline çevirip (JSON / OTA XML) PMS'e basar — onlar da Booking.com, Expedia ve diğer OTA'lara dağıtır.</p>
       </div>
+
+      {openAlerts.length > 0 && (
+        <section className="bg-rose-50 border border-rose-200 rounded-xl p-3" data-testid="pms-open-alerts-all">
+          <div className="text-[12px] font-bold text-rose-800 mb-1">🚨 {openAlerts.length} açık senkron kesintisi (tüm tesisler)</div>
+          <div className="flex flex-wrap gap-2">
+            {openAlerts.map((a) => (
+              <span key={a.id} className="text-[11px] bg-white border border-rose-200 rounded-full px-2 py-1 text-rose-700" data-testid={`pms-open-alert-${a.id}`}>{a.property_name} · {a.provider_name} · {a.streak} ardışık hata · {String(a.created_at).slice(5, 16).replace("T", " ")}</span>
+            ))}
+          </div>
+        </section>
+      )}
 
       {health && (
         <section className="bg-white border border-stone-200 rounded-xl p-4" data-testid="pms-health-board">

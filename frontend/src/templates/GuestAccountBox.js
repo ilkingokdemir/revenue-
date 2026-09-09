@@ -13,7 +13,7 @@ export function GuestAccountBox({ propertyId, guestForm, setGuestForm, accent })
   const [busy, setBusy] = useState(false);
 
   const apply = (p) => {
-    setProfile(p);
+    setProfile(p); try { sessionStorage.setItem("mhb_guest_profile", JSON.stringify(p)); } catch { /* ignore */ }
     setGuestForm((f) => ({ ...f, guest_name: f.guest_name || p.name || "", guest_email: f.guest_email || p.email || "", guest_phone: f.guest_phone || p.phone || "" }));
   };
   useEffect(() => {
@@ -33,7 +33,7 @@ export function GuestAccountBox({ propertyId, guestForm, setGuestForm, accent })
     try { const { data } = await axios.post(`${API}/booking/guest-account/magic-link`, { email: e, property_id: propertyId, return_path: window.location.pathname }); setSent(data); toast.success("Giriş bağlantısı e-postanıza gönderildi"); }
     catch { toast.error("Gönderilemedi"); } finally { setBusy(false); }
   };
-  const logout = async () => { const s = localStorage.getItem("mhb_guest_session"); localStorage.removeItem("mhb_guest_session"); setProfile(null); if (s) axios.post(`${API}/booking/guest-account/logout`, { session: s }).catch(() => {}); };
+  const logout = async () => { const s = localStorage.getItem("mhb_guest_session"); localStorage.removeItem("mhb_guest_session"); sessionStorage.removeItem("mhb_guest_profile"); setProfile(null); if (s) axios.post(`${API}/booking/guest-account/logout`, { session: s }).catch(() => {}); };
 
   if (profile) {
     const lo = profile.loyalty || {};

@@ -91,7 +91,9 @@ function BookingEngineInner() {
     const markets = beCfg?.tax_exclusive_markets || ["US", "CA", "en-US"];
     const nav = (navigator.language || "").toLowerCase(); const region = nav.split("-")[1]?.toUpperCase() || "";
     const exclusive = mode === "tax_exclusive" || (mode === "auto_by_market" && markets.some((m) => m.toUpperCase() === region || m.toLowerCase() === nav));
-    return { mode: exclusive ? "tax_exclusive" : "tax_inclusive", transparency: beCfg?.total_price_transparency !== false };
+    let tierMultiplier = 1;
+    try { const gp = JSON.parse(sessionStorage.getItem("mhb_guest_profile") || "null"); tierMultiplier = { silver: 1.25, gold: 1.5, platinum: 2 }[gp?.loyalty?.tier] || 1; } catch { /* ignore */ }
+    return { mode: exclusive ? "tax_exclusive" : "tax_inclusive", transparency: beCfg?.total_price_transparency !== false, showPoints: beCfg?.loyalty_show_points !== false, pointsPerUnit: Number(beCfg?.loyalty_points_per_unit) || 10, tierMultiplier };
   })();
   const applyAgentCode = async () => {
     try { const { data } = await axios.post(`${API}/booking/agent-code/validate`, { property_id: propertyId, code: agentCode }); setAgentInfo(data); toast.success(`${data.agent_name}: −${data.discount_pct}%`); }
@@ -390,10 +392,10 @@ function BookingEngineInner() {
       if (totalPrice <= 0 && paymentMethod !== "hotel") {
         finish(); setConfirmation(data); setStep(STEPS.CONFIRM); window.scrollTo({ top: 0, behavior: "smooth" }); return;
       }
-      if ((paymentMethod === "card" || paymentMethod === "deposit") && inlineEnabled) {
+      if ((paymentMethod === "card" || paymentMethod === "deposit" || paymentMethod === "installments") && inlineEnabled) {
         trackFunnel(propertyId, "payment", { method: paymentMethod }); trackEvent("add_payment_info", { ...purchaseParams, payment_type: "card" });
         finishRef.current = finish;
-        setInlineBooking({ ...data, amountMode: paymentMethod === "deposit" ? "deposit" : "full" });
+        setInlineBooking({ ...data, amountMode: paymentMethod === "installments" ? "installments" : paymentMethod === "deposit" ? "deposit" : "full" });
         setStep(STEPS.PAYMENT); window.scrollTo({ top: 0, behavior: "smooth" }); return;
       }
       trackFunnel(propertyId, "payment", { method: paymentMethod });
@@ -637,7 +639,7 @@ function BookingEngineInner() {
           socialProofSettings={property?.social_proof?.settings} cart={cart} onBackToRooms={() => setStep(STEPS.ROOMS)}
           giftCode={giftCode} setGiftCode={setGiftCode} giftCard={giftCard} applyGift={applyGift} clearGift={() => { setGiftCard(null); setGiftCode(""); }} giftApplied={giftApplied}
           depositDue={depositDue} fmt={formatPrice} memberPct={memberPct} cityTax={cityTax} vatRate={vatRate} childExtra={childExtra}
-          beCfg={beCfg} agentCode={agentCode} setAgentCode={setAgentCode} agentInfo={agentInfo} applyAgentCode={applyAgentCode} clearAgentCode={clearAgentCode}
+          beCfg={beCfg} inlineEnabled={inlineEnabled} agentCode={agentCode} setAgentCode={setAgentCode} agentInfo={agentInfo} applyAgentCode={applyAgentCode} clearAgentCode={clearAgentCode}
           flexCancel={flexCancel} setFlexCancel={setFlexCancel} flexFee={flexFee} extraAdultTotal={extraAdultTotal} losDiscount={losDiscount} losPct={losPct} agentDiscount={agentDiscount} />
       )}
 
@@ -658,7 +660,7 @@ function BookingEngineInner() {
       )}
 
       {/* Step 4: Confirmation */}
-      {step === STEPS.CONFIRM && <ConfirmationStep t={tmpl} confirmation={confirmation} onBookAnother={handleBookAnother} fmt={formatPrice} />}
+      {step === STEPS.CONFIRM && <ConfirmationStep t={tmpl} confirmation={{ ...confirmation, _points: priceDisplay.showPoints ? Math.round((confirmation.cart_total ?? confirmation.total_price ?? 0) * priceDisplay.pointsPerUnit * priceDisplay.tierMultiplier) : 0 }} onBookAnother={handleBookAnother} fmt={formatPrice} />}
       </main>
 
       {/* Mobile Sticky Search */}

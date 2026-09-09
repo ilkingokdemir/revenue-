@@ -144,6 +144,7 @@ export function ConfirmationStep({ t, confirmation, onBookAnother, fmt = (v) => 
             </div>
           )}
           {confirmation.status === "hold" && confirmation.hold_expires_at && <p className="text-xs font-semibold rounded-lg px-3 py-2 mb-3" style={{ background: "#fef3c7", color: "#92400e" }} data-testid="confirm-hold-note">⏳ {tr("confirm.holdNote", { until: new Date(confirmation.hold_expires_at).toLocaleString() })}</p>}
+          {confirmation._points > 0 && <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-50 border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-800" data-testid="confirm-points">★ Bu rezervasyonla +{confirmation._points.toLocaleString()} sadakat puanı kazandınız — konaklama sonrası hesabınıza işlenir.</div>}
           <PaymentPlanBox t={t} confirmation={confirmation} fmt={fmt} />
           <CalendarPdfRow t={t} confirmation={confirmation} />
           <BrgClaim t={t} confirmation={confirmation} />

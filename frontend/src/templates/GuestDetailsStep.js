@@ -8,9 +8,12 @@ import { PriceComparisonWidget } from "./PriceComparisonWidget";
 import { planNightPrice, planName, roomNightBase } from "./RatePlanRows";
 import { GuestAccountBox } from "./GuestAccountBox";
 
-export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, upsells, selectedUpsells, toggleUpsell, nights, adults, children, roomCount, checkIn, checkOut, socialProofSettings, dwConfig, damageWaiver, setDamageWaiver, waiverTotal, cart, onBackToRooms, giftCode, setGiftCode, giftCard, applyGift, clearGift, giftApplied, depositDue, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, cityTax = 0, vatRate = 0, childExtra = 0, beCfg = null, agentCode = "", setAgentCode = () => {}, agentInfo = null, applyAgentCode = () => {}, clearAgentCode = () => {}, flexCancel = false, setFlexCancel = () => {}, flexFee = 0, extraAdultTotal = 0, losDiscount = 0, losPct = 0, agentDiscount = 0 }) {
+export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, upsells, selectedUpsells, toggleUpsell, nights, adults, children, roomCount, checkIn, checkOut, socialProofSettings, dwConfig, damageWaiver, setDamageWaiver, waiverTotal, cart, onBackToRooms, giftCode, setGiftCode, giftCard, applyGift, clearGift, giftApplied, depositDue, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, cityTax = 0, vatRate = 0, childExtra = 0, beCfg = null, inlineEnabled = false, agentCode = "", setAgentCode = () => {}, agentInfo = null, applyAgentCode = () => {}, clearAgentCode = () => {}, flexCancel = false, setFlexCancel = () => {}, flexFee = 0, extraAdultTotal = 0, losDiscount = 0, losPct = 0, agentDiscount = 0 }) {
   const { t: tr } = useLanguage();
   const showDeposit = depositDue > 0 && depositDue < totalPrice - 0.5;
+  const instCount = Number(beCfg?.installments_count) || 3;
+  const showInstallments = beCfg?.installments_enabled && totalPrice >= Number(beCfg?.installments_min_amount || 500) && inlineEnabled;
+  const instAmount = totalPrice / instCount;
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8" data-testid="guest-details-step">
       {onBackToRooms && (
@@ -177,6 +180,7 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
             <div className="space-y-3">
               {[
                 { value: "card", icon: CreditCard, label: tr("payment.payNow"), sub: tr("payment.payNowSub"), showSecure: true, wallets: true },
+                ...(showInstallments ? [{ value: "installments", icon: CreditCard, label: `${instCount} taksit × ${fmt(instAmount)}`, sub: `İlk taksit şimdi, kalanı aylık otomatik (son taksit varıştan önce). Faizsiz.`, showSecure: true, wallets: false }] : []),
                 ...(showDeposit ? [{ value: "deposit", icon: ShieldCheck, label: tr("payment.payDeposit", { amount: depositDue.toFixed(0) }), sub: tr("payment.payDepositSub", { rest: (totalPrice - depositDue).toFixed(0) }), showSecure: true, wallets: true }] : []),
                 { value: "iyzico", icon: CreditCard, label: "iyzico ile Ode", sub: "Turkey — All Turkish banks, taksit (installments)", showSecure: true, flag: "🇹🇷" },
                 { value: "paytr", icon: CreditCard, label: "PayTR ile Ode", sub: "Turkey — Sanal POS, SMS payment, taksitli odeme", showSecure: true, flag: "🇹🇷" },
@@ -210,6 +214,7 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
             style={{ background: t.colors.accent, borderRadius: t.borderRadius }} data-testid="complete-booking-btn">
             {bookingLoading ? <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
               : paymentMethod === "hold" ? <><ShieldCheck size={20} weight="fill" /> {tr("payment.holdBtn")}</> : paymentMethod === "card" ? <><CreditCard size={20} weight="fill" /> {tr("payment.payAndComplete", { amount: totalPrice.toFixed(0) })}</>
+              : paymentMethod === "installments" ? <><CreditCard size={20} weight="fill" /> İlk taksiti öde · {fmt(instAmount)}</>
               : paymentMethod === "deposit" ? <><ShieldCheck size={20} weight="fill" /> {tr("payment.payAndComplete", { amount: depositDue.toFixed(0) })}</>
               : paymentMethod === "iyzico" ? <><CreditCard size={20} weight="fill" /> iyzico ile {totalPrice.toFixed(0)} {selectedRoom?.currency || "TRY"} Ode</>
               : paymentMethod === "paytr" ? <><CreditCard size={20} weight="fill" /> PayTR ile {totalPrice.toFixed(0)} {selectedRoom?.currency || "TRY"} Ode</>

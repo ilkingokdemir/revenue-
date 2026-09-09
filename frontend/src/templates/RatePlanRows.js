@@ -17,6 +17,7 @@ export function RatePlanRows({ t, room, plans, nights, cart, onAdd, fmt = gbp, m
   const exclusive = pd.mode === "tax_exclusive";
   const vat = Number(pd.vatRate || room.vat_rate || 0);
   const cityTax = Number(pd.cityTaxPerNight || 0);
+  const ppu = pd.showPoints ? Number(pd.pointsPerUnit || 10) * Number(pd.tierMultiplier || 1) : 0;
   const { t: tr, lang } = useLanguage();
   const [qty, setQty] = useState({});
   const [beds, setBeds] = useState({});
@@ -80,6 +81,7 @@ export function RatePlanRows({ t, room, plans, nights, cart, onAdd, fmt = gbp, m
               ) : (
                 <div className="text-[11px] text-slate-500">{fmt(nightly)} {tr("room.perNight")} · {room.vat_rate ? tr("tax.vatIncl", { pct: room.vat_rate }) : tr("room.includesTaxes")}{cityTax ? ` · + ${fmt(cityTax)}/gece şehir vergisi` : ""}</div>
               )}
+              {ppu > 0 && <div className="text-[11px] font-semibold text-amber-600 mt-0.5" data-testid={`plan-points-${room.id}-${p.code || idx}`}>★ +{Math.round(total * ppu).toLocaleString()} puan kazanın</div>}
               {pd.transparency && (exclusive || cityTax > 0) && (
                 <div className="text-[11px] font-semibold text-emerald-700 mt-0.5" data-testid={`plan-total-incl-${room.id}-${p.code || idx}`}>Toplam, tüm vergiler dahil: {fmt(total + cityTax * nights * q)}</div>
               )}

@@ -34,6 +34,15 @@ def create_be_payments_router(db, require_roles):
             if 0 < dep < total:
                 amount, is_deposit = round(dep, 2), True
                 await db.bookings.update_one({"id": booking["id"]}, {"$set": {"deposit_due": amount, "balance_due": round(total - amount, 2), "payment_plan": "deposit"}})
+        n_inst = 0
+        if data.get("amount_mode") == "installments":
+            from routes.pms.be_gaps import get_be_settings
+            st = await get_be_settings(db, booking["property_id"])
+            n_inst = int(st.get("installments_count") or 3)
+            if not st.get("installments_enabled") or total < float(st.get("installments_min_amount") or 0):
+                raise HTTPException(400, "Taksit bu rezervasyon için uygun değil")
+            amount, is_deposit = round(total / n_inst, 2), True
+            await db.bookings.update_one({"id": booking["id"]}, {"$set": {"payment_plan": "installments", "installments_count": n_inst}})
         if amount <= 0:
             raise HTTPException(400, "Tutar geçersiz")
         import stripe
@@ -53,7 +62,7 @@ def create_be_payments_router(db, require_roles):
                 pass
         pi = stripe.PaymentIntent.create(amount=int(round(amount * 100)), currency=cur, automatic_payment_methods={"enabled": True},
                                          receipt_email=booking.get("guest_email") or None, **extra,
-                                         metadata={"type": "booking", "booking_id": booking["id"], "booking_ref": booking.get("booking_ref", ""), "property_id": booking.get("property_id", ""), "amount_mode": "deposit" if is_deposit else "full"})
+                                         metadata={"type": "booking", "booking_id": booking["id"], "booking_ref": booking.get("booking_ref", ""), "property_id": booking.get("property_id", ""), "amount_mode": "installments" if n_inst else ("deposit" if is_deposit else "full"), "installments": str(n_inst)})
         await db.bookings.update_one({"id": booking["id"]}, {"$set": {"stripe_pi_id": pi.id}})
         await db.payment_transactions.insert_one({"id": str(uuid.uuid4()), "session_id": pi.id, "type": "booking", "reference_id": booking["id"], "reference_number": booking.get("booking_ref"),
                                                   "property_id": booking.get("property_id"), "amount": amount, "currency": cur, "guest_name": booking.get("guest_name"), "guest_email": booking.get("guest_email"),
@@ -76,9 +85,11 @@ def create_be_payments_router(db, require_roles):
         now = datetime.now(timezone.utc).isoformat()
         paid = pi.amount_received / 100.0
         total = float(booking.get("cart_total") or booking.get("total_price") or 0)
-        if (pi.metadata or {}).get("amount_mode") == "deposit" and paid < total - 0.5:
-            from routes.pms.be_payment_plans import schedule_balance
-            upd = await schedule_balance(db, booking, paid, getattr(pi, "payment_method", None), getattr(pi, "customer", None) or booking.get("stripe_customer_id"))
+        mode = (pi.metadata or {}).get("amount_mode")
+        if mode in ("deposit", "installments") and paid < total - 0.5:
+            from routes.pms.be_payment_plans import schedule_balance, schedule_installments
+            pm, cust = getattr(pi, "payment_method", None), getattr(pi, "customer", None) or booking.get("stripe_customer_id")
+            upd = await (schedule_installments(db, booking, paid, pm, cust, int((pi.metadata or {}).get("installments") or 3)) if mode == "installments" else schedule_balance(db, booking, paid, pm, cust))
             upd.update({"payment_method": "stripe", "paid_at": now, "paid_amount": paid})
             await db.bookings.update_one({"id": booking["id"]}, {"$set": {"payment_method": "stripe", "paid_at": now, "paid_amount": paid}})
         else:

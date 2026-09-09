@@ -79,6 +79,116 @@ def build_pdf(b: dict, prop: dict, items: List[dict]) -> bytes:
     return buf.getvalue()
 
 
+async def _step_drops(db, pid: str, since: str, until: str) -> tuple:
+    rows = await db.be_funnel_events.find({"property_id": pid, "at": {"$gte": since, "$lt": until}}, {"_id": 0, "session_id": 1, "step": 1}).to_list(100000)
+    sess: Dict[str, set] = defaultdict(set)
+    for r in rows:
+        sess[r["session_id"]].add(r["step"])
+    counts = {st: sum(1 for v in sess.values() if st in v) for st in FUNNEL_STEPS}
+    drops, prev = {}, None
+    for st in FUNNEL_STEPS:
+        n = counts[st]
+        if prev:
+            drops[st] = round((1 - n / prev) * 100, 1)
+        prev = n if n else prev
+    return len(sess), drops
+
+
+async def check_funnel_alerts(db, pid: Optional[str] = None) -> dict:
+    """Son 24 saatteki adım düşüşü, önceki 7 gün ortalamasını eşik puanı kadar aşarsa → bildirim + MOCK e-posta (gün/adım başına 1)."""
+    from routes.platform_ext.mailer import send_email
+    from routes.pms.be_gaps import get_be_settings
+    now = datetime.now(timezone.utc)
+    day_ago = (now - timedelta(days=1)).isoformat(); week_ago = (now - timedelta(days=8)).isoformat()
+    pids = [pid] if pid else await db.be_funnel_events.distinct("property_id", {"at": {"$gte": day_ago}})
+    out = {"checked": 0, "alerts": []}
+    for p in pids:
+        st = await get_be_settings(db, p)
+        if not st.get("funnel_alert_enabled", True):
+            continue
+        out["checked"] += 1
+        n24, d24 = await _step_drops(db, p, day_ago, now.isoformat())
+        if n24 < int(st.get("funnel_alert_min_sessions") or 20):
+            continue
+        _, d7 = await _step_drops(db, p, week_ago, day_ago)
+        thr = float(st.get("funnel_alert_threshold_pts") or 15)
+        prop = await db.properties.find_one({"id": p}, {"_id": 0, "name": 1}) or {}
+        for step, drop in d24.items():
+            base = d7.get(step)
+            if base is None:  # 7g baz yok (yeni tesis) → sadece ciddi kayıpta uyar
+                base = 0.0
+                if drop < 60:
+                    continue
+            elif drop < base + thr or drop < 30:
+                continue
+            key = f"{p}:{step}:{now.date().isoformat()}"
+            if await db.funnel_alerts.find_one({"key": key}, {"_id": 0, "id": 1}):
+                continue
+            title = f"⚠ Huni uyarısı — {STEP_LABELS[step]} adımında düşüş %{drop} (7g ort. %{base})"
+            body = f"{prop.get('name', p)}: son 24 saatte {n24} oturum; '{STEP_LABELS[step]}' adımındaki kayıp 7 günlük ortalamanın {round(drop - base, 1)} puan üzerinde. Booking Engine → Huni Analitiği'nden inceleyin."
+            emails = [u["email"] for u in await db.users.find({"role": {"$in": ["admin", "manager"]}}, {"_id": 0, "email": 1}).to_list(20)]
+            statuses = [await send_email(db, e, title, f"<div style='font-family:system-ui'><h3>{title}</h3><p>{body}</p></div>", kind="funnel_alert", meta={"property_id": p, "step": step}) for e in emails[:10]]
+            await db.notifications.insert_one({"id": str(uuid.uuid4()), "property_id": p, "type": "funnel_alert", "title": title, "body": body, "read": False, "created_at": now_iso()})
+            doc = {"id": str(uuid.uuid4()), "key": key, "property_id": p, "step": step, "step_label": STEP_LABELS[step], "drop_24h": drop, "avg_7d": base, "sessions_24h": n24, "emails": emails[:10], "email_status": statuses, "created_at": now_iso()}
+            await db.funnel_alerts.insert_one(dict(doc))
+            out["alerts"].append(doc)
+    return out
+
+
+async def funnel_alert_loop(db, interval_seconds: int = 21600):
+    import asyncio
+    await asyncio.sleep(180)
+    while True:
+        try:
+            await check_funnel_alerts(db)
+        except Exception:
+            pass
+        await asyncio.sleep(interval_seconds)
+
+
+async def ai_tag_reviews(db, pid: str, limit: int = 40) -> dict:
+    """LLM ile yorum → oda tipi eşleme (oda_type_id yoksa). Anahtar yoksa kelime eşleşmesi yedeği."""
+    import json
+    import os
+    rooms = await db.room_types.find({"property_id": pid}, {"_id": 0, "id": 1, "name": 1, "description": 1}).to_list(50)
+    reviews = await db.reviews.find({"property_id": pid, "room_type_id": {"$in": [None, ""]}, "room_tag_attempted": {"$ne": True}}, {"_id": 0, "id": 1, "comment": 1, "review_text": 1}).sort("created_at", -1).to_list(limit)
+    reviews = [r for r in reviews if (r.get("comment") or r.get("review_text") or "").strip()]
+    if not rooms or not reviews:
+        return {"tagged": 0, "processed": 0, "source": "none"}
+    mapping: Dict[str, dict] = {}
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    source = "heuristic"
+    if api_key:
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            room_list = "\n".join(f"- id={r['id']} | {r['name']}: {(r.get('description') or '')[:120]}" for r in rooms)
+            rev_list = "\n".join(f"[{r['id']}] {(r.get('comment') or r.get('review_text') or '')[:400]}" for r in reviews)
+            prompt = f"""Hotel room types:\n{room_list}\n\nGuest reviews (id in brackets):\n{rev_list}\n\nFor each review decide which room type the guest most likely stayed in based ONLY on explicit clues (room name, bed type, suite/family/king/twin, size, view, kitchen). If there is no clear clue return null. Respond with pure JSON: {{"<review_id>": {{"room_type_id": "<id or null>", "confidence": 0-1}}}}"""
+            chat = LlmChat(api_key=api_key, session_id=f"room-tag-{uuid.uuid4()}", system_message="You map hotel reviews to room types. Output JSON only.").with_model("openai", "gpt-5.2")
+            txt = (await chat.send_message(UserMessage(text=prompt))).strip()
+            txt = txt[txt.find("{"): txt.rfind("}") + 1]
+            mapping = json.loads(txt); source = "ai"
+        except Exception:
+            mapping = {}
+    if not mapping:
+        stop = {"room", "rooms", "oda", "suite", "the", "standard", "double", "with", "and"}
+        toks = {r["id"]: [t for t in re.findall(r"[a-zçğıöşü]+", r["name"].lower()) if len(t) > 3 and t not in stop] for r in rooms}
+        for rv in reviews:
+            low = (rv.get("comment") or rv.get("review_text") or "").lower()
+            hits = [rid for rid, tk in toks.items() if tk and all(t in low for t in tk)]
+            mapping[rv["id"]] = {"room_type_id": hits[0] if len(hits) == 1 else None, "confidence": 0.6 if len(hits) == 1 else 0}
+    valid = {r["id"] for r in rooms}
+    tagged = 0
+    for rv in reviews:
+        m = mapping.get(rv["id"]) or {}
+        rid = m.get("room_type_id") if m.get("room_type_id") in valid and float(m.get("confidence") or 0) >= 0.5 else None
+        upd = {"room_tag_attempted": True, "room_tag_source": source, "room_tag_confidence": float(m.get("confidence") or 0), "room_tag_at": now_iso()}
+        if rid:
+            upd["room_type_id"] = rid; tagged += 1
+        await db.reviews.update_one({"id": rv["id"]}, {"$set": upd})
+    return {"tagged": tagged, "processed": len(reviews), "source": source}
+
+
 def create_be_extras_router(db, require_roles):
     router = APIRouter(tags=["booking-engine-extras"])
 
@@ -185,6 +295,24 @@ def create_be_extras_router(db, require_roles):
         for p in per.values():
             out.append({"room_type_id": p["room_type_id"], "name": p["name"], "count": p["count"], "avg": round(p["sum"] / p["count"], 1) if p["count"] else None, "verified": p["verified"], "quotes": p["quotes"]})
         return {"property_id": pid, "property_avg": round(prop_sum / prop_n, 1) if prop_n else None, "property_count": prop_n, "rooms": out}
+
+    @router.get("/booking/funnel-alerts/{pid}")
+    async def funnel_alerts_list(pid: str, _u: dict = Depends(require_roles("admin", "manager", "revenue_manager"))):
+        rows = await db.funnel_alerts.find({"property_id": pid}, {"_id": 0, "emails": 0}).sort("created_at", -1).to_list(30)
+        return {"alerts": rows}
+
+    @router.post("/booking/funnel-alerts/{pid}/check")
+    async def funnel_alerts_check(pid: str, _u: dict = Depends(require_roles("admin", "manager"))):
+        return await check_funnel_alerts(db, pid)
+
+    @router.post("/booking/room-reviews/{pid}/auto-tag")
+    async def auto_tag(pid: str, limit: int = 40, _u: dict = Depends(require_roles("admin", "manager"))):
+        return await ai_tag_reviews(db, pid, limit)
+
+    @router.post("/booking/room-reviews/{pid}/reset-tags")
+    async def reset_tags(pid: str, _u: dict = Depends(require_roles("admin"))):
+        r = await db.reviews.update_many({"property_id": pid, "room_tag_source": {"$exists": True}}, {"$unset": {"room_type_id": "", "room_tag_attempted": "", "room_tag_source": "", "room_tag_confidence": ""}})
+        return {"reset": r.modified_count}
 
     @router.put("/booking/room-reviews/{review_id}/tag")
     async def tag_review_room(review_id: str, data: dict, _u: dict = Depends(require_roles("admin", "manager"))):

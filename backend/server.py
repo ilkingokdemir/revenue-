@@ -2493,6 +2493,8 @@ async def startup_event():
     _spawn(api_key_expiry_loop(db))
     from routes.pms.be_payment_plans import balance_charge_loop
     _spawn(balance_charge_loop(db))
+    from routes.pms.be_extras import funnel_alert_loop
+    _spawn(funnel_alert_loop(db))
     _spawn(campaign_window_loop(db))
     _spawn(reports_loop(db))
     _spawn(otb_snapshot_loop(db))

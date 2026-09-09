@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Package, TrendUp, ShoppingCartSimple, Plus, X, Tag, Broadcast, Medal, Funnel, CreditCard } from "@phosphor-icons/react";
+import { Package, TrendUp, ShoppingCartSimple, Plus, X, Tag, Broadcast, Medal, Funnel, CreditCard, Star } from "@phosphor-icons/react";
 import RatePlansCard from "./RatePlansCard";
 import DistributionCard from "./DistributionCard";
 import BrgClaimsCard from "./BrgClaimsCard";
 import BeFunnelCard from "./BeFunnelCard";
 import PaymentPlansCard from "./PaymentPlansCard";
+import RoomReviewsAdminCard from "./RoomReviewsAdminCard";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/booking-engine`;
 
@@ -19,6 +20,7 @@ const TABS = [
   { id: "brg", label: "Fiyat Garantisi", icon: Medal },
   { id: "funnel", label: "Huni Analitiği", icon: Funnel },
   { id: "payplans", label: "Ödeme Planı & Fiyat Gösterimi", icon: CreditCard },
+  { id: "roomreviews", label: "Oda Yorumları", icon: Star },
 ];
 
 export default function BookingEngineV2Panel({ propertyId = "all" }) {
@@ -35,7 +37,7 @@ export default function BookingEngineV2Panel({ propertyId = "all" }) {
       if (tab === "packages") url = `${API}/packages?property_id=${propertyId}`;
       if (tab === "upsells") url = `${API}/upsells?property_id=${propertyId}`;
       if (tab === "abandoned") url = `${API}/cart/abandoned?days=14`;
-      if (["rateplans", "distribution", "brg", "funnel", "payplans"].includes(tab)) { setItems([]); setLoading(false); return; }
+      if (["rateplans", "distribution", "brg", "funnel", "payplans", "roomreviews"].includes(tab)) { setItems([]); setLoading(false); return; }
       const r = await axios.get(url, { withCredentials: true });
       setItems(r.data.packages || r.data.upsells || r.data.carts || []);
     } catch (e) { toast.error("Yüklenemedi"); }
@@ -95,7 +97,7 @@ export default function BookingEngineV2Panel({ propertyId = "all" }) {
             <t.icon size={13} /> {t.label}
           </button>
         ))}
-        {!["abandoned", "rateplans", "distribution", "brg", "funnel", "payplans"].includes(tab) && (
+        {!["abandoned", "rateplans", "distribution", "brg", "funnel", "payplans", "roomreviews"].includes(tab) && (
           <button onClick={() => setShowCreate(true)} data-testid="be-create-btn"
                   className="ml-auto px-3 py-1.5 text-xs text-white bg-stone-900 rounded-lg inline-flex items-center gap-1.5 mb-1">
             <Plus size={13} /> Ekle
@@ -108,10 +110,11 @@ export default function BookingEngineV2Panel({ propertyId = "all" }) {
       {tab === "brg" && <BrgClaimsCard propertyId={propertyId} />}
       {tab === "funnel" && <BeFunnelCard propertyId={propertyId} />}
       {tab === "payplans" && <PaymentPlansCard propertyId={propertyId} />}
+      {tab === "roomreviews" && <RoomReviewsAdminCard propertyId={propertyId} />}
 
       {loading && <div className="text-center py-12 text-stone-400 text-sm">Yükleniyor…</div>}
 
-      {!loading && !["rateplans", "distribution", "brg", "funnel", "payplans"].includes(tab) && items.length === 0 && (
+      {!loading && !["rateplans", "distribution", "brg", "funnel", "payplans", "roomreviews"].includes(tab) && items.length === 0 && (
         <div className="text-center py-12 text-stone-400 text-sm" data-testid="be-empty">
           Henüz kayıt yok.
         </div>

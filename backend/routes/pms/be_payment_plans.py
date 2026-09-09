@@ -52,6 +52,28 @@ async def schedule_balance(db, booking: dict, paid_amount: float, pm_id: Optiona
     return upd
 
 
+async def schedule_installments(db, booking: dict, paid_amount: float, pm_id: Optional[str], customer_id: Optional[str], count: int = 3):
+    """Taksit: ilk taksit ödendi → kalan taksitler aylık (son taksit en geç check_in − charge_days)."""
+    total = float(booking.get("cart_total") or booking.get("total_price") or 0)
+    st = await plan_settings(db, booking["property_id"])
+    ci = _date.fromisoformat(booking["check_in"][:10])
+    last_day = max(_date.today(), ci - timedelta(days=int(st["balance_charge_days_before"])))
+    remaining = count - 1
+    per = round((total - paid_amount) / remaining, 2) if remaining else 0
+    sched = [{"label": "installment_1", "amount": paid_amount, "status": "paid", "at": now_iso()}]
+    for i in range(1, count):
+        due = min(last_day, _date.today() + timedelta(days=30 * i))
+        amt = round(total - paid_amount - per * (remaining - 1), 2) if i == count - 1 else per
+        sched.append({"label": f"installment_{i + 1}", "amount": amt, "status": "scheduled" if pm_id else "manual", "due_date": due.isoformat()})
+    upd = {"payment_status": "deposit_paid", "payment_plan": "installments", "installments_count": count, "deposit_paid": paid_amount, "balance_due": round(total - paid_amount, 2),
+           "balance_due_date": sched[1]["due_date"] if len(sched) > 1 else None, "balance_status": "scheduled" if (pm_id and st["balance_auto_charge_enabled"]) else "manual",
+           "stripe_customer_id": customer_id, "stripe_pm_id": pm_id, "payment_schedule": sched}
+    await db.bookings.update_one({"id": booking["id"]}, {"$set": upd})
+    if booking.get("cart_ref"):
+        await db.bookings.update_many({"cart_ref": booking["cart_ref"], "id": {"$ne": booking["id"]}}, {"$set": {"payment_status": "deposit_paid"}})
+    return upd
+
+
 def _pay_link(pid: str, ref: str, email: str) -> str:
     base = os.environ.get("PUBLIC_BASE_URL") or os.environ.get("FRONTEND_URL") or ""
     return f"{base}/pay-balance/{ref}?email={email}"
@@ -62,9 +84,11 @@ async def _email(db, to: str, subject: str, html: str, kind: str, meta: dict):
     return await send_email(db, to, subject, html, kind=kind, meta=meta)
 
 
-async def charge_balance(db, b: dict, trigger: str = "auto") -> dict:
-    """Kayıtlı karttan off-session bakiye tahsilatı."""
-    amount = float(b.get("balance_due") or 0)
+async def charge_balance(db, b: dict, trigger: str = "auto", entry_idx: Optional[int] = None) -> dict:
+    """Kayıtlı karttan off-session bakiye (veya tek taksit) tahsilatı."""
+    sched = b.get("payment_schedule") or []
+    entry = sched[entry_idx] if entry_idx is not None and entry_idx < len(sched) else None
+    amount = float(entry["amount"]) if entry else float(b.get("balance_due") or 0)
     if amount <= 0:
         return {"ok": False, "reason": "no_balance"}
     if not (b.get("stripe_customer_id") and b.get("stripe_pm_id")):
@@ -81,10 +105,21 @@ async def charge_balance(db, b: dict, trigger: str = "auto") -> dict:
         ok, err, pi = False, str(getattr(e, "user_message", None) or e)[:200], None
     now = now_iso()
     if ok:
-        await db.bookings.update_one({"id": b["id"]}, {"$set": {"payment_status": "paid", "balance_due": 0, "balance_status": "paid", "balance_paid_at": now, "balance_pi_id": pi.id, "paid_amount": round(float(b.get("deposit_paid") or 0) + amount, 2)},
-                                                       "$push": {"payment_events": {"kind": "balance_charged", "amount": amount, "trigger": trigger, "at": now}}})
-        await db.bookings.update_many({"cart_ref": b.get("cart_ref") or "__none__"}, {"$set": {"payment_status": "paid"}})
-        await _email(db, b["guest_email"], f"Kalan bakiye tahsil edildi — {b['booking_ref']}", f"<p>{b.get('guest_name', '')}, {b.get('currency', 'GBP')} {amount:.2f} tutarındaki kalan bakiye kayıtlı kartınızdan tahsil edildi. Rezervasyonunuz tamamen ödenmiştir.</p>", "balance_charged", {"booking_ref": b["booking_ref"]})
+        new_balance = round(float(b.get("balance_due") or 0) - amount, 2)
+        if entry is not None:
+            sched[entry_idx] = {**entry, "status": "paid", "at": now, "pi_id": pi.id}
+        nxt = next((e for e in sched if e.get("status") == "scheduled"), None)
+        full = new_balance <= 0.5
+        upd = {"balance_due": max(0.0, new_balance), "paid_amount": round(float(b.get("paid_amount") or b.get("deposit_paid") or 0) + amount, 2), "payment_schedule": sched or b.get("payment_schedule") or [],
+               "payment_status": "paid" if full else "partial", "balance_status": "paid" if full else "scheduled", "balance_due_date": None if full else (nxt or {}).get("due_date"), "balance_pi_id": pi.id}
+        if full:
+            upd["balance_paid_at"] = now
+        await db.bookings.update_one({"id": b["id"]}, {"$set": upd, "$push": {"payment_events": {"kind": "installment_charged" if entry else "balance_charged", "amount": amount, "trigger": trigger, "at": now}}})
+        if full:
+            await db.bookings.update_many({"cart_ref": b.get("cart_ref") or "__none__"}, {"$set": {"payment_status": "paid"}})
+        cur = b.get("currency", "GBP")
+        tail = "Rezervasyonunuz tamamen ödenmiştir." if full else f"Kalan: {cur} {max(0.0, new_balance):.2f}"
+        await _email(db, b["guest_email"], f"{'Taksit' if entry else 'Kalan bakiye'} tahsil edildi — {b['booking_ref']}", f"<p>{b.get('guest_name', '')}, {cur} {amount:.2f} kayıtlı kartınızdan tahsil edildi. {tail}</p>", "balance_charged", {"booking_ref": b["booking_ref"]})
     else:
         await db.bookings.update_one({"id": b["id"]}, {"$set": {"balance_status": "failed", "balance_last_error": err, "balance_failed_at": now},
                                                        "$push": {"payment_events": {"kind": "balance_failed", "amount": amount, "error": err, "trigger": trigger, "at": now}}})
@@ -111,9 +146,16 @@ async def run_payment_schedules(db, pid: Optional[str] = None) -> dict:
                          f"<p>{b.get('guest_name', '')}, {b.get('currency', 'GBP')} {float(b['balance_due']):.2f} kalan bakiyeniz {b.get('balance_due_date')} tarihinde " + ("kayıtlı kartınızdan otomatik tahsil edilecek." if auto else f"ödenmelidir. <a href='{link}'>Şimdi öde</a>") + "</p>", "balance_reminder", {"booking_ref": b["booking_ref"]})
             await db.bookings.update_one({"id": b["id"]}, {"$set": {"balance_reminder_sent_at": now_iso()}})
             reminded += 1
-        if b.get("balance_status") == "scheduled" and st["balance_auto_charge_enabled"] and (b.get("balance_due_date") or "9999") <= today:
-            r = await charge_balance(db, b, "auto")
-            charged += 1 if r["ok"] else 0; failed += 0 if r["ok"] else 1
+        if b.get("balance_status") == "scheduled" and st["balance_auto_charge_enabled"]:
+            if b.get("payment_plan") == "installments":
+                for idx, e in enumerate(b.get("payment_schedule") or []):
+                    if e.get("status") == "scheduled" and (e.get("due_date") or "9999") <= today:
+                        r = await charge_balance(db, b, "auto", entry_idx=idx)
+                        charged += 1 if r["ok"] else 0; failed += 0 if r["ok"] else 1
+                        break
+            elif (b.get("balance_due_date") or "9999") <= today:
+                r = await charge_balance(db, b, "auto")
+                charged += 1 if r["ok"] else 0; failed += 0 if r["ok"] else 1
     return {"charged": charged, "failed": failed, "reminded": reminded}
 
 

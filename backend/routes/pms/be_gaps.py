@@ -10,7 +10,10 @@ DEFAULTS = {"base_occupancy": 2, "extra_adult_per_night": 0.0, "los_tiers": [{"m
             "flex_cancel_pct": 8.0, "flex_cancel_enabled": True, "hold_hours": 24, "hold_enabled": True, "scarcity_threshold": 3,
             "waitlist_enabled": True, "agent_code_enabled": True, "long_stay_enabled": True,
             "day_use_enabled": False, "day_use_pct": 50.0, "day_use_start": "10:00", "day_use_end": "17:00", "wishlist_enabled": True,
-            "price_display_mode": "auto_by_market", "total_price_transparency": True, "tax_exclusive_markets": ["US", "CA", "en-US"]}
+            "price_display_mode": "auto_by_market", "total_price_transparency": True, "tax_exclusive_markets": ["US", "CA", "en-US"],
+            "installments_enabled": True, "installments_min_amount": 500, "installments_count": 3,
+            "loyalty_show_points": True, "loyalty_points_per_unit": 10,
+            "funnel_alert_enabled": True, "funnel_alert_min_sessions": 20, "funnel_alert_threshold_pts": 15}
 
 
 async def get_be_settings(db, pid: str) -> dict:

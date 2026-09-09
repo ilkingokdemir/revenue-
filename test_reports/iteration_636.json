@@ -1,0 +1,51 @@
+{
+  "summary": "Iter636 Paket 39 (BE eksikler): tested funnel analytics (POST/GET), ics/pdf confirmation, room reviews + admin tag, guest-account magic-link + session + /me + logout, payment plans admin, split-pay flow (create → 3 links summing to total, duplicate → 409, mark-paid-test → partial → paid, GET schedule shows split), metasearch feeds (trivago/tripadvisor/bing/status), price-display be-settings GET/PUT. 19/20 pytest PASSED. Frontend: booking engine /book?property=aldgate-flats loads clean (no console errors, room cards render, i18n EN OK). CRITICAL: /pay-share/{token} and /pay-balance/{ref} crash with ErrorBoundary: 'useLanguage must be used within a LanguageProvider' — PayPage.js doesn't wrap InlinePayment (which imports useLanguage from ./i18n/LanguageContext) in that specific LanguageProvider. There are TWO parallel language contexts in the codebase (src/i18n/index.js and src/i18n/LanguageContext.js); App.js wraps only in the first, InlinePayment reads the second. BUG#2: be_gaps.py:59 truncates every string setting to 10 chars — PUT /booking/be-settings {price_display_mode: 'tax_exclusive'} is silently stored as 'tax_exclus'. This breaks price_display_mode enum ('tax_inclusive'→'tax_inclus', 'auto_by_market'→'auto_by_ma') and any future string setting.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PUT /api/booking/be-settings/{pid}", "issue": "be_gaps.py:59 truncates string values to 10 chars via `str(val)[:10]`. `price_display_mode='tax_exclusive'` is stored as `tax_exclus`; `auto_by_market` would become `auto_by_ma`; `tax_inclusive`→`tax_inclus`. RatePlanRows enum comparisons and getPriceDisplayMode() logic will never match the stored value. Change [:10] to a reasonable cap (e.g. [:40]) or use a proper allowlist per key.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "PUT /api/booking/be-settings/{pid}", "issue": "`tax_exclusive_markets` (list) has no isinstance handler in be_gaps.py:47-62 loop; falls through so the raw value is stored without validation — mixed types could pollute storage."},
+      {"endpoint": "GET /api/booking/{ref}/calendar.ics and /confirmation.pdf", "issue": "If booking exists without `booking_ref` field, endpoint returns 400 'Eksik alan booking_ref' via server-wide KeyError handler (be_extras.py:33,41 uses b['booking_ref']). Consider `.get('booking_ref') or b['id']` fallback."},
+      {"endpoint": "GET /api/public/v1/bookings", "issue": "Response items omit `booking_ref` field even though DB has it — makes public API consumers unable to call downstream endpoints that require booking_ref (ics/pdf/payment-schedule)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PayPage (pages/PayPage.js) → InlinePayment", "issue": "Page crashes with ErrorBoundary showing 'useLanguage must be used within a LanguageProvider'. Two parallel i18n providers exist: `src/i18n/index.js` (wraps <App/> in App.js) and `src/i18n/LanguageContext.js` (used by InlinePayment.js line 4 and ConfirmationStep.js line 5). BookingEngine.js:786 wraps its subtree in the LanguageContext.js provider — so InlinePayment works inside the booking flow but NOT on /pay-share/{token} and /pay-balance/{ref}. Fix: wrap PayPage's returned JSX (or App.js routing for these paths) in <LanguageProvider> imported from '../i18n/LanguageContext'.", "selector": "[data-testid='pay-page']", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [
+      {"flow": "Split-pay → recipient clicks emailed /pay-share/{token} link", "issue": "Recipients cannot pay their share — landing page crashes. Backend endpoints (split_get / split_intent / split_confirm) are healthy; only the UI page is broken. Same fix as above.", "affected_selectors": ["pay-page", "pay-page-amount", "pay-page-summary", "pay-page-paid"]},
+      {"flow": "Guest self-pays remaining balance via /pay-balance/{ref}?email=", "issue": "Same crash — cannot pay balance from emailed link (balance_reminder mail from be_payment_plans.py:111).", "affected_selectors": ["pay-page", "pay-page-summary"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter636_paket39.py",
+    "/app/test_reports/pytest/iter636.xml"
+  ],
+  "action_items": [
+    "[HIGH] Fix be_gaps.py:59 — remove or widen the `str(val)[:10]` truncation so price_display_mode enum values ('tax_exclusive','tax_inclusive','auto_by_market') persist correctly. After fixing, run seed/repair to correct any docs currently containing 'tax_exclus'/'auto_by_ma'.",
+    "[CRITICAL] Wrap PayPage output in LanguageProvider (from ../i18n/LanguageContext) OR consolidate the two parallel i18n contexts into one. Currently /pay-share/{token} and /pay-balance/{ref} throw ErrorBoundary — end-user cannot complete any split payment or balance payment via emailed links.",
+    "[MINOR] be_extras._booking_for / build_ics: fallback to b['id'] when booking_ref missing, so admin/API-created bookings can still generate .ics/.pdf.",
+    "[MINOR] Add `booking_ref` to /api/public/v1/bookings serializer so partners can chain to ics/pdf/payment endpoints."
+  ],
+  "critical_code_review_comments": [
+    "be_gaps.py:59 `str(val or '')[:10]`: silent data corruption of any string setting >10 chars. Not caught by tests today because default `auto_by_market` (14ch) is stored via `$setOnInsert` (from DEFAULTS constant, unmodified) and reads return DEFAULTS-merged doc when key missing.",
+    "TWO parallel i18n providers (src/i18n/index.js AND src/i18n/LanguageContext.js) — code fragility. Consumers must import the same one that wraps the current subtree. Consolidate.",
+    "be_payment_plans.create_split (line 226): `include_me=False` still adds guest_email as first payer in `allp` list ONLY when include_me=True — but the `parts = len(emails) + (1 if include_me else 0)` and `allp = ([host] if include_me else []) + emails` logic is consistent. Verified split totals sum to booking total.",
+    "be_payment_plans.charge_balance (line 86): `update_many({'cart_ref': b.get('cart_ref') or '__none__'}, ...)` — good sentinel to avoid matching bookings without cart_ref.",
+    "be_extras.funnel_report drop_pct: uses `prev = n if n else prev` — sticky when a step has 0 sessions (so downstream drop_pct against last non-zero). Reasonable but could mask a hard drop; consider tracking prev regardless.",
+    "be_guest_account.dev_verify_latest returns 403 when RESEND_API_KEY set — appropriate for prod; test suite uses mocked mail so tokens returned inline (dev_token) — no need for dev-verify-latest in current tests."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter636_paket39.py",
+    "/app/test_reports/iteration_636.json"
+  ],
+  "success_rate": {"backend": "95% (19/20 — 1 failure exposes a real production bug: be-settings string truncation)", "frontend": "50% — booking engine loads clean but pay-share/pay-balance pages crash (blocking split-pay + balance-pay recipient flows)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! ; Public API key aldgate-flats: hbx_4kLXlyw1zn-onwVseP1RB0BGEWdVD2gN",
+  "seed_data_creation": "Created 2 funnel sessions (tsess1-* full path, tsess2-* search+rooms). Created 1 magic-link token for grace@example.com (consumed → session). Tagged 1 review to king-aldgate-flats via admin PUT. Created 1 pay-at-hotel booking (guest testsplit-*@example.com, +45→+47 days), split into 3 shares — all marked paid via mark-paid-test (booking now payment_status=paid). Restored be_settings.price_display_mode to 'auto_by_market' after test corruption to 'tax_exclus'.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "1) be_gaps.py:59 string truncation — after fixing, retest PUT /booking/be-settings with price_display_mode='tax_exclusive' and confirm GET returns the full string. Also sweep DB for existing docs with 'tax_exclus'/'auto_by_ma'/'tax_inclus'. 2) PayPage LanguageProvider wrap — retest /pay-share/<pending_token> and /pay-balance/<ref>?email=<email> should render pay-page-amount + Stripe Payment Element (or fallback text if STRIPE_PUBLISHABLE_KEY missing). Two pending split tokens still exist: lZENVJfHETURtG5oyUNqog, mBP_9eP4k9ZpcBlnX2HmWA (booking MHB-696738A5). 3) Admin UI (BookingEngineV2Panel be-tab-funnel/be-tab-payplans, DistributionCard metasearch-card, SiteBuilderExtras site-gads-*) was not verified in browser — sidebar link navigation left the auth session on a different route in automation. Backend endpoints all pass so cards should render; recommend testing by navigating Master dashboard → Booking Engine after selecting Aldgate Flats branch pill."
+}

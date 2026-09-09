@@ -24,6 +24,8 @@ export default function DistributionCard({ propertyId }) {
   const [props, setProps] = useState([]);
   const [pid, setPid] = useState(propertyId && propertyId !== "all" ? propertyId : "");
   const [ads, setAds] = useState(null);
+  const [meta, setMeta] = useState(null);
+  useEffect(() => { if (pid) axios.get(`${API}/hotel-ads/metasearch/${pid}`, W).then(({ data }) => setMeta(data)).catch(() => {}); }, [pid]);
   const [embed, setEmbed] = useState(null);
   const [exit, setExit] = useState(null);
   const [gift, setGift] = useState(null);
@@ -60,6 +62,21 @@ export default function DistributionCard({ propertyId }) {
       </select>
 
       <div className="grid lg:grid-cols-2 gap-4">
+        {meta && (
+          <div className={card} data-testid="metasearch-card">
+            <h3 className="text-sm font-semibold text-stone-800">🌐 Metasearch Feed'leri (Google · trivago · Tripadvisor · Bing)</h3>
+            <p className="text-[11px] text-stone-500">Her platformun konsolunda aşağıdaki feed URL'sini "doğrudan bağlantı" olarak tanımlayın; fiyat/müsaitlik otomatik güncellenir, tıklamalar booking engine'e utm_source ile düşer.{!meta.geo_ok && " ⚠ Tesis konumu (enlem/boylam) eksik — Tripadvisor/Google eşleşmesi için gerekli."}</p>
+            <div className="space-y-1.5">
+              {meta.feeds.map((f) => (
+                <div key={f.key} className="rounded-lg border border-stone-100 bg-stone-50 px-2.5 py-2 text-[11px]" data-testid={`metasearch-feed-${f.key}`}>
+                  <div className="flex items-center gap-2"><span className="font-bold text-stone-800">{f.name}</span><a href={f.console} target="_blank" rel="noreferrer" className="text-indigo-600 underline">konsol ↗</a><span className="text-stone-400 ml-auto">{f.note}</span></div>
+                  {f.hotel_list && <div className="font-mono text-stone-600 break-all mt-0.5">Hotel list: <a href={f.hotel_list} target="_blank" rel="noreferrer" className="underline">{f.hotel_list}</a></div>}
+                  <div className="font-mono text-stone-600 break-all mt-0.5">Rates: <a href={f.rates} target="_blank" rel="noreferrer" className="underline" data-testid={`metasearch-rates-${f.key}`}>{f.rates}</a></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className={card} data-testid="hotel-ads-card">
           <div className="flex items-center gap-2"><GoogleLogo size={16} weight="bold" className="text-blue-600" /><h3 className="text-sm font-semibold text-stone-900">Google Hotel Ads — Free Booking Links</h3>
             {ads && <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${ads.ready ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`} data-testid="hotel-ads-ready">{ads.ready ? "Hazır" : "Eksikler var"}</span>}

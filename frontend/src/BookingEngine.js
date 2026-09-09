@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import "@fontsource/outfit/400.css";
@@ -31,7 +31,7 @@ import { planNightPrice, roomNightBase } from "./templates/RatePlanRows";
 import { GiftCardSection } from "./templates/GiftCardSection";
 import { ExitIntentPopup, CookieBanner } from "./templates/ExitIntentPopup";
 import { InlinePayment } from "./templates/InlinePayment";
-import { useAnalytics, trackEvent } from "./site/analytics";
+import { useAnalytics, trackEvent, trackFunnel, trackPurchaseOnce, gaItem } from "./site/analytics";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -86,6 +86,13 @@ function BookingEngineInner() {
     catch { toast.error("Paylaşılamadı"); }
   };
   useEffect(() => { if (propertyId) axios.get(`${API}/booking/be-settings/${propertyId}`).then(({ data }) => setBeCfg(data)).catch(() => {}); }, [propertyId]);
+  const priceDisplay = (() => {
+    const mode = beCfg?.price_display_mode || "auto_by_market";
+    const markets = beCfg?.tax_exclusive_markets || ["US", "CA", "en-US"];
+    const nav = (navigator.language || "").toLowerCase(); const region = nav.split("-")[1]?.toUpperCase() || "";
+    const exclusive = mode === "tax_exclusive" || (mode === "auto_by_market" && markets.some((m) => m.toUpperCase() === region || m.toLowerCase() === nav));
+    return { mode: exclusive ? "tax_exclusive" : "tax_inclusive", transparency: beCfg?.total_price_transparency !== false };
+  })();
   const applyAgentCode = async () => {
     try { const { data } = await axios.post(`${API}/booking/agent-code/validate`, { property_id: propertyId, code: agentCode }); setAgentInfo(data); toast.success(`${data.agent_name}: −${data.discount_pct}%`); }
     catch (e) { toast.error(e.response?.data?.detail || "Kod geçersiz"); }
@@ -106,6 +113,7 @@ function BookingEngineInner() {
   const [member, setMember] = useState(null);
   const [childAges, setChildAges] = useState([]);
   const [inlineBooking, setInlineBooking] = useState(null);
+  const finishRef = useRef(null);
   const [inlineEnabled, setInlineEnabled] = useState(false);
   useEffect(() => { axios.get(`${API}/payments/config`).then(({ data }) => setInlineEnabled(!!data.inline_enabled)).catch(() => {}); }, []);
   useEffect(() => { const c = params.get("promo"); if (c) setPendingPromo(c.toUpperCase()); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -241,6 +249,8 @@ function BookingEngineInner() {
       const { data } = await axios.get(`${API}/booking/rooms/${propertyId}?check_in=${ci}&check_out=${co}&adults=${adults}&children=${children}`);
       setRooms(data);
       setStep(STEPS.ROOMS);
+      trackFunnel(propertyId, "search", { nights: Math.round((new Date(co) - new Date(ci)) / 86400000), adults }); trackFunnel(propertyId, "rooms", { results: data.length });
+      trackEvent("view_item_list", { item_list_name: "rooms", items: data.slice(0, 20).map((r) => gaItem(r, null, 1, r.price_per_night || r.base_price)) });
       axios.get(`${API}/booking/flex-dates/${propertyId}?check_in=${ci}&check_out=${co}&adults=${adults}`)
         .then(r => setFlexData(r.data)).catch(() => setFlexData(null));
     } catch (e) { console.error("Search failed:", e); }
@@ -250,6 +260,8 @@ function BookingEngineInner() {
   const applyFlexDates = (ci, co) => { setCheckIn(ci); setCheckOut(co); searchRooms(ci, co); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   const addToCart = (room, plan, qty = 1, extraBeds = 0) => {
+    trackFunnel(propertyId, "rate_select", { room: room.id, plan: plan?.id || "" });
+    trackEvent("add_to_cart", { currency: currency || "GBP", value: Number(plan?.price || room.price_per_night || room.base_price || 0) * qty, items: [gaItem(room, plan, qty, plan?.price)] });
     setCart(prev => {
       const key = (c) => `${c.room.id}|${c.plan?.id || ""}`;
       const k = `${room.id}|${plan?.id || ""}`;
@@ -259,7 +271,7 @@ function BookingEngineInner() {
     });
   };
   const removeFromCart = (i) => setCart(prev => prev.filter((_, idx) => idx !== i));
-  const continueToDetails = () => { if (!cart.length) return; setSelectedRoom(cart[0].room); setStep(STEPS.DETAILS); trackEvent("begin_checkout", { items: cart.length }); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const continueToDetails = () => { if (!cart.length) return; setSelectedRoom(cart[0].room); setStep(STEPS.DETAILS); trackFunnel(propertyId, "details", { items: cart.length }); trackEvent("begin_checkout", { currency: currency || "GBP", value: totalPrice, items: cart.map((c) => gaItem(c.room, c.plan, c.qty, c.plan?.price)) }); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   const nights = (() => {
     if (!checkIn || !checkOut) return 1;
@@ -373,14 +385,18 @@ function BookingEngineInner() {
         items: (cart.length ? cart : [{ room: selectedRoom, plan: null, qty: roomCount }]).map((c, i) => ({ room_type_id: c.room.id, rate_plan_id: c.plan?.id || "", qty: c.qty, extra_beds: c.extraBeds || 0, children_ages: i === 0 ? childAges.slice(0, children) : [] })),
       };
       const { data } = await axios.post(`${API}/booking/reserve-multi`, payload);
-      trackEvent("purchase", { transaction_id: data.booking_ref, value: data.total_price, currency: data.currency || "GBP", items: payload.items.length });
+      const purchaseParams = { value: data.cart_total ?? data.total_price, currency: data.currency || currency || "GBP", payment_type: paymentMethod, items: cart.map((c) => gaItem(c.room, c.plan, c.qty, c.plan?.price)) };
+      const finish = () => { trackFunnel(propertyId, "confirm", { ref: data.booking_ref, payment: paymentMethod }); trackPurchaseOnce(data.booking_ref, purchaseParams); };
       if (totalPrice <= 0 && paymentMethod !== "hotel") {
-        setConfirmation(data); setStep(STEPS.CONFIRM); window.scrollTo({ top: 0, behavior: "smooth" }); return;
+        finish(); setConfirmation(data); setStep(STEPS.CONFIRM); window.scrollTo({ top: 0, behavior: "smooth" }); return;
       }
       if ((paymentMethod === "card" || paymentMethod === "deposit") && inlineEnabled) {
+        trackFunnel(propertyId, "payment", { method: paymentMethod }); trackEvent("add_payment_info", { ...purchaseParams, payment_type: "card" });
+        finishRef.current = finish;
         setInlineBooking({ ...data, amountMode: paymentMethod === "deposit" ? "deposit" : "full" });
         setStep(STEPS.PAYMENT); window.scrollTo({ top: 0, behavior: "smooth" }); return;
       }
+      trackFunnel(propertyId, "payment", { method: paymentMethod });
       if (paymentMethod === "card" || paymentMethod === "deposit") {
         const { data: pd } = await axios.post(`${API}/payments/booking-checkout`, {
           booking_id: data.id, origin_url: window.location.origin, amount_mode: paymentMethod === "deposit" ? "deposit" : "full"
@@ -397,6 +413,7 @@ function BookingEngineInner() {
         });
         if (pd.url) window.location.href = pd.url;
       } else {
+        finish();
         setConfirmation(data);
         setStep(STEPS.CONFIRM);
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -600,7 +617,7 @@ function BookingEngineInner() {
       {step === STEPS.ROOMS && (
         <>
           <RoomSelectionStep t={tmpl} rooms={rooms} loading={loading} nights={nights} adults={adults} children={children} roomCount={roomCount}
-            checkIn={checkIn} checkOut={checkOut} onSelectRoom={addToCart} onChangeSearch={() => setStep(STEPS.SEARCH)}
+            checkIn={checkIn} checkOut={checkOut} onSelectRoom={addToCart} onChangeSearch={() => setStep(STEPS.SEARCH)} propertyId={propertyId} priceDisplay={{ ...priceDisplay, vatRate, cityTaxPerNight: Number(taxRoom.city_tax_per_night) || Number(rooms[0]?.city_tax_per_night) || 0 }}
             ratePlans={ratePlans} cart={cart} flexData={flexData} onApplyDates={applyFlexDates} fmt={formatPrice} memberPct={memberPct} onMemberCheck={checkMember} onWaitlist={submitWaitlist} wish={wish} toggleWish={toggleWish} />
           <CartBar t={tmpl} cart={cart} nights={nights} onRemove={removeFromCart} onContinue={continueToDetails} fmt={formatPrice} memberPct={memberPct} />
           {cart.length > 0 && <div className="h-28" />}
@@ -627,7 +644,7 @@ function BookingEngineInner() {
       {/* Step 3: Payment Processing */}
       {step === STEPS.PAYMENT && inlineBooking && (
         <InlinePayment t={tmpl} booking={inlineBooking} amountMode={inlineBooking.amountMode} fmt={formatPrice}
-          onPaid={() => { setConfirmation({ ...inlineBooking, payment_status: "paid" }); setInlineBooking(null); setStep(STEPS.CONFIRM); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          onPaid={() => { if (finishRef.current) { finishRef.current(); finishRef.current = null; } setConfirmation({ ...inlineBooking, payment_status: "paid" }); setInlineBooking(null); setStep(STEPS.CONFIRM); window.scrollTo({ top: 0, behavior: "smooth" }); }}
           onFallback={async () => { try { const { data: pd } = await axios.post(`${API}/payments/booking-checkout`, { booking_id: inlineBooking.id, origin_url: window.location.origin, amount_mode: inlineBooking.amountMode }); if (pd.url) window.location.href = pd.url; } catch { /* ignore */ } }} />
       )}
       {step === STEPS.PAYMENT && !inlineBooking && (

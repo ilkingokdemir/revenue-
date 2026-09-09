@@ -208,7 +208,7 @@ def create_site_builder_router(db, require_roles):
                                                                                   "valid_from": po.get("starts_at") or None, "valid_until": po.get("ends_at") or None},
                                                                          "$setOnInsert": {"id": str(uuid.uuid4()), "used_count": 0, "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
         an = content.get("analytics") or {}
-        content["analytics"] = {k: re.sub(r"[^A-Za-z0-9_-]", "", str(an.get(k) or ""))[:40] for k in ("ga4_id", "gtm_id", "pixel_id")}
+        content["analytics"] = {k: re.sub(r"[^A-Za-z0-9_-]", "", str(an.get(k) or ""))[:40] for k in ("ga4_id", "gtm_id", "pixel_id", "gads_id", "gads_label")}
         br = content.get("brand") or {}
         content["brand"] = {k: v for k, v in {"accent": str(br.get("accent") or "")[:7], "radius": str(br.get("radius") or "")[:6]}.items() if v and (k != "accent" or re.match(r"^#[0-9a-fA-F]{6}$", v))}
         upd = {"property_id": pid, "template": tpl, "content": content,

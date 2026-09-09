@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { X, Users, Bed, Ruler, Check, CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { useLanguage } from "../i18n/LanguageContext";
+import { RoomReviewQuotes } from "./RoomReviews";
 
-export function RoomDetailModal({ t, room, onClose, fmt, nights }) {
+export function RoomDetailModal({ t, room, onClose, fmt, nights, review = null }) {
   const { t: tr, lang } = useLanguage();
   const [i, setI] = useState(0);
   const photos = room.photos?.length ? room.photos : [];
@@ -31,6 +32,7 @@ export function RoomDetailModal({ t, room, onClose, fmt, nights }) {
             {room.view && <span>{room.view}</span>}
           </div>
           <p className="text-sm text-slate-700 leading-relaxed mt-4 whitespace-pre-line">{room.description}</p>
+          <RoomReviewQuotes review={review} roomId={room.id} accent={t.colors.accent} />
           {room.amenities?.length > 0 && (
             <div className="mt-5">
               <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">{tr("detail.amenities")}</div>

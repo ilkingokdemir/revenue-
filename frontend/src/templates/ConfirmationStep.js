@@ -1,6 +1,7 @@
 import { CheckCircle } from "@phosphor-icons/react";
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { toast } from "sonner";
 import { useLanguage } from "../i18n/LanguageContext";
 import { InlinePayment } from "./InlinePayment";
 
@@ -59,6 +60,52 @@ function PostUpsells({ t, confirmation, fmt }) {
   );
 }
 
+function PaymentPlanBox({ t, confirmation, fmt }) {
+  const [sched, setSched] = useState(null);
+  const [links, setLinks] = useState(null);
+  const ref = confirmation.booking_ref; const email = confirmation.guest_email || "";
+  useEffect(() => { if (ref && email) axios.get(`${API}/booking/payment-schedule/${ref}?email=${encodeURIComponent(email)}`).then((r) => setSched(r.data)).catch(() => {}); }, [ref, email]);
+  if (!sched || !(sched.balance_due > 0)) return null;
+  const split = async () => {
+    const raw = window.prompt("Ödemeyi bölüşeceğiniz kişilerin e-postaları (virgülle):", ""); if (!raw) return;
+    const emails = raw.split(/[,;\s]+/).filter((x) => x.includes("@"));
+    try { const { data } = await axios.post(`${API}/booking/${ref}/split`, { email, emails, include_me: true }); setLinks(data.links); toast.success(`${data.parts} kişiye bölüştürüldü — her pay ${fmt(data.share)}`); }
+    catch (e) { toast.error(e.response?.data?.detail || "Bölüşme oluşturulamadı"); }
+  };
+  return (
+    <div className="mt-4 text-left rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm" data-testid="payment-plan-box">
+      <div className="font-semibold text-amber-900">Ödeme planı</div>
+      <div className="text-amber-900 mt-1" data-testid="payment-plan-summary">Ödenen: <b>{fmt(sched.deposit_paid || 0)}</b> · Kalan: <b>{fmt(sched.balance_due)}</b>{sched.balance_due_date && <> · Vade: <b>{sched.balance_due_date}</b></>}</div>
+      <p className="text-xs text-amber-800 mt-1">{sched.card_on_file && sched.balance_status === "scheduled" ? "Kalan tutar vade tarihinde kayıtlı kartınızdan otomatik tahsil edilecek; 3 gün önce hatırlatma e-postası alırsınız." : "Kalan tutarı aşağıdaki bağlantıdan dilediğiniz zaman ödeyebilirsiniz."}</p>
+      <div className="flex flex-wrap gap-2 mt-2">
+        <a href={`/pay-balance/${ref}?email=${encodeURIComponent(email)}`} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: t.colors.accent }} data-testid="pay-balance-link">Kalanı şimdi öde</a>
+        {!links && !sched.split?.length && <button onClick={split} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-amber-300 text-amber-900" data-testid="split-pay-btn">👥 Ödemeyi bölüş</button>}
+      </div>
+      {(links || sched.split?.length > 0) && (
+        <div className="mt-2 space-y-1" data-testid="split-pay-links">
+          {(links || sched.split).map((l, i) => <div key={i} className="text-xs text-amber-900 flex items-center gap-2"><span className="font-mono">{l.email}</span> · {fmt(l.amount)} {l.status && <span className={`px-1.5 rounded-full text-[10px] font-bold ${l.status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-white"}`}>{l.status === "paid" ? "ödendi" : "bekliyor"}</span>}{l.url && <a href={l.url} className="underline" data-testid={`split-link-${i}`}>link</a>}</div>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CalendarPdfRow({ t, confirmation }) {
+  const ref = confirmation.booking_ref; const email = confirmation.guest_email || "";
+  if (!ref || !email) return null;
+  const q = `?email=${encodeURIComponent(email)}`;
+  const d = (s) => String(s || "").replace(/-/g, "");
+  const gcal = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent((confirmation.property_name || "Otel") + " — " + ref)}&dates=${d(confirmation.check_in)}/${d(confirmation.check_out)}&details=${encodeURIComponent("Rezervasyon " + ref)}`;
+  const btn = "text-xs font-semibold px-3 py-2 rounded-lg border hover:bg-slate-50 flex items-center gap-1";
+  return (
+    <div className="mt-4 flex flex-wrap gap-2 justify-center" data-testid="confirm-actions">
+      <a href={`${API}/booking/${ref}/calendar.ics${q}`} className={btn} style={{ borderColor: t.colors.accent, color: t.colors.accent }} data-testid="confirm-ics-btn">📅 Takvime ekle (.ics)</a>
+      <a href={gcal} target="_blank" rel="noreferrer" className={btn} style={{ borderColor: t.colors.accent, color: t.colors.accent }} data-testid="confirm-gcal-btn">Google Takvim</a>
+      <a href={`${API}/booking/${ref}/confirmation.pdf${q}`} className={btn} style={{ borderColor: t.colors.accent, color: t.colors.accent }} data-testid="confirm-pdf-btn">⬇ PDF onay</a>
+    </div>
+  );
+}
+
 export function ConfirmationStep({ t, confirmation, onBookAnother, fmt = (v) => `£${Math.round(v)}` }) {
   const { t: tr } = useLanguage();
   if (!confirmation) return null;
@@ -97,6 +144,8 @@ export function ConfirmationStep({ t, confirmation, onBookAnother, fmt = (v) => 
             </div>
           )}
           {confirmation.status === "hold" && confirmation.hold_expires_at && <p className="text-xs font-semibold rounded-lg px-3 py-2 mb-3" style={{ background: "#fef3c7", color: "#92400e" }} data-testid="confirm-hold-note">⏳ {tr("confirm.holdNote", { until: new Date(confirmation.hold_expires_at).toLocaleString() })}</p>}
+          <PaymentPlanBox t={t} confirmation={confirmation} fmt={fmt} />
+          <CalendarPdfRow t={t} confirmation={confirmation} />
           <BrgClaim t={t} confirmation={confirmation} />
           <div className="pt-2 border-t border-gray-100">
             <PostUpsells t={t} confirmation={confirmation} fmt={fmt} />

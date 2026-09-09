@@ -8,6 +8,8 @@ import { RatePlanRows } from "./RatePlanRows";
 import { RoomDetailModal } from "./RoomDetailModal";
 import { useState } from "react";
 import { useLanguage } from "../i18n/LanguageContext";
+import { trackFunnel, trackEvent, gaItem } from "../site/analytics";
+import { useRoomReviews, RoomRatingBadge } from "./RoomReviews";
 
 const amenityIcons = {
   "Free WiFi": WifiHigh, "Air conditioning": Snowflake, "Flat-screen TV": Television,
@@ -69,8 +71,9 @@ export function RoomPreviewCards({ t, rooms, searchRooms }) {
   );
 }
 
-export function RoomSelectionStep({ t, rooms, loading, nights, adults, children, roomCount, checkIn, checkOut, onSelectRoom, onChangeSearch, ratePlans, cart, flexData, onApplyDates, fmt, memberPct, onMemberCheck, onWaitlist, wish = [], toggleWish = null }) {
+export function RoomSelectionStep({ t, rooms, loading, nights, adults, children, roomCount, checkIn, checkOut, onSelectRoom, onChangeSearch, ratePlans, cart, flexData, onApplyDates, fmt, memberPct, onMemberCheck, onWaitlist, wish = [], toggleWish = null, propertyId = "", priceDisplay = null }) {
   const { t: tr } = useLanguage();
+  const reviews = useRoomReviews(propertyId);
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" data-testid="room-selection">
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6 flex flex-wrap items-center gap-4" style={{ borderRadius: t.borderRadius }}>
@@ -109,7 +112,7 @@ export function RoomSelectionStep({ t, rooms, loading, nights, adults, children,
       ) : (
         <div className="space-y-4">
           {rooms.map((room) => (
-            <RoomCard key={room.id} room={room} t={t} nights={nights} adults={adults} roomCount={roomCount} onSelect={onSelectRoom} ratePlans={ratePlans} cart={cart} fmt={fmt} memberPct={memberPct} wish={wish} toggleWish={toggleWish} />
+            <RoomCard key={room.id} room={room} t={t} nights={nights} adults={adults} roomCount={roomCount} onSelect={onSelectRoom} ratePlans={ratePlans} cart={cart} fmt={fmt} memberPct={memberPct} wish={wish} toggleWish={toggleWish} review={reviews?.rooms?.find((r) => r.room_type_id === room.id)} propertyId={propertyId} priceDisplay={priceDisplay} />
           ))}
         </div>
       )}
@@ -162,12 +165,13 @@ function FlexDatesStrip({ t, flexData, onApplyDates, fmt = (v) => `£${Math.roun
   );
 }
 
-function RoomCard({ room, t, nights, adults, onSelect, ratePlans, cart, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, wish = [], toggleWish = null }) {
+function RoomCard({ room, t, nights, adults, onSelect, ratePlans, cart, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, wish = [], toggleWish = null, review = null, propertyId = "", priceDisplay = null }) {
   const { t: tr } = useLanguage();
   const [detail, setDetail] = useState(false);
+  const openDetail = () => { setDetail(true); trackFunnel(propertyId, "room_view", { room: room.id }); trackEvent("view_item", { currency: "GBP", value: Number(room.price_per_night || room.base_price || 0), items: [gaItem(room, null, 1, room.price_per_night || room.base_price)] }); };
   return (
     <div className="bg-white border border-gray-200 overflow-hidden hover:shadow-md transition-shadow" style={{ borderRadius: t.borderRadius }} data-testid={`room-card-${room.id}`}>
-      {detail && <RoomDetailModal t={t} room={room} onClose={() => setDetail(false)} fmt={fmt} nights={nights} />}
+      {detail && <RoomDetailModal t={t} room={room} onClose={() => setDetail(false)} fmt={fmt} nights={nights} review={review} />}
       <div className="flex flex-col md:flex-row">
         <div className="md:w-72 h-48 md:h-auto bg-slate-200 flex-shrink-0 overflow-hidden" style={{ minHeight: "180px" }}>
           <PhotoCarousel photos={room.photos} borderRadius="0" />
@@ -181,6 +185,7 @@ function RoomCard({ room, t, nights, adults, onSelect, ratePlans, cart, fmt = (v
                 <span className="flex items-center gap-1"><Users size={14} /> {room.max_guests} {tr("room.guests")}</span>
                 <span className="flex items-center gap-1"><Bed size={14} /> {room.bed_type}</span>
                 {room.size_sqm > 0 && <span>{room.size_sqm} m&sup2;</span>}
+                <RoomRatingBadge review={review} roomId={room.id} />
               </div>
             </div>
             {t.showUrgency && room.available_rooms <= 3 && room.available_rooms > 0 && (
@@ -190,7 +195,7 @@ function RoomCard({ room, t, nights, adults, onSelect, ratePlans, cart, fmt = (v
             )}
           </div>
           <p className="text-sm text-slate-600 mb-1 line-clamp-2">{room.description}</p>
-          <button type="button" onClick={() => setDetail(true)} className="text-sm font-semibold hover:underline mb-3" style={{ color: t.colors.accent }} data-testid={`room-detail-btn-${room.id}`}>{tr("detail.open")} →</button>
+          <button type="button" onClick={openDetail} className="text-sm font-semibold hover:underline mb-3" style={{ color: t.colors.accent }} data-testid={`room-detail-btn-${room.id}`}>{tr("detail.open")} →</button>
           <div className="flex flex-wrap gap-2">
             {room.amenities?.slice(0, 6).map((a) => {
               const Icon = amenityIcons[a];
@@ -199,7 +204,7 @@ function RoomCard({ room, t, nights, adults, onSelect, ratePlans, cart, fmt = (v
           </div>
         </div>
       </div>
-      <RatePlanRows t={t} room={room} plans={ratePlans} nights={nights} adults={adults} cart={cart} onAdd={onSelect} fmt={fmt} memberPct={memberPct} />
+      <RatePlanRows t={t} room={room} plans={ratePlans} nights={nights} adults={adults} cart={cart} onAdd={onSelect} fmt={fmt} memberPct={memberPct} priceDisplay={priceDisplay} />
     </div>
   );
 }

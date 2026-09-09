@@ -1700,6 +1700,12 @@ api_router.include_router(create_be_payments_router(db, require_roles))
 from routes.pms.guest_pass import create_guest_pass_router
 from routes.pms.be_gaps import create_be_gaps_router
 api_router.include_router(create_be_gaps_router(db, require_roles))
+from routes.pms.be_extras import create_be_extras_router
+api_router.include_router(create_be_extras_router(db, require_roles))
+from routes.pms.be_payment_plans import create_payment_plans_router
+api_router.include_router(create_payment_plans_router(db, require_roles))
+from routes.pms.be_guest_account import create_guest_account_router
+api_router.include_router(create_guest_account_router(db, require_roles))
 api_router.include_router(create_guest_pass_router(db, require_roles))
 from routes.security.permission_matrix import create_permission_matrix_router
 api_router.include_router(create_permission_matrix_router(db, require_roles))
@@ -2485,6 +2491,8 @@ async def startup_event():
     from routes.platform_ext.partner_ops import webhook_retry_loop, api_key_expiry_loop
     _spawn(webhook_retry_loop(db))
     _spawn(api_key_expiry_loop(db))
+    from routes.pms.be_payment_plans import balance_charge_loop
+    _spawn(balance_charge_loop(db))
     _spawn(campaign_window_loop(db))
     _spawn(reports_loop(db))
     _spawn(otb_snapshot_loop(db))

@@ -12,7 +12,11 @@ export const planName = (plan, lang) => (lang === "tr" && plan.name_tr) || (lang
 export const roomNightBase = (room) => Number(room.avg_nightly ?? room.base_price) || 0;
 const gbp = (v) => `£${Math.round(v)}`;
 
-export function RatePlanRows({ t, room, plans, nights, cart, onAdd, fmt = gbp, memberPct = 0 }) {
+export function RatePlanRows({ t, room, plans, nights, cart, onAdd, fmt = gbp, memberPct = 0, priceDisplay = null }) {
+  const pd = priceDisplay || {};
+  const exclusive = pd.mode === "tax_exclusive";
+  const vat = Number(pd.vatRate || room.vat_rate || 0);
+  const cityTax = Number(pd.cityTaxPerNight || 0);
   const { t: tr, lang } = useLanguage();
   const [qty, setQty] = useState({});
   const [beds, setBeds] = useState({});
@@ -70,8 +74,15 @@ export function RatePlanRows({ t, room, plans, nights, cart, onAdd, fmt = gbp, m
             </div>
             <div className="md:text-right">
               <div className="text-xs text-slate-500">{nights} {nights !== 1 ? tr("room.nights") : tr("room.night")}{q > 1 ? ` × ${q}` : ""}</div>
-              <div className="text-2xl font-bold text-slate-900" data-testid={`plan-total-${room.id}-${p.code || idx}`}>{fmt(total)}</div>
-              <div className="text-[11px] text-slate-500">{fmt(nightly)} {tr("room.perNight")} · {room.vat_rate ? tr("tax.vatIncl", { pct: room.vat_rate }) : tr("room.includesTaxes")}</div>
+              <div className="text-2xl font-bold text-slate-900" data-testid={`plan-total-${room.id}-${p.code || idx}`}>{fmt(exclusive && vat ? total / (1 + vat / 100) : total)}</div>
+              {exclusive ? (
+                <div className="text-[11px] text-slate-500" data-testid={`plan-tax-excl-${room.id}-${p.code || idx}`}>{fmt(vat ? nightly / (1 + vat / 100) : nightly)} {tr("room.perNight")} · + {vat ? `%${vat} KDV` : "vergiler"}{cityTax ? ` + ${fmt(cityTax)}/gece şehir vergisi` : ""}</div>
+              ) : (
+                <div className="text-[11px] text-slate-500">{fmt(nightly)} {tr("room.perNight")} · {room.vat_rate ? tr("tax.vatIncl", { pct: room.vat_rate }) : tr("room.includesTaxes")}{cityTax ? ` · + ${fmt(cityTax)}/gece şehir vergisi` : ""}</div>
+              )}
+              {pd.transparency && (exclusive || cityTax > 0) && (
+                <div className="text-[11px] font-semibold text-emerald-700 mt-0.5" data-testid={`plan-total-incl-${room.id}-${p.code || idx}`}>Toplam, tüm vergiler dahil: {fmt(total + cityTax * nights * q)}</div>
+              )}
               {extraBedPrice > 0 && (
                 <label className="text-[11px] text-slate-600 inline-flex items-center gap-1 mt-1">{tr("extra.bed")}
                   <select value={b} onChange={(e) => setBeds((s) => ({ ...s, [p.id]: Number(e.target.value) }))} className="border border-gray-200 rounded px-1 py-0.5 text-[11px]" data-testid={`plan-extra-bed-${room.id}-${p.code || idx}`}>{[0, 1, 2].map((n) => <option key={n} value={n}>{n}</option>)}</select>

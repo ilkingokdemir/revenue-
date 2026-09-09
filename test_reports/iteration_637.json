@@ -1,0 +1,39 @@
+{
+  "summary": "Retest of Paket 39 fixes from iter636. Backend 25/25 pytest PASS (20 from iter636 + 5 new iter637 focused on the four fixes). Confirmed: (a) PayPage /pay-balance/MHB-696738A5?email=grace@example.com renders pay-page (no ErrorBoundary), amount £198.67, Stripe Payment Element iframe mounts. (b) /pay-share/{token} on a freshly created split renders with pay-page-summary (Test Share · Aldgate Flats · Deluxe King Room · dates), amount £149.00, pay-page-parts '0/2 pay ödendi', Stripe element mounts; after admin mark-paid-test → reload shows pay-page-paid ('✓ Ödeme alındı. Teşekkürler!') and '1/2 pay ödendi'. (c) be_gaps.py: PUT /booking/be-settings/aldgate-flats {price_display_mode:'tax_exclusive', tax_exclusive_markets:['US','CA']} → GET returns full 'tax_exclusive' string (not 'tax_exclus') and list preserved; PUT {price_display_mode:'bogus'} → 422; restored 'auto_by_market'. (d) POST /booking/payment-schedule/MHB-696738A5/pay-now and POST /booking/split/{token}/intent both return client_secret + publishable_key (Stripe test mode live). Booking Engine v2 admin panel: be-tab-funnel, be-tab-payplans, be-tab-distribution present; distribution tab shows metasearch-card with all 4 feeds (google/trivago/tripadvisor/bing) via metasearch-feed-* and metasearch-rates-* testids. Rate rows on /book?property=aldgate-flats render correctly with 'Includes taxes and fees' inclusive label under auto_by_market+en-GB (no plan-tax-excl-* — matches spec). Skipped full guest-login/confirmation e2e (heavy) — covered by backend suite.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PayPage (both /pay-balance and /pay-share)", "issues": ["Stripe.js console warning: 'It looks like Stripe.js was loaded more than one time.' — likely InlinePayment loads Stripe.js twice (once in Elements provider, once elsewhere). Non-blocking."]}
+    ],
+    "notes": [
+      "Booking Engine v2 payment-plans-card / be-funnel-card / price-display-card only render when a specific propertyId is selected (not 'all'). When user is on 'All Branches' the panel shows 'Üstten bir tesis seçin.' — expected UX, but the review's frontend spec requires a property to be selected first. Distribution/metasearch renders regardless."
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter636_paket39.py",
+    "/app/backend/tests/test_iter637_paket39_retest.py",
+    "/app/test_reports/pytest/iter637.xml",
+    "/app/test_reports/pytest/iter637_retest.xml"
+  ],
+  "action_items": [
+    "[low] Investigate duplicate Stripe.js load warning in InlinePayment / PayPage (may affect performance / Stripe metrics)."
+  ],
+  "critical_code_review_comments": [
+    "be_gaps.py: string cap [:40] and enum validation for price_display_mode are correct. tax_exclusive_markets branch now handled (per-item [:8], cap 30). Good.",
+    "PayPage.js wraps in LanguageProvider from ../i18n/LanguageContext — fixes ErrorBoundary crash. However the app still has TWO parallel LanguageProviders (src/i18n/index.js + src/i18n/LanguageContext.js). Long-term risk; consider consolidating.",
+    "be_payment_plans pay-now response returns both client_secret and publishable_key — good pattern.",
+    "Booking Engine v2 panel: payplans/funnel/price-display cards require specific propertyId — consider showing a friendlier hint for 'All Branches' state (currently generic 'Üstten bir tesis seçin.' text)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter637_paket39_retest.py",
+    "/app/test_reports/iteration_637.json"
+  ],
+  "success_rate": {"backend": "100% (25/25)", "frontend": "95% — pay flows fully green; admin BE tabs render (cards need specific property selection, expected)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! ; Public API key aldgate-flats: hbx_4kLXlyw1zn-onwVseP1RB0BGEWdVD2gN",
+  "seed_data_creation": "Created 1 pay-at-hotel booking MHB-6061E6AF (guest test-split-f59787@example.com, +50→+52 days), split into 2 shares. Second share (token Pg7FjwPFVGmKvRPXJHpewQ) marked paid via mark-paid-test → booking payment_status=partial. be-settings.price_display_mode restored to auto_by_market after test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 4 iter636 fixes verified working. If retesting: reuse /app/backend/tests/test_iter637_paket39_retest.py (5 focused cases). Booking MHB-696738A5 still has balance £198.67 due for grace@example.com and can be used repeatedly for pay-balance flow. For admin BE v2 payplans/funnel cards, must first select a specific branch (not 'All Branches') — the top pill bar has 'Aldgate Flats · 87' clickable pill."
+}

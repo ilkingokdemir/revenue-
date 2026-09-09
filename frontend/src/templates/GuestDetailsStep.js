@@ -6,6 +6,7 @@ import { useLanguage } from "../i18n/LanguageContext";
 import { SmartUpsellEngine } from "./SmartUpsellEngine";
 import { PriceComparisonWidget } from "./PriceComparisonWidget";
 import { planNightPrice, planName, roomNightBase } from "./RatePlanRows";
+import { GuestAccountBox } from "./GuestAccountBox";
 
 export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, upsells, selectedUpsells, toggleUpsell, nights, adults, children, roomCount, checkIn, checkOut, socialProofSettings, dwConfig, damageWaiver, setDamageWaiver, waiverTotal, cart, onBackToRooms, giftCode, setGiftCode, giftCard, applyGift, clearGift, giftApplied, depositDue, fmt = (v) => `£${Math.round(v)}`, memberPct = 0, cityTax = 0, vatRate = 0, childExtra = 0, beCfg = null, agentCode = "", setAgentCode = () => {}, agentInfo = null, applyAgentCode = () => {}, clearAgentCode = () => {}, flexCancel = false, setFlexCancel = () => {}, flexFee = 0, extraAdultTotal = 0, losDiscount = 0, losPct = 0, agentDiscount = 0 }) {
   const { t: tr } = useLanguage();
@@ -22,6 +23,7 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
             <h2 className="text-xl font-semibold text-slate-900 mb-6 flex items-center gap-2" style={{ fontFamily: t.fonts.heading }}>
               <User size={22} style={{ color: t.colors.accent }} /> {tr("guest.yourDetails")}
             </h2>
+            <GuestAccountBox propertyId={property?.id || new URLSearchParams(window.location.search).get("property") || ""} guestForm={guestForm} setGuestForm={setGuestForm} accent={t.colors.accent} />
             <div className="space-y-4">
               {[
                 { label: tr("guest.fullName"), field: "guest_name", type: "text", icon: User, placeholder: tr("guest.namePlaceholder"), testId: "guest-name-input" },

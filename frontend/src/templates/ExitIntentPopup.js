@@ -58,7 +58,7 @@ export function ExitIntentPopup({ t, propertyId, active, onApply }) {
 export function CookieBanner({ accent = "#0f172a", radius = "12px" }) {
   const [show, setShow] = useState(() => { try { return !localStorage.getItem("mhb_cookie_consent"); } catch { return false; } });
   const { t: tr } = useLanguage();
-  const set = (v) => { try { localStorage.setItem("mhb_cookie_consent", v); } catch { /* ignore */ } setShow(false); };
+  const set = (v) => { try { localStorage.setItem("mhb_cookie_consent", v); window.dispatchEvent(new Event("mhb-consent")); } catch { /* ignore */ } setShow(false); };
   if (!show) return null;
   return (
     <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-sm z-[60] bg-white border border-gray-200 shadow-2xl p-4 flex gap-3" role="region" aria-label="cookie consent" data-testid="cookie-banner" style={{ borderRadius: radius }}>

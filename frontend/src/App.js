@@ -21,6 +21,7 @@ import HousekeepingMobilePWA from "./pages/HousekeepingMobilePWA";
 import GuestPassPage from "./pages/GuestPassPage";
 import WishlistPage from "./pages/WishlistPage";
 import ChainSearchPage from "./pages/ChainSearchPage";
+import PayPage from "./pages/PayPage";
 import SelfCheckoutPage from "./SelfCheckoutPage";
 import DashboardSharePage from "./DashboardSharePage";
 import RoomKeyPage from "./RoomKeyPage";
@@ -1496,6 +1497,8 @@ function App() {
   if (window.location.pathname === "/book-all" || window.location.pathname === "/search-all") {
     return <ChainSearchPage />;
   }
+  if (window.location.pathname.startsWith("/pay-balance/")) return <PayPage mode="balance" />;
+  if (window.location.pathname.startsWith("/pay-share/")) return <PayPage mode="share" />;
   if (window.location.pathname.startsWith("/pass/")) {
     return <GuestPassPage />;
   }

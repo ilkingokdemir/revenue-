@@ -92,6 +92,87 @@ def create_be_distribution_router(db, require_roles):
         out.append('</Transaction>')
         return Response("\n".join(out), media_type="application/xml")
 
+    async def _ari_rows(pid: str, days: int, nights: int):
+        """Tüm metasearch feed'lerinin ortak veri kaynağı: (oda, gün, plan, fiyat, iade)."""
+        days = max(1, min(90, days))
+        rooms = await db.room_types.find({"property_id": pid, "is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "base_price": 1, "total_rooms": 1, "max_guests": 1}).to_list(50)
+        plans = await db.be_rate_plans.find({"property_id": pid, "is_active": {"$ne": False}}, {"_id": 0}).to_list(20)
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "currency": 1, "name": 1, "city": 1, "country": 1, "address": 1, "latitude": 1, "longitude": 1, "star_rating": 1, "phone": 1}) or {}
+        today = datetime.now(timezone.utc).date(); end = today + timedelta(days=days + nights)
+        booked: Dict[tuple, int] = {}
+        async for b in db.bookings.find({"property_id": pid, "status": {"$nin": ["cancelled"]}, "check_in": {"$lt": end.isoformat()}, "check_out": {"$gt": today.isoformat()}}, {"_id": 0, "room_type_id": 1, "check_in": 1, "check_out": 1, "rooms": 1}):
+            try:
+                d = max(_date.fromisoformat(b["check_in"][:10]), today); co = _date.fromisoformat(b["check_out"][:10])
+            except Exception:
+                continue
+            while d < co and d < end:
+                booked[(b["room_type_id"], d.isoformat())] = booked.get((b["room_type_id"], d.isoformat()), 0) + int(b.get("rooms") or 1); d += timedelta(days=1)
+        rows = []
+        for r in rooms:
+            for off in range(days):
+                d = today + timedelta(days=off)
+                left = min(int(r.get("total_rooms") or 1) - booked.get((r["id"], (d + timedelta(days=n)).isoformat()), 0) for n in range(nights))
+                if left <= 0:
+                    continue
+                for p in (plans or [None]):
+                    rows.append({"room": r, "date": d.isoformat(), "plan": p, "rate": round(plan_night_price(r.get("base_price", 0), p) * nights, 2), "refundable": (p or {}).get("cancellation_type", "free") == "free", "left": left})
+        return prop, rows
+
+    @router.get("/hotel-ads/trivago/{pid}.xml")
+    async def trivago_feed(pid: str, request: Request, days: int = 30, nights: int = 1):
+        """Trivago Rate Connect (Direct Connect) benzeri oran feed'i."""
+        prop, rows = await _ari_rows(pid, days, nights)
+        cur = prop.get("currency", "GBP"); base = _base(request)
+        out = ['<?xml version="1.0" encoding="UTF-8"?>', f'<trivago_rates hotel_id="{escape(pid)}" hotel_name="{escape(prop.get("name", ""))}" currency="{cur}" generated="{datetime.now(timezone.utc).isoformat()}">']
+        for x in rows:
+            out.append(f'<rate arrival="{x["date"]}" nights="{nights}" room_type="{escape(x["room"]["name"])}" room_id="{escape(x["room"]["id"])}" rate_plan="{escape((x["plan"] or {}).get("code", "standard"))}" '
+                       f'price="{x["rate"]}" currency="{cur}" max_persons="{int(x["room"].get("max_guests") or 2)}" breakfast_included="{str("breakfast" in ((x["plan"] or {}).get("includes") or [])).lower()}" '
+                       f'free_cancellation="{str(x["refundable"]).lower()}" availability="{x["left"]}" '
+                       f'deeplink="{escape(base)}/api/hotel-ads/landing?property={escape(pid)}&amp;checkin={x["date"]}&amp;nights={nights}&amp;room={escape(x["room"]["id"])}&amp;rate={escape((x["plan"] or {}).get("code", "standard"))}&amp;utm_source=trivago"/>')
+        out.append('</trivago_rates>')
+        return Response("\n".join(out), media_type="application/xml")
+
+    @router.get("/hotel-ads/tripadvisor/{pid}.xml")
+    async def tripadvisor_feed(pid: str, request: Request, days: int = 30, nights: int = 1):
+        """TripAdvisor TripConnect (Instant Booking/CPC) benzeri hotel + rates feed'i."""
+        prop, rows = await _ari_rows(pid, days, nights)
+        cur = prop.get("currency", "GBP"); base = _base(request)
+        out = ['<?xml version="1.0" encoding="UTF-8"?>', '<TripConnectFeed version="1.0">', '<Hotel>', f'<ID>{escape(pid)}</ID><Name>{escape(prop.get("name", ""))}</Name>',
+               f'<Address>{escape(prop.get("address", "") or "")}</Address><City>{escape(prop.get("city", "") or "")}</City><Country>{escape(prop.get("country", "") or "")}</Country>',
+               f'<Latitude>{prop.get("latitude", "") or ""}</Latitude><Longitude>{prop.get("longitude", "") or ""}</Longitude><Phone>{escape(prop.get("phone", "") or "")}</Phone>', '</Hotel>', '<Rates>']
+        for x in rows:
+            out.append(f'<Rate><CheckIn>{x["date"]}</CheckIn><Nights>{nights}</Nights><RoomType id="{escape(x["room"]["id"])}">{escape(x["room"]["name"])}</RoomType>'
+                       f'<RatePlan>{escape((x["plan"] or {}).get("code", "standard"))}</RatePlan><Price currency="{cur}">{x["rate"]}</Price><Refundable>{str(x["refundable"]).lower()}</Refundable>'
+                       f'<Url>{escape(base)}/api/hotel-ads/landing?property={escape(pid)}&amp;checkin={x["date"]}&amp;nights={nights}&amp;room={escape(x["room"]["id"])}&amp;utm_source=tripadvisor</Url></Rate>')
+        out += ['</Rates>', '</TripConnectFeed>']
+        return Response("\n".join(out), media_type="application/xml")
+
+    @router.get("/hotel-ads/bing/{pid}.xml")
+    async def bing_feed(pid: str, request: Request, days: int = 30, nights: int = 1):
+        """Bing Hotel Ads / Microsoft Hotel Price Ads — Google Transaction ile uyumlu format."""
+        prop, rows = await _ari_rows(pid, days, nights)
+        cur = prop.get("currency", "GBP")
+        out = ['<?xml version="1.0" encoding="UTF-8"?>', f'<Transaction timestamp="{datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")}" id="{uuid.uuid4().hex[:12]}" partner="bing">']
+        for x in rows:
+            out.append(f'<Result><Property>{escape(pid)}</Property><Checkin>{x["date"]}</Checkin><Nights>{nights}</Nights><RoomID>{escape(x["room"]["id"])}</RoomID>'
+                       f'<RatePlanID>{escape((x["plan"] or {}).get("code", "standard"))}</RatePlanID><Baserate currency="{cur}">{x["rate"]}</Baserate><Tax currency="{cur}">0</Tax><OtherFees currency="{cur}">0</OtherFees>'
+                       f'<Occupancy>{min(2, int(x["room"].get("max_guests") or 2))}</Occupancy><Refundable available="{str(x["refundable"]).lower()}"/></Result>')
+        out.append('</Transaction>')
+        return Response("\n".join(out), media_type="application/xml")
+
+    @router.get("/hotel-ads/metasearch/{pid}")
+    async def metasearch_status(pid: str, request: Request, _u: dict = Depends(require_roles(*ROLES))):
+        base = _base(request)
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "latitude": 1, "longitude": 1}) or {}
+        geo_ok = bool(prop.get("latitude") and prop.get("longitude"))
+        feeds = [
+            {"key": "google", "name": "Google Hotel Ads", "hotel_list": f"{base}/api/hotel-ads/hotel-list/{pid}.xml", "rates": f"{base}/api/hotel-ads/ari/{pid}.xml", "console": "https://hotelcenter.google.com", "note": "Hotel Center hesabı + tesis eşleşmesi gerekir."},
+            {"key": "trivago", "name": "trivago Rate Connect", "rates": f"{base}/api/hotel-ads/trivago/{pid}.xml", "console": "https://businessstudio.trivago.com", "note": "Business Studio → Rate Connect → 'Direct connection' ile feed URL'si tanımlanır."},
+            {"key": "tripadvisor", "name": "Tripadvisor TripConnect", "rates": f"{base}/api/hotel-ads/tripadvisor/{pid}.xml", "console": "https://www.tripadvisor.com/Owners", "note": "Business Advantage + TripConnect CPC; onaylı bağlantı sağlayıcısı onayı gerekebilir."},
+            {"key": "bing", "name": "Microsoft (Bing) Hotel Ads", "rates": f"{base}/api/hotel-ads/bing/{pid}.xml", "console": "https://ads.microsoft.com", "note": "Hotel Center benzeri; Google Transaction formatı kabul edilir."},
+        ]
+        return {"property_id": pid, "geo_ok": geo_ok, "feeds": feeds, "landing": f"{base}/api/hotel-ads/landing?property={pid}"}
+
     @router.get("/hotel-ads/landing")
     async def hotel_ads_landing(property: str, checkin: str = "", nights: int = 1, adults: int = 2, room: str = "", rate: str = ""):
         """Google point-of-sale URL hedefi → booking engine'e tarihlerle yönlendir."""

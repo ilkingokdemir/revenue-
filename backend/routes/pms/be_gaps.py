@@ -9,7 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException
 DEFAULTS = {"base_occupancy": 2, "extra_adult_per_night": 0.0, "los_tiers": [{"min_nights": 7, "pct": 10}, {"min_nights": 28, "pct": 25}],
             "flex_cancel_pct": 8.0, "flex_cancel_enabled": True, "hold_hours": 24, "hold_enabled": True, "scarcity_threshold": 3,
             "waitlist_enabled": True, "agent_code_enabled": True, "long_stay_enabled": True,
-            "day_use_enabled": False, "day_use_pct": 50.0, "day_use_start": "10:00", "day_use_end": "17:00", "wishlist_enabled": True}
+            "day_use_enabled": False, "day_use_pct": 50.0, "day_use_start": "10:00", "day_use_end": "17:00", "wishlist_enabled": True,
+            "price_display_mode": "auto_by_market", "total_price_transparency": True, "tax_exclusive_markets": ["US", "CA", "en-US"]}
 
 
 async def get_be_settings(db, pid: str) -> dict:
@@ -55,7 +56,11 @@ def create_be_gaps_router(db, require_roles):
                     if val < 0 or (k.endswith("_pct") and val > 100):
                         raise HTTPException(422, f"{k} aralık dışı")
                 elif isinstance(v, str):
-                    val = str(val or "")[:10]
+                    val = str(val or "")[:40]
+                    if k == "price_display_mode" and val not in ("auto_by_market", "tax_inclusive", "tax_exclusive"):
+                        raise HTTPException(422, "price_display_mode: auto_by_market | tax_inclusive | tax_exclusive")
+                elif k == "tax_exclusive_markets":
+                    val = [str(x).strip()[:8] for x in (val or []) if str(x).strip()][:30]
                 elif k == "los_tiers":
                     val = [{"min_nights": int(t.get("min_nights") or 0), "pct": float(t.get("pct") or 0)} for t in (val or []) if isinstance(t, dict)][:6]
                 upd[k] = val

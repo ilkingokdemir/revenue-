@@ -226,6 +226,8 @@ export function AnalyticsBrandEditor({ analytics, brand, onAnalytics, onBrand })
         <input className={inp} placeholder="GA4 Measurement ID (G-XXXXXXX)" value={a.ga4_id || ""} onChange={(e) => onAnalytics({ ...a, ga4_id: e.target.value })} data-testid="site-ga4-input" />
         <input className={inp} placeholder="Google Tag Manager (GTM-XXXXX)" value={a.gtm_id || ""} onChange={(e) => onAnalytics({ ...a, gtm_id: e.target.value })} data-testid="site-gtm-input" />
         <input className={inp} placeholder="Meta Pixel ID" value={a.pixel_id || ""} onChange={(e) => onAnalytics({ ...a, pixel_id: e.target.value })} data-testid="site-pixel-input" />
+        <input className={inp} placeholder="Google Ads ID (AW-XXXXXXXXX)" value={a.gads_id || ""} onChange={(e) => onAnalytics({ ...a, gads_id: e.target.value })} data-testid="site-gads-input" />
+        <input className={inp} placeholder="Google Ads dönüşüm etiketi (label)" value={a.gads_label || ""} onChange={(e) => onAnalytics({ ...a, gads_label: e.target.value })} data-testid="site-gads-label-input" />
         <p className="text-[10px] text-stone-400">Olaylar: page_view, begin_checkout, purchase (rezervasyon numarası + tutar). Çerez onayı "sadece zorunlu" ise yüklenmez.</p>
       </div>
       <div className="space-y-1.5">

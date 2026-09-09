@@ -25,14 +25,25 @@ def create_be_payments_router(db, require_roles):
         booking = await db.bookings.find_one({"id": data.get("booking_id")}, {"_id": 0})
         if not booking:
             raise HTTPException(404, "Rezervasyon yok")
-        amount = float(booking.get("cart_total") or booking.get("total_price") or 0)
-        if data.get("amount_mode") == "deposit" and booking.get("deposit_due"):
-            amount = float(booking["deposit_due"])
+        total = float(booking.get("cart_total") or booking.get("total_price") or 0)
+        amount = total
+        is_deposit = False
+        if data.get("amount_mode") == "deposit":
+            from routes.pms.be_payment_plans import compute_deposit
+            dep = float(booking.get("deposit_due") or 0) or await compute_deposit(db, booking)
+            if 0 < dep < total:
+                amount, is_deposit = round(dep, 2), True
+                await db.bookings.update_one({"id": booking["id"]}, {"$set": {"deposit_due": amount, "balance_due": round(total - amount, 2), "payment_plan": "deposit"}})
         if amount <= 0:
             raise HTTPException(400, "Tutar geçersiz")
         import stripe
         stripe.api_key = secret
         cur = (booking.get("currency") or "gbp").lower()
+        extra = {}
+        if is_deposit:  # kalan bakiye için kartı sakla (off-session tahsilat)
+            cust = stripe.Customer.create(email=booking.get("guest_email") or None, name=booking.get("guest_name") or None, metadata={"booking_ref": booking.get("booking_ref", "")})
+            extra = {"customer": cust.id, "setup_future_usage": "off_session"}
+            await db.bookings.update_one({"id": booking["id"]}, {"$set": {"stripe_customer_id": cust.id}})
         if booking.get("stripe_pi_id"):
             try:
                 pi = stripe.PaymentIntent.retrieve(booking["stripe_pi_id"])
@@ -41,8 +52,8 @@ def create_be_payments_router(db, require_roles):
             except Exception:
                 pass
         pi = stripe.PaymentIntent.create(amount=int(round(amount * 100)), currency=cur, automatic_payment_methods={"enabled": True},
-                                         receipt_email=booking.get("guest_email") or None,
-                                         metadata={"type": "booking", "booking_id": booking["id"], "booking_ref": booking.get("booking_ref", ""), "property_id": booking.get("property_id", "")})
+                                         receipt_email=booking.get("guest_email") or None, **extra,
+                                         metadata={"type": "booking", "booking_id": booking["id"], "booking_ref": booking.get("booking_ref", ""), "property_id": booking.get("property_id", ""), "amount_mode": "deposit" if is_deposit else "full"})
         await db.bookings.update_one({"id": booking["id"]}, {"$set": {"stripe_pi_id": pi.id}})
         await db.payment_transactions.insert_one({"id": str(uuid.uuid4()), "session_id": pi.id, "type": "booking", "reference_id": booking["id"], "reference_number": booking.get("booking_ref"),
                                                   "property_id": booking.get("property_id"), "amount": amount, "currency": cur, "guest_name": booking.get("guest_name"), "guest_email": booking.get("guest_email"),
@@ -63,17 +74,25 @@ def create_be_payments_router(db, require_roles):
         if pi.status != "succeeded":
             return {"paid": False, "status": pi.status}
         now = datetime.now(timezone.utc).isoformat()
-        upd = {"payment_status": "paid", "payment_method": "stripe", "paid_at": now, "paid_amount": pi.amount_received / 100.0}
-        await db.bookings.update_one({"id": booking["id"]}, {"$set": upd})
-        if booking.get("cart_master") and booking.get("cart_ref"):
-            await db.bookings.update_many({"cart_ref": booking["cart_ref"]}, {"$set": {"payment_status": "paid", "payment_method": "stripe", "paid_at": now}})
+        paid = pi.amount_received / 100.0
+        total = float(booking.get("cart_total") or booking.get("total_price") or 0)
+        if (pi.metadata or {}).get("amount_mode") == "deposit" and paid < total - 0.5:
+            from routes.pms.be_payment_plans import schedule_balance
+            upd = await schedule_balance(db, booking, paid, getattr(pi, "payment_method", None), getattr(pi, "customer", None) or booking.get("stripe_customer_id"))
+            upd.update({"payment_method": "stripe", "paid_at": now, "paid_amount": paid})
+            await db.bookings.update_one({"id": booking["id"]}, {"$set": {"payment_method": "stripe", "paid_at": now, "paid_amount": paid}})
+        else:
+            upd = {"payment_status": "paid", "payment_method": "stripe", "paid_at": now, "paid_amount": paid}
+            await db.bookings.update_one({"id": booking["id"]}, {"$set": upd})
+            if booking.get("cart_master") and booking.get("cart_ref"):
+                await db.bookings.update_many({"cart_ref": booking["cart_ref"]}, {"$set": {"payment_status": "paid", "payment_method": "stripe", "paid_at": now}})
         await db.payment_transactions.update_one({"session_id": pi.id}, {"$set": {"payment_status": "paid", "paid_at": now}})
         try:
             from routes.pms.guest_email_i18n import send_guest_confirmation
             await send_guest_confirmation(db, {**booking, **upd})
         except Exception:
             pass
-        return {"paid": True, "status": "succeeded", "booking_ref": booking.get("booking_ref")}
+        return {"paid": True, "status": "succeeded", "booking_ref": booking.get("booking_ref"), "payment_status": upd.get("payment_status"), "balance_due": upd.get("balance_due", 0), "balance_due_date": upd.get("balance_due_date")}
 
     # ---------------- UPSELL ÖDEMESİ (onay ekranı) ----------------
     async def _upsell_booking(data: Dict):

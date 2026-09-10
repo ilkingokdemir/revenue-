@@ -1,0 +1,36 @@
+{
+  "summary": "Paket 41 (Yorum Yanıt Taslağı) tested. Backend chain PASS (3/3 pytest): PUT tag → POST draft-replies (drafted>=1) → GET drafts (count>=1 with draft_room_name='Deluxe King Room', response_text non-empty, guest/rating/text present) → POST /api/reviews/{id}/approve (status=responded, drafts count decreases) → edit via submit-for-approval + approve → published response_text starts with 'Edited...' → reject path returns status='rejected'. Auto-tag endpoint returns tagged/processed/source/drafted keys. Frontend testids/selectors all wired correctly in RoomReviewsAdminCard.js (rr-draft-all, rr-drafts, rr-drafts-count, rr-draft-{id}, rr-draft-text-{id}, rr-approve-{id}, rr-reject-{id}) and BookingEngineV2Panel (be-tab-roomreviews). Navigation to BE v2 → Oda Yorumları tab works. Card renders only when a specific property (not 'All Branches') is selected — expected behavior showing 'Üstten bir tesis seçin' otherwise.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/booking/room-reviews/{pid}/auto-tag", "issue": "Response missed 'drafted' key when there were 0 reviews to process (early return in ai_tag_reviews). FIXED by testing agent — now returns drafted:0 in the no-op branch too."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_room_review_draft.py",
+    "/app/test_reports/pytest/room_review_draft.xml"
+  ],
+  "action_items": [
+    "None blocking. Backend chain and edited-text persistence via submit-for-approval verified end-to-end. Main agent can self-verify UI by: 1) login admin, 2) select 'Aldgate Flats' from Branch dropdown (top-left), 3) navigate to Booking Engine v2 via Cmd+K or sidebar, 4) click be-tab-roomreviews, 5) click rr-draft-all (LLM up to ~60s), then approve/reject."
+  ],
+  "critical_code_review_comments": [
+    "be_extras.py L157 early-return missed 'drafted' key; fixed to satisfy contract.",
+    "PUT /booking/room-reviews/{review_id}/tag intentionally does NOT auto-generate a draft; drafts are produced via draft-replies or auto-tag. This matches spec (drafted only in auto-tag response)."
+  ],
+  "updated_files": [
+    "/app/backend/routes/pms/be_extras.py",
+    "/app/backend/tests/test_room_review_draft.py"
+  ],
+  "success_rate": {"backend": "100% (3/3 pytest, incl. full approve/edit/reject chain)", "frontend": "Not fully automated (testid wiring & navigation verified; card gating requires branch selection)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Tagged 2 unresponded aldgate-flats reviews (Anna Kowalska / Hans Weber pool) to king-aldgate-flats. Approved 1 (edited text 'Edited: ...'), rejected 1 during test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend for Yorum Yanıt Taslağı (Paket 41) is solid. If UI regressions surface, note that RoomReviewsAdminCard renders only when specific property selected (not 'All Branches'); use the Branch dropdown (top-left) to pick 'Aldgate Flats' BEFORE clicking rr-draft-all. LLM calls up to 60s — use await 70000ms in playwright.",
+  "rca of the issue": "Missing 'drafted' key in auto-tag no-op response was a contract gap in ai_tag_reviews() early return path. Fixed by adding drafted:0 to the return dict."
+}

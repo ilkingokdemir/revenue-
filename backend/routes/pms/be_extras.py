@@ -154,7 +154,7 @@ async def ai_tag_reviews(db, pid: str, limit: int = 40) -> dict:
     reviews = await db.reviews.find({"property_id": pid, "room_type_id": {"$in": [None, ""]}, "room_tag_attempted": {"$ne": True}}, {"_id": 0, "id": 1, "comment": 1, "review_text": 1}).sort("created_at", -1).to_list(limit)
     reviews = [r for r in reviews if (r.get("comment") or r.get("review_text") or "").strip()]
     if not rooms or not reviews:
-        return {"tagged": 0, "processed": 0, "source": "none"}
+        return {"tagged": 0, "processed": 0, "source": "none", "drafted": 0}
     mapping: Dict[str, dict] = {}
     api_key = os.environ.get("EMERGENT_LLM_KEY")
     source = "heuristic"
@@ -178,15 +178,47 @@ async def ai_tag_reviews(db, pid: str, limit: int = 40) -> dict:
             hits = [rid for rid, tk in toks.items() if tk and all(t in low for t in tk)]
             mapping[rv["id"]] = {"room_type_id": hits[0] if len(hits) == 1 else None, "confidence": 0.6 if len(hits) == 1 else 0}
     valid = {r["id"] for r in rooms}
-    tagged = 0
+    tagged = 0; newly = []
     for rv in reviews:
         m = mapping.get(rv["id"]) or {}
         rid = m.get("room_type_id") if m.get("room_type_id") in valid and float(m.get("confidence") or 0) >= 0.5 else None
         upd = {"room_tag_attempted": True, "room_tag_source": source, "room_tag_confidence": float(m.get("confidence") or 0), "room_tag_at": now_iso()}
         if rid:
-            upd["room_type_id"] = rid; tagged += 1
+            upd["room_type_id"] = rid; tagged += 1; newly.append(rv["id"])
         await db.reviews.update_one({"id": rv["id"]}, {"$set": upd})
-    return {"tagged": tagged, "processed": len(reviews), "source": source}
+    drafted = await draft_room_replies(db, pid, newly) if newly else 0
+    return {"tagged": tagged, "processed": len(reviews), "source": source, "drafted": drafted}
+
+
+async def draft_room_replies(db, pid: str, review_ids: List[str], limit: int = 20) -> int:
+    """Odaya yeni eşlenen yorumlar için oda-farkında AI yanıt taslağı (response_status=draft, tek tık onaya hazır)."""
+    import os
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+    rooms = {r["id"]: r for r in await db.room_types.find({"property_id": pid}, {"_id": 0, "id": 1, "name": 1}).to_list(50)}
+    q = {"id": {"$in": review_ids}, "response_status": {"$nin": ["responded", "pending_approval"]}, "$or": [{"response_text": {"$in": [None, ""]}}, {"response_text": {"$exists": False}}]}
+    n = 0
+    async for rv in db.reviews.find(q, {"_id": 0, "id": 1, "rating": 1, "comment": 1, "review_text": 1, "guest_name": 1, "author": 1, "room_type_id": 1, "platform": 1, "language": 1}).limit(limit):
+        text = (rv.get("comment") or rv.get("review_text") or "").strip()
+        room = rooms.get(rv.get("room_type_id"), {}).get("name", "")
+        guest = rv.get("guest_name") or rv.get("author") or "Guest"
+        rating = float(rv.get("rating") or 0)
+        draft = None
+        if api_key and text:
+            try:
+                from emergentintegrations.llm.chat import LlmChat, UserMessage
+                prompt = (f"Hotel: {prop.get('name', '')}. Room type the guest stayed in: {room or 'unknown'}.\nGuest: {guest}. Rating: {rating}/5. Platform: {rv.get('platform') or 'direct'}.\nReview: {text}\n\n"
+                          f"Write a warm, specific manager reply in the SAME language as the review, under 120 words. Mention the room type naturally if known. If rating <= 3, apologise sincerely, address the specific issue, and invite them to contact us directly (no compensation promises). No placeholders, no sign-off names.")
+                chat = LlmChat(api_key=api_key, session_id=f"room-reply-{uuid.uuid4()}", system_message="You are an experienced hotel guest-relations manager writing public review replies.").with_model("openai", "gpt-5.2")
+                draft = (await chat.send_message(UserMessage(text=prompt))).strip()
+            except Exception:
+                draft = None
+        if not draft:
+            draft = (f"Dear {guest}, thank you for your kind words about your stay{f' in our {room}' if room else ''} at {prop.get('name', 'our hotel')}. We are delighted you enjoyed it and look forward to welcoming you back soon." if rating >= 4
+                     else f"Dear {guest}, thank you for your feedback{f' about your stay in our {room}' if room else ''}. We are sorry your experience did not fully meet expectations and have shared your comments with our team. Please contact us directly so we can make things right on your next visit.")
+        await db.reviews.update_one({"id": rv["id"]}, {"$set": {"response_text": draft, "ai_draft": draft, "response_status": "draft", "response_generated_at": now_iso(), "draft_source": "room_tag_ai" if api_key else "room_tag_template", "draft_room_name": room}})
+        n += 1
+    return n
 
 
 def create_be_extras_router(db, require_roles):
@@ -308,6 +340,23 @@ def create_be_extras_router(db, require_roles):
     @router.post("/booking/room-reviews/{pid}/auto-tag")
     async def auto_tag(pid: str, limit: int = 40, _u: dict = Depends(require_roles("admin", "manager"))):
         return await ai_tag_reviews(db, pid, limit)
+
+    @router.get("/booking/room-reviews/{pid}/drafts")
+    async def room_review_drafts(pid: str, _u: dict = Depends(require_roles("admin", "manager"))):
+        """Odaya eşlenmiş + taslak yanıtı bekleyen yorumlar (tek tık onay listesi)."""
+        rows = await db.reviews.find({"property_id": pid, "room_type_id": {"$nin": [None, ""]}, "response_status": "draft"},
+                                     {"_id": 0, "id": 1, "rating": 1, "comment": 1, "review_text": 1, "guest_name": 1, "author": 1, "room_type_id": 1, "draft_room_name": 1, "platform": 1, "response_text": 1, "draft_source": 1, "created_at": 1, "sentiment_analysis": 1}).sort("created_at", -1).to_list(50)
+        for r in rows:
+            r["text"] = r.pop("comment", None) or r.pop("review_text", None) or ""
+            r["guest"] = r.pop("guest_name", None) or r.pop("author", None) or "Misafir"
+            r["risk_level"] = (r.pop("sentiment_analysis", None) or {}).get("risk_level", "low")
+        return {"drafts": rows, "count": len(rows)}
+
+    @router.post("/booking/room-reviews/{pid}/draft-replies")
+    async def draft_replies_now(pid: str, limit: int = 20, _u: dict = Depends(require_roles("admin", "manager"))):
+        """Odaya eşlenmiş ama yanıtsız tüm yorumlar için taslak üret."""
+        ids = [r["id"] async for r in db.reviews.find({"property_id": pid, "room_type_id": {"$nin": [None, ""]}, "response_status": {"$nin": ["responded", "pending_approval", "draft"]}}, {"_id": 0, "id": 1}).limit(limit)]
+        return {"drafted": await draft_room_replies(db, pid, ids, limit), "candidates": len(ids)}
 
     @router.post("/booking/room-reviews/{pid}/reset-tags")
     async def reset_tags(pid: str, _u: dict = Depends(require_roles("admin"))):
